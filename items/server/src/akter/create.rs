@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use diesel_async::AsyncConnection;
-use kuria_engine::fields_to_json;
+use kuria_engine::{Change, fields_to_json};
 use kuria_store::akter::{self as store, AktRow};
 use kuria_store::containers::{self, MembershipRow};
 use serde_json::{Map, Value as Json, json};
@@ -71,8 +71,15 @@ impl Akter {
                 check_created_in(&stored, &parent_types)?;
                 check_containers(&stored, &parents, &parent_types)?;
 
-                let outcome = kuria_engine::create(&stored.ty, fields)?;
                 let now = Utc::now();
+                let outcome = kuria_engine::create(
+                    &stored.ty,
+                    fields,
+                    Change {
+                        by: actor.subject.into(),
+                        at: now,
+                    },
+                )?;
                 let parent = parents.first().map(|p| p.number.as_str());
                 let number = next_number(conn, tenant, &stored.ty, parent, now).await?;
                 let akt = AktRow {

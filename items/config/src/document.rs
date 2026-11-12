@@ -126,7 +126,10 @@ pub enum FieldKind {
     Choices,
     Date,
     User,
+    Checkbox,
     Reference,
+    Git,
+    Docker,
 }
 
 impl FieldKind {

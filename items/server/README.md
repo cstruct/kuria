@@ -72,7 +72,9 @@ Not yet: links other than containment, and signatures.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`.
-  `user` fields and a revision's `by` are `User { id name email }`.
+  `user` fields and a revision's `by` are `User { id name email }`;
+  checkboxes are `CheckboxValue { checked by at }`, and git references and
+  images `GitValue` and `DockerValue`.
   `Akt` also has `rank`, `members`, `containers` and `board` (its members
   in its akt type's columns, then `unmapped`, each in rank order), and a
   revision its `membership`.

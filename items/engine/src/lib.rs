@@ -17,7 +17,7 @@ use serde_json::{Map, Value as Json};
 
 pub use hash::state_hash;
 pub use rank::{RankError, nth_appended, rank_between};
-pub use value::{Value, fields_from_json, fields_to_json};
+pub use value::{Change, Input, Value, fields_from_json, fields_to_json};
 
 /// An akt's state and field values.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -65,9 +65,9 @@ pub enum Refusal {
 
 /// Creates an akt of `ty` with the values `input` gives.
 // r[impl akt.create]
-pub fn create(ty: &AktType, input: &Map<String, Json>) -> Result<Outcome, Refusal> {
+pub fn create(ty: &AktType, input: &Map<String, Json>, change: Change) -> Result<Outcome, Refusal> {
     let state = ty.initial_state().key.clone();
-    let (fields, changes) = apply(ty, &BTreeMap::new(), input)?;
+    let (fields, changes) = apply(ty, &BTreeMap::new(), input, change)?;
     // r[impl akt.field.required]
     if let Some(missing) = ty
         .document()
@@ -86,9 +86,10 @@ pub fn edit(
     ty: &AktType,
     current: &Current,
     input: &Map<String, Json>,
+    change: Change,
 ) -> Result<Outcome, Refusal> {
     refuse_final(ty, current)?;
-    let (fields, changes) = apply(ty, &current.fields, input)?;
+    let (fields, changes) = apply(ty, &current.fields, input, change)?;
     if changes.is_empty() {
         return Err(Refusal::NoChange);
     }
@@ -103,6 +104,7 @@ pub fn transition(
     current: &Current,
     transition: &str,
     input: &Map<String, Json>,
+    change: Change,
 ) -> Result<Outcome, Refusal> {
     let Some(def) = ty.transition(transition) else {
         return Err(Refusal::UnknownTransition(transition.to_owned()));
@@ -114,7 +116,9 @@ pub fn transition(
             state: current.state.clone(),
         });
     }
-    let (fields, changes) = apply(ty, &current.fields, input)?;
+    let (fields, changes) = apply(ty, &current.fields, input, change)?;
+    // r[impl akt.field.checkbox]
+    // A checkbox counts as holding a value only while checked.
     let missing: Vec<String> = def
         .requires
         .iter()
@@ -144,6 +148,7 @@ fn apply(
     ty: &AktType,
     fields: &BTreeMap<String, Value>,
     input: &Map<String, Json>,
+    change: Change,
 ) -> Result<Applied, Refusal> {
     let mut fields = fields.clone();
     let mut changes = BTreeMap::new();
@@ -151,23 +156,31 @@ fn apply(
         let Some(def) = ty.field(key) else {
             return Err(Refusal::UnknownField(key.clone()));
         };
-        if raw.is_null() {
-            if def.required {
-                return Err(Refusal::Required(key.clone()));
-            }
-            if fields.remove(key).is_some() {
-                changes.insert(key.clone(), None);
-            }
-            continue;
-        }
         // r[impl akt.field.kinds]
-        let value = Value::from_json(def, raw).map_err(|reason| Refusal::InvalidValue {
-            field: key.clone(),
-            reason,
-        })?;
-        if fields.get(key) != Some(&value) {
-            fields.insert(key.clone(), value.clone());
-            changes.insert(key.clone(), Some(value));
+        let input =
+            Value::from_input(def, raw, change).map_err(|reason| Refusal::InvalidValue {
+                field: key.clone(),
+                reason,
+            })?;
+        match input {
+            Input::Clear => {
+                if def.required {
+                    return Err(Refusal::Required(key.clone()));
+                }
+                if fields.remove(key).is_some() {
+                    changes.insert(key.clone(), None);
+                }
+            }
+            // r[impl akt.field.checkbox]
+            // Checking a checked box keeps who checked it first.
+            Input::Set(Value::Checkbox { .. })
+                if matches!(fields.get(key), Some(Value::Checkbox { .. })) => {}
+            Input::Set(value) => {
+                if fields.get(key) != Some(&value) {
+                    fields.insert(key.clone(), value.clone());
+                    changes.insert(key.clone(), Some(value));
+                }
+            }
         }
     }
     Ok((fields, changes))

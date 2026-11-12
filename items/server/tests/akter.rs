@@ -518,3 +518,64 @@ async fn shows_users_by_name() {
     );
     assert_eq!(data["akt"]["revisions"][0]["by"]["name"], "Bob Builder");
 }
+
+// r[verify akt.field.checkbox]
+// r[verify akt.field.kinds]
+#[tokio::test(flavor = "multi_thread")]
+async fn checkboxes_record_the_caller_and_git_and_images_round_trip() {
+    let world = World::new().await;
+    world
+        .define(json!({
+            "key": "build", "name": "Build", "number": "BUILD-{seq}",
+            "fields": [
+                { "key": "verified", "name": "Verified", "kind": "checkbox" },
+                { "key": "source", "name": "Source", "kind": "git" },
+                { "key": "image", "name": "Image", "kind": "docker" }
+            ],
+            "states": [{ "key": "open", "name": "Open", "initial": true }]
+        }))
+        .await;
+    record_person(&world, Some("Alice Example"), None).await;
+    let digest = format!("sha256:{}", "ab".repeat(32));
+    let fields = "fields { __typename ... on CheckboxValue { field checked by { name } at } ... on GitValue { repository sha tag } ... on DockerValue { repository digest tag } }";
+    let created = world
+        .data(
+            &format!("mutation($f: JSON) {{ createAkt(input: {{ type: \"build\", fields: $f }}) {{ number revision {fields} }} }}"),
+            json!({ "f": {
+                "verified": true,
+                "source": { "repository": "git@git.example:team/app.git", "tag": "v4.2.0" },
+                "image": { "repository": "registry.example/team/app", "digest": digest, "tag": "4.2.0" }
+            } }),
+        )
+        .await["createAkt"]
+        .clone();
+    let values = created["fields"].as_array().unwrap();
+    let checkbox = values
+        .iter()
+        .find(|v| v["__typename"] == "CheckboxValue")
+        .unwrap();
+    assert_eq!(checkbox["checked"], true);
+    assert_eq!(checkbox["by"]["name"], "Alice Example");
+    let checked_at = checkbox["at"].clone();
+    assert!(checked_at.is_string());
+    assert!(values.contains(&json!({ "__typename": "GitValue", "repository": "git@git.example:team/app.git", "sha": null, "tag": "v4.2.0" })));
+    assert!(values.contains(&json!({ "__typename": "DockerValue", "repository": "registry.example/team/app", "digest": digest, "tag": "4.2.0" })));
+
+    // Checking it again changes nothing; clearing it does.
+    let number = created["number"].as_str().unwrap();
+    let edit = |value: bool, revision: i64| {
+        format!(
+            "mutation {{ editAkt(input: {{ number: \"{number}\", revision: {revision}, fields: {{ verified: {value} }} }}) {{ revision {fields} }} }}"
+        )
+    };
+    let again = world.run(&edit(true, 1), json!({})).await;
+    assert_eq!(code(&again), "REFUSED", "an edit that changes nothing");
+    let cleared = world.data(&edit(false, 1), json!({})).await;
+    assert!(
+        !cleared["editAkt"]["fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|v| v["__typename"] == "CheckboxValue")
+    );
+}

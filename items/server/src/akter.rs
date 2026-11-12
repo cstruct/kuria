@@ -242,7 +242,7 @@ impl Akter {
             |ty| Permission::Edit {
                 key: ty.key().to_owned(),
             },
-            |ty, current| kuria_engine::edit(ty, current, fields),
+            |ty, current, change| kuria_engine::edit(ty, current, fields, change),
         )
         .await
     }
@@ -270,7 +270,7 @@ impl Akter {
                 key: ty.key().to_owned(),
                 action: ty.transition(transition).and_then(|t| t.action.clone()),
             },
-            |ty, current| kuria_engine::transition(ty, current, transition, fields),
+            |ty, current, change| kuria_engine::transition(ty, current, transition, fields, change),
         )
         .await
     }
@@ -291,7 +291,7 @@ impl Akter {
         transition: Option<String>,
         reason: Option<String>,
         permission: impl FnOnce(&AktType) -> Permission + Send,
-        decide: impl FnOnce(&AktType, &Current) -> Result<Outcome, Refusal> + Send,
+        decide: impl FnOnce(&AktType, &Current, kuria_engine::Change) -> Result<Outcome, Refusal> + Send,
     ) -> Result<AktRow, AktError> {
         let Caller { actor, auth } = caller;
         let tenant: Uuid = actor.tenant.into();
@@ -335,8 +335,15 @@ impl Akter {
                     )
                     .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
                 };
-                let outcome = decide(&stored.ty, &current)?;
                 let now = Utc::now();
+                let outcome = decide(
+                    &stored.ty,
+                    &current,
+                    kuria_engine::Change {
+                        by: actor.subject.into(),
+                        at: now,
+                    },
+                )?;
                 akt.state = outcome.state.clone();
                 akt.fields = Json::Object(fields_to_json(&outcome.fields));
                 akt.revision = expected_revision + 1;

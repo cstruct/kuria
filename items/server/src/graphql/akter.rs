@@ -632,7 +632,10 @@ pub enum FieldKind {
     Choices,
     Date,
     User,
+    Checkbox,
     Reference,
+    Git,
+    Docker,
 }
 
 impl From<ConfigKind> for FieldKind {
@@ -643,6 +646,9 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Choices => Self::Choices,
             ConfigKind::Date => Self::Date,
             ConfigKind::User => Self::User,
+            ConfigKind::Checkbox => Self::Checkbox,
+            ConfigKind::Git => Self::Git,
+            ConfigKind::Docker => Self::Docker,
             ConfigKind::Reference => Self::Reference,
         }
     }
@@ -910,6 +916,9 @@ pub enum FieldValue {
     Choices(ChoicesValue),
     Date(DateValue),
     User(UserValue),
+    Checkbox(CheckboxValue),
+    Git(GitValue),
+    Docker(DockerValue),
     Reference(ReferenceValue),
 }
 
@@ -945,6 +954,32 @@ impl FieldValue {
             Value::User(subject) => Self::User(UserValue {
                 field,
                 user: User(*subject),
+            }),
+            Value::Checkbox { by, at } => Self::Checkbox(CheckboxValue {
+                field,
+                checked: true,
+                by: User(*by),
+                at: *at,
+            }),
+            Value::Git {
+                repository,
+                sha,
+                tag,
+            } => Self::Git(GitValue {
+                field,
+                repository: repository.clone(),
+                sha: sha.clone(),
+                tag: tag.clone(),
+            }),
+            Value::Docker {
+                repository,
+                digest,
+                tag,
+            } => Self::Docker(DockerValue {
+                field,
+                repository: repository.clone(),
+                digest: digest.clone(),
+                tag: tag.clone(),
             }),
             Value::Reference { url, label } => Self::Reference(ReferenceValue {
                 field,
@@ -984,6 +1019,37 @@ pub struct DateValue {
 pub struct UserValue {
     field: String,
     user: User,
+}
+
+/// A checked box. An unchecked box holds no value, so it isn't listed.
+#[derive(SimpleObject)]
+pub struct CheckboxValue {
+    field: String,
+    /// Always true: listed boxes are checked.
+    checked: bool,
+    /// Who checked it.
+    by: User,
+    /// When it was checked.
+    at: DateTime<Utc>,
+}
+
+/// A commit in a git repository.
+#[derive(SimpleObject)]
+pub struct GitValue {
+    field: String,
+    repository: String,
+    sha: Option<String>,
+    tag: Option<String>,
+}
+
+/// A container image.
+#[derive(SimpleObject)]
+pub struct DockerValue {
+    field: String,
+    repository: String,
+    /// `sha256:` and 64 hexadecimal digits.
+    digest: String,
+    tag: Option<String>,
 }
 
 #[derive(SimpleObject)]

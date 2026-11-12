@@ -5,8 +5,10 @@ produces, or why it is refused.
 
 ## Responsibilities
 
-- `Value`: a field value of one of the field kinds, read from and written to
-  JSON.
+- `Value`: a field value of one of the field kinds, read from a request's
+  input (`from_input`) or from what was stored (`from_json`), and written to
+  JSON. A `Change` (who, when) is what the server supplies to values such as
+  a checkbox's.
 - `create`, `edit` and `transition`: take an `AktType` (from `kuria-config`),
   the akt's current state and field values, and the values a request gives,
   and return an `Outcome` (the new state and values, what changed, and the
