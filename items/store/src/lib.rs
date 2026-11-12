@@ -6,6 +6,7 @@
 //! writes them.
 
 pub mod akter;
+pub mod attachments;
 pub mod containers;
 pub mod erasure;
 mod migrate;

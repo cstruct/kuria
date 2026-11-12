@@ -7,7 +7,8 @@ Akt type documents: their model, their validation, and number patterns.
 - `AktTypeDocument`: the document a tenant submits to define an akt type,
   with its fields, states, transitions and number pattern, and for a
   container what it `contains`, what it must be `created_in` and its
-  `board` columns, and per multiline text field a `draft` recipe. Unknown
+  `board` columns, per multiline text field a `draft` recipe, and per
+  `attachment` field its `format` (`any` or `sbom`). Unknown
   members are refused, so a typo can't be silently
   ignored.
 - `validate`: checks a document and returns every problem with its path

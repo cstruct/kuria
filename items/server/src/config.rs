@@ -52,10 +52,30 @@ pub struct Config {
     /// CIDR networks (`KURIA_TRUSTED_PROXIES`, comma-separated; none by
     /// default).
     pub trusted_proxies: Vec<String>,
+    /// Where attachments are stored.
+    pub storage: StorageConfig,
+    /// The largest attachment accepted, in bytes (`KURIA_ATTACHMENT_LIMIT`,
+    /// 100 MiB by default).
+    pub attachment_limit: u64,
     /// Whether cookies are `Secure` and `__Host-` prefixed
     /// (`KURIA_SECURE_COOKIES`, `true` by default). Turn it off only for
     /// local development over plain HTTP.
     pub secure_cookies: bool,
+}
+
+/// S3-compatible object storage for attachments.
+#[derive(Clone)]
+pub struct StorageConfig {
+    /// The bucket (`KURIA_S3_BUCKET`).
+    pub bucket: String,
+    /// An S3-compatible endpoint other than AWS (`KURIA_S3_ENDPOINT`), such
+    /// as the development gateway.
+    pub endpoint: Option<String>,
+    /// `KURIA_S3_REGION`, `us-east-1` by default.
+    pub region: String,
+    /// `KURIA_S3_ACCESS_KEY` and `KURIA_S3_SECRET_KEY`; without them, the
+    /// standard AWS environment and instance credentials are used.
+    pub credentials: Option<(String, String)>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -122,6 +142,28 @@ impl Config {
             .map(|p| p.trim().to_owned())
             .filter(|p| !p.is_empty())
             .collect();
+        let storage = StorageConfig {
+            bucket: required("KURIA_S3_BUCKET")?,
+            endpoint: lookup("KURIA_S3_ENDPOINT").filter(|e| !e.is_empty()),
+            region: lookup("KURIA_S3_REGION")
+                .filter(|r| !r.is_empty())
+                .unwrap_or_else(|| "us-east-1".to_owned()),
+            credentials: match (lookup("KURIA_S3_ACCESS_KEY"), lookup("KURIA_S3_SECRET_KEY")) {
+                (Some(key), Some(secret)) if !key.is_empty() && !secret.is_empty() => {
+                    Some((key, secret))
+                }
+                _ => None,
+            },
+        };
+        let attachment_limit = match lookup("KURIA_ATTACHMENT_LIMIT") {
+            Some(limit) if !limit.is_empty() => limit.parse().map_err(|_| {
+                ConfigError::Invalid(
+                    "KURIA_ATTACHMENT_LIMIT",
+                    "expected a number of bytes".to_owned(),
+                )
+            })?,
+            _ => 100 * 1024 * 1024,
+        };
         let rate_limit_secret = required("KURIA_RATE_LIMIT_SECRET")?;
         if rate_limit_secret.len() < 32 {
             return Err(ConfigError::Invalid(
@@ -145,6 +187,8 @@ impl Config {
             valkey_url: required("KURIA_VALKEY_URL")?,
             rate_limit_secret,
             trusted_proxies,
+            storage,
+            attachment_limit,
             secure_cookies,
             public_url,
         })
@@ -188,7 +232,8 @@ mod tests {
         move |name| vars.get(name).cloned()
     }
 
-    const COMPLETE: [(&str, &str); 12] = [
+    const COMPLETE: [(&str, &str); 13] = [
+        ("KURIA_S3_BUCKET", "kuria"),
         ("KURIA_VALKEY_URL", "redis://localhost:6379"),
         (
             "KURIA_RATE_LIMIT_SECRET",

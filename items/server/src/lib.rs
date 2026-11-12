@@ -5,6 +5,7 @@
 //! relying client.
 
 pub mod akter;
+pub mod attachments;
 pub mod authorize;
 pub mod changes;
 mod config;
@@ -14,6 +15,6 @@ mod http;
 pub mod oidc;
 pub mod session;
 
-pub use config::{Config, ConfigError};
+pub use config::{Config, ConfigError, StorageConfig};
 pub use graphql::{KuriaSchema, schema};
 pub use http::{AppError, Changes, Options, app};

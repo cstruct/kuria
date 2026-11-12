@@ -176,6 +176,10 @@ async fn describe(
             let text = match value {
                 // r[impl draft.render]
                 Value::User(subject) => user_name(conn, &mut names, *subject).await?,
+                Value::Attachment(id) => kuria_store::attachments::find(conn, tenant, &[*id])
+                    .await?
+                    .pop()
+                    .map_or_else(|| id.to_string(), |a| a.name),
                 other => other.display(def),
             };
             fields.insert(key.clone(), text);

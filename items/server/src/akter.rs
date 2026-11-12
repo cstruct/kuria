@@ -26,7 +26,8 @@ use chrono::{DateTime, Datelike, Utc};
 use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
 use kuria_config::{
-    AktType, AktTypeDocument, NumberContext, Problem, check_state_references, validate,
+    AktType, AktTypeDocument, AttachmentFormat, FieldKind, NumberContext, Problem,
+    check_state_references, validate,
 };
 use tokio::sync::Notify;
 
@@ -34,7 +35,7 @@ use crate::authorize::{Authorizer, Permission, Unavailable};
 use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json, rank_between};
 use kuria_store::Pool;
 use kuria_store::akter::{self as store, AktRow, AktTypeVersion, RevisionRow};
-use kuria_store::containers;
+use kuria_store::{attachments, containers};
 use serde_json::{Map, Value as Json};
 use uuid::Uuid;
 
@@ -353,6 +354,7 @@ impl Akter {
                         "akt {number} moved while locked"
                     )));
                 }
+                hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
                 store::append_revision(
                     conn,
                     &revision(&akt, actor, transition, reason, &outcome, now),
@@ -446,6 +448,63 @@ async fn type_of(
         .pop()
         .ok_or_else(|| AktError::Internal(format!("akt {} has no akt type", akt.number)))?;
     StoredType::read(row)
+}
+
+/// Checks the attachments `outcome` puts in `akt`'s fields, and records
+/// which attachments the akt holds. Only attachments of the tenant the
+/// caller may read are taken, and only SBOMs in `sbom` fields.
+// r[impl akt.field.attachment]
+// r[impl attachment.references]
+async fn hold_attachments(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &AktType,
+    akt: &AktRow,
+    outcome: &Outcome,
+) -> Result<(), AktError> {
+    let is_attachment = |key: &str| {
+        ty.field(key)
+            .is_some_and(|f| f.kind == FieldKind::Attachment)
+    };
+    if !outcome.changes.keys().any(|key| is_attachment(key)) {
+        return Ok(());
+    }
+    for (key, value) in &outcome.changes {
+        let Some(kuria_engine::Value::Attachment(id)) = value else {
+            continue;
+        };
+        let refused = |reason: &str| {
+            AktError::Refused(Refusal::InvalidValue {
+                field: key.clone(),
+                reason: reason.to_owned(),
+            })
+        };
+        let row = attachments::find(conn, akt.tenant_id, &[*id])
+            .await?
+            .pop()
+            .ok_or_else(|| refused("there is no such attachment"))?;
+        if !crate::attachments::may_read(conn, caller.auth, caller.actor.subject.into(), &row)
+            .await?
+        {
+            return Err(refused("there is no such attachment"));
+        }
+        let wants_sbom = ty
+            .field(key)
+            .is_some_and(|f| f.format == Some(AttachmentFormat::Sbom));
+        if wants_sbom && row.sbom.is_none() {
+            return Err(refused("the attachment is not an SBOM"));
+        }
+    }
+    let held: Vec<(String, Uuid)> = outcome
+        .fields
+        .iter()
+        .filter_map(|(key, value)| match value {
+            kuria_engine::Value::Attachment(id) => Some((key.clone(), *id)),
+            _ => None,
+        })
+        .collect();
+    attachments::set_held(conn, akt.tenant_id, akt.id, &held).await?;
+    Ok(())
 }
 
 /// Refuses an akt the caller may not read as if it didn't exist.

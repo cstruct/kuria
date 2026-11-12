@@ -120,7 +120,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     akt_type_version,
     akt_revision,
     akt_membership,
-    change_event
+    change_event,
+    akt_attachment,
+    attachment
 );
 
 diesel::table! {
@@ -129,5 +131,28 @@ diesel::table! {
         name -> Nullable<Text>,
         email -> Nullable<Text>,
         updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    attachment (id) {
+        id -> Uuid,
+        tenant_id -> Uuid,
+        name -> Text,
+        media_type -> Text,
+        size -> Int8,
+        sha256 -> Bytea,
+        uploaded_by -> Uuid,
+        uploaded_at -> Timestamptz,
+        sbom -> Nullable<Jsonb>,
+    }
+}
+
+diesel::table! {
+    akt_attachment (akt_id, field) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        field -> Text,
+        attachment_id -> Uuid,
     }
 }

@@ -10,7 +10,10 @@ use async_graphql::{
     Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, SimpleObject, Union,
 };
 use chrono::{DateTime, Utc};
-use kuria_config::{ChoiceOption as ConfigOption, FieldDef, FieldKind as ConfigKind};
+use kuria_config::{
+    AttachmentFormat as ConfigFormat, ChoiceOption as ConfigOption, FieldDef,
+    FieldKind as ConfigKind,
+};
 use kuria_engine::board::{UNMAPPED, column_of};
 use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow, RevisionRow};
@@ -19,6 +22,7 @@ use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
 use super::Principal;
+use super::attachments::Attachment;
 use super::people::User;
 use crate::akter::{AktError, Akter, Caller, Place, StoredType};
 use crate::authorize::{Authorizer, Permission};
@@ -636,6 +640,7 @@ pub enum FieldKind {
     Reference,
     Git,
     Docker,
+    Attachment,
 }
 
 impl From<ConfigKind> for FieldKind {
@@ -650,6 +655,7 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Git => Self::Git,
             ConfigKind::Docker => Self::Docker,
             ConfigKind::Reference => Self::Reference,
+            ConfigKind::Attachment => Self::Attachment,
         }
     }
 }
@@ -663,6 +669,15 @@ pub struct Field {
     required: bool,
     multiline: bool,
     options: Vec<ChoiceOption>,
+    /// For attachment fields: what files they hold.
+    format: Option<AttachmentFormat>,
+}
+
+/// What files an attachment field holds.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+pub enum AttachmentFormat {
+    Any,
+    Sbom,
 }
 
 impl From<&FieldDef> for Field {
@@ -675,6 +690,10 @@ impl From<&FieldDef> for Field {
             required: def.required,
             multiline: def.multiline,
             options: def.options.iter().map(ChoiceOption::from).collect(),
+            format: def.format.map(|format| match format {
+                ConfigFormat::Any => AttachmentFormat::Any,
+                ConfigFormat::Sbom => AttachmentFormat::Sbom,
+            }),
         }
     }
 }
@@ -920,6 +939,7 @@ pub enum FieldValue {
     Git(GitValue),
     Docker(DockerValue),
     Reference(ReferenceValue),
+    Attachment(AttachmentValue),
 }
 
 impl FieldValue {
@@ -986,8 +1006,18 @@ impl FieldValue {
                 url: url.clone(),
                 label: label.clone(),
             }),
+            Value::Attachment(id) => Self::Attachment(AttachmentValue {
+                field,
+                attachment: Attachment(*id),
+            }),
         }
     }
+}
+
+#[derive(SimpleObject)]
+pub struct AttachmentValue {
+    field: String,
+    attachment: Attachment,
 }
 
 #[derive(SimpleObject)]

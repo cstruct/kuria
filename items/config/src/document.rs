@@ -115,6 +115,19 @@ pub struct FieldDef {
     /// For multiline `text`: how it is drafted from the akter around it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub draft: Option<DraftDef>,
+    /// For `attachment`: what files it holds, any file by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<AttachmentFormat>,
+}
+
+/// What files an `attachment` field holds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AttachmentFormat {
+    /// Any file.
+    Any,
+    /// Only a file Kuria recognised as an SBOM.
+    Sbom,
 }
 
 /// What values a field takes.
@@ -130,6 +143,7 @@ pub enum FieldKind {
     Reference,
     Git,
     Docker,
+    Attachment,
 }
 
 impl FieldKind {

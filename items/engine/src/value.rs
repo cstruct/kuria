@@ -40,6 +40,8 @@ pub enum Value {
         digest: String,
         tag: Option<String>,
     },
+    /// An attachment of the akt's tenant, by its identifier.
+    Attachment(Uuid),
 }
 
 /// Who makes a change, and when: what the server supplies to values such as
@@ -93,6 +95,8 @@ impl Value {
     ///   last two
     /// - `docker`: `{"repository": …, "digest": "sha256:…", "tag": …}`, the
     ///   tag optional
+    /// - `attachment`: an attachment identifier; that it exists in the
+    ///   tenant is checked by the server
     // r[impl akt.field.kinds]
     pub fn from_json(field: &FieldDef, json: &Json) -> Result<Self, String> {
         let option = |key: &str| {
@@ -143,6 +147,12 @@ impl Value {
             FieldKind::Reference => reference(json),
             FieldKind::Git => git(json),
             FieldKind::Docker => docker(json),
+            FieldKind::Attachment => {
+                let text = json.as_str().ok_or("expected an attachment identifier")?;
+                Uuid::parse_str(text)
+                    .map(Self::Attachment)
+                    .map_err(|_| format!("`{text}` is not an attachment identifier"))
+            }
         }
     }
 
@@ -162,7 +172,7 @@ impl Value {
             Self::Choice(key) => name(key),
             Self::Choices(keys) => keys.iter().map(|k| name(k)).collect::<Vec<_>>().join(", "),
             Self::Date(date) => date.format("%Y-%m-%d").to_string(),
-            Self::User(subject) => subject.to_string(),
+            Self::User(subject) | Self::Attachment(subject) => subject.to_string(),
             Self::Checkbox { .. } => "yes".to_owned(),
             Self::Reference { url, label } => label.clone().unwrap_or_else(|| url.clone()),
             Self::Git {
@@ -204,7 +214,7 @@ impl Value {
             Self::Text(text) | Self::Choice(text) => json!(text),
             Self::Choices(keys) => json!(keys),
             Self::Date(date) => json!(date.format("%Y-%m-%d").to_string()),
-            Self::User(subject) => json!(subject.to_string()),
+            Self::User(subject) | Self::Attachment(subject) => json!(subject.to_string()),
             Self::Checkbox { by, at } => json!({
                 "checked_by": by.to_string(),
                 "checked_at": at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),

@@ -179,6 +179,13 @@ fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSe
         if let Some(draft) = &field.draft {
             draft_recipe(problems, &format!("{path}.draft"), field, draft);
         }
+        // r[impl akt.field.attachment]
+        if field.format.is_some() && field.kind != FieldKind::Attachment {
+            problems.add(
+                &format!("{path}.format"),
+                "only attachment fields have a format",
+            );
+        }
         if field.multiline && field.kind != FieldKind::Text {
             problems.add(
                 &format!("{path}.multiline"),
@@ -539,6 +546,21 @@ mod tests {
             assert!(found[0].starts_with("transitions[0].action: "), "{action}");
             assert!(found[0].contains(message), "{action}: {}", found[0]);
         }
+    }
+
+    // r[verify akt.field.attachment]
+    #[test]
+    fn only_attachment_fields_have_a_format() {
+        let mut document = capa();
+        document["fields"][0]["format"] = json!("sbom");
+        assert_eq!(
+            problems(document.clone()),
+            vec!["fields[0].format: only attachment fields have a format"]
+        );
+        document["fields"][0]["kind"] = json!("attachment");
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["fields"][0]["format"] = json!("pdf");
+        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
     }
 
     // r[verify akt.type.validation]

@@ -11,17 +11,23 @@ DATABASE_URL = "postgres://kuria:kuria@localhost:{{env.KURIA_DEV_PG_PORT}}/kuria
 # Valkey, which speaks Redis' protocol, reached with a redis:// URL.
 KURIA_DEV_VALKEY_PORT = "16389"
 KURIA_VALKEY_URL = "redis://localhost:{{env.KURIA_DEV_VALKEY_PORT}}"
+# Attachments, in versitygw: an S3-compatible gateway over a local directory.
+KURIA_DEV_S3_PORT = "17070"
+KURIA_S3_ENDPOINT = "http://localhost:{{env.KURIA_DEV_S3_PORT}}"
+KURIA_S3_BUCKET = "kuria"
+KURIA_S3_ACCESS_KEY = "kuria"
+KURIA_S3_SECRET_KEY = "kuria-dev-only-secret"
 
 [tasks."db:up"]
-description = "Start the local Postgres and Valkey and wait until they accept connections"
+description = "Start the local Postgres, Valkey and S3 gateway and wait until they accept connections"
 run = "docker compose -f dev/compose.yaml up -d --wait"
 
 [tasks."db:down"]
-description = "Stop the local Postgres and Valkey, keeping Postgres' data"
+description = "Stop the local services, keeping their data"
 run = "docker compose -f dev/compose.yaml down"
 
 [tasks."db:reset"]
-description = "Stop the local Postgres and Valkey and delete Postgres' data"
+description = "Stop the local services and delete their data"
 run = "docker compose -f dev/compose.yaml down --volumes"
 
 [tasks."db:psql"]

@@ -8,6 +8,7 @@ pub mod board;
 pub mod draft;
 mod hash;
 mod rank;
+pub mod sbom;
 mod value;
 
 use std::collections::BTreeMap;

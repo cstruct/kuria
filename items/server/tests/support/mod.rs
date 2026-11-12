@@ -24,6 +24,8 @@ use tower::ServiceExt;
 pub const TENANT: &str = "01900000-0000-7000-8000-000000000001";
 pub const OTHER_TENANT: &str = "01900000-0000-7000-8000-000000000002";
 pub const SUBJECT: &str = "01900000-0000-7000-8000-0000000000aa";
+/// The subject of `colleague` tokens: another subject of `TENANT`.
+pub const COLLEAGUE: &str = "01900000-0000-7000-8000-0000000000cc";
 pub const PUBLIC_URL: &str = "https://kuria.example";
 
 /// The claims of a token of `kind`, in `TENANT` if it is a tenant token.
@@ -88,6 +90,11 @@ impl FakeHost {
                 Ok(Verified::Valid(bound))
             }
             token if token.starts_with("tenant") => Ok(Verified::Valid(claims("tenant"))),
+            token if token.starts_with("colleague") => {
+                let mut colleague = claims("tenant");
+                colleague.sub = COLLEAGUE.parse().unwrap();
+                Ok(Verified::Valid(colleague))
+            }
             "other-tenant" => Ok(Verified::Valid(claims_in("tenant", OTHER_TENANT))),
             token if token.starts_with("identity") => Ok(Verified::Valid(claims("identity"))),
             "bad-proof" => Ok(Verified::InvalidProof),
@@ -154,6 +161,21 @@ pub fn router_with(
     pool: kuria_store::Pool,
     decider: Arc<decider::FakeDecider>,
 ) -> Router {
+    router_storing(
+        host,
+        pool,
+        decider,
+        kuria_server::attachments::Storage::in_memory(1 << 20),
+    )
+}
+
+/// Like [`router_with`], storing attachments in `storage`.
+pub fn router_storing(
+    host: &Arc<FakeHost>,
+    pool: kuria_store::Pool,
+    decider: Arc<decider::FakeDecider>,
+    storage: kuria_server::attachments::Storage,
+) -> Router {
     kuria_server::app(
         host.clone(),
         kuria_server::Options {
@@ -163,6 +185,7 @@ pub fn router_with(
             decider,
             sessions: None,
             changes: None,
+            storage,
         },
     )
     .unwrap()

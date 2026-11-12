@@ -11,8 +11,8 @@ mod references;
 mod validate;
 
 pub use document::{
-    AktTypeDocument, BoardDef, ChoiceOption, ColumnDef, ContainsDef, FieldDef, FieldKind, StateDef,
-    TransitionDef,
+    AktTypeDocument, AttachmentFormat, BoardDef, ChoiceOption, ColumnDef, ContainsDef, FieldDef,
+    FieldKind, StateDef, TransitionDef,
 };
 pub use draft::{DraftDef, GroupBy, LineTemplate, LineValues, MAX_DEPTH};
 pub use number::{NumberContext, NumberPattern, PatternError};

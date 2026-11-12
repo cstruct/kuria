@@ -106,6 +106,7 @@ impl World {
                 decider: support::decider::FakeDecider::allowing_tenant(),
                 sessions: Some(sessions),
                 changes: None,
+                storage: kuria_server::attachments::Storage::in_memory(1 << 20),
             },
         )
         .unwrap();

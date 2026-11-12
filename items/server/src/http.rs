@@ -5,6 +5,7 @@ use std::sync::Arc;
 use async_graphql::http::ALL_WEBSOCKET_PROTOCOLS;
 use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket};
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::extract::State;
 use axum::extract::WebSocketUpgrade;
 use axum::http::request::Parts;
@@ -20,6 +21,7 @@ use konklav_axum::{
 use konklav_token::TokenKind;
 
 use crate::akter::Akter;
+use crate::attachments::{self, AttachmentState, Storage};
 use crate::authorize::{Authorizer, Decider};
 use crate::changes::Hub;
 use crate::graphql::{KuriaSchema, Principal, schema};
@@ -54,6 +56,8 @@ pub struct Options {
     /// Change events. Without them, the `changes` subscription refuses, and
     /// published events wait for the relay's next pass.
     pub changes: Option<Changes>,
+    /// Where attachments are stored, and how large they may be.
+    pub storage: Storage,
 }
 
 /// What delivers change events: the hub subscriptions join, and what wakes
@@ -76,6 +80,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         decider,
         sessions,
         changes,
+        storage,
     } = options;
     let konklav = Konklav::builder(host.clone())
         // r[impl auth.dpop]
@@ -88,6 +93,24 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     // r[impl auth.graphql.tenant-token]
     // r[impl auth.unavailable]
     let api = RouterPolicy::new(Policy::new().token_kinds([TokenKind::Tenant]));
+
+    let attachment_routes = Router::new()
+        .route(
+            "/attachments",
+            // r[impl attachment.limit]
+            post(attachments::upload)
+                .layer(DefaultBodyLimit::max(storage.limit))
+                .route_layer(api.route(&Policy::new())?),
+        )
+        .route(
+            "/attachments/{id}",
+            get(attachments::download).route_layer(api.route(&Policy::new())?),
+        )
+        .with_state(AttachmentState {
+            pool: pool.clone(),
+            storage,
+            decider: decider.clone(),
+        });
 
     let mut router = Router::new()
         // r[impl auth.health]
@@ -109,7 +132,8 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
                 changes.map(|c| c.hub),
             ),
             decider,
-        });
+        })
+        .merge(attachment_routes);
 
     if let Some(sessions) = sessions {
         let state = SessionState { sessions, host };
@@ -135,7 +159,7 @@ struct GraphqlState {
 /// Who a GraphQL request or connection acts as, and what decides its
 /// permissions, from its verified token; or the answer refusing it.
 // r[impl auth.tenant]
-fn caller(
+pub(crate) fn caller(
     token: &TenantToken,
     headers: &HeaderMap,
     decider: &Arc<dyn Decider>,

@@ -16,19 +16,21 @@ This is a starting point. Decisions marked *open* are not settled yet.
  scanners ──────►│  HTTP endpoints for webhooks,
    (webhooks)    │  attachments and exports
                  │
-          ┌──────┴───────────────┐
-          ▼                      ▼
-       Postgres                Valkey
-         akter, revisions,       live change events and a short
-         links, configuration,   window of recent ones,
-         the change-event        rate limits
-         outbox
+          ┌──────┴───────────────┬────────────────────┐
+          ▼                      ▼                    ▼
+       Postgres                Valkey             object storage
+         akter, revisions,       live change          (S3-compatible)
+         links, configuration,   events and a         attachments'
+         the change-event        short window of      bytes
+         outbox, attachments'    recent ones,
+         metadata                rate limits
 ```
 
 - **Kuria server**: one Rust binary serving GraphQL, a few plain HTTP endpoints, and WebSocket subscriptions. It can run as several instances behind a load balancer. Instances share nothing except Postgres and Valkey.
 - **React app**: a single-page app built with Vite, talking to the server only through GraphQL, plus the HTTP endpoints for files.
 - **Postgres**: the record. It holds every akt, its full history, its links, the runtime configuration, and every change event.
 - **Valkey**: state the instances share that is not a record: live change events, a short window of recent ones, and rate limits. Losing it loses nothing that cannot be rebuilt from Postgres, so it is run without persistence.
+- **Object storage**: any S3-compatible store, holding attachments' bytes under their SHA-256 per tenant. Locally, versitygw.
 - **Konklav**: authenticates people and software and publishes what they may do. Kuria is a Konklav relying system.
 
 ## Server
@@ -119,12 +121,14 @@ Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDD
 | `akt_membership` | Current memberships, container and member. Their history is in both akter's revisions. |
 | `tenant_counter` | Per-tenant counters and locks: akt number sequences per pattern scope, the change-event sequence, and the order lock. |
 | `change_event` | The outbox: one row per change, in order (a sequence per tenant), naming the tenant, the akt and, for a `revision` event, its new revision, or for a `rank` event, none; and when it was published to Valkey. |
+| `attachment` | Each upload: tenant, name, media type, size, SHA-256, uploader and time, and an SBOM's summary. Its bytes are in object storage at `<tenant>/<SHA-256>`. |
+| `akt_attachment` | Which field of which akt holds which attachment, kept by the write path, so a download is decided by the akt types holding the file. |
 | `person` | The name and email recorded at a subject's last browser sign-in, from Konklav's userinfo endpoint. Erased with the subject. |
 | `erasure_watermark` | The time Kuria has handled Konklav's erasures up to: the latest erasure read from Konklav's list. One row, moved only forward. |
 | `login_attempt` | Browser sign-ins started at Konklav and not completed: the `state`, the PKCE verifier and where to return. Kept for ten minutes. |
 | `browser_session` | Browser sessions: the SHA-256 of the session cookie, the subject and tenant, and the Konklav tokens, encrypted. |
 
-Planned: `akt_link` (typed links besides containment), `signature`, `obligation` and `attachment`.
+Planned: `akt_link` (typed links besides containment), `signature` and `obligation`.
 
 - `akt_revision` is the record of truth. `akt` is a projection of it that is kept in the same transaction, so it is always consistent and can be rebuilt.
 - Fields are JSONB in `akt` so that queries can filter on any field with GIN indexes. Each value is validated against its field kind before it is written, so the JSON has a known shape.
@@ -190,7 +194,7 @@ Today that means browser sessions and the recorded name and email. Akter will ma
 Some things are simpler outside GraphQL:
 
 - **Webhooks** from code hosts, pipelines, monitoring and scanners. Each source has its own endpoint and verifies its own signatures. Events are deduplicated by their source identifier before they open or change an akt.
-- **Attachments**: upload and download, streamed to and from object storage.
+- **Attachments**: `POST /attachments` takes the file as its body, named by a percent-encoded `X-Attachment-Name`, up to a configured size, and answers its identifier; GraphQL fields then hold that identifier. `GET /attachments/{id}` streams it back from object storage, always as a download (`Content-Disposition: attachment`, `nosniff`, a sandboxing CSP), so an uploaded page never runs on Kuria's origin.
 - **Exports**: a complete export of akter with their revisions, signatures, links and attachments, for audits and backups that do not depend on Kuria being available.
 
 ## Frontend
@@ -211,11 +215,12 @@ Some things are simpler outside GraphQL:
 - A container's akt type can say in which states it accepts each member type (`while`), and draft recipes can count akter only in some states (`states`).
 - Moving an akt from one container to another is a transfer: one change, recorded once on the akt and on both containers.
 - States one akt type names of another, in board columns and draft recipes, are checked whenever either is defined: a reference must name a state the latest version has, and a new version can't drop a state another still names. Definitions in a tenant are checked one at a time.
+- Attachments' bytes are in S3-compatible object storage, content-addressed per tenant; their metadata, SBOM summaries and holders are in Postgres. An upload no akt holds yet is visible only to its uploader.
 
 ## Open decisions
 
 - Signing: re-authentication and the proof stored with a signature.
 - Row-level security in Postgres alongside tenant filtering in queries.
-- Object storage for attachments, and how exports include them.
+- How exports include attachments, and what erasure does to attachments a subject uploaded.
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
 - DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. A Konklav change could lift that, such as letting one accepted presentation answer several decisions within its request.

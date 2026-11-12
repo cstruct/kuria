@@ -5,7 +5,8 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 ## Responsibilities
 
 - Serving the GraphQL endpoint (`POST /graphql`), GraphQL subscriptions over
-  WebSocket (`GET /graphql/ws`, `graphql-transport-ws`), and a health check
+  WebSocket (`GET /graphql/ws`, `graphql-transport-ws`), attachments
+  (`POST /attachments`, `GET /attachments/{id}`), and a health check
   (`GET /healthz`).
 - Publishing every change event from the outbox to Valkey, and delivering
   them to `changes` subscriptions in order, after catching a client up from
@@ -40,6 +41,13 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   akter involved), only in the states a container accepts them in; creating
   akter inside containers with `{parent}` numbers, and moving akter in their
   tenant's one priority order.
+- Attachments ([`src/attachments.rs`](src/attachments.rs)): storing
+  uploads in S3-compatible object storage under their SHA-256 per tenant,
+  recognising and summarising SPDX and CycloneDX SBOMs, and answering
+  downloads to whoever may read an akt holding the file, or to its uploader
+  while none does. The write path takes into `attachment` fields only the
+  tenant's attachments the caller may read, only SBOMs into `sbom` fields,
+  and records which akter hold which attachments.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
 
@@ -123,6 +131,11 @@ The server is configured from the environment:
 | `DATABASE_URL` | Kuria's Postgres database |
 | `KURIA_VALKEY_URL` | Valkey, as a `redis://` URL, for state the instances share |
 | `KURIA_RATE_LIMIT_SECRET` | At least 32 bytes, shared by every instance; rate-limit keys are hashed under it before they reach Valkey |
+| `KURIA_S3_BUCKET` | The bucket attachments are stored in |
+| `KURIA_S3_ENDPOINT` | An S3-compatible endpoint other than AWS, such as the development gateway; `http://` endpoints are allowed |
+| `KURIA_S3_REGION` | The bucket's region, `us-east-1` by default |
+| `KURIA_S3_ACCESS_KEY`, `KURIA_S3_SECRET_KEY` | Credentials for the bucket; without them, the standard AWS environment and instance credentials |
+| `KURIA_ATTACHMENT_LIMIT` | The largest upload in bytes, 100 MiB by default |
 | `KURIA_TRUSTED_PROXIES` | Comma-separated addresses or CIDR networks whose `X-Forwarded-For` names the client; none by default |
 | `KONKLAV_ISSUER` | Konklav's issuer, as its tokens' `iss` names it; the OpenID provider is discovered from it |
 | `KONKLAV_AUDIENCE` | The audience Kuria's tokens carry |
@@ -193,6 +206,13 @@ mise run test
   order, catching up from a cursor, leaving out what the subscriber can't
   read, publishing only identifiers, a change on one instance reaching
   another's subscribers, and ending when the token expires.
+- [`tests/attachments.rs`](tests/attachments.rs) uploads and downloads
+  through the router with object storage in memory: metadata and
+  percent-encoded names, authentication, the size limit, a file stored
+  once per tenant, SBOM summaries, who may download an attachment held or
+  not, and which attachments `attachment` and `sbom` fields take.
+- [`tests/storage.rs`](tests/storage.rs) uploads and downloads through the
+  development S3 gateway (versitygw, started by `mise run db:up`).
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -216,5 +236,6 @@ against a fake of Konklav's OpenID provider only.
   [`boards.md`](../../docs/spec/boards.md) (`board.*`) and
   [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`),
   [`changes.md`](../../docs/spec/changes.md) (`changes.*`) and
-  [`people.md`](../../docs/spec/people.md) (`person.*`).
+  [`people.md`](../../docs/spec/people.md) (`person.*`) and
+  [`attachments.md`](../../docs/spec/attachments.md) (`attachment.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

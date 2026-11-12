@@ -21,6 +21,8 @@ produces, or why it is refused.
 - `draft::render`: a draft's text from the akter its recipe lists, grouped
   by akt type if the recipe says so; `Value::display` gives each value's
   text.
+- `sbom::detect`: whether a file is an SPDX or CycloneDX JSON document, and
+  its summary: format, specification version, name and component count.
 - `state_hash`: the SHA-256 of an akt's state and field values as canonical
   JSON (no whitespace, object members in key order), independent of how
   `serde_json` orders maps.
@@ -40,4 +42,6 @@ cargo test -p kuria-engine
   `akt.edit`, `akt.transition`, `akt.field.*`, `akt.revision.record`) and
   [`docs/spec/ordering.md`](../../docs/spec/ordering.md) (`order.move`) and
   [`docs/spec/boards.md`](../../docs/spec/boards.md) (`board.placement`,
-  `board.unmapped`, `board.default`).
+  `board.unmapped`, `board.default`) and
+  [`docs/spec/attachments.md`](../../docs/spec/attachments.md)
+  (`attachment.sbom`).

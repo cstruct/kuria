@@ -8,6 +8,7 @@
 #![allow(clippy::unused_async, clippy::unused_async_trait_impl)]
 
 mod akter;
+mod attachments;
 mod changes;
 mod people;
 

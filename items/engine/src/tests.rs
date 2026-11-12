@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use kuria_config::{AktType, AktTypeDocument, validate};
 use serde_json::{Map, Value as Json, json};
+use uuid::Uuid;
 
 use super::*;
 
@@ -22,7 +23,8 @@ fn capa() -> AktType {
             { "key": "evidence", "name": "Evidence", "kind": "reference" },
             { "key": "verified", "name": "Verified", "kind": "checkbox" },
             { "key": "source", "name": "Source", "kind": "git" },
-            { "key": "image", "name": "Image", "kind": "docker" }
+            { "key": "image", "name": "Image", "kind": "docker" },
+            { "key": "report", "name": "Report", "kind": "attachment", "format": "sbom" }
         ],
         "states": [
             { "key": "open", "name": "Open", "initial": true },
@@ -464,4 +466,32 @@ fn shows_the_new_kinds_as_text() {
     // And the stored form reads back as the same value.
     let stored = fields_to_json(&outcome.fields);
     assert_eq!(fields_from_json(&ty, &stored).unwrap(), outcome.fields);
+}
+
+// r[verify akt.field.kinds]
+#[test]
+fn holds_an_attachment_by_its_identifier() {
+    let id = "01900000-0000-7000-8000-0000000000f1";
+    let outcome = create(
+        &capa(),
+        &input(json!({ "title": "T", "report": id })),
+        change(),
+    )
+    .unwrap();
+    assert_eq!(
+        outcome.fields["report"],
+        Value::Attachment(Uuid::parse_str(id).unwrap())
+    );
+    assert_eq!(outcome.fields["report"].to_json(), json!(id));
+    for value in [json!("report.json"), json!({ "attachment": id }), json!(1)] {
+        let refused = create(
+            &capa(),
+            &input(json!({ "title": "T", "report": value.clone() })),
+            change(),
+        );
+        assert!(
+            matches!(refused, Err(Refusal::InvalidValue { ref field, .. }) if field == "report"),
+            "{value}: {refused:?}"
+        );
+    }
 }

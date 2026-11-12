@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use konklav_relying_client::RelyingClient;
+use kuria_server::attachments::Storage;
 use kuria_server::changes::{Hub, Relay};
 use kuria_server::erasure::handle_erasures;
 use kuria_server::oidc::{self, Provider};
@@ -105,6 +106,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let hub = Hub::new(pool.clone(), valkey_client.clone());
     tokio::spawn(hub.clone().run());
 
+    let storage = Storage::s3(
+        &config.storage,
+        usize::try_from(config.attachment_limit).unwrap_or(usize::MAX),
+    )?;
+
     let router = app(
         Arc::new(client.clone()),
         Options {
@@ -114,6 +120,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             decider: Arc::new(client.clone()),
             sessions: Some(sessions),
             changes: Some(Changes { hub, waker }),
+            storage,
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

@@ -32,5 +32,24 @@ services:
       timeout: 3s
       retries: 30
 
+  # Attachments: an S3-compatible gateway over a local directory. The
+  # `kuria` bucket is a directory under /data, made before it starts.
+  s3:
+    image: versity/versitygw:v1.10.0
+    entrypoint: ["/bin/sh", "-c", "mkdir -p /data/kuria && exec versitygw posix /data"]
+    environment:
+      ROOT_ACCESS_KEY: kuria
+      ROOT_SECRET_KEY: kuria-dev-only-secret
+    ports:
+      - "${KURIA_DEV_S3_PORT:-17070}:7070"
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "7070"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
 volumes:
   postgres-data:
+  s3-data:

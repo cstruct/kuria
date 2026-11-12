@@ -9,8 +9,8 @@ use serde_json::{Map, Value as Json, json};
 use uuid::Uuid;
 
 use super::{
-    AktError, Akter, Caller, StoredType, membership_entry, next_number, rank_after_last,
-    record_membership, require, require_read, revision, type_of,
+    AktError, Akter, Caller, StoredType, hold_attachments, membership_entry, next_number,
+    rank_after_last, record_membership, require, require_read, revision, type_of,
 };
 use crate::authorize::Permission;
 
@@ -95,6 +95,7 @@ impl Akter {
                     rank: rank_after_last(conn, tenant).await?,
                 };
                 store::insert_akt(conn, &akt).await?;
+                hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
                 let mut first = revision(&akt, actor, None, reason.clone(), &outcome, now);
                 if !parents.is_empty() {
                     first.membership = Some(json!({
