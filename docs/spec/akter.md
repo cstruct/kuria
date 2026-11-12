@@ -35,7 +35,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - the keys in `contains` and `created_in` are valid akt type keys, each listed
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
-- every draft recipe is valid (`draft.recipe`, `draft.line`).
+- every draft recipe is valid (`draft.recipe`, `draft.line`);
+- its presentation is valid (`akt.type.presentation`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or
@@ -54,6 +55,22 @@ problem for each, when:
 Akt types that aren't defined yet MAY be named, so that documents can be
 submitted in any order. Definitions in one tenant MUST be checked one at a
 time, so that two can't each pass against the other's old version.
+
+r[akt.type.presentation]
+An akt type MAY say how its akter are shown, in `presentation`:
+
+| Member | Meaning |
+|---|---|
+| `title` | The key of a single-line `text` field, shown as each akt's title. |
+| `card` | Up to four field keys, shown on board cards after the title. |
+| `list` | Field keys, shown as columns where the type's akter are listed. |
+| `tones` | Per state key, a tone: `neutral`, `active`, `success`, `warning` or `danger`. |
+
+Every key MUST name a field or state the type defines, each at most once
+in its list, and the title a single-line `text` field; otherwise the
+document MUST be refused. Without a `title`, an akt's title MUST be the
+value of the type's first required single-line `text` field, if it has
+one. A state without a tone MUST be shown as `neutral`.
 
 ## Fields
 
@@ -133,6 +150,17 @@ target state.
 r[akt.version-pinned]
 An akt MUST be validated against the akt type version it was created with,
 also after newer versions of its akt type exist.
+
+r[akt.title]
+Every akt MUST be served with its title, as its type's presentation
+(`akt.type.presentation`) gives it, or none, beside its number.
+
+r[akt.search]
+Akter MUST be searchable by text: an akt matches when its number starts
+with the text, ignoring case, or its title contains every word of the
+text, ignoring case. A search MUST only answer akter the subject may read
+(`authz.read`), and at most a limit of them, the most recently changed
+first.
 
 ## Akt revisions
 
