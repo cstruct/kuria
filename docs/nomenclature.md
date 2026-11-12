@@ -62,10 +62,10 @@ Terms are introduced in dependency order: each definition only uses terms define
   - Revisions are append only. An akt's current state is always the result of its revisions.
 
 - `transition`
-  - A move of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
+  - A change of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
 
 - `change event`
-  - The record that an akt changed: the tenant, the akt and its new akt revision, numbered per tenant. Change events are what subscriptions and catching up deliver.
+  - The record that an akt changed, numbered per tenant: either a new akt revision, or a new rank. Change events are what subscriptions and catching up deliver.
 
 ## Links
 
@@ -74,4 +74,31 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A link can pin a specific akt revision of its target instead of following the latest.
 
 - `link kind`
-  - A runtime definition of one kind of link, such as `child of`, `verifies` or `included in`. Nesting is the link kind `child of`, not a separate mechanism.
+  - A runtime definition of one kind of link, such as `verifies` or `originated from`.
+  - Containment is the one link kind Kuria builds in, because boards, ranks and numbering depend on it. Prefer `container` and `member` over `parent` and `child` for it.
+
+## Containment
+
+- `container`
+  - An akt whose akt type lets it contain other akter, such as a backlog, an epic or a release.
+
+- `member`
+  - An akt in a container. An akt may be a member of many containers at once, such as a backlog, an epic and a release.
+
+- `membership`
+  - One akt being a member of one container. Adding and ending a membership are recorded as akt revisions of both akter.
+
+- `exclusive`
+  - Said of a container akt type when an akt may be a member of at most one of its akter at a time, such as one backlog.
+
+- `rank`
+  - An akt's place in its tenant's one priority order. Every board orders members by rank, so moving an akt on one board moves it on every board.
+
+- `move`
+  - Giving an akt a new rank, directly before or after another akt. A move is not an akt revision.
+
+- `board`
+  - A container shown as columns. The container's akt type configures the columns, naming which states of which member akt types fall in each.
+
+- `parent` (in a number pattern)
+  - The container an akt was created in, whose akt number `{parent}` renders, as in `RELEASE-2026-0001-RC-0001`.

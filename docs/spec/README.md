@@ -24,3 +24,7 @@ Specs:
   transitioning akter, akt revisions and change events
 - [authorization](authorization.md): Kuria's actions in Konklav's catalog,
   and what each operation on akt types and akter requires
+- [containers](containers.md): akter containing akter, memberships and
+  their history, and creating an akt inside a container
+- [ordering](ordering.md): one rank per akt, and moves
+- [boards](boards.md): a container's members in configured columns

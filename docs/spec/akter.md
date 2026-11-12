@@ -5,8 +5,10 @@ moves through and how its number reads all come from its akt type, which is
 configuration a tenant submits at runtime. Every change to an akt is kept as
 an akt revision.
 
-Not yet covered here: links, signatures, structured tables and
-obligations. Who may do what is in [authorization](authorization.md).
+Not yet covered here: links other than containment, signatures,
+structured tables and obligations. Containing akter is in
+[containers](containers.md), their order in [ordering](ordering.md), and who
+may do what in [authorization](authorization.md).
 
 ## Akt types
 
@@ -29,7 +31,10 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - no transition starts from a final state;
 - every choice field has at least one option;
 - the number pattern is valid (`akt.number.pattern`);
-- every action a transition names is valid (`authz.transition-action`).
+- every action a transition names is valid (`authz.transition-action`);
+- the keys in `contains` and `created_in` are valid akt type keys, each listed
+  once (`container.contains`, `container.created-in`);
+- the board's columns are valid (`board.columns`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or
@@ -64,14 +69,18 @@ not define MUST be refused.
 
 r[akt.number.pattern]
 An akt type's number pattern MUST be literal text with these placeholders:
-`{year}` and `{month}` (of the akt's creation, in UTC, as 4 and 2 digits), and
+`{year}` and `{month}` (of the akt's creation, in UTC, as 4 and 2 digits),
+`{parent}` (the akt number of the container the akt was created in), and
 exactly one `{seq}` or `{seq:N}`, the sequence number zero-padded to at least
-N digits. Literal text MUST NOT contain `{` or `}`.
+N digits. `{parent}` MUST only be used by an akt type with `created_in`
+(`container.created-in`). Literal text MUST NOT contain `{` or `}`.
 
 r[akt.number.sequence]
 The sequence number MUST count from 1 per tenant and per pattern as rendered
 without its sequence, so that `CAPA-{year}-{seq:4}` gives `CAPA-2026-0001`,
-`CAPA-2026-0002`, and starts again at `CAPA-2027-0001`. Akt numbers MUST be
+`CAPA-2026-0002`, and starts again at `CAPA-2027-0001`, and
+`{parent}-RC-{seq:4}` counts separately in each parent:
+`RELEASE-2026-0001-RC-0002` and `RELEASE-2026-0002-RC-0001`. Akt numbers MUST be
 unique in their tenant and MUST never change.
 
 r[akt.edit]
@@ -113,3 +122,5 @@ written in one transaction, so that none is ever stored without the others.
 r[akt.change-event]
 Every akt revision MUST append a change event naming the tenant, the akt and
 the revision, numbered from 1 per tenant in the order the changes committed.
+Moves append change events too (`order.not-recorded`), numbered in the same
+sequence.

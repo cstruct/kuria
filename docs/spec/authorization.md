@@ -72,3 +72,24 @@ r[authz.transition]
 Performing a transition MUST require `kuria:akter:transition` at its akt
 type, and the transition's own action if it names one, and be refused as
 `FORBIDDEN` otherwise.
+
+r[authz.membership]
+Adding a member to a container, or removing one, MUST require
+`kuria:akter:edit` at the container's akt type and `kuria:akter:read` at the
+member's. A container the subject can't read, or a member they can't read,
+MUST be refused as `NOT_FOUND`, so that nobody learns of or arranges an akt
+they can't see.
+
+r[authz.create-inside]
+Creating an akt inside containers MUST require, besides `authz.create`,
+`kuria:akter:edit` at each container's akt type. A container the subject
+can't read MUST be refused as `NOT_FOUND`.
+
+r[authz.move]
+Moving an akt MUST require `kuria:akter:edit` at its akt type, and
+`kuria:akter:read` at the akt type of the akt it is moved next to; either
+akt the subject can't read MUST be refused as `NOT_FOUND`.
+
+r[authz.members]
+Lists of an akt's members and of its containers MUST leave out the akter the
+subject may not read.
