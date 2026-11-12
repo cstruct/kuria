@@ -63,8 +63,9 @@ signatures.
   revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt`.
-  `Akt` also has `rank`, `members` and `containers`, and a revision its
-  `membership`.
+  `Akt` also has `rank`, `members`, `containers` and `board` (its members
+  in its akt type's columns, then `unmapped`, each in rank order), and a
+  revision its `membership`.
   Errors carry a `code` extension: `INVALID_AKT_TYPE` (with `problems`),
   `UNKNOWN_AKT_TYPE`, `NOT_FOUND`, `REFUSED`, `STALE` (with
   `currentRevision`), `FORBIDDEN`, `UNAVAILABLE`, `NOT_CONTAINABLE`,
@@ -150,6 +151,9 @@ mise run test
   creating inside several containers, a move in a backlog showing in an
   epic, moves as rank events, concurrent moves, and the permissions for
   arranging, moving, creating inside and listing.
+- [`tests/boards.rs`](tests/boards.rs): stories and bugs in shared columns,
+  rank order within a column, `unmapped`, a container without columns, and
+  members the subject can't read.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -169,5 +173,6 @@ against a fake of Konklav's OpenID provider only.
   (`erasure.*`), [`akter.md`](../../docs/spec/akter.md) (`akt.*`) and
   [`authorization.md`](../../docs/spec/authorization.md) (`authz.*`),
   [`containers.md`](../../docs/spec/containers.md) (`container.*`) and
-  [`ordering.md`](../../docs/spec/ordering.md) (`order.*`).
+  [`ordering.md`](../../docs/spec/ordering.md) (`order.*`) and
+  [`boards.md`](../../docs/spec/boards.md) (`board.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

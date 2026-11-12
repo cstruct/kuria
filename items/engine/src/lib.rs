@@ -4,6 +4,7 @@
 //! No I/O: the caller loads the akt type and the akt, asks the engine, and
 //! stores what it answers.
 
+pub mod board;
 mod hash;
 mod rank;
 mod value;

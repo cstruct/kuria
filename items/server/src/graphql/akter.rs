@@ -11,6 +11,7 @@ use async_graphql::{
 };
 use chrono::{DateTime, Utc};
 use kuria_config::{ChoiceOption as ConfigOption, FieldDef, FieldKind as ConfigKind};
+use kuria_engine::board::{UNMAPPED, column_of};
 use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow, RevisionRow};
 use kuria_store::containers;
@@ -23,6 +24,9 @@ use crate::authorize::{Authorizer, Permission};
 
 /// The most akter one query lists.
 const MAX_LIST: i32 = 200;
+
+/// The most members one board shows.
+const MAX_BOARD: i32 = 1_000;
 
 fn principal<'a>(ctx: &Context<'a>) -> async_graphql::Result<&'a Principal> {
     ctx.data::<Principal>()
@@ -634,6 +638,55 @@ pub struct Transition {
     requires: Vec<String>,
 }
 
+/// A container's members in columns.
+#[derive(SimpleObject)]
+pub struct Board {
+    /// The configured columns, then `unmapped`.
+    columns: Vec<BoardColumn>,
+}
+
+/// One column of a board.
+#[derive(SimpleObject)]
+pub struct BoardColumn {
+    key: String,
+    name: String,
+    /// Its members, in rank order.
+    akter: Vec<Akt>,
+}
+
+impl Akt {
+    /// Up to `limit` members that the subject may read, of the akt type
+    /// `key` if given, in rank order, in a fixed number of queries.
+    async fn readable_members(
+        &self,
+        ctx: &Context<'_>,
+        key: Option<&str>,
+        limit: i32,
+    ) -> async_graphql::Result<Vec<Akt>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut readable = Vec::new();
+        for contained in self.ty.ty.document().contains.iter().map(|c| &c.akt_type) {
+            if key.is_none_or(|k| k == contained) && reads(ctx, contained).await? {
+                readable.push(contained.clone());
+            }
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let rows = containers::members_of(
+            &mut conn,
+            tenant,
+            &[self.row.id],
+            &readable,
+            i64::from(limit),
+        )
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .map(|(_, row)| row)
+        .collect();
+        with_types(&mut conn, tenant, rows).await
+    }
+}
+
 /// An akt, with the akt type version it was created with.
 pub struct Akt {
     row: AktRow,
@@ -712,28 +765,43 @@ impl Akt {
         #[graphql(name = "type")] key: Option<String>,
         first: Option<i32>,
     ) -> async_graphql::Result<Vec<Akt>> {
-        let tenant: Uuid = principal(ctx)?.tenant.into();
         let limit = first.unwrap_or(50).clamp(1, MAX_LIST);
-        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
-        let mut readable = Vec::new();
-        for contained in self.ty.ty.document().contains.iter().map(|c| &c.akt_type) {
-            if key.as_ref().is_none_or(|k| k == contained) && reads(ctx, contained).await? {
-                readable.push(contained.clone());
+        self.readable_members(ctx, key.as_deref(), limit).await
+    }
+
+    /// The akt as a board: its members that the subject may read, in the
+    /// columns its akt type configures and then `unmapped`, each in rank
+    /// order. At most `first` members are shown (500 by default, 1000 at
+    /// most).
+    // r[impl board.placement]
+    // r[impl board.visibility]
+    async fn board(&self, ctx: &Context<'_>, first: Option<i32>) -> async_graphql::Result<Board> {
+        let limit = first.unwrap_or(500).clamp(1, MAX_BOARD);
+        let members = self.readable_members(ctx, None, limit).await?;
+        let config = self.ty.ty.board();
+        let mut columns: Vec<BoardColumn> = config
+            .map(|board| board.columns.as_slice())
+            .unwrap_or_default()
+            .iter()
+            .map(|column| BoardColumn {
+                key: column.key.clone(),
+                name: column.name.clone(),
+                akter: Vec::new(),
+            })
+            .collect();
+        columns.push(BoardColumn {
+            key: UNMAPPED.to_owned(),
+            name: "Unmapped".to_owned(),
+            akter: Vec::new(),
+        });
+        // Members arrive in rank order, so each column keeps it.
+        for member in members {
+            let key = column_of(config, member.ty.ty.key(), &member.row.state);
+            if let Some(column) = columns.iter_mut().find(|c| c.key == key) {
+                column.akter.push(member);
             }
         }
-        let rows = containers::members_of(
-            &mut conn,
-            tenant,
-            &[self.row.id],
-            &readable,
-            i64::from(limit),
-        )
-        .await
-        .map_err(internal)?
-        .into_iter()
-        .map(|(_, row)| row)
-        .collect();
-        with_types(&mut conn, tenant, rows).await
+        Ok(Board { columns })
     }
 
     /// The containers it is in that the subject may read, in rank order.
