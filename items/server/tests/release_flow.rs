@@ -11,13 +11,16 @@ use kuria_test_support::TestDatabase;
 use serde_json::{Value, json};
 
 use support::decider::FakeDecider;
-use support::{FakeHost, graphql_with, router_with, send};
+use support::{FakeHost, SUBJECT, graphql_with, router_with, send};
 
 const ADMIN: &str = "tenant";
 const DEV: &str = "tenant-dev";
 const RM: &str = "tenant-release-manager";
+/// The build pipeline: software, another subject than the people.
+const CI: &str = "colleague-ci";
 
-const DOCUMENTS: [&str; 7] = [
+const DOCUMENTS: [&str; 8] = [
+    include_str!("../../../docs/examples/release-management/artifact.json"),
     include_str!("../../../docs/examples/release-management/backlog_item.json"),
     include_str!("../../../docs/examples/release-management/epic.json"),
     include_str!("../../../docs/examples/release-management/backlog.json"),
@@ -75,6 +78,56 @@ impl World {
             .as_str()
             .unwrap()
             .to_owned()
+    }
+
+    /// Uploads `body` as the pipeline, and returns the attachment's id.
+    async fn upload(&self, name: &str, body: &Value) -> String {
+        let answer = send(
+            &self.router,
+            axum::http::Request::post("/attachments")
+                .header("authorization", format!("Bearer {CI}"))
+                .header("x-attachment-name", name)
+                .header("content-type", "application/vnd.cyclonedx+json")
+                .body(axum::body::Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(answer.status, 201, "{}", answer.body);
+        answer.json()["id"].as_str().unwrap().to_owned()
+    }
+
+    /// Registers a built image of `component`, as the pipeline.
+    async fn built(
+        &self,
+        component: &str,
+        version: &str,
+        digest: char,
+        sbom: Option<&str>,
+    ) -> String {
+        let mut fields = json!({
+            "component": component,
+            "change": "built",
+            "version": version,
+            "source": { "repository": format!("https://git.example/shop/{component}.git"),
+                        "tag": format!("v{version}") },
+            "image": { "repository": format!("registry.example/shop/{component}"),
+                       "digest": digest_of(digest), "tag": version },
+        });
+        if let Some(sbom) = sbom {
+            fields["sbom"] = json!(sbom);
+        }
+        self.create(CI, "artifact", &[], fields).await
+    }
+
+    /// Registers that `component` is removed, as the pipeline.
+    async fn removed(&self, component: &str) -> String {
+        self.create(
+            CI,
+            "artifact",
+            &[],
+            json!({ "component": component, "change": "removed" }),
+        )
+        .await
     }
 
     async fn item(&self, inside: &[&str], title: &str, kind: &str) -> String {
@@ -185,8 +238,14 @@ impl World {
     }
 }
 
-/// The developer and release manager roles of the example's README.
+fn digest_of(digit: char) -> String {
+    format!("sha256:{}", String::from(digit).repeat(64))
+}
+
+/// The developer, release manager and pipeline roles of the example's
+/// README.
 fn roles(decider: &FakeDecider) {
+    decider.grant_at(CI, "artifact", &[READ, CREATE]);
     decider.grant(DEV, &[READ]);
     for key in ["backlog", "epic", "backlog_item"] {
         decider.grant_at(DEV, key, &[CREATE, EDIT, TRANSITION]);
@@ -214,7 +273,12 @@ async fn a_release_from_planning_to_closed() {
 
     // Planning: a release, its backlog, an epic, and items in both.
     let release = world
-        .create(RM, "release", &[], json!({ "title": "Spring" }))
+        .create(
+            RM,
+            "release",
+            &[],
+            json!({ "title": "Spring", "release_manager": SUBJECT }),
+        )
         .await;
     assert_eq!(release, format!("RELEASE-{year}-0001"));
     let backlog = world
@@ -276,6 +340,25 @@ async fn a_release_from_planning_to_closed() {
         .await;
     world.added(RM, &rc1, &experiment).await;
 
+    // The pipeline builds the candidate's images, with the backend's SBOM,
+    // and the release manager puts them in it.
+    let sbom = world
+        .upload(
+            "backend.cdx.json",
+            &json!({
+                "bomFormat": "CycloneDX", "specVersion": "1.6",
+                "metadata": { "component": { "name": "backend" } },
+                "components": [{ "name": "serde" }, { "name": "tokio" }, { "name": "axum" }]
+            }),
+        )
+        .await;
+    let backend_rc1 = world.built("backend", "4.2.0-rc.1", 'a', Some(&sbom)).await;
+    let frontend = world.built("frontend", "4.2.0-rc.1", 'b', None).await;
+    let search = world.built("search", "0.1.0", 'c', None).await;
+    for artifact in [&backend_rc1, &frontend, &search] {
+        world.added(RM, &rc1, artifact).await;
+    }
+
     // Work moves across the candidate's board as it is done.
     world.finish(&crash).await;
     assert_eq!(
@@ -295,6 +378,12 @@ async fn a_release_from_planning_to_closed() {
     assert_eq!(rc2, format!("RELEASE-{year}-0001-RC-0002"));
     for member in [&epic, &crash, &typo] {
         world.added(RM, &rc2, member).await;
+    }
+    // Only the backend is rebuilt, and the experimental search is dropped.
+    let backend_rc2 = world.built("backend", "4.2.0-rc.2", 'd', None).await;
+    let no_search = world.removed("search").await;
+    for artifact in [&backend_rc2, &no_search] {
+        world.added(RM, &rc2, artifact).await;
     }
     for item in [&passkeys, &reset, &typo] {
         world.finish(item).await;
@@ -325,7 +414,8 @@ async fn a_release_from_planning_to_closed() {
         .await;
     assert_eq!(next_rc, format!("RELEASE-{year}-0002-RC-0001"));
 
-    // Releasing needs the version and date, and release:approve.
+    // Releasing needs the version and date, the release manager's go, and
+    // release:approve.
     let released_fields = json!({ "version": "4.2.0", "released_on": "2026-04-01" });
     assert_eq!(
         code(
@@ -335,9 +425,28 @@ async fn a_release_from_planning_to_closed() {
         ),
         "FORBIDDEN"
     );
-    world
-        .transitioned(RM, &release, "release", released_fields)
+    assert_eq!(
+        code(
+            &world
+                .transition(RM, &release, "release", released_fields.clone())
+                .await
+        ),
+        "REFUSED",
+        "releasing needs the go"
+    );
+    let mut with_go = released_fields;
+    with_go["go"] = json!(true);
+    world.transitioned(RM, &release, "release", with_go).await;
+    let go = world
+        .ok(
+            ADMIN,
+            "query($n: String!) { akt(number: $n) { fields { ... on CheckboxValue { field checked by { id } } ... on UserValue { field user { id } } } } }",
+            json!({ "n": release }),
+        )
         .await;
+    let fields = go["akt"]["fields"].as_array().unwrap();
+    assert!(fields.contains(&json!({ "field": "release_manager", "user": { "id": SUBJECT } })));
+    assert!(fields.contains(&json!({ "field": "go", "checked": true, "by": { "id": SUBJECT } })));
 
     // Once released, it takes hotfixes but no more candidates.
     let late_rc = world
@@ -375,6 +484,8 @@ async fn a_release_from_planning_to_closed() {
     assert_eq!(hotfix, format!("RELEASE-{year}-0001-HOTFIX-0001"));
     let sessions = world.item(&[&backlog], "Lost sessions", "fix").await;
     world.added(RM, &hotfix, &sessions).await;
+    let backend_hotfix = world.built("backend", "4.2.1", 'e', None).await;
+    world.added(RM, &hotfix, &backend_hotfix).await;
     world.finish(&sessions).await;
     world
         .transitioned(
@@ -411,7 +522,72 @@ async fn a_release_from_planning_to_closed() {
         ]
         .join("\n")
     );
+
+    // The artifacts that ship: each component's newest, across the
+    // candidates and the hotfix in order, without the removed search. The
+    // frontend built for the first candidate still ships, since no later
+    // one rebuilt it.
+    let drafted = world
+        .ok(
+            RM,
+            "mutation($n: String!) { draftField(input: { number: $n, revision: 2, field: \"artifacts\" }) { fields { ... on TextValue { field text } } } }",
+            json!({ "n": notes }),
+        )
+        .await;
+    let artifacts = drafted["draftField"]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["field"] == "artifacts")
+        .unwrap()["text"]
+        .clone();
+    assert_eq!(
+        artifacts,
+        [
+            format!(
+                "- frontend 4.2.0-rc.1: registry.example/shop/frontend:4.2.0-rc.1@{}",
+                digest_of('b')
+            ),
+            format!(
+                "- backend 4.2.1: registry.example/shop/backend:4.2.1@{}",
+                digest_of('e')
+            ),
+        ]
+        .join("\n")
+    );
     world.transitioned(RM, &notes, "approve", json!({})).await;
+
+    // The backend's SBOM, summarised at upload, downloads for the release
+    // manager now that an artifact they can read holds it.
+    let held = world
+        .ok(
+            RM,
+            "query($n: String!) { akt(number: $n) { fields { ... on AttachmentValue { attachment { name sbom { format specVersion name components } } } } } }",
+            json!({ "n": backend_rc1 }),
+        )
+        .await;
+    let attachment = held["akt"]["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|f| f.get("attachment"))
+        .unwrap()
+        .clone();
+    assert_eq!(
+        attachment,
+        json!({ "name": "backend.cdx.json",
+                "sbom": { "format": "CYCLONEDX", "specVersion": "1.6", "name": "backend", "components": 3 } })
+    );
+    let download = send(
+        &world.router,
+        axum::http::Request::get(format!("/attachments/{sbom}"))
+            .header("authorization", format!("Bearer {RM}"))
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(download.status, 200);
+    assert_eq!(download.json()["bomFormat"], "CycloneDX");
 
     // The release board shows its candidates and hotfix by outcome.
     assert_eq!(

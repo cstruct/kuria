@@ -1,6 +1,6 @@
 # Release management
 
-An example configuration: seven akt types for running a product's backlog
+An example configuration: eight akt types for running a product's backlog
 and releases in Kuria. Nothing in Kuria knows these names; they are
 ordinary akt type documents, and a tenant can change them or start from
 others.
@@ -11,8 +11,9 @@ others.
 | [`epic`](epic.json) | `EPIC-001` | backlog items, each in one epic | |
 | [`backlog`](backlog.json) | `BACKLOG-001` | backlog items, each in one backlog, and epics | |
 | [`release`](release.json) | `RELEASE-2026-0001` | backlogs, release candidates, hotfixes, one set of release notes | |
-| [`release_candidate`](release_candidate.json) | `RELEASE-2026-0001-RC-0001` | epics and backlog items | a release |
-| [`hotfix`](hotfix.json) | `RELEASE-2026-0001-HOTFIX-0001` | backlog items | a release |
+| [`release_candidate`](release_candidate.json) | `RELEASE-2026-0001-RC-0001` | epics, backlog items and artifacts | a release |
+| [`hotfix`](hotfix.json) | `RELEASE-2026-0001-HOTFIX-0001` | backlog items and artifacts | a release |
+| [`artifact`](artifact.json) | `ARTIFACT-00001` | | |
 | [`release_notes`](release_notes.json) | `RELEASE-2026-0001-NOTES-1` | | a release |
 
 ## How it fits together
@@ -30,10 +31,24 @@ others.
   on the item and both backlogs.
 - Release candidates and hotfixes are accepted or deployed with evidence:
   the build, and for a candidate its test record, as references.
+- An artifact is what a build produced for one component: its version, the
+  git commit it was built from, its container image by digest, and its SBOM
+  (SPDX or CycloneDX, uploaded to `POST /attachments`). The build pipeline
+  registers artifacts, and the release manager puts them into candidates
+  and hotfixes. An artifact whose change is `removed` says that a candidate
+  drops a component.
+- A release names its release manager, and can only be released once they
+  check *Go for release*, which records who checked it and when.
 - The release notes are drafted from what the release's accepted candidates
   and deployed hotfixes contain, including the items inside their epics,
   but not from its backlogs, whose items may not have shipped, nor from
   rejected candidates. The draft is then edited and approved.
+- The release notes' *Artifacts* are drafted from the artifacts in the
+  release's candidates and hotfixes: each component's newest artifact, and
+  none for a component whose newest artifact is a removal. Every candidate
+  counts, rejected ones too, so a component built once early and never
+  rebuilt still ships; a candidate that must not ship a component removes
+  it.
 
 ## Defining it
 
@@ -62,6 +77,13 @@ Two roles cover the usual split:
 - **Release manager**, tenant-wide: `kuria:akter:read`; and at `release`,
   `release_candidate`, `hotfix` and `release_notes`: `kuria:akter:create`,
   `kuria:akter:edit`, `kuria:akter:transition`, and `release:approve`.
+
+And one for software:
+
+- **Build pipeline**, at `artifact`: `kuria:akter:read` and
+  `kuria:akter:create`. It uploads SBOMs and registers artifacts holding
+  them; only it can attach its uploads until an artifact holds them, and
+  then whoever reads artifacts can download them.
 
 A release manager can put items into release candidates and hotfixes,
 since that needs `edit` at the container and `read` at the item. A

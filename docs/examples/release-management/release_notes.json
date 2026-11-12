@@ -12,6 +12,15 @@
         "line": "- {number} {field:title} ({field:kind})",
         "group_by": "type",
         "states": { "release_candidate": ["accepted"], "hotfix": ["deployed"] }
+      } },
+    { "key": "artifacts", "name": "Artifacts", "kind": "text", "multiline": true,
+      "draft": {
+        "through": ["release_candidate", "hotfix"],
+        "depth": 2,
+        "types": ["artifact"],
+        "line": "- {field:component} {field:version}: {field:image}",
+        "latest_by": "component",
+        "exclude": { "change": ["removed"] }
       } }
   ],
   "states": [

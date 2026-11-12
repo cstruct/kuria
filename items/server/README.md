@@ -199,9 +199,11 @@ mise run test
 - [`tests/release_flow.rs`](tests/release_flow.rs) walks one release with
   the example configuration in
   [`docs/examples/release-management`](../../docs/examples/release-management/README.md),
-  read straight from its files, as a developer and a release manager: from
-  planning through two release candidates, the release and a hotfix, to
-  drafted notes and a closed, frozen release.
+  read straight from its files, as a developer, a release manager and a
+  build pipeline: from planning through two release candidates with their
+  artifacts and an SBOM, a removal, the release manager's go, the release
+  and a hotfix, to drafted notes and artifacts and a closed, frozen
+  release.
 - [`tests/changes.rs`](tests/changes.rs) runs real servers on local ports
   against the development Valkey and subscribes over WebSocket: delivery in
   order, catching up from a cursor, leaving out what the subscriber can't

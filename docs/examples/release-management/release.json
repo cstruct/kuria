@@ -5,7 +5,9 @@
   "fields": [
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "version", "name": "Version", "kind": "text" },
-    { "key": "released_on", "name": "Released on", "kind": "date" }
+    { "key": "released_on", "name": "Released on", "kind": "date" },
+    { "key": "release_manager", "name": "Release manager", "kind": "user" },
+    { "key": "go", "name": "Go for release", "kind": "checkbox" }
   ],
   "states": [
     { "key": "planning", "name": "Planning", "initial": true },
@@ -16,7 +18,8 @@
   "transitions": [
     { "key": "test", "name": "Start testing", "from": ["planning"], "to": "testing" },
     { "key": "release", "name": "Release", "from": ["testing"], "to": "released",
-      "requires": ["version", "released_on"], "action": "release:approve" },
+      "requires": ["version", "released_on", "release_manager", "go"],
+      "action": "release:approve" },
     { "key": "close", "name": "End maintenance", "from": ["released"], "to": "closed" }
   ],
   "contains": [

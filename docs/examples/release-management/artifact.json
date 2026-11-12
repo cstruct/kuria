@@ -1,0 +1,20 @@
+{
+  "key": "artifact",
+  "name": "Artifact",
+  "number": "ARTIFACT-{seq:5}",
+  "fields": [
+    { "key": "component", "name": "Component", "kind": "text", "required": true },
+    { "key": "change", "name": "Change", "kind": "choice", "required": true,
+      "options": [
+        { "key": "built", "name": "Built" },
+        { "key": "removed", "name": "Removed" }
+      ] },
+    { "key": "version", "name": "Version", "kind": "text" },
+    { "key": "source", "name": "Source", "kind": "git" },
+    { "key": "image", "name": "Image", "kind": "docker" },
+    { "key": "sbom", "name": "SBOM", "kind": "attachment", "format": "sbom" }
+  ],
+  "states": [
+    { "key": "registered", "name": "Registered", "initial": true }
+  ]
+}

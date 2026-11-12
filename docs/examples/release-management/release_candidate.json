@@ -17,7 +17,7 @@
       "requires": ["build", "test_record"] },
     { "key": "reject", "name": "Reject", "from": ["testing"], "to": "rejected" }
   ],
-  "contains": [{ "type": "epic" }, { "type": "backlog_item" }],
+  "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" }],
   "board": { "columns": [
     { "key": "todo", "name": "To do",
       "states": { "backlog_item": ["open"], "epic": ["open"] } },

@@ -15,5 +15,5 @@
     { "key": "deploy", "name": "Deploy", "from": ["open"], "to": "deployed",
       "requires": ["build"], "action": "release:approve" }
   ],
-  "contains": [{ "type": "backlog_item" }]
+  "contains": [{ "type": "backlog_item" }, { "type": "artifact" }]
 }
