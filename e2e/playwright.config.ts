@@ -24,7 +24,9 @@ export default defineConfig({
 		url: `${KURIA}/healthz`,
 		// The first run compiles the server.
 		timeout: 900_000,
-		reuseExistingServer: false,
+		// KURIA_E2E_EXISTING=1 runs the tests against a server already
+		// running, such as `mise run e2e:serve`'s, leaving what they make.
+		reuseExistingServer: process.env.KURIA_E2E_EXISTING === '1',
 		stdout: 'pipe',
 		stderr: 'pipe'
 	}

@@ -20,6 +20,27 @@ against the same Konklav, or one of them:
 mise exec -- npx --prefix e2e playwright test -g "release"
 ```
 
+## Clicking around
+
+```sh
+mise run e2e:serve
+```
+
+starts the same stack, defines the release-management example's akt
+types, and prints who can sign in at <http://localhost:18090> (use
+`localhost`, not `127.0.0.1`). Each start begins with an empty Kuria and
+a fresh Konklav. Ctrl-C stops the server.
+
+```sh
+mise run e2e:walk
+```
+
+runs the release walkthrough against that server, from another terminal,
+and leaves its release, candidates, hotfix, notes and artifacts behind to
+explore; it can run again, numbering the next release. With
+`KURIA_E2E_EXISTING=1`, any Playwright run uses a server already
+listening instead of starting one.
+
 The first run installs Chromium (`mise run e2e:install`) and compiles the
 server. A failed test keeps its trace and screenshots in
 `.state/results`; `npx playwright show-trace <trace.zip>` replays it.

@@ -3,25 +3,12 @@
 // through the API, from planning to a closed release. It mirrors
 // items/server/tests/release_flow.rs, which walks the same release through
 // GraphQL alone.
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
+import { defineExample } from '../support/example.ts';
 import { addMembers, addTo, column, create, moved, open, shown, transition } from '../support/app.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
-
-const EXAMPLE = join(import.meta.dirname, '..', '..', 'docs', 'examples', 'release-management');
-const TYPES = [
-	'artifact',
-	'backlog_item',
-	'epic',
-	'backlog',
-	'release',
-	'release_candidate',
-	'hotfix',
-	'release_notes'
-];
 
 const digest = (digit: string) => `sha256:${digit.repeat(64)}`;
 
@@ -36,12 +23,7 @@ test('a release from planning to closed', async ({ browser }) => {
 	const { people, clients } = seeded();
 
 	// The admin defines the example's akt types, as their documents are.
-	const admin = await api(clients.admin);
-	for (const key of TYPES) {
-		await admin.graphql('mutation($d: JSON!) { defineAktType(document: $d) { key } }', {
-			d: JSON.parse(readFileSync(join(EXAMPLE, `${key}.json`), 'utf8'))
-		});
-	}
+	await defineExample();
 	const pipeline = await api(clients.pipeline);
 	/** The pipeline registers a build of `component`, and answers its number. */
 	async function built(component: string, version: string, digit: string, sbom?: string) {
@@ -85,7 +67,7 @@ test('a release from planning to closed', async ({ browser }) => {
 		Title: 'Spring',
 		'Release manager': { choose: 'Me' }
 	});
-	expect(release).toMatch(/^RELEASE-\d{4}-0001$/);
+	expect(release).toMatch(/^RELEASE-\d{4}-\d{4}$/);
 	const backlog = await create(dev, 'backlog', { Title: 'Spring backlog' });
 	await open(rm, backlog);
 	await addTo(rm, release);

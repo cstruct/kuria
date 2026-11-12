@@ -116,3 +116,15 @@ description = "Run the end-to-end tests: a seeded Konklav, the Kuria server serv
 depends = ["db:up", "web:build", "e2e:up"]
 dir = "e2e"
 run = "npx playwright test"
+
+[tasks."e2e:serve"]
+description = "Run Kuria against a fresh, seeded Konklav with the release-management example's akt types, to click around in on http://localhost:18090"
+depends = ["db:up", "web:build", "e2e:up"]
+dir = "e2e"
+run = "node scripts/explore.ts"
+
+[tasks."e2e:walk"]
+description = "Run the release walkthrough against the server `mise run e2e:serve` runs, leaving its release behind"
+dir = "e2e"
+env = { KURIA_E2E_EXISTING = "1" }
+run = "npx playwright test tests/release-flow.spec.ts"
