@@ -7,6 +7,7 @@
 
 pub mod akter;
 pub mod attachments;
+pub mod contacts;
 pub mod containers;
 pub mod erasure;
 mod migrate;

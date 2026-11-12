@@ -112,6 +112,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    contact (id) {
+        id -> Uuid,
+        tenant_id -> Uuid,
+        name -> Nullable<Text>,
+        email -> Nullable<Text>,
+        linked_subject -> Nullable<Uuid>,
+        linked_at -> Nullable<Timestamptz>,
+        created_by -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
 diesel::joinable!(akt -> akt_type_version (type_version_id));
 diesel::joinable!(akt_revision -> akt (akt_id));
 diesel::allow_tables_to_appear_in_same_query!(

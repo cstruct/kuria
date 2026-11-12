@@ -123,6 +123,7 @@ Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDD
 | `change_event` | The outbox: one row per change, in order (a sequence per tenant), naming the tenant, the akt and, for a `revision` event, its new revision, or for a `rank` event, none; and when it was published to Valkey. |
 | `attachment` | Each upload: tenant, name, media type, size, SHA-256, uploader and time, and an SBOM's summary. Its bytes are in object storage at `<tenant>/<SHA-256>`. |
 | `akt_attachment` | Which field of which akt holds which attachment, kept by the write path, so a download is decided by the akt types holding the file. |
+| `contact` | People a tenant names before, or without, them being users: a name and an optional email, unique per tenant regardless of case, and the subject it is linked to once they sign in with that email verified. Erasing it keeps the row without name or email. |
 | `person` | The name and email recorded at a subject's last browser sign-in, from Konklav's userinfo endpoint. Erased with the subject. |
 | `erasure_watermark` | The time Kuria has handled Konklav's erasures up to: the latest erasure read from Konklav's list. One row, moved only forward. |
 | `login_attempt` | Browser sign-ins started at Konklav and not completed: the `state`, the PKCE verifier and where to return. Kept for ten minutes. |

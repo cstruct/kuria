@@ -2,6 +2,7 @@
 //!
 //! - [`akter`]: akt types, akter and their revisions, and the mutations
 //!   that change them.
+//! - [`contacts`]: people a tenant names before they are users.
 
 // async-graphql requires every resolver to be async, also those that don't
 // await anything.
@@ -10,6 +11,7 @@
 mod akter;
 mod attachments;
 mod changes;
+mod contacts;
 mod people;
 
 pub(crate) use people::display_name;
@@ -59,10 +61,14 @@ impl Principal {
 }
 
 #[derive(async_graphql::MergedObject, Default)]
-pub struct Query(ViewerQuery, akter::AkterQuery);
+pub struct Query(ViewerQuery, akter::AkterQuery, contacts::ContactsQuery);
 
 #[derive(async_graphql::MergedObject, Default)]
-pub struct Mutation(akter::AkterMutation, akter::ContainmentMutation);
+pub struct Mutation(
+    akter::AkterMutation,
+    akter::ContainmentMutation,
+    contacts::ContactsMutation,
+);
 
 #[derive(Default)]
 pub struct ViewerQuery;

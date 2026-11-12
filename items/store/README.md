@@ -21,6 +21,8 @@ the queries the server runs.
     recursive query), ranks with their neighbours, rank change events, the
     tenant's order lock, and locking several akter in a fixed order.
   - [`people`](src/people.rs): the names and emails recorded at sign-in.
+  - [`contacts`](src/contacts.rs): contacts, telling a taken email apart
+    from other failures, and editing only unlinked ones.
   - [`attachments`](src/attachments.rs): attachments' metadata, which akt
     fields hold which attachment, and the akt types of an attachment's
     holders.

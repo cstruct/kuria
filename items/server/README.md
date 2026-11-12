@@ -48,6 +48,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   while none does. The write path takes into `attachment` fields only the
   tenant's attachments the caller may read, only SBOMs into `sbom` fields,
   and records which akter hold which attachments.
+- Contacts ([`src/graphql/contacts.rs`](src/graphql/contacts.rs)):
+  adding, editing, erasing and listing the people a tenant names before
+  they are users, one per email, with `kuria:contacts:manage` and
+  `kuria:contacts:read`.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
 
@@ -112,8 +116,9 @@ Not yet: links other than containment, and signatures.
 ## Running
 
 Konklav's catalog must declare Kuria's actions, `kuria:akt_types:define`,
-`kuria:akter:read`, `kuria:akter:create`, `kuria:akter:edit` and
-`kuria:akter:transition`, the scope kind `kuria_akt_type`, and any action an
+`kuria:akter:read`, `kuria:akter:create`, `kuria:akter:edit`,
+`kuria:akter:transition`, `kuria:contacts:read` and
+`kuria:contacts:manage`, the scope kind `kuria_akt_type`, and any action an
 akt type's transitions name. Roles grant them tenant-wide or at one akt type
 (the scope id is the akt type's key).
 
@@ -216,6 +221,10 @@ mise run test
   not, and which attachments `attachment` and `sbom` fields take.
 - [`tests/storage.rs`](tests/storage.rs) uploads and downloads through the
   development S3 gateway (versitygw, started by `mise run db:up`).
+- [`tests/contacts.rs`](tests/contacts.rs): adding and listing contacts
+  and their permissions, names and emails checked, one per email per
+  tenant regardless of case, editing until linked, a linked contact shown
+  as its user, and erasing.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -240,5 +249,6 @@ against a fake of Konklav's OpenID provider only.
   [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`),
   [`changes.md`](../../docs/spec/changes.md) (`changes.*`) and
   [`people.md`](../../docs/spec/people.md) (`person.*`) and
-  [`attachments.md`](../../docs/spec/attachments.md) (`attachment.*`).
+  [`attachments.md`](../../docs/spec/attachments.md) (`attachment.*`) and
+  [`contacts.md`](../../docs/spec/contacts.md) (`contact.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

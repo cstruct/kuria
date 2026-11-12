@@ -22,6 +22,10 @@ pub const CREATE: &str = "kuria:akter:create";
 pub const EDIT: &str = "kuria:akter:edit";
 /// Performing an akt type's transitions.
 pub const TRANSITION: &str = "kuria:akter:transition";
+/// Listing contacts, with their emails, tenant-wide.
+pub const READ_CONTACTS: &str = "kuria:contacts:read";
+/// Adding, editing, erasing and listing contacts, tenant-wide.
+pub const MANAGE_CONTACTS: &str = "kuria:contacts:manage";
 /// The scope kind of an akt type, whose ids are akt type keys.
 pub const SCOPE_KIND: &str = "kuria_akt_type";
 
@@ -51,6 +55,8 @@ pub enum Permission {
     Create { key: String },
     Edit { key: String },
     Transition { key: String, action: Option<String> },
+    ReadContacts,
+    ManageContacts,
 }
 
 impl Permission {
@@ -66,11 +72,14 @@ impl Permission {
             }],
             ..Requirements::default()
         };
+        let tenant_wide = |action: &str| Requirements {
+            tenant: BTreeSet::from([action.to_owned()]),
+            ..Requirements::default()
+        };
         match self {
-            Self::DefineTypes => Requirements {
-                tenant: BTreeSet::from([DEFINE_TYPES.to_owned()]),
-                ..Requirements::default()
-            },
+            Self::DefineTypes => tenant_wide(DEFINE_TYPES),
+            Self::ReadContacts => tenant_wide(READ_CONTACTS),
+            Self::ManageContacts => tenant_wide(MANAGE_CONTACTS),
             Self::Read { key } => at_type(key, &[READ]),
             Self::Create { key } => at_type(key, &[CREATE]),
             Self::Edit { key } => at_type(key, &[EDIT]),
@@ -131,6 +140,14 @@ impl Authorizer {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(permission.clone(), allowed);
         Ok(allowed)
+    }
+
+    /// Whether the subject may list contacts and see their emails: may read
+    /// or manage them.
+    // r[impl contact.list]
+    pub async fn reads_contacts(&self) -> Result<bool, Unavailable> {
+        Ok(self.allows(&Permission::ReadContacts).await?
+            || self.allows(&Permission::ManageContacts).await?)
     }
 
     /// Whether the subject may see the akt type `key`: may define akt types,
