@@ -1,2 +1,4 @@
 /target
 mise.local.toml
+.agents/plans/*
+!.agents/plans/PLANS.md
