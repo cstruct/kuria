@@ -14,7 +14,9 @@ the queries the server runs.
   - [`sessions`](src/sessions.rs): login attempts and browser sessions,
     including the row lock a refresh holds.
   - [`akter`](src/akter.rs): akt types and their versions, akter, akt
-    revisions, per-tenant counters, and the change-event outbox.
+    revisions, per-tenant counters, and the change-event outbox: taking
+    unpublished events (`for update skip locked`), marking them published,
+    and reading them in order with their akter's numbers and types.
   - [`containers`](src/containers.rs): memberships, the cycle check (a
     recursive query), ranks with their neighbours, rank change events, the
     tenant's order lock, and locking several akter in a fixed order.

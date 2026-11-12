@@ -53,7 +53,8 @@ pub fn claims_in(kind: &str, tenant: &str) -> AccessClaims {
 }
 
 /// Stands in for a started `RelyingClient`. It accepts bearer tokens starting
-/// with `tenant` or `identity`, with claims of that kind, `tenant-dpop`, a
+/// with `tenant` or `identity`, with claims of that kind, `tenant-expiring`,
+/// a tenant token that expires in two seconds, `tenant-dpop`, a
 /// tenant token bound to a DPoP key, and `other-tenant`, a tenant token in
 /// `OTHER_TENANT`; refuses `invalid`,
 /// refuses the proof of `bad-proof`, fails for `unreachable`, and decides
@@ -74,6 +75,11 @@ impl FakeHost {
 
     fn token(presented: &Presented) -> Result<Verified<AccessClaims>, Error> {
         match presented.access_token().unwrap_or_default() {
+            "tenant-expiring" => {
+                let mut soon = claims("tenant");
+                soon.exp = chrono::Utc::now().timestamp() + 2;
+                Ok(Verified::Valid(soon))
+            }
             "tenant-dpop" => {
                 let mut bound = claims("tenant");
                 bound.cnf = Some(konklav_token::Confirmation {
@@ -156,6 +162,7 @@ pub fn router_with(
             pool,
             decider,
             sessions: None,
+            changes: None,
         },
     )
     .unwrap()

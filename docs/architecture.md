@@ -147,14 +147,19 @@ Containment is the one link kind Kuria builds in ([containers](spec/containers.m
 
 ## Real-time updates
 
-Postgres is the record of every change, and Valkey carries them to the instances and keeps a short window of recent ones. Nothing is written to Valkey that is not already committed in Postgres.
+Postgres is the record of every change, and Valkey tells every instance that there is something new. Nothing is written to Valkey that is not already committed in Postgres ([spec](spec/changes.md)).
 
-1. **Outbox.** The transaction that writes a revision, or moves an akt, also appends a `change_event` row, with the tenant's next sequence number. The event names the tenant, the akt, and its new revision or that its rank changed, and nothing else. (Writing the outbox is built; steps 2 to 4 are not yet.)
-2. **Publishing.** After the commit, the writing instance adds the event to the tenant's stream in Valkey (`XADD`, trimmed to a bounded length) and marks the row published. A relay, run by one instance at a time under a Postgres advisory lock, publishes any row still unpublished a few seconds later, so an instance that dies between commit and publish loses nothing. An event may therefore be published twice; consumers ignore sequence numbers they have seen.
-3. **Delivery.** Each instance reads the streams of the tenants it has subscribers in (`XREAD BLOCK`) and passes each event to the subscriptions that may see that akt. A subscription delivers small events ("akt X is now at revision N"), and the client fetches what it needs through ordinary queries.
-4. **Catching up.** A client keeps the last sequence number it saw. When it comes back, it asks for everything after it: the server answers from the Valkey stream while the cursor is inside its window, and from `change_event` in Postgres when it is older. Either way the client gets the same events in the same order, filtered by the same permissions.
+1. **Outbox.** The transaction that writes a revision, or moves an akt, also appends a `change_event` row, with the tenant's next sequence number. Taking that number locks the tenant's counter until commit, so sequence numbers follow commit order: once event N is visible, every event before it is too.
+2. **Publishing.** Every instance runs a relay that takes unpublished rows (`for update skip locked`, so instances never publish the same row at once), adds each to its tenant's stream in Valkey (`XADD`, trimmed to a bounded length), and marks it published. The relay wakes as soon as its own instance writes, and every half second otherwise, so a row an instance left unpublished is picked up by any other. An event may be published twice; nothing depends on it being once.
+3. **Fan-out.** Each instance keeps one hub per tenant it has subscribers in, and one reader that waits on those tenants' streams (`XREAD BLOCK`). A stream entry is only a wake-up: the hub then reads the tenant's change events after the last one it delivered, from Postgres, in sequence order, and broadcasts them to its subscriptions. Streams published by different instances may interleave out of order; reading from Postgres puts them back in order.
+4. **Delivery.** A subscription delivers small events ("akt X is now at revision N", or "akt X moved"), leaving out akter the subscriber may not read. The client fetches what it needs through ordinary queries.
+5. **Catching up.** A client keeps the last sequence number it saw and reconnects with it as `after`. The subscription first joins the hub, then reads everything after the cursor from Postgres, then continues with the hub's events past what it already delivered, so nothing is missed or repeated in between. A subscriber that falls behind the hub is caught up from Postgres the same way.
 
-Sending events rather than whole objects means permissions are checked in one place, the query resolvers, and Valkey never holds field values or personal data, only identifiers.
+Catching up reads Postgres, not the Valkey stream: it is exact, has no window, and is one code path. The streams are bounded, so a short window of recent events is there if something later wants it.
+
+Subscriptions are served over WebSocket at `/graphql/ws`, authenticated like `/graphql`, and end when the connection's access token expires; the client reconnects with its cursor.
+
+Sending events rather than whole objects means permissions are checked in one place, the query resolvers, and Valkey never holds field values or personal data, only tenants and sequence numbers.
 
 ## Identity and access
 

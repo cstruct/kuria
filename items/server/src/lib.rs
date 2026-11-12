@@ -6,6 +6,7 @@
 
 pub mod akter;
 pub mod authorize;
+pub mod changes;
 mod config;
 pub mod erasure;
 mod graphql;
@@ -15,4 +16,4 @@ pub mod session;
 
 pub use config::{Config, ConfigError};
 pub use graphql::{KuriaSchema, schema};
-pub use http::{AppError, Options, app};
+pub use http::{AppError, Changes, Options, app};

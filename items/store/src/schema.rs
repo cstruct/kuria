@@ -119,5 +119,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     akt_type,
     akt_type_version,
     akt_revision,
-    akt_membership
+    akt_membership,
+    change_event
 );

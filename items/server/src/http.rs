@@ -2,9 +2,11 @@
 
 use std::sync::Arc;
 
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use async_graphql::http::ALL_WEBSOCKET_PROTOCOLS;
+use async_graphql_axum::{GraphQLProtocol, GraphQLRequest, GraphQLResponse, GraphQLWebSocket};
 use axum::Router;
 use axum::extract::State;
+use axum::extract::WebSocketUpgrade;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::middleware;
@@ -19,6 +21,7 @@ use konklav_token::TokenKind;
 
 use crate::akter::Akter;
 use crate::authorize::{Authorizer, Decider};
+use crate::changes::Hub;
 use crate::graphql::{KuriaSchema, Principal, schema};
 use crate::session::{self, BrowserSessions, SessionState};
 use kuria_store::Pool;
@@ -48,6 +51,17 @@ pub struct Options {
     /// Browser sessions. Without them, only token-authenticated requests are
     /// served.
     pub sessions: Option<Arc<BrowserSessions>>,
+    /// Change events. Without them, the `changes` subscription refuses, and
+    /// published events wait for the relay's next pass.
+    pub changes: Option<Changes>,
+}
+
+/// What delivers change events: the hub subscriptions join, and what wakes
+/// the relay after a write.
+#[derive(Clone)]
+pub struct Changes {
+    pub hub: Hub,
+    pub waker: Arc<tokio::sync::Notify>,
 }
 
 /// The server's router, deciding every request through `host`. Serve it
@@ -61,6 +75,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         pool,
         decider,
         sessions,
+        changes,
     } = options;
     let konklav = Konklav::builder(host.clone())
         // r[impl auth.dpop]
@@ -84,8 +99,15 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             "/graphql",
             post(graphql).route_layer(api.route(&Policy::new())?),
         )
+        .route(
+            "/graphql/ws",
+            get(graphql_ws).route_layer(api.route(&Policy::new())?),
+        )
         .with_state(GraphqlState {
-            schema: schema(Akter::new(pool)),
+            schema: schema(
+                Akter::new(pool, changes.as_ref().map(|c| c.waker.clone())),
+                changes.map(|c| c.hub),
+            ),
             decider,
         });
 
@@ -110,61 +132,75 @@ struct GraphqlState {
     decider: Arc<dyn Decider>,
 }
 
+/// Who a GraphQL request or connection acts as, and what decides its
+/// permissions, from its verified token; or the answer refusing it.
+// r[impl auth.tenant]
+fn caller(
+    token: &TenantToken,
+    headers: &HeaderMap,
+    decider: &Arc<dyn Decider>,
+) -> Result<(Principal, Arc<Authorizer>), Box<Response>> {
+    let refused = || {
+        Box::new(
+            (
+                StatusCode::FORBIDDEN,
+                axum::Json(
+                    serde_json::json!({ "error": { "code": "sender_constrained_unsupported" } }),
+                ),
+            )
+                .into_response(),
+        )
+    };
+    // r[impl authz.sender-constrained]
+    if token.cnf.is_some() {
+        return Err(refused());
+    }
+    // Verified by Konklav's layer; a bearer token, since it has no `cnf`.
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split_once(' '))
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+        .map(|(_, token)| token.trim().to_owned())
+        .ok_or_else(refused)?;
+    // The route admits only tenant tokens, and every tenant token names its
+    // tenant.
+    let Some(tenant) = token.tid else {
+        tracing::error!("a tenant token without a tenant");
+        return Err(Box::new(StatusCode::INTERNAL_SERVER_ERROR.into_response()));
+    };
+    let principal = Principal {
+        subject: token.sub,
+        tenant,
+        expires_at: token.exp,
+    };
+    Ok((
+        principal,
+        Arc::new(Authorizer::new(decider.clone(), bearer)),
+    ))
+}
+
 /// Executes a GraphQL request as the subject and in the tenant of its
 /// verified token.
-// r[impl auth.tenant]
 async fn graphql(
     State(state): State<GraphqlState>,
     token: TenantToken,
     headers: HeaderMap,
     request: GraphQLRequest,
 ) -> Response {
-    // r[impl authz.sender-constrained]
-    if token.cnf.is_some() {
-        return (
-            StatusCode::FORBIDDEN,
-            axum::Json(
-                serde_json::json!({ "error": { "code": "sender_constrained_unsupported" } }),
-            ),
-        )
-            .into_response();
-    }
-    // Verified by Konklav's layer; a bearer token, since it has no `cnf`.
-    let Some(bearer) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split_once(' '))
-        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
-        .map(|(_, token)| token.trim().to_owned())
-    else {
-        return (
-            StatusCode::FORBIDDEN,
-            axum::Json(
-                serde_json::json!({ "error": { "code": "sender_constrained_unsupported" } }),
-            ),
-        )
-            .into_response();
-    };
     // r[impl session.graphql-json]
     let json = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.split(';').next())
         .is_some_and(|v| v.trim().eq_ignore_ascii_case("application/json"));
+    let (principal, authorizer) = match caller(&token, &headers, &state.decider) {
+        Ok(caller) => caller,
+        Err(refused) => return *refused,
+    };
     if !json {
         return StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response();
     }
-    // The route admits only tenant tokens, and every tenant token names its
-    // tenant.
-    let Some(tenant) = token.tid else {
-        tracing::error!("a tenant token without a tenant");
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    };
-    let principal = Principal {
-        subject: token.sub,
-        tenant,
-    };
-    let authorizer = Authorizer::new(state.decider.clone(), bearer);
     GraphQLResponse::from(
         state
             .schema
@@ -172,4 +208,31 @@ async fn graphql(
             .await,
     )
     .into_response()
+}
+
+/// Serves GraphQL subscriptions over a WebSocket, as the subject and in the
+/// tenant of the upgrade request's verified token.
+// r[impl changes.websocket]
+async fn graphql_ws(
+    State(state): State<GraphqlState>,
+    token: TenantToken,
+    headers: HeaderMap,
+    protocol: GraphQLProtocol,
+    upgrade: WebSocketUpgrade,
+) -> Response {
+    let (principal, authorizer) = match caller(&token, &headers, &state.decider) {
+        Ok(caller) => caller,
+        Err(refused) => return *refused,
+    };
+    let mut data = async_graphql::Data::default();
+    data.insert(principal);
+    data.insert(authorizer);
+    let schema = state.schema.clone();
+    upgrade
+        .protocols(ALL_WEBSOCKET_PROTOCOLS)
+        .on_upgrade(move |socket| {
+            GraphQLWebSocket::new(socket, schema, protocol)
+                .with_data(data)
+                .serve()
+        })
 }

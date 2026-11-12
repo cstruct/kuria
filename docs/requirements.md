@@ -20,13 +20,13 @@ else in this document is still to come.
 | Numbering | Number patterns with `{year}`, `{month}`, `{parent}` and a sequence | [akter](spec/akter.md) |
 | Records and integrity | Append-only revisions with author, reason and a state hash; membership history; change events | [akter](spec/akter.md), [containers](spec/containers.md) |
 | Drafting | Fields drafted from the akter around them, such as release notes | [drafts](spec/drafts.md) |
+| Live updates | Change events published through Valkey, a `changes` subscription over WebSocket, catching up from a cursor | [changes](spec/changes.md) |
 | Identity and access | Konklav authentication, browser sessions, authorization per akt type and transition, erasure | [authentication](spec/authentication.md), [browser sessions](spec/browser-sessions.md), [authorization](spec/authorization.md), [erasure](spec/erasure.md) |
 
 The release, backlog and epic processes run on this today: see
 [the release-management example](examples/release-management/README.md).
 Not yet: other link kinds and traceability, signatures, structured tables,
-computed fields, deadlines, obligations, reporting, subscriptions and the
-frontend.
+computed fields, deadlines, obligations, reporting and the frontend.
 
 ## Processes to cover
 

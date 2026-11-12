@@ -4,8 +4,12 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 
 ## Responsibilities
 
-- Serving the GraphQL endpoint (`POST /graphql`) and a health check
+- Serving the GraphQL endpoint (`POST /graphql`), GraphQL subscriptions over
+  WebSocket (`GET /graphql/ws`, `graphql-transport-ws`), and a health check
   (`GET /healthz`).
+- Publishing every change event from the outbox to Valkey, and delivering
+  them to `changes` subscriptions in order, after catching a client up from
+  its cursor.
 - Authenticating every request as a Konklav relying system, through
   `konklav-axum` and the relying client. The GraphQL endpoint admits only
   tenant tokens.
@@ -44,8 +48,7 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Refusing DPoP-bound tokens on `/graphql`: their proof is answered once, so
   Kuria can't decide more than once for them.
 
-Not yet: subscriptions, publishing change events to Valkey, links and
-signatures.
+Not yet: links other than containment, and signatures.
 
 ## Entry points
 
@@ -76,6 +79,12 @@ signatures.
   `ALREADY_MEMBER`, `NOT_MEMBER`, `EXCLUSIVE`, `CYCLE`, `FROZEN`,
   `NOT_ACCEPTING`,
   `CREATED_IN`, `BAD_REQUEST` or `INTERNAL`.
+- [`src/changes.rs`](src/changes.rs): the [relay](src/changes/relay.rs),
+  which publishes the outbox to Valkey and is woken by every committed write,
+  and the [hub](src/changes/hub.rs), which wakes on Valkey, reads change
+  events from Postgres in order and broadcasts them per tenant. The
+  `changes` subscription is in
+  [`src/graphql/changes.rs`](src/graphql/changes.rs).
 - [`src/akter.rs`](src/akter.rs): the write path for akt types and akter,
   with [`create`](src/akter/create.rs),
   [`membership`](src/akter/membership.rs) and
@@ -173,6 +182,11 @@ mise run test
   read straight from its files, as a developer and a release manager: from
   planning through two release candidates, the release and a hotfix, to
   drafted notes and a closed, frozen release.
+- [`tests/changes.rs`](tests/changes.rs) runs real servers on local ports
+  against the development Valkey and subscribes over WebSocket: delivery in
+  order, catching up from a cursor, leaving out what the subscriber can't
+  read, publishing only identifiers, a change on one instance reaching
+  another's subscribers, and ending when the token expires.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -194,5 +208,6 @@ against a fake of Konklav's OpenID provider only.
   [`containers.md`](../../docs/spec/containers.md) (`container.*`) and
   [`ordering.md`](../../docs/spec/ordering.md) (`order.*`) and
   [`boards.md`](../../docs/spec/boards.md) (`board.*`) and
-  [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`).
+  [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`) and
+  [`changes.md`](../../docs/spec/changes.md) (`changes.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

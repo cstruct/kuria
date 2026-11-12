@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 aes-gcm = "0.10"
+async-stream = "0.3"
 async-graphql = { version = "7.2.1", features = ["chrono"] }
 async-graphql-axum = "7.2.1"
 axum = "0.8"
@@ -16,6 +17,7 @@ base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 diesel = { version = "2.3", default-features = false, features = ["postgres_backend"] }
 diesel-async = { version = "0.9", features = ["postgres"] }
+futures-util = { version = "0.3", default-features = false }
 getrandom = "0.3"
 konklav-authz = "=1.7.0"
 konklav-axum = "=1.7.0"
@@ -26,7 +28,7 @@ konklav-token = "=1.7.0"
 kuria-config = { path = "../config" }
 kuria-engine = { path = "../engine" }
 kuria-store = { path = "../store" }
-redis = { version = "1.8", default-features = false, features = ["connection-manager", "tokio-comp"] }
+redis = { version = "1.8", default-features = false, features = ["connection-manager", "tokio-comp", "streams"] }
 reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.154"
@@ -39,10 +41,12 @@ url = "2"
 uuid = { version = "1", features = ["v7"] }
 
 [dev-dependencies]
+futures-util = "0.3"
 http-body-util = "0.1.5"
 konklav-authz = "=1.7.0"
 kuria-test-support = { path = "../test-support" }
 serde_json = "1.0.154"
+tokio-tungstenite = "0.30.0"
 tower = { version = "0.5.3", features = ["util"] }
 
 [lints]

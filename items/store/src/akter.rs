@@ -341,3 +341,83 @@ pub async fn change_events_after(
         .load(conn)
         .await
 }
+
+/// Up to `limit` unpublished change events of any tenant, oldest first,
+/// locked until the transaction ends and skipping rows another transaction
+/// holds, so instances relaying at once never take the same row.
+pub async fn take_unpublished(conn: &mut Connection, limit: i64) -> QueryResult<Vec<(Uuid, i64)>> {
+    change_event::table
+        .filter(change_event::published_at.is_null())
+        .order((change_event::created_at, change_event::seq))
+        .limit(limit)
+        .select((change_event::tenant_id, change_event::seq))
+        .for_update()
+        .skip_locked()
+        .load(conn)
+        .await
+}
+
+/// Marks the change events `events` published at `now`.
+pub async fn mark_published(
+    conn: &mut Connection,
+    events: &[(Uuid, i64)],
+    now: DateTime<Utc>,
+) -> QueryResult<()> {
+    for (tenant, seq) in events {
+        diesel::update(change_event::table.find((tenant, seq)))
+            .set(change_event::published_at.eq(now))
+            .execute(conn)
+            .await?;
+    }
+    Ok(())
+}
+
+/// The tenant's last change event's sequence number, or 0.
+pub async fn last_change_seq(conn: &mut Connection, tenant: Uuid) -> QueryResult<i64> {
+    change_event::table
+        .filter(change_event::tenant_id.eq(tenant))
+        .select(diesel::dsl::max(change_event::seq))
+        .first::<Option<i64>>(conn)
+        .await
+        .map(Option::unwrap_or_default)
+}
+
+/// A change event with what a subscriber needs to see it: the akt's
+/// number and akt type key.
+#[derive(Clone, Debug, PartialEq, Eq, Queryable)]
+pub struct Change {
+    pub seq: i64,
+    pub akt_id: Uuid,
+    /// `revision` or `rank`.
+    pub kind: String,
+    pub revision: Option<i32>,
+    pub number: String,
+    pub akt_type: String,
+}
+
+/// The tenant's change events after `after`, in sequence order, up to
+/// `limit`, each with its akt's number and akt type key.
+pub async fn changes_after(
+    conn: &mut Connection,
+    tenant: Uuid,
+    after: i64,
+    limit: i64,
+) -> QueryResult<Vec<Change>> {
+    change_event::table
+        .inner_join(akt::table.on(akt::id.eq(change_event::akt_id)))
+        .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
+        .filter(change_event::tenant_id.eq(tenant))
+        .filter(change_event::seq.gt(after))
+        .order(change_event::seq)
+        .limit(limit)
+        .select((
+            change_event::seq,
+            change_event::akt_id,
+            change_event::kind,
+            change_event::revision,
+            akt::number,
+            akt_type_version::key,
+        ))
+        .load(conn)
+        .await
+}

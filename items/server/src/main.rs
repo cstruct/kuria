@@ -6,10 +6,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use konklav_relying_client::RelyingClient;
+use kuria_server::changes::{Hub, Relay};
 use kuria_server::erasure::handle_erasures;
 use kuria_server::oidc::{self, Provider};
 use kuria_server::session::{self, BrowserSessions, Cookies, SessionCipher};
-use kuria_server::{Config, Options, app};
+use kuria_server::{Changes, Config, Options, app};
 use kuria_store::{ConnectOptions, Pool};
 use tracing_subscriber::EnvFilter;
 
@@ -72,13 +73,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         },
     )
     .await?;
-    let valkey = redis::Client::open(config.valkey_url.as_str())?
-        .get_connection_manager()
-        .await?;
+    let valkey_client = redis::Client::open(config.valkey_url.as_str())?;
+    let valkey = valkey_client.get_connection_manager().await?;
     let sign_in_limit = session::sign_in_limit(
         "kuria.sign-in",
         session::SIGN_IN_WINDOWS.to_vec(),
-        valkey,
+        valkey.clone(),
         &config.rate_limit_secret,
     )?;
     let sessions = Arc::new(BrowserSessions {
@@ -97,6 +97,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     ));
     tokio::spawn(sweep_login_attempts(pool.clone()));
 
+    // Change events: every instance publishes the outbox and fans events out
+    // to its own subscribers.
+    let relay = Relay::new(pool.clone(), valkey.clone());
+    let waker = relay.waker();
+    tokio::spawn(relay.run());
+    let hub = Hub::new(pool.clone(), valkey_client.clone());
+    tokio::spawn(hub.clone().run());
+
     let router = app(
         Arc::new(client.clone()),
         Options {
@@ -105,6 +113,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             pool: pool.clone(),
             decider: Arc::new(client.clone()),
             sessions: Some(sessions),
+            changes: Some(Changes { hub, waker }),
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

@@ -30,3 +30,5 @@ Specs:
 - [boards](boards.md): a container's members in configured columns
 - [drafts](drafts.md): drafting a field, such as release notes, from the
   akter around it
+- [changes](changes.md): publishing change events through Valkey, the
+  `changes` subscription, catching up, and WebSocket connections

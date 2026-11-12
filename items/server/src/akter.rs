@@ -20,10 +20,13 @@ mod ordering;
 
 pub use ordering::Place;
 
+use std::sync::Arc;
+
 use chrono::{DateTime, Datelike, Utc};
 use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
 use kuria_config::{AktType, AktTypeDocument, NumberContext, Problem, validate};
+use tokio::sync::Notify;
 
 use crate::authorize::{Authorizer, Permission, Unavailable};
 use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json, rank_between};
@@ -140,12 +143,25 @@ impl StoredType {
 #[derive(Clone)]
 pub struct Akter {
     pool: Pool,
+    /// Woken after a change commits, so its change event is published at
+    /// once.
+    published: Option<Arc<Notify>>,
 }
 
 impl Akter {
     #[must_use]
-    pub fn new(pool: Pool) -> Self {
-        Self { pool }
+    pub fn new(pool: Pool, published: Option<Arc<Notify>>) -> Self {
+        Self { pool, published }
+    }
+
+    /// Wakes the relay: a change has committed.
+    fn committed<T>(&self, result: Result<T, AktError>) -> Result<T, AktError> {
+        if result.is_ok()
+            && let Some(published) = &self.published
+        {
+            published.notify_one();
+        }
+        result
     }
 
     #[must_use]
@@ -260,59 +276,64 @@ impl Akter {
         let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
-        conn.transaction::<_, AktError, _>(async |conn| {
-            let mut akt = store::lock_akt_by_number(conn, tenant, number)
-                .await?
-                .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
-            // The akt's own version, not the type's latest.
-            let row = store::type_versions_by_id(conn, tenant, &[akt.type_version_id])
-                .await?
-                .pop()
-                .ok_or_else(|| AktError::Internal(format!("akt {number} has no akt type")))?;
-            let stored = StoredType::read(row)?;
-            // An akt the subject can't read doesn't exist for them, so this
-            // comes before anything that would tell them otherwise.
-            if !auth
-                .allows(&Permission::Read {
-                    key: stored.ty.key().to_owned(),
-                })
-                .await?
-            {
-                return Err(AktError::NotFound(number.to_owned()));
-            }
-            if !auth.allows(&permission(&stored.ty)).await? {
-                return Err(AktError::Forbidden);
-            }
-            if akt.revision != expected_revision {
-                return Err(AktError::Stale {
-                    expected: expected_revision,
-                    current: akt.revision,
-                });
-            }
-            let current = Current {
-                state: akt.state.clone(),
-                fields: fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                let mut akt = store::lock_akt_by_number(conn, tenant, number)
+                    .await?
+                    .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
+                // The akt's own version, not the type's latest.
+                let row = store::type_versions_by_id(conn, tenant, &[akt.type_version_id])
+                    .await?
+                    .pop()
+                    .ok_or_else(|| AktError::Internal(format!("akt {number} has no akt type")))?;
+                let stored = StoredType::read(row)?;
+                // An akt the subject can't read doesn't exist for them, so this
+                // comes before anything that would tell them otherwise.
+                if !auth
+                    .allows(&Permission::Read {
+                        key: stored.ty.key().to_owned(),
+                    })
+                    .await?
+                {
+                    return Err(AktError::NotFound(number.to_owned()));
+                }
+                if !auth.allows(&permission(&stored.ty)).await? {
+                    return Err(AktError::Forbidden);
+                }
+                if akt.revision != expected_revision {
+                    return Err(AktError::Stale {
+                        expected: expected_revision,
+                        current: akt.revision,
+                    });
+                }
+                let current = Current {
+                    state: akt.state.clone(),
+                    fields: fields_from_json(
+                        &stored.ty,
+                        akt.fields.as_object().unwrap_or(&Map::new()),
+                    )
                     .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
-            };
-            let outcome = decide(&stored.ty, &current)?;
-            let now = Utc::now();
-            akt.state = outcome.state.clone();
-            akt.fields = Json::Object(fields_to_json(&outcome.fields));
-            akt.revision = expected_revision + 1;
-            akt.updated_at = now;
-            if !store::update_akt(conn, &akt, expected_revision).await? {
-                return Err(AktError::Internal(format!(
-                    "akt {number} moved while locked"
-                )));
-            }
-            store::append_revision(
-                conn,
-                &revision(&akt, actor, transition, reason, &outcome, now),
-            )
-            .await?;
-            Ok(akt)
-        })
-        .await
+                };
+                let outcome = decide(&stored.ty, &current)?;
+                let now = Utc::now();
+                akt.state = outcome.state.clone();
+                akt.fields = Json::Object(fields_to_json(&outcome.fields));
+                akt.revision = expected_revision + 1;
+                akt.updated_at = now;
+                if !store::update_akt(conn, &akt, expected_revision).await? {
+                    return Err(AktError::Internal(format!(
+                        "akt {number} moved while locked"
+                    )));
+                }
+                store::append_revision(
+                    conn,
+                    &revision(&akt, actor, transition, reason, &outcome, now),
+                )
+                .await?;
+                Ok(akt)
+            })
+            .await;
+        self.committed(result)
     }
 }
 

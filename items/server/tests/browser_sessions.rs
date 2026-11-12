@@ -105,6 +105,7 @@ impl World {
                 pool: db.pool().clone(),
                 decider: support::decider::FakeDecider::allowing_tenant(),
                 sessions: Some(sessions),
+                changes: None,
             },
         )
         .unwrap();

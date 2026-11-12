@@ -8,23 +8,31 @@
 #![allow(clippy::unused_async, clippy::unused_async_trait_impl)]
 
 mod akter;
+mod changes;
 
-use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
+use async_graphql::{Context, ID, Object, Schema, SimpleObject};
 use konklav_core::{SubjectId, TenantId};
 
 use crate::akter::{Actor, Akter};
+use crate::changes::Hub;
 
 /// The schema the GraphQL endpoint serves.
-pub type KuriaSchema = Schema<Query, Mutation, EmptySubscription>;
+pub type KuriaSchema = Schema<Query, Mutation, changes::ChangesSubscription>;
 
-/// Builds the schema, storing akter through `akter`.
+/// Builds the schema, storing akter through `akter`, and serving the
+/// `changes` subscription from `hub` if there is one.
 #[must_use]
-pub fn schema(akter: Akter) -> KuriaSchema {
-    Schema::build(Query::default(), Mutation::default(), EmptySubscription)
-        .data(akter)
-        .limit_depth(12)
-        .limit_complexity(2_000)
-        .finish()
+pub fn schema(akter: Akter, hub: Option<Hub>) -> KuriaSchema {
+    Schema::build(
+        Query::default(),
+        Mutation::default(),
+        changes::ChangesSubscription,
+    )
+    .data(akter)
+    .data(hub)
+    .limit_depth(12)
+    .limit_complexity(2_000)
+    .finish()
 }
 
 /// Who is making a request, from its verified token. Every request's data
@@ -33,6 +41,8 @@ pub fn schema(akter: Akter) -> KuriaSchema {
 pub(crate) struct Principal {
     pub subject: SubjectId,
     pub tenant: TenantId,
+    /// When the access token expires, in Unix seconds.
+    pub expires_at: i64,
 }
 
 impl Principal {

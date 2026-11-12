@@ -37,7 +37,7 @@ fn akter<'a>(ctx: &Context<'a>) -> async_graphql::Result<&'a Akter> {
 }
 
 fn authorizer<'a>(ctx: &Context<'a>) -> async_graphql::Result<&'a Authorizer> {
-    ctx.data::<Authorizer>()
+    ctx.data::<std::sync::Arc<Authorizer>>().map(AsRef::as_ref)
 }
 
 /// Whether the request may read the akter of the akt type `key`.

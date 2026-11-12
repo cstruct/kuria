@@ -34,34 +34,36 @@ impl Akter {
         let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
-        conn.transaction::<_, AktError, _>(async |conn| {
-            let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
-            require_edit(caller, &c).await?;
-            check_unfrozen(&c)?;
-            check_accepts(conn, tenant, &c, &m, None).await?;
-            let now = Utc::now();
-            insert(conn, caller, tenant, &c, &m, now).await?;
-            record(
-                conn,
-                caller,
-                &mut m,
-                reason.as_deref(),
-                json!({ "added": [membership_entry(&c.akt)] }),
-                now,
-            )
-            .await?;
-            record(
-                conn,
-                caller,
-                &mut c,
-                reason.as_deref(),
-                json!({ "added_member": [membership_entry(&m.akt)] }),
-                now,
-            )
-            .await?;
-            Ok(c.akt)
-        })
-        .await
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
+                require_edit(caller, &c).await?;
+                check_unfrozen(&c)?;
+                check_accepts(conn, tenant, &c, &m, None).await?;
+                let now = Utc::now();
+                insert(conn, caller, tenant, &c, &m, now).await?;
+                record(
+                    conn,
+                    caller,
+                    &mut m,
+                    reason.as_deref(),
+                    json!({ "added": [membership_entry(&c.akt)] }),
+                    now,
+                )
+                .await?;
+                record(
+                    conn,
+                    caller,
+                    &mut c,
+                    reason.as_deref(),
+                    json!({ "added_member": [membership_entry(&m.akt)] }),
+                    now,
+                )
+                .await?;
+                Ok(c.akt)
+            })
+            .await;
+        self.committed(result)
     }
 
     /// Removes the akt `member` from the container `container`.
@@ -77,33 +79,35 @@ impl Akter {
         let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
-        conn.transaction::<_, AktError, _>(async |conn| {
-            let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
-            require_edit(caller, &c).await?;
-            check_unfrozen(&c)?;
-            end(conn, tenant, &c, &m).await?;
-            let now = Utc::now();
-            record(
-                conn,
-                caller,
-                &mut m,
-                reason.as_deref(),
-                json!({ "removed": [membership_entry(&c.akt)] }),
-                now,
-            )
-            .await?;
-            record(
-                conn,
-                caller,
-                &mut c,
-                reason.as_deref(),
-                json!({ "removed_member": [membership_entry(&m.akt)] }),
-                now,
-            )
-            .await?;
-            Ok(c.akt)
-        })
-        .await
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
+                require_edit(caller, &c).await?;
+                check_unfrozen(&c)?;
+                end(conn, tenant, &c, &m).await?;
+                let now = Utc::now();
+                record(
+                    conn,
+                    caller,
+                    &mut m,
+                    reason.as_deref(),
+                    json!({ "removed": [membership_entry(&c.akt)] }),
+                    now,
+                )
+                .await?;
+                record(
+                    conn,
+                    caller,
+                    &mut c,
+                    reason.as_deref(),
+                    json!({ "removed_member": [membership_entry(&m.akt)] }),
+                    now,
+                )
+                .await?;
+                Ok(c.akt)
+            })
+            .await;
+        self.committed(result)
     }
 
     /// Transfers the akt `member` from the container `from` to the container
@@ -127,51 +131,53 @@ impl Akter {
         }
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
-        conn.transaction::<_, AktError, _>(async |conn| {
-            let [mut source, mut target, mut m] =
-                lock(conn, caller, tenant, [from, to, member]).await?;
-            require_edit(caller, &source).await?;
-            require_edit(caller, &target).await?;
-            check_unfrozen(&source)?;
-            check_unfrozen(&target)?;
-            end(conn, tenant, &source, &m).await?;
-            // The membership just ended doesn't count against exclusivity.
-            check_accepts(conn, tenant, &target, &m, Some(source.akt.id)).await?;
-            let now = Utc::now();
-            insert(conn, caller, tenant, &target, &m, now).await?;
-            record(
-                conn,
-                caller,
-                &mut m,
-                reason.as_deref(),
-                json!({
-                    "removed": [membership_entry(&source.akt)],
-                    "added": [membership_entry(&target.akt)],
-                }),
-                now,
-            )
-            .await?;
-            record(
-                conn,
-                caller,
-                &mut source,
-                reason.as_deref(),
-                json!({ "removed_member": [membership_entry(&m.akt)] }),
-                now,
-            )
-            .await?;
-            record(
-                conn,
-                caller,
-                &mut target,
-                reason.as_deref(),
-                json!({ "added_member": [membership_entry(&m.akt)] }),
-                now,
-            )
-            .await?;
-            Ok(target.akt)
-        })
-        .await
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                let [mut source, mut target, mut m] =
+                    lock(conn, caller, tenant, [from, to, member]).await?;
+                require_edit(caller, &source).await?;
+                require_edit(caller, &target).await?;
+                check_unfrozen(&source)?;
+                check_unfrozen(&target)?;
+                end(conn, tenant, &source, &m).await?;
+                // The membership just ended doesn't count against exclusivity.
+                check_accepts(conn, tenant, &target, &m, Some(source.akt.id)).await?;
+                let now = Utc::now();
+                insert(conn, caller, tenant, &target, &m, now).await?;
+                record(
+                    conn,
+                    caller,
+                    &mut m,
+                    reason.as_deref(),
+                    json!({
+                        "removed": [membership_entry(&source.akt)],
+                        "added": [membership_entry(&target.akt)],
+                    }),
+                    now,
+                )
+                .await?;
+                record(
+                    conn,
+                    caller,
+                    &mut source,
+                    reason.as_deref(),
+                    json!({ "removed_member": [membership_entry(&m.akt)] }),
+                    now,
+                )
+                .await?;
+                record(
+                    conn,
+                    caller,
+                    &mut target,
+                    reason.as_deref(),
+                    json!({ "added_member": [membership_entry(&m.akt)] }),
+                    now,
+                )
+                .await?;
+                Ok(target.akt)
+            })
+            .await;
+        self.committed(result)
     }
 }
 
