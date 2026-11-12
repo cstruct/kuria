@@ -21,6 +21,12 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A browser's signed-in state in Kuria: the Konklav tokens Kuria holds for it on the server, named by the browser's session cookie.
   - Not to be confused with Konklav's `session`, which a browser session's tokens belong to and which can outlive it.
 
+- `app`
+  - Kuria's frontend: the single-page app the server serves from its own origin, which builds every view from the akt types it reads.
+
+- `login page`
+  - Kuria's page that acts as Konklav's login application: it signs a person in to Konklav and accepts the login request a sign-in to Kuria, or to another client, started.
+
 - `login attempt`
   - A browser sign-in that Kuria has started at Konklav and not completed yet, named by its `state`.
 

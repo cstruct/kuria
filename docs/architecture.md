@@ -209,7 +209,10 @@ Some things are simpler outside GraphQL:
 - **Svelte** and **Vite**, with TypeScript.
 - **graphql-codegen** generates typed operations from the fixed schema.
 - **urql** (its framework-independent core, with `@urql/svelte`) and **Graphcache** as the GraphQL client: a normalized cache, and subscription events that mark the akter they name as stale so they are refetched.
+- **SvelteKit** in SPA mode (`adapter-static`, no server-side rendering), in `items/web`. The server serves the build from its own origin, with a fallback page for the app's paths ([spec](spec/frontend.md)).
 - Forms, boards and akt views are built from `AktType` definitions at runtime, not written per akt type.
+- **The login page.** Konklav has no user interface; its authorization endpoint hands the browser to a login application. Kuria's `/login` is that application ([spec](spec/login.md)): it signs the person in through Konklav's subject-facing API with a DPoP-bound session, moves it into the requested tenant, and accepts the login request. Konklav's refresh cookie must be on the page's origin, so the server proxies Konklav's `/v1` and `/.well-known`, and Kuria's public URL is Konklav's issuer. Kuria itself discovers the provider from Konklav directly, so it doesn't depend on its own proxy to start.
+- **End-to-end tests** run Playwright against the built app, the server and a seeded Konklav (`e2e/`), walking the release-management example in a browser.
 
 ## Decided
 

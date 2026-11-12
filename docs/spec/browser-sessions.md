@@ -17,6 +17,10 @@ attempt on the server for at most ten minutes, and bind it to the browser
 with a login cookie holding the `state`: `HttpOnly`, `Secure`,
 `SameSite=Lax` (so it returns with Konklav's redirect) and `Max-Age=600`.
 
+r[session.login.default-tenant]
+A sign-in that names no tenant MUST be for the server's configured default
+tenant, if it has one.
+
 r[session.login.rate-limit]
 `GET /auth/login` records an attempt for anyone who asks, so it MUST be
 rate limited per client address, with the limit shared by every instance of

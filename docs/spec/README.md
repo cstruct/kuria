@@ -37,3 +37,7 @@ Specs:
 - [people](people.md): the names Kuria shows for users, from sign-in
 - [contacts](contacts.md): people a tenant names before they are users,
   and linking them to the users they become
+- [login page](login.md): Kuria's login page as Konklav's login
+  application, and the proxy to Konklav it needs
+- [frontend](frontend.md): serving the app, signing in from it, and views
+  built from akt types
