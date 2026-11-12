@@ -122,3 +122,12 @@ diesel::allow_tables_to_appear_in_same_query!(
     akt_membership,
     change_event
 );
+
+diesel::table! {
+    person (subject_id) {
+        subject_id -> Uuid,
+        name -> Nullable<Text>,
+        email -> Nullable<Text>,
+        updated_at -> Timestamptz,
+    }
+}

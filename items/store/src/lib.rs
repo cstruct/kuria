@@ -9,6 +9,7 @@ pub mod akter;
 pub mod containers;
 pub mod erasure;
 mod migrate;
+pub mod people;
 mod pool;
 pub mod schema;
 pub mod sessions;

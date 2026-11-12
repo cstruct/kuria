@@ -14,7 +14,7 @@ pub enum Value {
     Choice(String),
     Choices(Vec<String>),
     Date(NaiveDate),
-    Subject(Uuid),
+    User(Uuid),
     Reference { url: String, label: Option<String> },
 }
 
@@ -65,10 +65,10 @@ impl Value {
                     .map(Self::Date)
                     .ok_or_else(|| format!("`{text}` is not a date, YYYY-MM-DD"))
             }
-            FieldKind::Subject => {
+            FieldKind::User => {
                 let text = json.as_str().ok_or("expected a subject identifier")?;
                 Uuid::parse_str(text)
-                    .map(Self::Subject)
+                    .map(Self::User)
                     .map_err(|_| format!("`{text}` is not a subject identifier"))
             }
             FieldKind::Reference => {
@@ -116,7 +116,7 @@ impl Value {
             Self::Choice(key) => name(key),
             Self::Choices(keys) => keys.iter().map(|k| name(k)).collect::<Vec<_>>().join(", "),
             Self::Date(date) => date.format("%Y-%m-%d").to_string(),
-            Self::Subject(subject) => subject.to_string(),
+            Self::User(subject) => subject.to_string(),
             Self::Reference { url, label } => label.clone().unwrap_or_else(|| url.clone()),
         }
     }
@@ -128,7 +128,7 @@ impl Value {
             Self::Text(text) | Self::Choice(text) => json!(text),
             Self::Choices(keys) => json!(keys),
             Self::Date(date) => json!(date.format("%Y-%m-%d").to_string()),
-            Self::Subject(subject) => json!(subject.to_string()),
+            Self::User(subject) => json!(subject.to_string()),
             Self::Reference { url, label } => match label {
                 Some(label) => json!({ "url": url, "label": label }),
                 None => json!({ "url": url }),

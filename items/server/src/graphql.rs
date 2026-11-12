@@ -9,6 +9,9 @@
 
 mod akter;
 mod changes;
+mod people;
+
+pub(crate) use people::display_name;
 
 use async_graphql::{Context, ID, Object, Schema, SimpleObject};
 use konklav_core::{SubjectId, TenantId};

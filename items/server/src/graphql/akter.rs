@@ -19,6 +19,7 @@ use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
 use super::Principal;
+use super::people::User;
 use crate::akter::{AktError, Akter, Caller, Place, StoredType};
 use crate::authorize::{Authorizer, Permission};
 
@@ -630,7 +631,7 @@ pub enum FieldKind {
     Choice,
     Choices,
     Date,
-    Subject,
+    User,
     Reference,
 }
 
@@ -641,7 +642,7 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Choice => Self::Choice,
             ConfigKind::Choices => Self::Choices,
             ConfigKind::Date => Self::Date,
-            ConfigKind::Subject => Self::Subject,
+            ConfigKind::User => Self::User,
             ConfigKind::Reference => Self::Reference,
         }
     }
@@ -908,7 +909,7 @@ pub enum FieldValue {
     Choice(ChoiceValue),
     Choices(ChoicesValue),
     Date(DateValue),
-    Subject(SubjectValue),
+    User(UserValue),
     Reference(ReferenceValue),
 }
 
@@ -941,9 +942,9 @@ impl FieldValue {
                 field,
                 date: date.format("%Y-%m-%d").to_string(),
             }),
-            Value::Subject(subject) => Self::Subject(SubjectValue {
+            Value::User(subject) => Self::User(UserValue {
                 field,
-                subject: ID(subject.to_string()),
+                user: User(*subject),
             }),
             Value::Reference { url, label } => Self::Reference(ReferenceValue {
                 field,
@@ -980,9 +981,9 @@ pub struct DateValue {
 }
 
 #[derive(SimpleObject)]
-pub struct SubjectValue {
+pub struct UserValue {
     field: String,
-    subject: ID,
+    user: User,
 }
 
 #[derive(SimpleObject)]
@@ -1004,6 +1005,11 @@ impl AktRevision {
     /// The subject who made the change.
     async fn author(&self) -> ID {
         ID(self.0.author.to_string())
+    }
+
+    /// Who made the change, shown by name.
+    async fn by(&self) -> User {
+        User(self.0.author)
     }
 
     async fn transition(&self) -> Option<&str> {

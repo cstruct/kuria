@@ -125,7 +125,7 @@ pub enum FieldKind {
     Choice,
     Choices,
     Date,
-    Subject,
+    User,
     Reference,
 }
 

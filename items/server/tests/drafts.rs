@@ -17,7 +17,7 @@ use support::{FakeHost, graphql_with, router_with, send};
 const ALICE: &str = "tenant-alice";
 
 struct World {
-    _db: TestDatabase,
+    db: TestDatabase,
     router: Router,
     decider: Arc<FakeDecider>,
 }
@@ -70,7 +70,7 @@ impl World {
         let decider = FakeDecider::allowing_tenant();
         let router = router_with(&FakeHost::new(), db.pool().clone(), decider.clone());
         let world = Self {
-            _db: db,
+            db,
             router,
             decider,
         };
@@ -314,4 +314,61 @@ async fn counts_only_the_states_the_recipe_names() {
         .to_owned();
     assert_eq!(text, format!("## Backlog items\n{shipped} Shipped (Fix)"));
     assert!(!text.contains(&never));
+}
+
+// r[verify draft.render]
+#[tokio::test(flavor = "multi_thread")]
+async fn shows_users_by_name_in_drafts() {
+    let world = World::new().await;
+    let mut item = types().into_iter().find(|t| t["key"] == "item").unwrap();
+    item["fields"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({ "key": "owner", "name": "Owner", "kind": "user" }));
+    let mut notes = types()
+        .into_iter()
+        .find(|t| t["key"] == "release_notes")
+        .unwrap();
+    notes["fields"][0]["draft"]["line"] = json!("{number} by {field:owner}");
+    notes["fields"][0]["draft"]["group_by"] = json!(null);
+    for document in [item, notes] {
+        world
+            .ok(
+                "tenant",
+                "mutation($d: JSON!) { defineAktType(document: $d) { version } }",
+                json!({ "d": document }),
+            )
+            .await;
+    }
+    let mut conn = world.db.pool().get().await.unwrap();
+    kuria_store::people::record(
+        &mut conn,
+        &kuria_store::people::Person {
+            subject_id: support::SUBJECT.parse().unwrap(),
+            name: Some("Alice Example".to_owned()),
+            email: None,
+            updated_at: Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    let release = world.create("release", &[], json!({})).await;
+    let rc = world
+        .create("release_candidate", &[&release], json!({}))
+        .await;
+    let item = world
+        .create(
+            "item",
+            &[&rc],
+            json!({ "title": "T", "owner": support::SUBJECT }),
+        )
+        .await;
+    let notes = world.create("release_notes", &[&release], json!({})).await;
+    let answer = world.draft("tenant", &notes, 1, "text").await;
+    assert_eq!(
+        answer["data"]["draftField"]["fields"][0]["text"],
+        format!("{item} by Alice Example")
+    );
 }

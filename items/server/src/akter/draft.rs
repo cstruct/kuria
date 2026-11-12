@@ -2,9 +2,8 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use kuria_config::FieldDef;
 use kuria_engine::draft::{Listed, render};
-use kuria_engine::fields_from_json;
+use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow};
 use kuria_store::containers;
 use serde_json::{Map, Value as Json};
@@ -114,6 +113,21 @@ impl Akter {
     }
 }
 
+/// How the user `subject` is shown, remembered for the rest of the draft.
+async fn user_name(
+    conn: &mut kuria_store::Connection,
+    names: &mut HashMap<Uuid, String>,
+    subject: Uuid,
+) -> Result<String, AktError> {
+    if let Some(name) = names.get(&subject) {
+        return Ok(name.clone());
+    }
+    let person = kuria_store::people::find(conn, &[subject]).await?.pop();
+    let name = crate::graphql::display_name(subject, person.as_ref());
+    names.insert(subject, name.clone());
+    Ok(name)
+}
+
 async fn reads(auth: &Authorizer, key: &str) -> Result<bool, AktError> {
     Ok(auth
         .allows(&Permission::Read {
@@ -145,6 +159,7 @@ async fn describe(
     rows: &[AktRow],
 ) -> Result<Vec<Listed>, AktError> {
     let mut types: HashMap<Uuid, StoredType> = HashMap::new();
+    let mut names: HashMap<Uuid, String> = HashMap::new();
     let mut listed = Vec::with_capacity(rows.len());
     for row in rows {
         if let std::collections::hash_map::Entry::Vacant(slot) = types.entry(row.type_version_id) {
@@ -153,13 +168,18 @@ async fn describe(
         let ty = &types[&row.type_version_id];
         let values = fields_from_json(&ty.ty, row.fields.as_object().unwrap_or(&Map::new()))
             .map_err(|e| AktError::Internal(format!("akt {}: {e}", row.number)))?;
-        let fields: BTreeMap<String, String> = values
-            .iter()
-            .filter_map(|(key, value)| {
-                let def: &FieldDef = ty.ty.field(key)?;
-                Some((key.clone(), value.display(def)))
-            })
-            .collect();
+        let mut fields = BTreeMap::new();
+        for (key, value) in &values {
+            let Some(def) = ty.ty.field(key) else {
+                continue;
+            };
+            let text = match value {
+                // r[impl draft.render]
+                Value::User(subject) => user_name(conn, &mut names, *subject).await?,
+                other => other.display(def),
+            };
+            fields.insert(key.clone(), text);
+        }
         listed.push(Listed {
             number: row.number.clone(),
             akt_type: ty.ty.key().to_owned(),

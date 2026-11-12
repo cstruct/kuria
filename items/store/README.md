@@ -20,6 +20,7 @@ the queries the server runs.
   - [`containers`](src/containers.rs): memberships, the cycle check (a
     recursive query), ranks with their neighbours, rank change events, the
     tenant's order lock, and locking several akter in a fixed order.
+  - [`people`](src/people.rs): the names and emails recorded at sign-in.
   - [`erasure`](src/erasure.rs): deleting what Kuria holds about a subject,
     and the time erasures are handled up to.
 

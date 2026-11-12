@@ -56,8 +56,9 @@ async fn login(State(state): State<SessionState>, Query(params): Query<LoginPara
     let code_challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .encode(Sha256::digest(code_verifier.as_bytes()));
     let scope = match params.tenant {
-        Some(tenant) => format!("openid tenant:{tenant}"),
-        None => "openid".to_owned(),
+        // r[impl person.from-sign-in]
+        Some(tenant) => format!("openid profile email tenant:{tenant}"),
+        None => "openid profile email".to_owned(),
     };
     let attempt = NewLoginAttempt {
         state: state_value.clone(),
@@ -185,6 +186,8 @@ async fn callback(
         Err(reason) => return failed(&reason),
     };
 
+    record_person(&state, &mut conn, &signed_in).await;
+
     // r[impl session.login.replace]
     if let Some(previous) = sessions.cookies.session(&headers)
         && let Err(e) = sessions::delete_session(&mut conn, &id_hash(&previous)).await
@@ -266,6 +269,41 @@ async fn exchange(state: &SessionState, code: &str, verifier: &str) -> Result<Si
         tenant: tenant.into(),
         received_at,
     })
+}
+
+/// Records the signed-in subject's name and email from Konklav's userinfo
+/// endpoint. Best effort: a sign-in doesn't fail for want of a name.
+// r[impl person.from-sign-in]
+async fn record_person(
+    state: &SessionState,
+    conn: &mut kuria_store::Connection,
+    signed_in: &SignedIn,
+) {
+    let info = match state
+        .sessions
+        .provider
+        .userinfo(&signed_in.tokens.access_token)
+        .await
+    {
+        Ok(info) => info,
+        Err(e) => {
+            tracing::warn!("reading the signed-in subject's name: {e}");
+            return;
+        }
+    };
+    if info.sub != signed_in.subject.to_string() {
+        tracing::warn!("the userinfo endpoint answered for another subject");
+        return;
+    }
+    let person = kuria_store::people::Person {
+        subject_id: signed_in.subject,
+        name: info.name.filter(|n| !n.trim().is_empty()),
+        email: info.email.filter(|e| !e.trim().is_empty()),
+        updated_at: Utc::now(),
+    };
+    if let Err(e) = kuria_store::people::record(conn, &person).await {
+        tracing::warn!("recording the signed-in subject's name: {e}");
+    }
 }
 
 /// Ends the browser's session here and at Konklav.

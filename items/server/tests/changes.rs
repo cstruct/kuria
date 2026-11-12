@@ -202,9 +202,9 @@ async fn delivers_each_change_in_order() {
     let db = TestDatabase::new().await;
     let instance = Instance::start(&db, FakeDecider::allowing_tenant()).await;
     define(&instance).await;
-    let mut subscriber = instance.subscribe("tenant", None).await;
-    // Give the subscription a moment to join its hub before anything changes.
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // From the start of the tenant's sequence, so nothing depends on how
+    // soon the subscription joins its hub.
+    let mut subscriber = instance.subscribe("tenant", Some(0)).await;
 
     let first = instance.create("item").await;
     let second = instance.create("item").await;
@@ -258,7 +258,9 @@ async fn catches_up_from_a_cursor_then_continues() {
 
     // Without a cursor, only what happens from now on.
     let mut fresh = instance.subscribe("tenant", None).await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    // Without a cursor the subscription only sees what happens after it
+    // joined, so give it time to join.
+    tokio::time::sleep(Duration::from_millis(500)).await;
     let fifth = instance.create("item").await;
     assert_eq!(fresh.take(1).await, [(5, fifth)]);
 }
@@ -324,10 +326,13 @@ async fn a_change_on_one_instance_reaches_subscribers_of_another() {
     let writer = Instance::start(&db, FakeDecider::allowing_tenant()).await;
     let reader = Instance::start(&db, FakeDecider::allowing_tenant()).await;
     define(&writer).await;
-    let mut subscriber = reader.subscribe("tenant", None).await;
-    tokio::time::sleep(Duration::from_millis(200)).await;
+    let mut subscriber = reader.subscribe("tenant", Some(0)).await;
+    // The first event comes from catching up; the second must travel
+    // through Valkey from the writer to the reader's hub.
+    let first = writer.create("item").await;
+    assert_eq!(subscriber.take(1).await, [(1, first)]);
     let item = writer.create("item").await;
-    assert_eq!(subscriber.take(1).await, [(1, item)]);
+    assert_eq!(subscriber.take(1).await, [(2, item)]);
 }
 
 // r[verify changes.expiry]

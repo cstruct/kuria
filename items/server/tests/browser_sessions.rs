@@ -245,7 +245,10 @@ async fn starts_a_sign_in_at_konklav() {
         params["redirect_uri"],
         format!("{PUBLIC_URL}/auth/callback")
     );
-    assert_eq!(params["scope"], format!("openid tenant:{TENANT}"));
+    assert_eq!(
+        params["scope"],
+        format!("openid profile email tenant:{TENANT}")
+    );
     assert_eq!(params["code_challenge_method"], "S256");
     assert_eq!(params["state"], login);
     assert!(login.len() >= 43, "32 random bytes");
@@ -267,7 +270,7 @@ async fn starts_a_sign_in_at_konklav() {
 async fn asks_for_no_tenant_unless_named() {
     let world = World::new().await;
     let (_, _, params) = world.start("").await;
-    assert_eq!(params["scope"], "openid");
+    assert_eq!(params["scope"], "openid profile email");
 }
 
 // r[verify session.login.callback]
@@ -678,4 +681,39 @@ async fn a_trusted_proxy_names_the_client() {
         world.send(start_request(Some("192.0.2.2"))).await.status,
         StatusCode::SEE_OTHER
     );
+}
+
+async fn person(world: &World) -> Option<(Option<String>, Option<String>)> {
+    use kuria_store::schema::person;
+    let mut conn = world.db.pool().get().await.unwrap();
+    person::table
+        .select((person::name, person::email))
+        .first(&mut conn)
+        .await
+        .optional()
+        .unwrap()
+}
+
+// r[verify person.from-sign-in]
+#[tokio::test(flavor = "multi_thread")]
+async fn records_the_signed_in_persons_name() {
+    let world = World::new().await;
+    assert_eq!(person(&world).await, None);
+    world.sign_in().await;
+    assert_eq!(
+        person(&world).await,
+        Some((
+            Some("Alice Example".to_owned()),
+            Some("alice@example.com".to_owned())
+        ))
+    );
+}
+
+// r[verify person.from-sign-in]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sign_in_without_a_name_still_succeeds() {
+    let world = World::new().await;
+    world.konklav.set_userinfo_failing(true);
+    world.sign_in().await;
+    assert_eq!(person(&world).await, None);
 }

@@ -15,6 +15,7 @@ pub struct Provider {
     authorization_endpoint: String,
     token_endpoint: String,
     revocation_endpoint: Option<String>,
+    userinfo_endpoint: Option<String>,
     client_id: String,
     client_secret: String,
     redirect_uri: String,
@@ -39,6 +40,14 @@ pub struct Tokens {
     pub expires_in: Option<i64>,
 }
 
+/// What the userinfo endpoint says about a subject.
+#[derive(Clone, Debug, Deserialize)]
+pub struct UserInfo {
+    pub sub: String,
+    pub name: Option<String>,
+    pub email: Option<String>,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProviderError {
     /// The provider answered, and refused: the grant is invalid, expired or
@@ -56,6 +65,7 @@ struct Discovery {
     authorization_endpoint: String,
     token_endpoint: String,
     revocation_endpoint: Option<String>,
+    userinfo_endpoint: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +112,7 @@ impl Provider {
             authorization_endpoint: discovery.authorization_endpoint,
             token_endpoint: discovery.token_endpoint,
             revocation_endpoint: discovery.revocation_endpoint,
+            userinfo_endpoint: discovery.userinfo_endpoint,
             client_id: client.id,
             client_secret: client.secret,
             redirect_uri: client.redirect_uri,
@@ -156,6 +167,33 @@ impl Provider {
             ("refresh_token", refresh_token),
         ])
         .await
+    }
+
+    /// The claims about the signed-in subject the userinfo endpoint answers
+    /// for `access_token`.
+    pub async fn userinfo(&self, access_token: &str) -> Result<UserInfo, ProviderError> {
+        let Some(endpoint) = &self.userinfo_endpoint else {
+            return Err(ProviderError::Unavailable(
+                "the provider has no userinfo endpoint".to_owned(),
+            ));
+        };
+        let response = self
+            .http
+            .get(endpoint)
+            .bearer_auth(access_token)
+            .send()
+            .await
+            .map_err(|e| ProviderError::Unavailable(e.to_string()))?;
+        if !response.status().is_success() {
+            return Err(ProviderError::Refused(format!(
+                "the userinfo endpoint answered {}",
+                response.status()
+            )));
+        }
+        response
+            .json()
+            .await
+            .map_err(|e| ProviderError::Unavailable(format!("the userinfo response: {e}")))
     }
 
     /// Revokes a refresh token, and with it the session at Konklav.

@@ -18,7 +18,7 @@ fn capa() -> AktType {
               "options": [{ "key": "safety", "name": "Safety" }, { "key": "security", "name": "Security" }] },
             { "key": "root_cause", "name": "Root cause", "kind": "text", "multiline": true },
             { "key": "due", "name": "Due", "kind": "date" },
-            { "key": "owner", "name": "Owner", "kind": "subject" },
+            { "key": "owner", "name": "Owner", "kind": "user" },
             { "key": "evidence", "name": "Evidence", "kind": "reference" }
         ],
         "states": [

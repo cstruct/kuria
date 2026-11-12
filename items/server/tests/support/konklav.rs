@@ -34,6 +34,8 @@ pub struct ProviderState {
     pub revoked: Vec<String>,
     /// Answer every token request with 500.
     pub failing: bool,
+    /// Answer userinfo requests with 500.
+    pub userinfo_failing: bool,
     /// How long a refresh takes.
     pub refresh_delay: Duration,
 }
@@ -61,12 +63,14 @@ impl FakeProvider {
                             "authorization_endpoint": format!("{issuer}/authorize"),
                             "token_endpoint": format!("{issuer}/token"),
                             "revocation_endpoint": format!("{issuer}/revoke"),
+                            "userinfo_endpoint": format!("{issuer}/userinfo"),
                         }))
                     }
                 }),
             )
             .route("/token", post(token))
             .route("/revoke", post(revoke))
+            .route("/userinfo", get(userinfo))
             .with_state(state.clone());
         tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         Self { issuer, state }
@@ -97,6 +101,10 @@ impl FakeProvider {
 
     pub fn set_failing(&self, failing: bool) {
         self.state.lock().unwrap().failing = failing;
+    }
+
+    pub fn set_userinfo_failing(&self, failing: bool) {
+        self.state.lock().unwrap().userinfo_failing = failing;
     }
 
     pub fn set_refresh_delay(&self, delay: Duration) {
@@ -200,4 +208,24 @@ async fn revoke(
         }
     }
     StatusCode::OK
+}
+
+/// Answers for any bearer token: the test subject, Alice.
+async fn userinfo(State(state): State<Arc<Mutex<ProviderState>>>, headers: HeaderMap) -> Response {
+    if state.lock().unwrap().userinfo_failing {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    if !headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.starts_with("Bearer "))
+    {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    Json(json!({
+        "sub": super::SUBJECT,
+        "name": "Alice Example",
+        "email": "alice@example.com",
+    }))
+    .into_response()
 }

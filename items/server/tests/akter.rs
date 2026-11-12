@@ -21,7 +21,7 @@ const AKT: &str = "number type { key version } state { key } revision
         ... on ChoiceValue { field option { key name } }
         ... on ChoicesValue { field options { key } }
         ... on DateValue { field date }
-        ... on SubjectValue { field subject }
+        ... on UserValue { field user { id } }
         ... on ReferenceValue { field url label }
     }";
 
@@ -97,7 +97,7 @@ fn capa() -> Value {
             { "key": "severity", "name": "Severity", "kind": "choice",
               "options": [{ "key": "major", "name": "Major" }, { "key": "minor", "name": "Minor" }] },
             { "key": "root_cause", "name": "Root cause", "kind": "text", "multiline": true },
-            { "key": "owner", "name": "Owner", "kind": "subject" },
+            { "key": "owner", "name": "Owner", "kind": "user" },
             { "key": "evidence", "name": "Evidence", "kind": "reference" }
         ],
         "states": [
@@ -464,4 +464,57 @@ async fn concurrent_creates_get_distinct_numbers() {
         .map(|n| format!("CAPA-{}-{n:04}", year()))
         .collect();
     assert_eq!(numbers, expected);
+}
+
+async fn record_person(world: &World, name: Option<&str>, email: Option<&str>) {
+    let mut conn = world.db.pool().get().await.unwrap();
+    kuria_store::people::record(
+        &mut conn,
+        &kuria_store::people::Person {
+            subject_id: SUBJECT.parse().unwrap(),
+            name: name.map(str::to_owned),
+            email: email.map(str::to_owned),
+            updated_at: Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+// r[verify person.name]
+#[tokio::test(flavor = "multi_thread")]
+async fn shows_users_by_name() {
+    let world = World::new().await;
+    world.define(capa()).await;
+    let query = format!(
+        "mutation {{ createAkt(input: {{ type: \"capa\", fields: {{ title: \"T\", owner: \"{SUBJECT}\" }} }}) {{ number fields {{ ... on UserValue {{ field user {{ id name email }} }} }} revisions {{ by {{ name }} }} }} }}"
+    );
+    // Never signed in: shown by identifier.
+    let created = world.data(&query, json!({})).await["createAkt"].clone();
+    let owner = created["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["field"] == "owner")
+        .unwrap();
+    assert_eq!(
+        owner["user"],
+        json!({ "id": SUBJECT, "name": SUBJECT, "email": null })
+    );
+
+    record_person(&world, Some("Bob Builder"), Some("bob@example.com")).await;
+    let number = created["number"].as_str().unwrap();
+    let data = world
+        .data(
+            "query($n: String!) { akt(number: $n) { fields { ... on UserValue { user { name email } } } revisions { by { name } } } }",
+            json!({ "n": number }),
+        )
+        .await;
+    let fields = data["akt"]["fields"].as_array().unwrap();
+    let owner = fields.iter().find(|f| f.get("user").is_some()).unwrap();
+    assert_eq!(
+        owner["user"],
+        json!({ "name": "Bob Builder", "email": "bob@example.com" })
+    );
+    assert_eq!(data["akt"]["revisions"][0]["by"]["name"], "Bob Builder");
 }

@@ -6,14 +6,20 @@ use diesel_async::RunQueryDsl;
 use uuid::Uuid;
 
 use crate::Connection;
-use crate::schema::{browser_session, erasure_watermark};
+use crate::schema::{browser_session, erasure_watermark, person};
 
-/// Deletes everything Kuria holds about `subject`, and returns how many
-/// rows went.
+/// Deletes everything Kuria holds about `subject`: their browser sessions
+/// and their name and email. Returns how many rows went.
 pub async fn erase_subject(conn: &mut Connection, subject: Uuid) -> QueryResult<usize> {
-    diesel::delete(browser_session::table.filter(browser_session::subject_id.eq(subject)))
+    let sessions =
+        diesel::delete(browser_session::table.filter(browser_session::subject_id.eq(subject)))
+            .execute(conn)
+            .await?;
+    // r[impl person.erasure]
+    let people = diesel::delete(person::table.find(subject))
         .execute(conn)
-        .await
+        .await?;
+    Ok(sessions + people)
 }
 
 /// The time erasures are handled up to, in Unix seconds, or `None` before

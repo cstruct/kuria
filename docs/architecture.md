@@ -119,6 +119,7 @@ Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDD
 | `akt_membership` | Current memberships, container and member. Their history is in both akter's revisions. |
 | `tenant_counter` | Per-tenant counters and locks: akt number sequences per pattern scope, the change-event sequence, and the order lock. |
 | `change_event` | The outbox: one row per change, in order (a sequence per tenant), naming the tenant, the akt and, for a `revision` event, its new revision, or for a `rank` event, none; and when it was published to Valkey. |
+| `person` | The name and email recorded at a subject's last browser sign-in, from Konklav's userinfo endpoint. Erased with the subject. |
 | `erasure_watermark` | The time Kuria has handled Konklav's erasures up to: the latest erasure read from Konklav's list. One row, moved only forward. |
 | `login_attempt` | Browser sign-ins started at Konklav and not completed: the `state`, the PKCE verifier and where to return. Kept for ten minutes. |
 | `browser_session` | Browser sessions: the SHA-256 of the session cookie, the subject and tenant, and the Konklav tokens, encrypted. |
@@ -180,7 +181,7 @@ Sending events rather than whole objects means permissions are checked in one pl
 
 When Konklav erases a subject, Kuria deletes what it holds about them ([spec](spec/erasure.md)). The relying client hands over a notice for each erasure, and says when some may have been missed, which it does on every start because it keeps its feed position in memory. Kuria then reads Konklav's durable list of erased subjects from the time stored in `erasure_watermark`, deletes, and only then moves that time forward. Every instance does this; deleting is idempotent and the stored time only moves forward, so they don't conflict.
 
-Today that means browser sessions. Akter will make it harder: a revision records who made it, and a QMS has to keep records for years.
+Today that means browser sessions and the recorded name and email. Akter will make it harder: a revision records who made it, and a QMS has to keep records for years.
 
 - *Open:* what erasure does to akter. The likely answer is that records keep the subject's identifier, which Konklav keeps without personal data after an erasure, while anything Kuria copied about the person (names, email addresses in free text, attachments) is removed or redacted. The records' retention requirements have to be settled against that.
 

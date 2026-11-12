@@ -255,3 +255,43 @@ async fn keeps_trying_a_catch_up_until_it_succeeds() {
         .await;
     assert_eq!(world.sessions_of(ALICE).await, 0);
 }
+
+// r[verify person.erasure]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_erasure_deletes_the_persons_name() {
+    let world = World::new().await;
+    let mut conn = world.pool().get().await.unwrap();
+    for subject in [ALICE, BOB] {
+        kuria_store::people::record(
+            &mut conn,
+            &kuria_store::people::Person {
+                subject_id: subject,
+                name: Some("Someone".to_owned()),
+                email: None,
+                updated_at: Utc::now(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+    drop(conn);
+    let erased = world.list.erase(ALICE, 1_000);
+    world.notices.send(ErasureNotice::Erased(erased)).unwrap();
+    world
+        .eventually("Alice's name is gone", || async {
+            let mut conn = world.pool().get().await.unwrap();
+            kuria_store::people::find(&mut conn, &[ALICE])
+                .await
+                .unwrap()
+                .is_empty()
+        })
+        .await;
+    let mut conn = world.pool().get().await.unwrap();
+    assert_eq!(
+        kuria_store::people::find(&mut conn, &[BOB])
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+}

@@ -17,6 +17,8 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   (`/auth/login`, `/auth/callback`, `/auth/logout`), keeping their tokens
   encrypted on the server, and authenticating their requests by an
   `HttpOnly` session cookie.
+- Recording people's names and emails from Konklav's userinfo endpoint at
+  browser sign-in, and showing `user` fields and revision authors by name.
 - Refreshing browser sessions' access tokens before they expire, one refresh
   per session at a time across every instance.
 - Rate limiting sign-in starts per client address, shared between instances
@@ -70,6 +72,7 @@ Not yet: links other than containment, and signatures.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`.
+  `user` fields and a revision's `by` are `User { id name email }`.
   `Akt` also has `rank`, `members`, `containers` and `board` (its members
   in its akt type's columns, then `unmapped`, each in rank order), and a
   revision its `membership`.
@@ -209,6 +212,7 @@ against a fake of Konklav's OpenID provider only.
   [`containers.md`](../../docs/spec/containers.md) (`container.*`) and
   [`ordering.md`](../../docs/spec/ordering.md) (`order.*`) and
   [`boards.md`](../../docs/spec/boards.md) (`board.*`) and
-  [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`) and
-  [`changes.md`](../../docs/spec/changes.md) (`changes.*`).
+  [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`),
+  [`changes.md`](../../docs/spec/changes.md) (`changes.*`) and
+  [`people.md`](../../docs/spec/people.md) (`person.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).
