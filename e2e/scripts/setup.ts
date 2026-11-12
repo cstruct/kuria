@@ -95,8 +95,7 @@ async function member(tenant: string, subject: string, grants: Grant[]) {
 async function person(
 	tenant: string,
 	email: string,
-	grants: Grant[],
-	options: { verified?: boolean } = {}
+	grants: Grant[]
 ): Promise<Person> {
 	const subject = randomUUID();
 	const password = `${email.split('@')[0]}'s end-to-end password`;
@@ -106,10 +105,6 @@ async function person(
 		identifier: email,
 		password
 	});
-	// A password's email is unverified; an email-link credential's is.
-	if (options.verified) {
-		await control('POST', `/subjects/${subject}/credentials`, { kind: 'email_link', identifier: email });
-	}
 	await member(tenant, subject, grants);
 	return { email, password, subject };
 }
@@ -151,7 +146,7 @@ const people = {
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] }
 	]),
-	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'], { verified: true })
+	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])
 };
 
 // Kuria itself: its browser sign-in client and its relying client's

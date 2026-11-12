@@ -3,7 +3,14 @@
 	import { page } from '$app/state';
 	import FieldEditor from '#lib/akt/FieldEditor.svelte';
 	import FieldShown from '#lib/akt/FieldShown.svelte';
-	import { containedTypes, draftedFields } from '#lib/akt/document.ts';
+	import {
+		availableTransitions,
+		containedTypes,
+		draftedFields,
+		requiredFields
+	} from '#lib/akt/document.ts';
+	import { settle } from '#lib/akt/editing.ts';
+	import { boardLabels } from '#lib/akt/labels.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import type { Person } from '#lib/akt/people.ts';
 	import { changes, draftOf, textOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
@@ -46,9 +53,7 @@
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
 	const transitions = $derived<Transition[]>(
-		akt && !akt.state.final
-			? akt.type.transitions.filter((t) => t.from.includes(akt.state.key))
-			: []
+		akt ? availableTransitions(akt.type.transitions, akt.state) : []
 	);
 
 	// What the editors hold, and what they held when the akt was loaded: an
@@ -103,14 +108,12 @@
 		const { error } = await change();
 		const fresh = await refetch();
 		busy = false;
-		if (error) {
-			refusal = refusalOf(error, fieldNames);
-			// r[impl app.stale]
-			if (refusal.code === 'STALE' && fresh) base = snapshot(fresh);
-			return false;
-		}
-		if (fresh) reset(fresh);
-		return true;
+		const settled = settle(error, fresh ? snapshot(fresh) : undefined, fieldNames);
+		refusal = settled.refusal;
+		if (settled.base) base = settled.base;
+		if (settled.drafts) drafts = settled.drafts;
+		if (fresh && !error) loadedFor = fresh.number;
+		return !error;
 	}
 
 	async function save() {
@@ -134,10 +137,9 @@
 	}
 
 	function required(transition: Transition): FieldDef[] {
-		return (akt?.type.fields ?? []).filter((f) => transition.requires.includes(f.key));
+		return requiredFields(akt?.type.fields ?? [], transition);
 	}
 
-	// r[impl app.transitions]
 	async function perform(transition: Transition) {
 		if (!akt) return;
 		const fields = changes(required(transition), base, drafts);
@@ -166,11 +168,16 @@
 		await run(() => mutate(client, DraftField, { input: { number, revision, field } }));
 	}
 
+	// The inputs below are cleared as a change starts, so the next number
+	// can be typed while it runs, and restored if it is refused.
 	async function join() {
 		const container = containerToJoin.trim();
 		if (!container) return;
-		if (await run(() => mutate(client, AddToContainer, { input: { container, member: number } }))) {
-			containerToJoin = '';
+		containerToJoin = '';
+		if (
+			!(await run(() => mutate(client, AddToContainer, { input: { container, member: number } })))
+		) {
+			containerToJoin = container;
 		}
 	}
 
@@ -182,6 +189,7 @@
 		const to = transferTo.trim();
 		if (!transferFrom || !to) return;
 		const from = transferFrom;
+		transferTo = '';
 		if (
 			await run(() =>
 				mutate(client, TransferMember, {
@@ -189,16 +197,20 @@
 				})
 			)
 		) {
-			transferTo = '';
 			reason = '';
+		} else {
+			transferTo = to;
 		}
 	}
 
 	async function addMember() {
 		const member = memberToAdd.trim();
 		if (!member) return;
-		if (await run(() => mutate(client, AddToContainer, { input: { container: number, member } }))) {
-			memberToAdd = '';
+		memberToAdd = '';
+		if (
+			!(await run(() => mutate(client, AddToContainer, { input: { container: number, member } })))
+		) {
+			memberToAdd = member;
 		}
 	}
 
@@ -419,21 +431,21 @@
 										<span class="actions">
 											<button
 												type="button"
-												aria-label="Move {member.number} up"
+												aria-label={boardLabels(member.number).up}
 												disabled={busy || i === 0}
 												onclick={() => move(member.number, { before: column.akter[i - 1].number })}
 												>↑</button
 											>
 											<button
 												type="button"
-												aria-label="Move {member.number} down"
+												aria-label={boardLabels(member.number).down}
 												disabled={busy || i === column.akter.length - 1}
 												onclick={() => move(member.number, { after: column.akter[i + 1].number })}
 												>↓</button
 											>
 											<button
 												type="button"
-												aria-label="Remove {member.number}"
+												aria-label={boardLabels(member.number).remove}
 												disabled={busy}
 												onclick={() => removeMember(member.number)}>✕</button
 											>

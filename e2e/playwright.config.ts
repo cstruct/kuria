@@ -12,6 +12,9 @@ export default defineConfig({
 	outputDir: '.state/results',
 	use: {
 		baseURL: KURIA,
+		// A control that isn't there fails a step in seconds, not at the end.
+		actionTimeout: 15_000,
+		navigationTimeout: 30_000,
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},

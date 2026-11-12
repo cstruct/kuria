@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SomeoneSelect from './SomeoneSelect.svelte';
+	import { legendOf } from './labels';
 	import { upload } from './upload';
 	import type { Person } from './people';
 	import type { Draft, FieldDef } from './values';
@@ -34,10 +35,8 @@
 	}
 </script>
 
-<!-- r[impl app.fields] -->
-<!-- r[impl app.accessible]: every editor is a labelled control in a fieldset named by its field. -->
 <fieldset class="field" aria-describedby={error ? `${id}-error` : undefined}>
-	<legend>{field.name}{field.required ? ' (required)' : ''}</legend>
+	<legend>{legendOf(field)}</legend>
 	{#if field.description}<p class="hint">{field.description}</p>{/if}
 
 	{#if draft.kind === 'TEXT'}

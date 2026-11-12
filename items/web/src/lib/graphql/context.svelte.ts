@@ -35,9 +35,11 @@ export function query<Data, Variables extends AnyVariables>(
 		const subscription = client
 			.query(document, variables(), { requestPolicy: 'cache-and-network' })
 			.subscribe((result) => {
-				state.data = result.data;
+				// While what the cache held is refetched, after a change marked it
+				// stale, keep showing it rather than nothing.
+				if (result.data !== undefined || result.error) state.data = result.data;
 				state.error = result.error;
-				state.fetching = result.stale;
+				state.fetching = result.stale || result.data === undefined;
 			});
 		return () => subscription.unsubscribe();
 	});

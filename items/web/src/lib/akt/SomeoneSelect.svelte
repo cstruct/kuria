@@ -31,7 +31,7 @@
 
 <label>
 	{label}
-	<select value={choice} onchange={(e) => pick(e.currentTarget.value)}>
+	<select aria-label={label} value={choice} onchange={(e) => pick(e.currentTarget.value)}>
 		<option value="">{none}</option>
 		{#each people as person (keyOf(person.who))}
 			<option value={keyOf(person.who)}>{person.name}</option>
@@ -43,6 +43,7 @@
 	<label>
 		{label}: subject id
 		<input
+			aria-label="{label}: subject id"
 			bind:value={typed}
 			oninput={() => (who = typed.trim() ? { user: typed.trim() } : null)}
 			autocomplete="off"

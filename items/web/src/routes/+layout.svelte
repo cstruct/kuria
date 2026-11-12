@@ -19,7 +19,7 @@
 
 	$effect(() => {
 		if (!app) return;
-		// r[impl app.live]
+		// Its events are applied by the client's cache (invalidateChange).
 		const subscription = client.subscription(Changes, {}).subscribe(() => {});
 		return () => subscription.unsubscribe();
 	});
