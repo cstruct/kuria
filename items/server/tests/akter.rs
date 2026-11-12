@@ -421,13 +421,13 @@ async fn every_revision_has_a_change_event_in_order() {
         .await;
 
     let mut conn = world.db.pool().get().await.unwrap();
-    let events: Vec<(i64, i32)> = change_event::table
+    let events: Vec<(i64, Option<i32>)> = change_event::table
         .order(change_event::seq)
         .select((change_event::seq, change_event::revision))
         .load(&mut conn)
         .await
         .unwrap();
-    assert_eq!(events, vec![(1, 1), (2, 1), (3, 2)]);
+    assert_eq!(events, vec![(1, Some(1)), (2, Some(1)), (3, Some(2))]);
     assert_eq!(world.revision_rows().await, 3);
 }
 

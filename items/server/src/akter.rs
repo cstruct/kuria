@@ -10,9 +10,10 @@ use konklav_core::{SubjectId, TenantId};
 use kuria_config::{AktType, AktTypeDocument, NumberContext, Problem, validate};
 
 use crate::authorize::{Authorizer, Permission, Unavailable};
-use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json};
+use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json, rank_between};
 use kuria_store::Pool;
 use kuria_store::akter::{self as store, AktRow, AktTypeVersion, RevisionRow};
+use kuria_store::containers;
 use serde_json::{Map, Value as Json};
 use uuid::Uuid;
 
@@ -171,6 +172,7 @@ impl Akter {
             let outcome = kuria_engine::create(&stored.ty, fields)?;
             let now = Utc::now();
             let number = next_number(conn, tenant, &stored.ty, now).await?;
+            let rank = append_rank(conn, tenant).await?;
             let akt = AktRow {
                 id: Uuid::now_v7(),
                 tenant_id: tenant,
@@ -181,6 +183,7 @@ impl Akter {
                 revision: 1,
                 created_at: now,
                 updated_at: now,
+                rank,
             };
             store::insert_akt(conn, &akt).await?;
             store::append_revision(conn, &revision(&akt, actor, None, reason, &outcome, now))
@@ -321,6 +324,15 @@ impl Akter {
     }
 }
 
+/// A rank after every akt of the tenant, under the tenant's order lock.
+// r[impl order.rank]
+// r[impl order.concurrent]
+async fn append_rank(conn: &mut kuria_store::Connection, tenant: Uuid) -> Result<String, AktError> {
+    containers::lock_order(conn, tenant).await?;
+    let last = containers::last_rank(conn, tenant).await?;
+    rank_between(last.as_deref(), None).map_err(|e| AktError::Internal(e.to_string()))
+}
+
 /// The next akt number for `ty`, taken from the tenant's counter for the
 /// pattern's scope.
 // r[impl akt.number.sequence]
@@ -375,5 +387,6 @@ fn revision(
         state: outcome.state.clone(),
         hash: outcome.hash.to_vec(),
         created_at: now,
+        membership: None,
     }
 }

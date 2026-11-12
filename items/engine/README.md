@@ -11,6 +11,9 @@ produces, or why it is refused.
   the akt's current state and field values, and the values a request gives,
   and return an `Outcome` (the new state and values, what changed, and the
   hash) or a `Refusal`.
+- `rank_between` and `nth_appended`: rank keys, fractional indexing with an
+  integer part, so appending keeps keys short and there is always a key
+  between two others. Keys are compared byte by byte.
 - `state_hash`: the SHA-256 of an akt's state and field values as canonical
   JSON (no whitespace, object members in key order), independent of how
   `serde_json` orders maps.
@@ -27,4 +30,5 @@ cargo test -p kuria-engine
 ## Traceability
 
 - Spec: [`docs/spec/akter.md`](../../docs/spec/akter.md) (`akt.create`,
-  `akt.edit`, `akt.transition`, `akt.field.*`, `akt.revision.record`).
+  `akt.edit`, `akt.transition`, `akt.field.*`, `akt.revision.record`) and
+  [`docs/spec/ordering.md`](../../docs/spec/ordering.md) (`order.move`).

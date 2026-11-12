@@ -164,6 +164,8 @@ pub struct AktRow {
     pub revision: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// The akt's place in its tenant's priority order.
+    pub rank: String,
 }
 
 /// An akt revision, as stored.
@@ -180,6 +182,8 @@ pub struct RevisionRow {
     pub state: String,
     pub hash: Vec<u8>,
     pub created_at: DateTime<Utc>,
+    /// For a membership revision, the membership it added or removed.
+    pub membership: Option<Json>,
 }
 
 /// Stores a new akt.
@@ -230,6 +234,7 @@ pub async fn append_revision(conn: &mut Connection, row: &RevisionRow) -> QueryR
             change_event::akt_id.eq(row.akt_id),
             change_event::revision.eq(row.revision),
             change_event::created_at.eq(row.created_at),
+            change_event::kind.eq("revision"),
         ))
         .execute(conn)
         .await?;
@@ -312,9 +317,12 @@ pub struct ChangeEventRow {
     pub tenant_id: Uuid,
     pub seq: i64,
     pub akt_id: Uuid,
-    pub revision: i32,
+    /// The new revision, for a `revision` event; `None` for a `rank` event.
+    pub revision: Option<i32>,
     pub created_at: DateTime<Utc>,
     pub published_at: Option<DateTime<Utc>>,
+    /// `revision` or `rank`.
+    pub kind: String,
 }
 
 /// The tenant's change events after `after`, in order, up to `limit`.

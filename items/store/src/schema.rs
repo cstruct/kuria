@@ -70,6 +70,7 @@ diesel::table! {
         revision -> Int4,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,
+        rank -> Text,
     }
 }
 
@@ -85,6 +86,7 @@ diesel::table! {
         state -> Text,
         hash -> Bytea,
         created_at -> Timestamptz,
+        membership -> Nullable<Jsonb>,
     }
 }
 
@@ -93,12 +95,29 @@ diesel::table! {
         tenant_id -> Uuid,
         seq -> Int8,
         akt_id -> Uuid,
-        revision -> Int4,
+        revision -> Nullable<Int4>,
         created_at -> Timestamptz,
         published_at -> Nullable<Timestamptz>,
+        kind -> Text,
+    }
+}
+
+diesel::table! {
+    akt_membership (container_id, member_id) {
+        tenant_id -> Uuid,
+        container_id -> Uuid,
+        member_id -> Uuid,
+        added_at -> Timestamptz,
+        added_by -> Uuid,
     }
 }
 
 diesel::joinable!(akt -> akt_type_version (type_version_id));
 diesel::joinable!(akt_revision -> akt (akt_id));
-diesel::allow_tables_to_appear_in_same_query!(akt, akt_type, akt_type_version, akt_revision);
+diesel::allow_tables_to_appear_in_same_query!(
+    akt,
+    akt_type,
+    akt_type_version,
+    akt_revision,
+    akt_membership
+);

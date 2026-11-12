@@ -64,6 +64,21 @@ impl TestDatabase {
     /// When no server URL is configured, the server is unreachable, or
     /// migrations fail: a test cannot proceed in any of those cases.
     pub async fn new() -> Self {
+        let db = Self::unmigrated().await;
+        kuria_store::run_pending_migrations(&db.pool)
+            .await
+            .expect("migrate test database");
+        db
+    }
+
+    /// Creates a uniquely named database without applying any migration, for
+    /// tests that apply them one by one with
+    /// [`kuria_store::run_next_migration`].
+    ///
+    /// # Panics
+    ///
+    /// When no server URL is configured or the server is unreachable.
+    pub async fn unmigrated() -> Self {
         let admin_url = server_url();
         let name = format!("kuria_test_{}", uuid::Uuid::now_v7().simple());
         let url = with_database(&admin_url, &name);
@@ -83,9 +98,6 @@ impl TestDatabase {
             max_connections: 8,
         })
         .expect("build test pool");
-        kuria_store::run_pending_migrations(&pool)
-            .await
-            .expect("migrate test database");
 
         Self {
             name,

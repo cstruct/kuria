@@ -5,6 +5,7 @@
 //! stores what it answers.
 
 mod hash;
+mod rank;
 mod value;
 
 use std::collections::BTreeMap;
@@ -13,6 +14,7 @@ use kuria_config::AktType;
 use serde_json::{Map, Value as Json};
 
 pub use hash::state_hash;
+pub use rank::{RankError, nth_appended, rank_between};
 pub use value::{Value, fields_from_json, fields_to_json};
 
 /// An akt's state and field values.

@@ -6,13 +6,14 @@
 //! writes them.
 
 pub mod akter;
+pub mod containers;
 pub mod erasure;
 mod migrate;
 mod pool;
 pub mod schema;
 pub mod sessions;
 
-pub use migrate::{MigrationError, run_pending_migrations};
+pub use migrate::{MigrationError, run_next_migration, run_pending_migrations};
 pub use pool::{ConnectOptions, Pool, PoolError, connect};
 
 /// A connection checked out of the [`Pool`].

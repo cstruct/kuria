@@ -26,3 +26,20 @@ pub async fn run_pending_migrations(pool: &Pool) -> Result<Vec<String>, Migratio
         .map_err(MigrationError::Migration)?;
     Ok(applied.iter().map(ToString::to_string).collect())
 }
+
+/// Applies the next pending migration, if any, and returns its version.
+/// For tests that check a migration against data written before it.
+pub async fn run_next_migration(pool: &Pool) -> Result<Option<String>, MigrationError> {
+    let conn = pool.get().await?;
+    let mut harness = AsyncMigrationHarness::new(conn);
+    let pending = harness
+        .pending_migrations(MIGRATIONS)
+        .map_err(MigrationError::Migration)?;
+    let Some(next) = pending.first() else {
+        return Ok(None);
+    };
+    let version = harness
+        .run_migration(next.as_ref())
+        .map_err(MigrationError::Migration)?;
+    Ok(Some(version.to_string()))
+}

@@ -15,16 +15,30 @@ the queries the server runs.
     including the row lock a refresh holds.
   - [`akter`](src/akter.rs): akt types and their versions, akter, akt
     revisions, per-tenant counters, and the change-event outbox.
+  - [`containers`](src/containers.rs): memberships, the cycle check (a
+    recursive query), ranks with their neighbours, rank change events, the
+    tenant's order lock, and locking several akter in a fixed order.
   - [`erasure`](src/erasure.rs): deleting what Kuria holds about a subject,
     and the time erasures are handled up to.
 
 The migrations also make `akt_revision` append only: a trigger refuses every
-update and delete.
+update and delete. Ranks use `COLLATE "C"`, so they sort byte by byte as the
+engine's rank keys require, and are unique per tenant.
 
 Out of scope: what stored values mean. Browser sessions' tokens arrive here
 already encrypted by the server.
 
 ## Testing
 
-It is tested through the server's database tests, which create a fresh
-database each with `kuria-test-support`.
+```sh
+mise run db:up
+cargo test -p kuria-store
+```
+
+- [`tests/containers.rs`](tests/containers.rs): unique ranks per tenant,
+  byte-order sorting, memberships stored once and never of an akt itself,
+  finding akter contained through other containers, members in rank order
+  by readable type, and the containment migration ranking existing akter in
+  creation order (applied step by step with `run_next_migration`).
+
+Most queries are also covered by the server's database tests.
