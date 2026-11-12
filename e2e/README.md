@@ -69,6 +69,10 @@ server. A failed test keeps its trace and screenshots in
 - [`support/`](support): signing people in, working in the app by roles
   and labels, and the API as software uses it.
 
+Each test's browser sends its own `X-Forwarded-For` address, which Kuria
+trusts from localhost here, so the sign-in rate limit counts each test as
+it would each person.
+
 Software signs in to Konklav with its secret key and moves into the
 tenant, so its tokens carry Konklav's own audience; Kuria accepts that
 beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
@@ -77,6 +81,9 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
 
 - [`tests/sign-in.spec.ts`](tests/sign-in.spec.ts): signing in through the
   login page, a wrong password, and single sign-on.
+- [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
+  the drawer and no sideways scrolling at 390 pixels, and signing out of
+  Kuria and of the login page's Konklav session.
 - [`tests/release-flow.spec.ts`](tests/release-flow.spec.ts): the
   [release-management example](../docs/examples/release-management/README.md)
   from planning to a closed release, as a developer and a release manager

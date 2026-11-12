@@ -3,9 +3,9 @@
 	import { createClient } from '#lib/graphql/client.ts';
 	import { setClient } from '#lib/graphql/context.svelte.ts';
 	import { Changes } from '#lib/graphql/operations.ts';
-	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
+	import Shell from '#lib/shell/Shell.svelte';
 	import Toaster from '#lib/ui/Toaster.svelte';
 	import '../app.css';
 
@@ -32,19 +32,8 @@
 </svelte:head>
 
 {#if app}
-	<nav class="top" aria-label="Kuria">
-		<a href={resolve('/')}>Kuria</a>
-		<a href={resolve('/contacts')}>Contacts</a>
-	</nav>
+	<Shell>{@render children()}</Shell>
+{:else}
+	{@render children()}
 {/if}
-{@render children()}
 <Toaster />
-
-<style>
-	.top {
-		display: flex;
-		gap: 1rem;
-		padding: 0.5rem 1rem;
-		border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-	}
-</style>

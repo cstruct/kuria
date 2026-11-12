@@ -91,6 +91,20 @@ export async function signIn(
 	}
 }
 
+/** Ends the page's own Konklav session, if it can be restored, so that
+ * signing out of Kuria signs the person out here too. */
+// r[impl login.sign-out]
+export async function signOut(konklav: Konklav): Promise<Step> {
+	if (await konklav.restore()) {
+		try {
+			await konklav.signOut();
+		} catch {
+			// Restored but not ended: Konklav will end it when it expires.
+		}
+	}
+	return { kind: 'message', text: 'You’re signed out.' };
+}
+
 /** Refuses the request because the person cancelled. */
 export async function cancel(konklav: Konklav, id: string): Promise<Step> {
 	return { kind: 'redirect', to: await konklav.reject(id, 'access_denied') };

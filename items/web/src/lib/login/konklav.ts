@@ -112,6 +112,12 @@ export class Konklav {
 		return answer.redirect_to;
 	}
 
+	/** Ends this session at Konklav, and every session started from it. */
+	async signOut(): Promise<void> {
+		await this.#call('POST', '/v1/sign-out');
+		this.#accessToken = undefined;
+	}
+
 	/** Refuses the request with `error`; where to send the browser. */
 	async reject(id: string, error: string): Promise<string> {
 		const answer = await this.#call<{ redirect_to: string }>(

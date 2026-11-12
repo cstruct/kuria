@@ -369,3 +369,41 @@ export const EraseContact = graphql(`
 		}
 	}
 `);
+
+export const Shell = graphql(`
+	query Shell {
+		viewer {
+			subject
+			user {
+				id
+				name
+			}
+		}
+		aktTypes {
+			key
+			version
+			name
+			akterCount
+		}
+	}
+`);
+
+export const SearchAkter = graphql(`
+	query SearchAkter($text: String!) {
+		akter(search: $text, first: 12) {
+			id
+			number
+			title
+			state {
+				key
+				name
+				tone
+			}
+			type {
+				key
+				version
+				name
+			}
+		}
+	}
+`);

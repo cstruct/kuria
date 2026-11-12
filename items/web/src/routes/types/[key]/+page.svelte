@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { query } from '#lib/graphql/context.svelte.ts';
 	import { AkterOfType } from '#lib/graphql/operations.ts';
 
 	const list = query(AkterOfType, () => ({ type: page.params.key ?? '' }));
+	setCrumbs(() => [{ label: list.data?.aktType?.name ?? page.params.key ?? '' }]);
 </script>
 
 <main>

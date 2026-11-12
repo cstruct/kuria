@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import { resolve } from '$app/paths';
 	import { query } from '#lib/graphql/context.svelte.ts';
 	import { Home } from '#lib/graphql/operations.ts';
 
 	const home = query(Home, () => ({}));
+	setCrumbs(() => [{ label: 'Home' }]);
 </script>
 
 <main>

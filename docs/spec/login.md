@@ -60,6 +60,12 @@ After signing in, the page MUST accept the login request and send the
 browser where Konklav answers, and MUST refuse it with `access_denied` when
 the person cancels.
 
+r[login.sign-out]
+Opened as `/login?sign_out`, the page MUST end its own Konklav session, if
+it has one (`/v1/sign-out`), and say that the person is signed out, so
+that signing out of Kuria doesn't leave a session that signs them straight
+back in.
+
 r[login.csp]
 The page MUST be served with a Content Security Policy that allows scripts,
 styles and connections from Kuria's own origin only, and forbids framing.

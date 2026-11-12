@@ -30,6 +30,10 @@ server serves from its own origin, and Kuria's login page.
   `Toaster` and `toast()`, and, on Bits UI's accessible primitives, `Menu`,
   `Dialog` and `Combobox`. Icons from `@lucide/svelte`, bundled. `/design`
   shows them all, in either theme.
+- [`src/lib/shell`](src/lib/shell): the app's frame: a sidebar of akt
+  types with counts, Home and Contacts (a drawer below 900 pixels), a top
+  bar with breadcrumbs (`setCrumbs`), the viewer and Sign out, and search
+  (`/` or Cmd-K) over akter by number or title.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
   each field kind's editor, input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a

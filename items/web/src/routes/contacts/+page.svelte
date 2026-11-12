@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import { AddContact, Contacts, EditContact, EraseContact } from '#lib/graphql/operations.ts';
 
 	const client = getClient();
 	const list = query(Contacts, () => ({}));
+	setCrumbs(() => [{ label: 'Contacts' }]);
 
 	let name = $state('');
 	let email = $state('');

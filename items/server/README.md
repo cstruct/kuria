@@ -102,7 +102,9 @@ Not yet: links other than containment, and signatures.
   `eraseContact`; and the query `contacts`.
   An akt has its `title`, an akt type its `presentation` (title field,
   card and list fields) and each state its `tone`; `akter(search:)` finds
-  akter by a number's beginning or a title's words.
+  akter by a number's beginning or a title's words; `AktType.akterCount`
+  counts a type's akter for those who may read them; `viewer.user` names
+  the viewer.
   A revision's `by` is `User { id name email }`; `user` fields are
   `UserValue { user: Someone }`, `Someone` being a `User` or a
   `Contact { id displayName name email user }`; checkboxes are

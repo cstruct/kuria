@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -16,6 +17,10 @@
 	const view = query(NewAkt, () => ({ type: key }));
 	const contacts = query(Contacts, () => ({}));
 	const type = $derived(view.data?.aktType ?? undefined);
+	setCrumbs(() => [
+		{ label: type?.name ?? key, href: resolve('/types/[key]', { key }) },
+		{ label: 'New' }
+	]);
 	const people = $derived<Person[]>([
 		...(view.data ? [{ who: { user: view.data.viewer.subject }, name: 'Me' }] : []),
 		...(contacts.data?.contacts ?? []).map((c) => ({

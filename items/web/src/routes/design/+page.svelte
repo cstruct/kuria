@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import { resolve } from '$app/paths';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash-2';
@@ -24,6 +25,7 @@
 		{ value: 'ITEM-0001', label: 'Passkeys', hint: 'ITEM-0001 · Backlog item' }
 	];
 
+	setCrumbs(() => [{ label: 'Design' }]);
 	let dialog = $state(false);
 	let picked = $state('');
 	let theme = $state<'system' | 'light' | 'dark'>('system');

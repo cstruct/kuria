@@ -650,6 +650,23 @@ impl AktType {
         self.0.row.created_at
     }
 
+    /// How many akter of this type the tenant has, to a subject who may
+    /// read them; `null` to anyone else.
+    // r[impl authz.read]
+    async fn akter_count(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<i64>> {
+        let key = self.0.ty.key();
+        if !reads(ctx, key).await? {
+            return Ok(None);
+        }
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        Ok(Some(
+            store::count_akter(&mut conn, tenant, key)
+                .await
+                .map_err(internal)?,
+        ))
+    }
+
     async fn created_by(&self) -> ID {
         ID(self.0.row.created_by.to_string())
     }

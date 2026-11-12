@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import FieldEditor from '#lib/akt/FieldEditor.svelte';
@@ -37,6 +38,14 @@
 	const contacts = query(Contacts, () => ({}));
 
 	const akt = $derived(view.data?.akt ?? undefined);
+	setCrumbs(() =>
+		akt
+			? [
+					{ label: akt.type.name, href: resolve('/types/[key]', { key: akt.type.key }) },
+					{ label: akt.number }
+				]
+			: [{ label: number }]
+	);
 	const fieldNames = $derived(
 		Object.fromEntries((akt?.type.fields ?? []).map((f) => [f.key, f.name]))
 	);
@@ -480,6 +489,8 @@
 				{/each}
 			</ol>
 		</section>
+	{:else if view.data && !view.fetching}
+		<p role="alert">There is no akt {number}, or you can’t see it.</p>
 	{:else}
 		<p>Loading…</p>
 	{/if}

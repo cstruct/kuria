@@ -239,3 +239,35 @@ async fn akter_are_found_by_number_or_title_words() {
         [sign_in.as_str()]
     );
 }
+
+// r[verify authz.read]
+#[tokio::test(flavor = "multi_thread")]
+async fn akt_types_count_their_akter_for_those_who_read_them() {
+    let world = World::new().await;
+    world.create("story", json!({ "summary": "s" })).await;
+    world.create("story", json!({ "summary": "t" })).await;
+    world.create("bug", json!({ "title": "b" })).await;
+    let counts = |data: Value| -> Vec<(String, Value)> {
+        data["aktTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| {
+                (
+                    t["key"].as_str().unwrap().to_owned(),
+                    t["akterCount"].clone(),
+                )
+            })
+            .collect()
+    };
+    let query = "{ aktTypes { key akterCount } viewer { user { id } } }";
+    let all = world.data("tenant", query, json!({})).await;
+    assert_eq!(
+        counts(all.clone()),
+        [("bug".to_owned(), json!(1)), ("story".to_owned(), json!(2))]
+    );
+    assert_eq!(all["viewer"]["user"]["id"], support::SUBJECT);
+    // A reader of stories sees only stories, and counts them.
+    let stories = world.data(STORY_READER, query, json!({})).await;
+    assert_eq!(counts(stories), [("story".to_owned(), json!(2))]);
+}

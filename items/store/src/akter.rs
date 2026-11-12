@@ -298,6 +298,17 @@ pub async fn list_akter(
     query.load(conn).await
 }
 
+/// How many akter of the akt type `key` the tenant has, in any version.
+pub async fn count_akter(conn: &mut Connection, tenant: Uuid, key: &str) -> QueryResult<i64> {
+    akt::table
+        .inner_join(akt_type_version::table)
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt_type_version::key.eq(key))
+        .count()
+        .get_result(conn)
+        .await
+}
+
 /// Escapes `%`, `_` and `\` for a `like` pattern.
 fn like_escaped(text: &str) -> String {
     text.replace('\\', "\\\\")

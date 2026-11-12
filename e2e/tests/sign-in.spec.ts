@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from '../support/people.ts';
+import { newPage, signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
 // r[verify app.sign-in]
@@ -29,7 +29,8 @@ test('the release manager signs in through the login page', async ({ browser }) 
 });
 
 // r[verify login.password]
-test('a wrong password is refused without saying which part was wrong', async ({ page }) => {
+test('a wrong password is refused without saying which part was wrong', async ({ browser }) => {
+	const page = await newPage(browser);
 	await page.goto('/');
 	await page.getByLabel('Email').fill(seeded().people.developer.email);
 	await page.getByLabel('Password').fill('not the password');

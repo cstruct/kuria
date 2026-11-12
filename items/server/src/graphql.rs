@@ -99,6 +99,7 @@ impl ViewerQuery {
         Ok(Viewer {
             subject: ID(principal.subject.to_string()),
             tenant: ID(principal.tenant.to_string()),
+            user: people::User(principal.subject.into()),
         })
     }
 }
@@ -110,6 +111,8 @@ pub struct Viewer {
     subject: ID,
     /// The tenant the request acts in.
     tenant: ID,
+    /// The subject, shown by name.
+    user: people::User,
 }
 
 #[cfg(test)]

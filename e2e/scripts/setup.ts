@@ -175,6 +175,9 @@ const env = {
 	KURIA_SECURE_COOKIES: 'false',
 	KURIA_LOGIN_APP: 'true',
 	KURIA_DEFAULT_TENANT: tenant,
+	// Each test's browser names its own client address (support/people.ts),
+	// so the sign-in rate limit counts per test, as it would per person.
+	KURIA_TRUSTED_PROXIES: '127.0.0.1,::1',
 	KONKLAV_ISSUER: KURIA,
 	KONKLAV_AUDIENCE: 'kuria,konklav',
 	KONKLAV_SUBJECT_URL: KONKLAV_SUBJECT,

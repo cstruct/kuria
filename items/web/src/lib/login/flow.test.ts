@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Konklav, type LoginRequest } from './konklav';
-import { cancel, signIn, start } from './flow';
+import { cancel, signIn, signOut, start } from './flow';
 
 const ORIGIN = 'https://kuria.example';
 const TENANT = '01900000-0000-7000-8000-000000000001';
@@ -161,6 +161,23 @@ describe('the login page', () => {
 			kind: 'form',
 			error: expect.stringContaining("aren't a member")
 		});
+	});
+
+	// r[verify login.sign-out]
+	it('ends its own session when signing out, if it has one', async () => {
+		const { client, calls } = konklav({
+			'POST /v1/refresh': session('t1'),
+			'POST /v1/sign-out': () => [200, {}]
+		});
+		expect(await signOut(client)).toMatchObject({
+			kind: 'message',
+			text: expect.stringContaining('signed out')
+		});
+		const ended = calls.find((c) => c.path === '/v1/sign-out')!;
+		expect(ended.headers.authorization).toBe('DPoP t1');
+		const none = konklav({});
+		expect(await signOut(none.client)).toMatchObject({ kind: 'message' });
+		expect(none.calls.some((c) => c.path === '/v1/sign-out')).toBe(false);
 	});
 
 	// r[verify login.accept]

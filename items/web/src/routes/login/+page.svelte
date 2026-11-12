@@ -2,7 +2,8 @@
 	import { page } from '$app/state';
 	import { proof } from '#lib/login/dpop.ts';
 	import { Konklav } from '#lib/login/konklav.ts';
-	import { cancel, signIn, start, type Step } from '#lib/login/flow.ts';
+	import { resolve } from '$app/paths';
+	import { cancel, signIn, signOut, start, type Step } from '#lib/login/flow.ts';
 
 	// Konklav's login application: it signs the person in to Konklav and
 	// accepts the sign-in another client (Kuria, say) started.
@@ -26,8 +27,10 @@
 		busy = false;
 	}
 
+	const signingOut = page.url.searchParams.has('sign_out');
+
 	$effect(() => {
-		start(konklav, id).then(go, (error: Error) =>
+		(signingOut ? signOut(konklav) : start(konklav, id)).then(go, (error: Error) =>
 			go({ kind: 'message', text: `Something went wrong: ${error.message}` })
 		);
 	});
@@ -78,6 +81,7 @@
 		</form>
 	{:else if step.kind === 'message'}
 		<p role="status">{step.text}</p>
+		{#if signingOut}<p><a href={resolve('/')}>Sign in again</a></p>{/if}
 	{/if}
 </main>
 
