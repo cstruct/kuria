@@ -60,6 +60,7 @@ fn get_request(path: &str) -> Request<Body> {
 
 // r[verify app.serve]
 // r[verify app.csp]
+// r[verify login.csp]
 #[tokio::test(flavor = "multi_thread")]
 async fn serves_the_app_and_its_fallback_page() {
     let router = router(Some(Web::load(&built_app()).unwrap()), None);
