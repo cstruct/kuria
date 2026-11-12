@@ -43,3 +43,13 @@ export function query<Data, Variables extends AnyVariables>(
 	});
 	return state;
 }
+
+/** Runs a mutation; its result, or the error it was refused with. */
+export async function mutate<Data, Variables extends AnyVariables>(
+	client: Client,
+	document: TypedDocumentNode<Data, Variables>,
+	variables: Variables
+): Promise<{ data?: Data; error?: CombinedError }> {
+	const result = await client.mutation(document, variables).toPromise();
+	return { data: result.data, error: result.error };
+}

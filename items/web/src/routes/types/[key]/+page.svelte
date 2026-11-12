@@ -12,6 +12,11 @@
 		<p role="alert">{list.error.message}</p>
 	{:else if list.data?.aktType}
 		<h1>{list.data.aktType.name}</h1>
+		<p>
+			<a href={resolve('/types/[key]/new', { key: list.data.aktType.key })}
+				>New {list.data.aktType.name}</a
+			>
+		</p>
 		<ul aria-label={list.data.aktType.name}>
 			{#each list.data.akter as akt (akt.id)}
 				<li>

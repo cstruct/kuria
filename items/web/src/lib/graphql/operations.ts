@@ -43,3 +43,329 @@ export const AkterOfType = graphql(`
 		}
 	}
 `);
+
+export const FieldValues = graphql(`
+	fragment FieldValues on FieldValue {
+		__typename
+		... on TextValue {
+			field
+			text
+		}
+		... on ChoiceValue {
+			field
+			option {
+				key
+				name
+			}
+		}
+		... on ChoicesValue {
+			field
+			options {
+				key
+				name
+			}
+		}
+		... on DateValue {
+			field
+			date
+		}
+		... on UserValue {
+			field
+			user {
+				...SomeoneShown
+			}
+		}
+		... on CheckboxValue {
+			field
+			checked
+			at
+			by {
+				id
+				name
+			}
+			for {
+				...SomeoneShown
+			}
+		}
+		... on ReferenceValue {
+			field
+			url
+			label
+		}
+		... on GitValue {
+			field
+			repository
+			sha
+			tag
+		}
+		... on DockerValue {
+			field
+			repository
+			digest
+			tag
+		}
+		... on AttachmentValue {
+			field
+			attachment {
+				id
+				url
+				name
+				mediaType
+				size
+				sbom {
+					format
+					specVersion
+					name
+					components
+				}
+			}
+		}
+	}
+`);
+
+export const SomeoneShown = graphql(`
+	fragment SomeoneShown on Someone {
+		__typename
+		... on User {
+			id
+			name
+		}
+		... on Contact {
+			id
+			displayName
+		}
+	}
+`);
+
+export const TypeShape = graphql(`
+	fragment TypeShape on AktType {
+		key
+		version
+		name
+		document
+		fields {
+			key
+			name
+			kind
+			description
+			required
+			multiline
+			options {
+				key
+				name
+			}
+			format
+		}
+		states {
+			key
+			name
+			initial
+			final
+		}
+		transitions {
+			key
+			name
+			from
+			to
+			requires
+		}
+	}
+`);
+
+export const AktPage = graphql(`
+	query AktPage($number: String!) {
+		viewer {
+			subject
+		}
+		aktTypes {
+			key
+			version
+			name
+		}
+		akt(number: $number) {
+			id
+			number
+			revision
+			state {
+				key
+				name
+				final
+			}
+			type {
+				...TypeShape
+			}
+			fields {
+				...FieldValues
+			}
+			containers {
+				id
+				number
+				type {
+					key
+					version
+					name
+				}
+			}
+			board(first: 500) {
+				columns {
+					key
+					name
+					akter {
+						id
+						number
+						state {
+							key
+							name
+						}
+						type {
+							key
+							version
+							name
+						}
+						fields {
+							...FieldValues
+						}
+					}
+				}
+			}
+			revisions {
+				revision
+				transition
+				reason
+				changes
+				membership
+				createdAt
+				by {
+					id
+					name
+				}
+			}
+		}
+	}
+`);
+
+export const NewAkt = graphql(`
+	query NewAkt($type: String!) {
+		viewer {
+			subject
+		}
+		aktType(key: $type) {
+			...TypeShape
+		}
+	}
+`);
+
+export const Contacts = graphql(`
+	query Contacts {
+		contacts {
+			id
+			displayName
+			name
+			email
+			user {
+				id
+				name
+			}
+		}
+	}
+`);
+
+export const CreateAkt = graphql(`
+	mutation CreateAkt($input: CreateAktInput!) {
+		createAkt(input: $input) {
+			id
+			number
+		}
+	}
+`);
+
+export const EditAkt = graphql(`
+	mutation EditAkt($input: EditAktInput!) {
+		editAkt(input: $input) {
+			id
+			revision
+		}
+	}
+`);
+
+export const PerformTransition = graphql(`
+	mutation PerformTransition($input: PerformTransitionInput!) {
+		performTransition(input: $input) {
+			id
+			revision
+			state {
+				key
+				name
+			}
+		}
+	}
+`);
+
+export const DraftField = graphql(`
+	mutation DraftField($input: DraftFieldInput!) {
+		draftField(input: $input) {
+			id
+			revision
+		}
+	}
+`);
+
+export const AddToContainer = graphql(`
+	mutation AddToContainer($input: MembershipInput!) {
+		addToContainer(input: $input) {
+			id
+		}
+	}
+`);
+
+export const RemoveFromContainer = graphql(`
+	mutation RemoveFromContainer($input: MembershipInput!) {
+		removeFromContainer(input: $input) {
+			id
+		}
+	}
+`);
+
+export const TransferMember = graphql(`
+	mutation TransferMember($input: TransferInput!) {
+		transferMember(input: $input) {
+			id
+		}
+	}
+`);
+
+export const MoveAkt = graphql(`
+	mutation MoveAkt($input: MoveAktInput!) {
+		moveAkt(input: $input) {
+			id
+			rank
+		}
+	}
+`);
+
+export const AddContact = graphql(`
+	mutation AddContact($input: AddContactInput!) {
+		addContact(input: $input) {
+			id
+			displayName
+		}
+	}
+`);
+
+export const EditContact = graphql(`
+	mutation EditContact($input: EditContactInput!) {
+		editContact(input: $input) {
+			id
+			displayName
+		}
+	}
+`);
+
+export const EraseContact = graphql(`
+	mutation EraseContact($id: ID!) {
+		eraseContact(id: $id) {
+			id
+			displayName
+		}
+	}
+`);
