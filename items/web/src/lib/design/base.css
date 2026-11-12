@@ -1,0 +1,160 @@
+/* Base styles for elements, on the tokens. Components style themselves. */
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-sans);
+	font-size: var(--text-md);
+	line-height: var(--leading);
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	margin: 0;
+	line-height: var(--leading-tight);
+	font-weight: 600;
+}
+
+h1 {
+	font-size: var(--text-2xl);
+}
+
+h2 {
+	font-size: var(--text-lg);
+}
+
+h3 {
+	font-size: var(--text-md);
+}
+
+p {
+	margin: 0;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+code,
+kbd,
+samp,
+pre {
+	font-family: var(--font-mono);
+	font-size: 0.9em;
+}
+
+/* Form controls */
+input:not([type='checkbox'], [type='radio'], [type='file']),
+select,
+textarea {
+	width: 100%;
+	min-height: 2.25rem;
+	padding: var(--space-2) var(--space-3);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-md);
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+	font-size: var(--text-sm);
+}
+
+textarea {
+	min-height: 6rem;
+	resize: vertical;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 0;
+	border-color: var(--focus);
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+	accent-color: var(--accent);
+	width: 1rem;
+	height: 1rem;
+}
+
+::placeholder {
+	color: var(--text-muted);
+	opacity: 1;
+}
+
+fieldset {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+legend {
+	padding: 0;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+/* Visually hidden, still read by assistive technology. */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* SvelteKit's route announcer: hidden by its own inline style, which the
+   server's CSP allows by hash; hidden here too, should that change. */
+#svelte-announcer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}

@@ -79,6 +79,11 @@ async fn serves_the_app_and_its_fallback_page() {
             "{csp}"
         );
         assert!(csp.contains("frame-ancestors 'none'"), "{csp}");
+        // Only the route announcer's style attribute, by its hash.
+        assert!(
+            csp.contains("style-src-attr 'unsafe-hashes' 'sha256-S8qMpvofolR8Mpjy4kQvEm7m1q8clzU4dfDH0AmvZjo='"),
+            "{csp}"
+        );
     }
 
     let asset = send(&router, get_request("/_app/immutable/start.abc123.js")).await;

@@ -1,19 +1,12 @@
-:root {
-	color-scheme: light dark;
-	font-family: system-ui, sans-serif;
-	line-height: 1.5;
-}
-
-body {
-	margin: 0;
-}
+@import './lib/design/tokens.css';
+@import './lib/design/base.css';
 
 .app {
 	display: contents;
 }
 
 main {
-	max-width: 72rem;
+	max-width: var(--content-width);
 	margin: 0 auto;
-	padding: 1rem;
+	padding: var(--space-4);
 }

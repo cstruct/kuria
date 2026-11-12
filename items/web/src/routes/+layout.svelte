@@ -6,6 +6,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { LayoutProps } from './$types';
+	import Toaster from '#lib/ui/Toaster.svelte';
 	import '../app.css';
 
 	let { children }: LayoutProps = $props();
@@ -37,6 +38,7 @@
 	</nav>
 {/if}
 {@render children()}
+<Toaster />
 
 <style>
 	.top {

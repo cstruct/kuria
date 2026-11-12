@@ -15,7 +15,8 @@ MUST be cacheable for a year; the fallback page MUST NOT be cached.
 r[app.csp]
 The app MUST be served with a Content Security Policy that allows scripts,
 styles, images and connections from Kuria's own origin only, and forbids
-framing.
+framing. Inline, it MAY allow only the app's own bootstrap script and the
+router's hidden announcer's style, each by its hash.
 
 ## Signing in
 

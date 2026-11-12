@@ -22,6 +22,11 @@ use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
+/// The inline style SvelteKit's route announcer, a hidden live region,
+/// carries; allowed by its hash and nothing else inline. The app's
+/// stylesheet hides the announcer too, should SvelteKit change it.
+const ANNOUNCER_STYLE: &str = "position: absolute; left: 0; top: 0; clip: rect(0 0 0 0); clip-path: inset(50%); overflow: hidden; white-space: nowrap; width: 1px; height: 1px";
+
 /// The page the app's paths load.
 const FALLBACK: &str = "index.html";
 
@@ -60,8 +65,10 @@ impl Web {
         });
         // r[impl app.csp]
         // r[impl login.csp]
+        let announcer =
+            base64::engine::general_purpose::STANDARD.encode(Sha256::digest(ANNOUNCER_STYLE));
         let csp = format!(
-            "default-src 'self'; script-src 'self'{hashes}; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+            "default-src 'self'; script-src 'self'{hashes}; style-src 'self'; style-src-attr 'unsafe-hashes' 'sha256-{announcer}'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         );
         Ok(Self {
             dir: dir.to_owned(),

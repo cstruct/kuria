@@ -21,6 +21,15 @@ server serves from its own origin, and Kuria's login page.
   The types are generated into `src/lib/graphql/generated` (not checked
   in) from [`schema.graphql`](schema.graphql), which `kuria-server schema`
   prints.
+- [`src/lib/design`](src/lib/design): the design tokens (`tokens.css`:
+  colours for light and dark, state tones, space, radius, type) and base
+  element styles; `theme.ts` lists the colour pairs used together, which
+  `theme.test.ts` checks against WCAG 2.2 AA.
+- [`src/lib/ui`](src/lib/ui): the components every page builds on:
+  `Button`, `IconButton`, `Badge`, `Card`, `Field`, `EmptyState`, `Mono`,
+  `Toaster` and `toast()`, and, on Bits UI's accessible primitives, `Menu`,
+  `Dialog` and `Combobox`. Icons from `@lucide/svelte`, bundled. `/design`
+  shows them all, in either theme.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
   each field kind's editor, input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a

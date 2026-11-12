@@ -43,8 +43,11 @@
 		"vitest": "^4.1.8"
 	},
 	"dependencies": {
+		"@internationalized/date": "^3.12.4",
+		"@lucide/svelte": "^1.72.0",
 		"@urql/core": "^6.0.3",
 		"@urql/exchange-graphcache": "^9.0.2",
+		"bits-ui": "^2.21.0",
 		"graphql": "^17.1.0",
 		"graphql-ws": "^6.4.2"
 	}
