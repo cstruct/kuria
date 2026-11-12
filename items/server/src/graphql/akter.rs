@@ -13,11 +13,12 @@ use chrono::{DateTime, Utc};
 use kuria_config::{ChoiceOption as ConfigOption, FieldDef, FieldKind as ConfigKind};
 use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow, RevisionRow};
+use kuria_store::containers;
 use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
 use super::Principal;
-use crate::akter::{AktError, Akter, Caller, StoredType};
+use crate::akter::{AktError, Akter, Caller, Place, StoredType};
 use crate::authorize::{Authorizer, Permission};
 
 /// The most akter one query lists.
@@ -86,6 +87,14 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotFound(_) => coded(message, "NOT_FOUND"),
         AktError::Refused(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
+        AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
+        AktError::AlreadyMember { .. } => coded(message, "ALREADY_MEMBER"),
+        AktError::NotMember { .. } => coded(message, "NOT_MEMBER"),
+        AktError::Exclusive { .. } => coded(message, "EXCLUSIVE"),
+        AktError::Cycle { .. } => coded(message, "CYCLE"),
+        AktError::Frozen(_) => coded(message, "FROZEN"),
+        AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
+        AktError::SelfMove => coded(message, "BAD_REQUEST"),
         AktError::Unavailable(detail) => {
             tracing::warn!("akter: {detail}");
             coded(
@@ -252,7 +261,8 @@ async fn with_types(
         .collect()
 }
 
-pub struct Mutation;
+#[derive(Default)]
+pub struct AkterMutation;
 
 /// What creating an akt takes.
 #[derive(InputObject)]
@@ -263,6 +273,9 @@ pub struct CreateAktInput {
     /// Field keys to values.
     fields: Option<Json<JsonValue>>,
     reason: Option<String>,
+    /// The containers to create it in, by number; the first is its parent.
+    #[graphql(name = "in", default)]
+    inside: Vec<String>,
 }
 
 /// What editing an akt takes.
@@ -289,7 +302,7 @@ pub struct PerformTransitionInput {
 }
 
 #[Object]
-impl Mutation {
+impl AkterMutation {
     /// Submits an akt type document, creating the next version of its key.
     async fn define_akt_type(
         &self,
@@ -320,7 +333,7 @@ impl Mutation {
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
         let row = akter
-            .create(caller, &input.key, &fields, input.reason)
+            .create(caller, &input.key, &fields, input.reason, &input.inside)
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -362,6 +375,92 @@ impl Mutation {
                 &fields,
                 input.reason,
             )
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+}
+
+#[derive(Default)]
+pub struct ContainmentMutation;
+
+/// What adding to or removing from a container takes.
+#[derive(InputObject)]
+pub struct MembershipInput {
+    /// The container's number.
+    container: String,
+    /// The member's number.
+    member: String,
+    reason: Option<String>,
+}
+
+/// What moving an akt takes: exactly one of `before` and `after`.
+#[derive(InputObject)]
+pub struct MoveAktInput {
+    number: String,
+    /// The akt to place it directly before.
+    before: Option<String>,
+    /// The akt to place it directly after.
+    after: Option<String>,
+}
+
+#[Object]
+impl ContainmentMutation {
+    /// Adds an akt to a container, and returns the container.
+    async fn add_to_container(
+        &self,
+        ctx: &Context<'_>,
+        input: MembershipInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .add_member(caller, &input.container, &input.member, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Removes an akt from a container, and returns the container.
+    async fn remove_from_container(
+        &self,
+        ctx: &Context<'_>,
+        input: MembershipInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .remove_member(caller, &input.container, &input.member, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Moves an akt directly before or after another, on every board.
+    async fn move_akt(&self, ctx: &Context<'_>, input: MoveAktInput) -> async_graphql::Result<Akt> {
+        let place = match (&input.before, &input.after) {
+            (Some(before), None) => Place::Before(before),
+            (None, Some(after)) => Place::After(after),
+            _ => {
+                return Err(coded(
+                    "give exactly one of before and after".to_owned(),
+                    "BAD_REQUEST",
+                ));
+            }
+        };
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .move_akt(caller, &input.number, place)
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -598,6 +697,62 @@ impl Akt {
         self.row.updated_at
     }
 
+    /// The akt's place in its tenant's priority order. Lists of akter are
+    /// in this order.
+    async fn rank(&self) -> &str {
+        &self.row.rank
+    }
+
+    /// Its members that the subject may read, in rank order: of one akt
+    /// type if given, and at most `first` (50 by default, 200 at most).
+    // r[impl authz.members]
+    async fn members(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(name = "type")] key: Option<String>,
+        first: Option<i32>,
+    ) -> async_graphql::Result<Vec<Akt>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let limit = first.unwrap_or(50).clamp(1, MAX_LIST);
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut readable = Vec::new();
+        for contained in self.ty.ty.document().contains.iter().map(|c| &c.akt_type) {
+            if key.as_ref().is_none_or(|k| k == contained) && reads(ctx, contained).await? {
+                readable.push(contained.clone());
+            }
+        }
+        let rows = containers::members_of(
+            &mut conn,
+            tenant,
+            &[self.row.id],
+            &readable,
+            i64::from(limit),
+        )
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .map(|(_, row)| row)
+        .collect();
+        with_types(&mut conn, tenant, rows).await
+    }
+
+    /// The containers it is in that the subject may read, in rank order.
+    // r[impl authz.members]
+    async fn containers(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Akt>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut rows = Vec::new();
+        for (row, key) in containers::containers_of(&mut conn, tenant, self.row.id)
+            .await
+            .map_err(internal)?
+        {
+            if reads(ctx, &key).await? {
+                rows.push(row);
+            }
+        }
+        with_types(&mut conn, tenant, rows).await
+    }
+
     /// Every revision, oldest first.
     async fn revisions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<AktRevision>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
@@ -732,6 +887,13 @@ impl AktRevision {
     /// The state the akt was left in.
     async fn state(&self) -> &str {
         &self.0.state
+    }
+
+    /// For a membership revision, what it added or removed: `added` or
+    /// `removed` with the containers on a member, `added_member` or
+    /// `removed_member` with the members on a container.
+    async fn membership(&self) -> Option<Json<JsonValue>> {
+        self.0.membership.clone().map(Json)
     }
 
     /// SHA-256 of the resulting state and field values, in hex.

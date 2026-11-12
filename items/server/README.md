@@ -28,8 +28,11 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 
 - Defining akt types and creating, editing and transitioning akter through
   GraphQL, with every change written as an akt revision and a change event
-  in one transaction ([`src/akter.rs`](src/akter.rs) is the only code that
-  writes them).
+  in one transaction ([`src/akter.rs`](src/akter.rs) and its submodules are
+  the only code that writes them).
+- Containers: adding and removing members (recorded on both akter), creating
+  akter inside containers with `{parent}` numbers, and moving akter in their
+  tenant's one priority order.
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt
@@ -58,11 +61,21 @@ signatures.
 - [`src/graphql.rs`](src/graphql.rs): the schema, with
   [`src/graphql/akter.rs`](src/graphql/akter.rs) for akt types, akter and
   revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
-  Mutations: `defineAktType`, `createAkt`, `editAkt`, `performTransition`.
+  Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
+  `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt`.
+  `Akt` also has `rank`, `members` and `containers`, and a revision its
+  `membership`.
   Errors carry a `code` extension: `INVALID_AKT_TYPE` (with `problems`),
   `UNKNOWN_AKT_TYPE`, `NOT_FOUND`, `REFUSED`, `STALE` (with
-  `currentRevision`), `FORBIDDEN`, `UNAVAILABLE` or `INTERNAL`.
-- [`src/akter.rs`](src/akter.rs): the write path for akt types and akter.
+  `currentRevision`), `FORBIDDEN`, `UNAVAILABLE`, `NOT_CONTAINABLE`,
+  `ALREADY_MEMBER`, `NOT_MEMBER`, `EXCLUSIVE`, `CYCLE`, `FROZEN`,
+  `CREATED_IN`, `BAD_REQUEST` or `INTERNAL`.
+- [`src/akter.rs`](src/akter.rs): the write path for akt types and akter,
+  with [`create`](src/akter/create.rs),
+  [`membership`](src/akter/membership.rs) and
+  [`ordering`](src/akter/ordering.rs). Every path takes its locks in one
+  order: the tenant's order lock, akt rows by id, number counters, then the
+  change-event counter.
 - [`src/main.rs`](src/main.rs) reads [`Config`](src/config.rs), migrates the
   database, discovers Konklav's OpenID provider, starts the relying client,
   waits up to 30 seconds for its caches to be trusted, and serves.
@@ -131,6 +144,12 @@ mise run test
   akt types and akter are visible, creating, editing, transitions and their
   own actions, tenant-wide grants, Konklav failing, decisions lasting one
   request, and DPoP-bound tokens.
+- [`tests/containers.rs`](tests/containers.rs): many containers per akt,
+  removing, exclusivity, cycles, frozen containers, membership revisions on
+  both akter, release candidates and hotfixes numbered inside their release,
+  creating inside several containers, a move in a backlog showing in an
+  epic, moves as rank events, concurrent moves, and the permissions for
+  arranging, moving, creating inside and listing.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -148,5 +167,7 @@ against a fake of Konklav's OpenID provider only.
   (`auth.*`), [`browser-sessions.md`](../../docs/spec/browser-sessions.md)
   (`session.*`), [`erasure.md`](../../docs/spec/erasure.md)
   (`erasure.*`), [`akter.md`](../../docs/spec/akter.md) (`akt.*`) and
-  [`authorization.md`](../../docs/spec/authorization.md) (`authz.*`).
+  [`authorization.md`](../../docs/spec/authorization.md) (`authz.*`),
+  [`containers.md`](../../docs/spec/containers.md) (`container.*`) and
+  [`ordering.md`](../../docs/spec/ordering.md) (`order.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

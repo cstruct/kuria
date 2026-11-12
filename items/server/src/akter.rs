@@ -3,6 +3,20 @@
 //! Each change loads what it needs, asks the engine, and writes the akt, its
 //! revision and its change event in one transaction. No other code writes to
 //! the akt tables.
+//!
+//! - [`create`]: creating akter, also inside containers.
+//! - [`membership`]: adding members to containers and removing them.
+//! - [`ordering`]: moving akter in their tenant's order.
+//!
+//! Locks are always taken in one order, so no two changes deadlock: the
+//! tenant's order lock, then akt rows (by id), then number counters, then
+//! the change-event counter.
+
+mod create;
+mod membership;
+mod ordering;
+
+pub use ordering::Place;
 
 use chrono::{DateTime, Datelike, Utc};
 use diesel_async::AsyncConnection;
@@ -48,6 +62,29 @@ pub enum AktError {
     Stale { expected: i32, current: i32 },
     #[error("not permitted")]
     Forbidden,
+    #[error("`{container}` can't contain akter of the type `{member}`")]
+    NotContainable { container: String, member: String },
+    #[error("`{member}` is already a member of `{container}`")]
+    AlreadyMember { container: String, member: String },
+    #[error("`{member}` is not a member of `{container}`")]
+    NotMember { container: String, member: String },
+    #[error("`{member}` is already in `{other}`, and can be in only one `{akt_type}`")]
+    Exclusive {
+        member: String,
+        other: String,
+        akt_type: String,
+    },
+    #[error("`{member}` contains `{container}`, so it can't also be in it")]
+    Cycle { container: String, member: String },
+    #[error("`{0}` is in a final state, so its members can't change")]
+    Frozen(String),
+    #[error("an akt of the type `{akt_type}` must be created in one of: {}", .allowed.join(", "))]
+    CreatedIn {
+        akt_type: String,
+        allowed: Vec<String>,
+    },
+    #[error("an akt can't be moved next to itself")]
+    SelfMove,
     #[error("{0}")]
     Unavailable(#[from] Unavailable),
     #[error("internal error")]
@@ -136,61 +173,6 @@ impl Akter {
         )
         .await?;
         Ok(StoredType { row, ty })
-    }
-
-    /// Creates an akt of the akt type `key`.
-    // r[impl akt.create]
-    // r[impl akt.revision.atomic]
-    // r[impl authz.create]
-    pub async fn create(
-        &self,
-        caller: Caller<'_>,
-        key: &str,
-        fields: &Map<String, Json>,
-        reason: Option<String>,
-    ) -> Result<AktRow, AktError> {
-        let Caller { actor, auth } = caller;
-        let tenant: Uuid = actor.tenant.into();
-        let mut conn = self.pool.get().await?;
-        let conn: &mut kuria_store::Connection = &mut conn;
-        conn.transaction::<_, AktError, _>(async |conn| {
-            let row = store::latest_type_version(conn, tenant, key)
-                .await?
-                .ok_or_else(|| AktError::UnknownType(key.to_owned()))?;
-            if !auth.sees_type(key).await? {
-                return Err(AktError::UnknownType(key.to_owned()));
-            }
-            if !auth
-                .allows(&Permission::Create {
-                    key: key.to_owned(),
-                })
-                .await?
-            {
-                return Err(AktError::Forbidden);
-            }
-            let stored = StoredType::read(row)?;
-            let outcome = kuria_engine::create(&stored.ty, fields)?;
-            let now = Utc::now();
-            let number = next_number(conn, tenant, &stored.ty, now).await?;
-            let rank = append_rank(conn, tenant).await?;
-            let akt = AktRow {
-                id: Uuid::now_v7(),
-                tenant_id: tenant,
-                number,
-                type_version_id: stored.row.id,
-                state: outcome.state.clone(),
-                fields: Json::Object(fields_to_json(&outcome.fields)),
-                revision: 1,
-                created_at: now,
-                updated_at: now,
-                rank,
-            };
-            store::insert_akt(conn, &akt).await?;
-            store::append_revision(conn, &revision(&akt, actor, None, reason, &outcome, now))
-                .await?;
-            Ok(akt)
-        })
-        .await
     }
 
     /// Edits the akt `number`, based on `expected_revision`.
@@ -324,11 +306,13 @@ impl Akter {
     }
 }
 
-/// A rank after every akt of the tenant, under the tenant's order lock.
+/// A rank after every akt of the tenant. The caller holds the tenant's
+/// order lock.
 // r[impl order.rank]
-// r[impl order.concurrent]
-async fn append_rank(conn: &mut kuria_store::Connection, tenant: Uuid) -> Result<String, AktError> {
-    containers::lock_order(conn, tenant).await?;
+async fn rank_after_last(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+) -> Result<String, AktError> {
     let last = containers::last_rank(conn, tenant).await?;
     rank_between(last.as_deref(), None).map_err(|e| AktError::Internal(e.to_string()))
 }
@@ -340,12 +324,13 @@ async fn next_number(
     conn: &mut kuria_store::Connection,
     tenant: Uuid,
     ty: &AktType,
+    parent: Option<&str>,
     now: DateTime<Utc>,
 ) -> Result<String, AktError> {
     let context = NumberContext {
         year: now.year(),
         month: now.month(),
-        parent: None,
+        parent,
     };
     let scope = ty.number().scope(&context);
     let sequence = store::next_counter(conn, tenant, &format!("number:{scope}")).await?;
@@ -389,4 +374,100 @@ fn revision(
         created_at: now,
         membership: None,
     }
+}
+
+/// The akt type version `akt` was created with.
+async fn type_of(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    akt: &AktRow,
+) -> Result<StoredType, AktError> {
+    let row = store::type_versions_by_id(conn, tenant, &[akt.type_version_id])
+        .await?
+        .pop()
+        .ok_or_else(|| AktError::Internal(format!("akt {} has no akt type", akt.number)))?;
+    StoredType::read(row)
+}
+
+/// Refuses an akt the caller may not read as if it didn't exist.
+// r[impl authz.read]
+async fn require_read(auth: &Authorizer, ty: &StoredType, number: &str) -> Result<(), AktError> {
+    if auth
+        .allows(&Permission::Read {
+            key: ty.ty.key().to_owned(),
+        })
+        .await?
+    {
+        Ok(())
+    } else {
+        Err(AktError::NotFound(number.to_owned()))
+    }
+}
+
+/// Refuses a permission the caller lacks.
+async fn require(auth: &Authorizer, permission: Permission) -> Result<(), AktError> {
+    if auth.allows(&permission).await? {
+        Ok(())
+    } else {
+        Err(AktError::Forbidden)
+    }
+}
+
+/// The hash of `akt`'s current state and field values.
+fn current_hash(ty: &StoredType, akt: &AktRow) -> Result<[u8; 32], AktError> {
+    let fields = fields_from_json(&ty.ty, akt.fields.as_object().unwrap_or(&Map::new()))
+        .map_err(|e| AktError::Internal(format!("akt {}: {e}", akt.number)))?;
+    Ok(kuria_engine::state_hash(&akt.state, &fields))
+}
+
+/// Whether `akt` is in a final state of its akt type.
+fn is_final(ty: &StoredType, akt: &AktRow) -> bool {
+    ty.ty.state(&akt.state).is_some_and(|s| s.is_final)
+}
+
+/// One side of a membership, as a membership revision records it.
+fn membership_entry(akt: &AktRow) -> Json {
+    serde_json::json!({ "akt": akt.id.to_string(), "number": akt.number })
+}
+
+/// Appends a membership revision to `akt`, which changes neither its state
+/// nor its fields, and moves its current revision on.
+// r[impl container.revisions]
+async fn record_membership(
+    conn: &mut kuria_store::Connection,
+    ty: &StoredType,
+    akt: &mut AktRow,
+    actor: Actor,
+    reason: Option<String>,
+    membership: Json,
+    now: DateTime<Utc>,
+) -> Result<(), AktError> {
+    let hash = current_hash(ty, akt)?;
+    let expected = akt.revision;
+    akt.revision += 1;
+    akt.updated_at = now;
+    if !store::update_akt(conn, akt, expected).await? {
+        return Err(AktError::Internal(format!(
+            "akt {} moved while locked",
+            akt.number
+        )));
+    }
+    store::append_revision(
+        conn,
+        &RevisionRow {
+            akt_id: akt.id,
+            revision: akt.revision,
+            tenant_id: akt.tenant_id,
+            author: actor.subject.into(),
+            transition: None,
+            reason: reason.filter(|r| !r.trim().is_empty()),
+            changes: Json::Object(Map::new()),
+            state: akt.state.clone(),
+            hash: hash.to_vec(),
+            created_at: now,
+            membership: Some(membership),
+        },
+    )
+    .await?;
+    Ok(())
 }

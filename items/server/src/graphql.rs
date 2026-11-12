@@ -15,12 +15,12 @@ use konklav_core::{SubjectId, TenantId};
 use crate::akter::{Actor, Akter};
 
 /// The schema the GraphQL endpoint serves.
-pub type KuriaSchema = Schema<Query, akter::Mutation, EmptySubscription>;
+pub type KuriaSchema = Schema<Query, Mutation, EmptySubscription>;
 
 /// Builds the schema, storing akter through `akter`.
 #[must_use]
 pub fn schema(akter: Akter) -> KuriaSchema {
-    Schema::build(Query::default(), akter::Mutation, EmptySubscription)
+    Schema::build(Query::default(), Mutation::default(), EmptySubscription)
         .data(akter)
         .limit_depth(12)
         .limit_complexity(2_000)
@@ -46,6 +46,9 @@ impl Principal {
 
 #[derive(async_graphql::MergedObject, Default)]
 pub struct Query(ViewerQuery, akter::AkterQuery);
+
+#[derive(async_graphql::MergedObject, Default)]
+pub struct Mutation(akter::AkterMutation, akter::ContainmentMutation);
 
 #[derive(Default)]
 pub struct ViewerQuery;
