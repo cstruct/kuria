@@ -5,6 +5,7 @@
 //! such as how a session's tokens are encrypted, belongs to the crate that
 //! writes them.
 
+pub mod akter;
 pub mod erasure;
 mod migrate;
 mod pool;

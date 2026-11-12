@@ -26,7 +26,14 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Handing resolvers the subject and tenant of the verified token, and nothing
   from the request, as the tenant to act in.
 
-Not yet: akter, subscriptions, and authorization finer than the token kind.
+- Defining akt types and creating, editing and transitioning akter through
+  GraphQL, with every change written as an akt revision and a change event
+  in one transaction ([`src/akter.rs`](src/akter.rs) is the only code that
+  writes them).
+
+Not yet: subscriptions, publishing change events to Valkey, links,
+signatures, and authorization finer than the token kind. **Any subject with
+a tenant token can define akt types and change any akt in its tenant.**
 
 ## Entry points
 
@@ -42,7 +49,14 @@ Not yet: akter, subscriptions, and authorization finer than the token kind.
 - [`src/erasure.rs`](src/erasure.rs): `handle_erasures` consumes the relying
   client's erasure notices; `ErasedSubjects` is where the list of erased
   subjects comes from, so tests can stand in for Konklav.
-- [`src/graphql.rs`](src/graphql.rs): the schema.
+- [`src/graphql.rs`](src/graphql.rs): the schema, with
+  [`src/graphql/akter.rs`](src/graphql/akter.rs) for akt types, akter and
+  revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
+  Mutations: `defineAktType`, `createAkt`, `editAkt`, `performTransition`.
+  Errors carry a `code` extension: `INVALID_AKT_TYPE` (with `problems`),
+  `UNKNOWN_AKT_TYPE`, `NOT_FOUND`, `REFUSED`, `STALE` (with
+  `currentRevision`) or `INTERNAL`.
+- [`src/akter.rs`](src/akter.rs): the write path for akt types and akter.
 - [`src/main.rs`](src/main.rs) reads [`Config`](src/config.rs), migrates the
   database, discovers Konklav's OpenID provider, starts the relying client,
   waits up to 30 seconds for its caches to be trusted, and serves.
@@ -94,6 +108,11 @@ mise run test
   refreshes, signing out, and rate limits on starting a sign-in (per client
   address, shared between two servers, and with and without a trusted proxy).
   They need the development Postgres and Valkey (`mise run db:up`).
+- [`tests/akter.rs`](tests/akter.rs) goes through GraphQL against a fresh
+  database: akt type versions and their validation, tenant isolation,
+  numbering (also ten concurrent creates), field kinds and refusals, edits
+  and their revisions and hashes, stale revisions, transitions, pinned akt
+  type versions, append-only revisions, and change events in order.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -109,6 +128,6 @@ against a fake of Konklav's OpenID provider only.
 
 - Specs: [`authentication.md`](../../docs/spec/authentication.md)
   (`auth.*`), [`browser-sessions.md`](../../docs/spec/browser-sessions.md)
-  (`session.*`) and [`erasure.md`](../../docs/spec/erasure.md)
-  (`erasure.*`).
+  (`session.*`), [`erasure.md`](../../docs/spec/erasure.md)
+  (`erasure.*`) and [`akter.md`](../../docs/spec/akter.md) (`akt.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

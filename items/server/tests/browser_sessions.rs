@@ -102,6 +102,7 @@ impl World {
             Options {
                 public_url: PUBLIC_URL.to_owned(),
                 trusted_proxies: limits.trusted_proxies.clone(),
+                pool: db.pool().clone(),
                 sessions: Some(sessions),
             },
         )

@@ -1,0 +1,21 @@
+[package]
+name = "kuria-engine"
+description = "Field values and the rules for creating, editing and transitioning akter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
+kuria-config = { path = "../config" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.10"
+thiserror = "2.0.21"
+url = "2"
+uuid = { version = "1", features = ["serde"] }
+
+[lints]
+workspace = true

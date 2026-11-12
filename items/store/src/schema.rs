@@ -30,3 +30,75 @@ diesel::table! {
         updated_at -> Timestamptz,
     }
 }
+
+diesel::table! {
+    tenant_counter (tenant_id, name) {
+        tenant_id -> Uuid,
+        name -> Text,
+        value -> Int8,
+    }
+}
+
+diesel::table! {
+    akt_type (tenant_id, key) {
+        tenant_id -> Uuid,
+        key -> Text,
+        latest_version -> Int4,
+    }
+}
+
+diesel::table! {
+    akt_type_version (id) {
+        id -> Uuid,
+        tenant_id -> Uuid,
+        key -> Text,
+        version -> Int4,
+        definition -> Jsonb,
+        created_by -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    akt (id) {
+        id -> Uuid,
+        tenant_id -> Uuid,
+        number -> Text,
+        type_version_id -> Uuid,
+        state -> Text,
+        fields -> Jsonb,
+        revision -> Int4,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    akt_revision (akt_id, revision) {
+        akt_id -> Uuid,
+        revision -> Int4,
+        tenant_id -> Uuid,
+        author -> Uuid,
+        transition -> Nullable<Text>,
+        reason -> Nullable<Text>,
+        changes -> Jsonb,
+        state -> Text,
+        hash -> Bytea,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    change_event (tenant_id, seq) {
+        tenant_id -> Uuid,
+        seq -> Int8,
+        akt_id -> Uuid,
+        revision -> Int4,
+        created_at -> Timestamptz,
+        published_at -> Nullable<Timestamptz>,
+    }
+}
+
+diesel::joinable!(akt -> akt_type_version (type_version_id));
+diesel::joinable!(akt_revision -> akt (akt_id));
+diesel::allow_tables_to_appear_in_same_query!(akt, akt_type, akt_type_version, akt_revision);

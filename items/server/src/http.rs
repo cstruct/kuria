@@ -17,8 +17,10 @@ use konklav_axum::{
 };
 use konklav_token::TokenKind;
 
+use crate::akter::Akter;
 use crate::graphql::{KuriaSchema, Principal, schema};
 use crate::session::{self, BrowserSessions, SessionState};
+use kuria_store::Pool;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -37,6 +39,9 @@ pub struct Options {
     /// The proxies whose `X-Forwarded-For` names the client, as addresses or
     /// CIDR networks.
     pub trusted_proxies: Vec<String>,
+    /// Kuria's database, for akt types and akter. Connections are opened
+    /// when first needed.
+    pub pool: Pool,
     /// Browser sessions. Without them, only token-authenticated requests are
     /// served.
     pub sessions: Option<Arc<BrowserSessions>>,
@@ -50,6 +55,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     let Options {
         public_url,
         trusted_proxies,
+        pool,
         sessions,
     } = options;
     let konklav = Konklav::builder(host.clone())
@@ -74,7 +80,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             "/graphql",
             post(graphql).route_layer(api.route(&Policy::new())?),
         )
-        .with_state(schema());
+        .with_state(schema(Akter::new(pool)));
 
     if let Some(sessions) = sessions {
         let state = SessionState { sessions, host };

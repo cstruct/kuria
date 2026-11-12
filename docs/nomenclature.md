@@ -43,7 +43,19 @@ Terms are introduced in dependency order: each definition only uses terms define
   - Every akt revision records the akt type version it was validated against.
 
 - `akt number`
-  - The readable reference people use for an akt, such as `CAPA-42`. It never changes, and is separate from the akt's internal identifier.
+  - The readable reference people use for an akt, such as `CAPA-2026-0042`. It never changes, and is separate from the akt's internal identifier.
+
+- `number pattern`
+  - The part of an akt type that says how its akt numbers read, such as `CAPA-{year}-{seq:4}`.
+
+- `field`
+  - One named value an akt type defines, such as `severity`. Every field has a `field kind`.
+
+- `field kind`
+  - What values a field takes: `text`, `choice`, `choices`, `date`, `subject` or `reference`, so far.
+
+- `state`
+  - Where an akt is in its akt type's workflow, such as `open` or `closed`. One state of each akt type is `initial`; states may be `final`, and an akt in a final state can no longer be edited.
 
 - `akt revision`
   - One recorded change to an akt: who made it, in what capacity, through which transition, why, and what changed.
@@ -51,6 +63,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 
 - `transition`
   - A move of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
+
+- `change event`
+  - The record that an akt changed: the tenant, the akt and its new akt revision, numbered per tenant. Change events are what subscriptions and catching up deliver.
 
 ## Links
 

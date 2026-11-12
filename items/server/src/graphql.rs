@@ -1,15 +1,30 @@
 //! The GraphQL schema.
+//!
+//! - [`akter`]: akt types, akter and their revisions, and the mutations
+//!   that change them.
 
-use async_graphql::{Context, EmptyMutation, EmptySubscription, ID, Object, Schema, SimpleObject};
+// async-graphql requires every resolver to be async, also those that don't
+// await anything.
+#![allow(clippy::unused_async, clippy::unused_async_trait_impl)]
+
+mod akter;
+
+use async_graphql::{Context, EmptySubscription, ID, Object, Schema, SimpleObject};
 use konklav_core::{SubjectId, TenantId};
 
-/// The schema the GraphQL endpoint serves.
-pub type KuriaSchema = Schema<Query, EmptyMutation, EmptySubscription>;
+use crate::akter::{Actor, Akter};
 
-/// Builds the schema.
+/// The schema the GraphQL endpoint serves.
+pub type KuriaSchema = Schema<Query, akter::Mutation, EmptySubscription>;
+
+/// Builds the schema, storing akter through `akter`.
 #[must_use]
-pub fn schema() -> KuriaSchema {
-    Schema::build(Query, EmptyMutation, EmptySubscription).finish()
+pub fn schema(akter: Akter) -> KuriaSchema {
+    Schema::build(Query::default(), akter::Mutation, EmptySubscription)
+        .data(akter)
+        .limit_depth(12)
+        .limit_complexity(2_000)
+        .finish()
 }
 
 /// Who is making a request, from its verified token. Every request's data
@@ -20,17 +35,25 @@ pub(crate) struct Principal {
     pub tenant: TenantId,
 }
 
-pub struct Query;
+impl Principal {
+    fn actor(self) -> Actor {
+        Actor {
+            subject: self.subject,
+            tenant: self.tenant,
+        }
+    }
+}
+
+#[derive(async_graphql::MergedObject, Default)]
+pub struct Query(ViewerQuery, akter::AkterQuery);
+
+#[derive(Default)]
+pub struct ViewerQuery;
 
 #[Object]
-impl Query {
+impl ViewerQuery {
     /// The subject making this request, in the tenant of its token.
     // r[impl auth.viewer]
-    #[allow(
-        clippy::unused_async,
-        clippy::unused_async_trait_impl,
-        reason = "async-graphql requires resolvers to be async"
-    )]
     async fn viewer(&self, ctx: &Context<'_>) -> async_graphql::Result<Viewer> {
         let principal = ctx.data::<Principal>()?;
         Ok(Viewer {

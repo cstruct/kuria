@@ -20,3 +20,5 @@ Specs:
   Konklav, session cookies, refreshing and cross-site requests
 - [erasure](erasure.md): deleting what Kuria holds about a subject Konklav
   erases, without missing an erasure
+- [akter](akter.md): akt types, fields, akt numbers, creating, editing and
+  transitioning akter, akt revisions and change events

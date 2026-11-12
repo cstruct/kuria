@@ -27,6 +27,11 @@ pub const PUBLIC_URL: &str = "https://kuria.example";
 
 /// The claims of a token of `kind`, in `TENANT` if it is a tenant token.
 pub fn claims(kind: &str) -> AccessClaims {
+    claims_in(kind, TENANT)
+}
+
+/// The claims of a token of `kind`, in `tenant` if it is a tenant token.
+pub fn claims_in(kind: &str, tenant: &str) -> AccessClaims {
     let mut claims = json!({
         "iss": "https://auth.example",
         "aud": "kuria",
@@ -41,13 +46,14 @@ pub fn claims(kind: &str) -> AccessClaims {
         "auth_time": 0,
     });
     if kind == "tenant" {
-        claims["tid"] = json!(TENANT);
+        claims["tid"] = json!(tenant);
     }
     serde_json::from_value(claims).unwrap()
 }
 
 /// Stands in for a started `RelyingClient`. It accepts bearer tokens starting
-/// with `tenant` or `identity`, with claims of that kind, refuses `invalid`,
+/// with `tenant` or `identity`, with claims of that kind, and `other-tenant`,
+/// a tenant token in `OTHER_TENANT`; refuses `invalid`,
 /// refuses the proof of `bad-proof`, fails for `unreachable`, and decides
 /// by token kind alone.
 #[derive(Default)]
@@ -67,6 +73,7 @@ impl FakeHost {
     fn token(presented: &Presented) -> Result<Verified<AccessClaims>, Error> {
         match presented.access_token().unwrap_or_default() {
             token if token.starts_with("tenant") => Ok(Verified::Valid(claims("tenant"))),
+            "other-tenant" => Ok(Verified::Valid(claims_in("tenant", OTHER_TENANT))),
             token if token.starts_with("identity") => Ok(Verified::Valid(claims("identity"))),
             "bad-proof" => Ok(Verified::InvalidProof),
             "unreachable" => Err(Error::Exhausted),
@@ -122,14 +129,30 @@ impl RelyingHost for FakeHost {
 
 /// The server's router, deciding through `host`.
 pub fn router(host: &Arc<FakeHost>) -> Router {
+    router_with(host, unused_pool())
+}
+
+/// The server's router, deciding through `host` and storing in `pool`.
+pub fn router_with(host: &Arc<FakeHost>, pool: kuria_store::Pool) -> Router {
     kuria_server::app(
         host.clone(),
         kuria_server::Options {
             public_url: PUBLIC_URL.to_owned(),
             trusted_proxies: Vec::new(),
+            pool,
             sessions: None,
         },
     )
+    .unwrap()
+}
+
+/// A pool for tests that never touch the database: it connects only when a
+/// connection is first checked out.
+pub fn unused_pool() -> kuria_store::Pool {
+    kuria_store::connect(&kuria_store::ConnectOptions {
+        url: "postgres://unused@127.0.0.1:1/unused".to_owned(),
+        max_connections: 1,
+    })
     .unwrap()
 }
 
@@ -160,6 +183,18 @@ pub async fn send(router: &Router, mut request: Request<Body>) -> Answer {
         headers,
         body: String::from_utf8(bytes.to_vec()).unwrap(),
     }
+}
+
+/// A GraphQL request for `query` with `variables`, with `token` as a bearer
+/// token.
+pub fn graphql_with(token: &str, query: &str, variables: &Value) -> Request<Body> {
+    Request::post("/graphql")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::from(
+            json!({ "query": query, "variables": variables }).to_string(),
+        ))
+        .unwrap()
 }
 
 /// A GraphQL request for `query`, with `token` as a bearer token if given.

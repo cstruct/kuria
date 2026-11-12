@@ -4,6 +4,7 @@
 //! Konklav. The binary in `main.rs` builds one from [`Config`], with a real
 //! relying client.
 
+pub mod akter;
 mod config;
 pub mod erasure;
 mod graphql;

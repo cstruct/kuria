@@ -173,10 +173,15 @@ Some things are simpler outside GraphQL:
 - **urql** with **Graphcache** as the GraphQL client: a normalized cache, and subscription events that mark the akter they name as stale so they are refetched.
 - Forms, boards and akt views are built from `AktType` definitions at runtime, not written per akt type.
 
+## Decided
+
+- Akt types are written as whole documents and submitted through the API (`defineAktType`); each submission becomes a new, immutable akt type version. A UI editor or a CLI pushing files from version control can sit on top.
+- Akt numbers come from a number pattern in each akt type, such as `CAPA-{year}-{seq:4}`, counting per tenant and per pattern as rendered without its sequence.
+
 ## Open decisions
 
 - Signing: re-authentication and the proof stored with a signature.
 - Row-level security in Postgres alongside tenant filtering in queries.
 - Object storage for attachments, and how exports include them.
-- How configuration is authored: through the app, as files reviewed in version control, or both.
-- How akt numbers are generated: per akt type, per tenant, or by a pattern in the configuration.
+- Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
+- Authorization of akt types and akter: who may define akt types, and who may create, edit and transition akter of each type. Until then, any subject with a tenant token can do all of it.

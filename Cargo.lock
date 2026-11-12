@@ -105,6 +105,7 @@ dependencies = [
  "asynk-strim",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "fast_chemail",
  "fnv",
  "futures-util",
@@ -443,6 +444,7 @@ checksum = "1aa79e62e7697b8e29b513a68abacf485adcd1fe8284a4316c5ae868e6633327"
 dependencies = [
  "iana-time-zone",
  "num-traits",
+ "serde",
  "windows-link",
 ]
 
@@ -814,6 +816,7 @@ dependencies = [
  "diesel_derives",
  "downcast-rs",
  "itoa",
+ "serde_json",
  "uuid",
 ]
 
@@ -1735,6 +1738,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "kuria-config"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "kuria-engine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "kuria-config",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "kuria-server"
 version = "0.1.0"
 dependencies = [
@@ -1754,6 +1780,8 @@ dependencies = [
  "konklav-relying",
  "konklav-relying-client",
  "konklav-token",
+ "kuria-config",
+ "kuria-engine",
  "kuria-store",
  "kuria-test-support",
  "redis",
@@ -1778,6 +1806,7 @@ dependencies = [
  "diesel",
  "diesel-async",
  "diesel_migrations",
+ "serde_json",
  "thiserror",
  "uuid",
 ]
