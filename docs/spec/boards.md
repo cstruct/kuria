@@ -6,9 +6,10 @@ container's akt type says how they line up.
 
 r[board.columns]
 An akt type document MAY configure `board.columns`. Each column MUST have a
-unique key and a name, and MAY name, per akt type, the states of that akt
-type that fall in it. Every akt type a column names MUST be one the akt type
-contains, and a state of one akt type MUST NOT fall in two columns.
+unique key other than `unmapped` and a name, and MAY name, per akt type, the
+states of that akt type that fall in it. Every akt type a column names MUST
+be one the akt type contains, and a state of one akt type MUST NOT fall in
+two columns.
 
 r[board.placement]
 A container's board MUST show each member it may be shown to in the column

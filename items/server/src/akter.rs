@@ -7,7 +7,7 @@
 use chrono::{DateTime, Datelike, Utc};
 use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
-use kuria_config::{AktType, AktTypeDocument, Problem, validate};
+use kuria_config::{AktType, AktTypeDocument, NumberContext, Problem, validate};
 
 use crate::authorize::{Authorizer, Permission, Unavailable};
 use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json};
@@ -330,11 +330,15 @@ async fn next_number(
     ty: &AktType,
     now: DateTime<Utc>,
 ) -> Result<String, AktError> {
-    let (year, month) = (now.year(), now.month());
-    let scope = ty.number().scope(year, month);
+    let context = NumberContext {
+        year: now.year(),
+        month: now.month(),
+        parent: None,
+    };
+    let scope = ty.number().scope(&context);
     let sequence = store::next_counter(conn, tenant, &format!("number:{scope}")).await?;
     let sequence = u64::try_from(sequence).map_err(|e| AktError::Internal(e.to_string()))?;
-    Ok(ty.number().render(year, month, sequence))
+    Ok(ty.number().render(&context, sequence))
 }
 
 /// The revision recording `outcome` on `akt`.

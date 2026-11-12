@@ -13,12 +13,28 @@ enum Part {
     Literal(String),
     Year,
     Month,
+    Parent,
     Sequence { width: usize },
+}
+
+/// What an akt number is rendered from, besides its sequence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NumberContext<'a> {
+    /// The year of the akt's creation, in UTC.
+    pub year: i32,
+    /// The month of the akt's creation, in UTC, from 1.
+    pub month: u32,
+    /// The akt number of the container the akt is created in, for
+    /// `{parent}`. A pattern that [uses it](NumberPattern::uses_parent) must
+    /// be given one.
+    pub parent: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PatternError {
-    #[error("`{{{0}}}` is not a placeholder; use {{year}}, {{month}}, {{seq}} or {{seq:N}}")]
+    #[error(
+        "`{{{0}}}` is not a placeholder; use {{year}}, {{month}}, {{parent}}, {{seq}} or {{seq:N}}"
+    )]
     UnknownPlaceholder(String),
     #[error("a `{{` is never closed")]
     Unclosed,
@@ -56,6 +72,7 @@ impl NumberPattern {
             parts.push(match name {
                 "year" => Part::Year,
                 "month" => Part::Month,
+                "parent" => Part::Parent,
                 "seq" => Part::Sequence { width: 1 },
                 other => match other.strip_prefix("seq:") {
                     Some(width) => {
@@ -84,35 +101,47 @@ impl NumberPattern {
         Ok(Self { parts })
     }
 
-    /// The pattern rendered for `year` and `month` with the sequence left as
-    /// a placeholder. Akt numbers with the same scope share a sequence.
+    /// Whether the pattern holds `{parent}`.
+    #[must_use]
+    pub fn uses_parent(&self) -> bool {
+        self.parts.contains(&Part::Parent)
+    }
+
+    /// The pattern rendered for `context` with the sequence left as a
+    /// placeholder. Akt numbers with the same scope share a sequence, so a
+    /// pattern with `{parent}` counts separately in each parent.
     // r[impl akt.number.sequence]
     #[must_use]
-    pub fn scope(&self, year: i32, month: u32) -> String {
-        self.render_with(year, month, |out, width| {
+    pub fn scope(&self, context: &NumberContext<'_>) -> String {
+        self.render_with(context, |out, width| {
             let _ = write!(out, "{{seq:{width}}}");
         })
     }
 
-    /// The akt number for `year`, `month` and `sequence`.
+    /// The akt number for `context` and `sequence`.
     #[must_use]
-    pub fn render(&self, year: i32, month: u32, sequence: u64) -> String {
-        self.render_with(year, month, |out, width| {
+    pub fn render(&self, context: &NumberContext<'_>, sequence: u64) -> String {
+        self.render_with(context, |out, width| {
             let _ = write!(out, "{sequence:0width$}");
         })
     }
 
-    fn render_with(&self, year: i32, month: u32, sequence: impl Fn(&mut String, usize)) -> String {
+    fn render_with(
+        &self,
+        context: &NumberContext<'_>,
+        sequence: impl Fn(&mut String, usize),
+    ) -> String {
         let mut out = String::new();
         for part in &self.parts {
             match part {
                 Part::Literal(text) => out.push_str(text),
                 Part::Year => {
-                    let _ = write!(out, "{year:04}");
+                    let _ = write!(out, "{:04}", context.year);
                 }
                 Part::Month => {
-                    let _ = write!(out, "{month:02}");
+                    let _ = write!(out, "{:02}", context.month);
                 }
+                Part::Parent => out.push_str(context.parent.unwrap_or_default()),
                 Part::Sequence { width } => sequence(&mut out, *width),
             }
         }
@@ -124,14 +153,35 @@ impl NumberPattern {
 mod tests {
     use super::*;
 
+    fn at(year: i32, month: u32) -> NumberContext<'static> {
+        NumberContext {
+            year,
+            month,
+            parent: None,
+        }
+    }
+
     // r[verify akt.number.pattern]
     #[test]
     fn renders_placeholders() {
         let pattern = NumberPattern::parse("CAPA-{year}-{seq:4}").unwrap();
-        assert_eq!(pattern.render(2026, 11, 42), "CAPA-2026-0042");
-        assert_eq!(pattern.render(2026, 11, 123_456), "CAPA-2026-123456");
+        assert_eq!(pattern.render(&at(2026, 11), 42), "CAPA-2026-0042");
+        assert_eq!(pattern.render(&at(2026, 11), 123_456), "CAPA-2026-123456");
+        assert!(!pattern.uses_parent());
         let pattern = NumberPattern::parse("{year}{month}/{seq}").unwrap();
-        assert_eq!(pattern.render(2026, 3, 7), "202603/7");
+        assert_eq!(pattern.render(&at(2026, 3), 7), "202603/7");
+    }
+
+    // r[verify akt.number.pattern]
+    #[test]
+    fn renders_the_parent() {
+        let pattern = NumberPattern::parse("{parent}-RC-{seq:4}").unwrap();
+        assert!(pattern.uses_parent());
+        let context = NumberContext {
+            parent: Some("RELEASE-2026-0001"),
+            ..at(2026, 11)
+        };
+        assert_eq!(pattern.render(&context, 1), "RELEASE-2026-0001-RC-0001");
     }
 
     // r[verify akt.number.pattern]
@@ -158,8 +208,24 @@ mod tests {
     #[test]
     fn scopes_by_everything_but_the_sequence() {
         let pattern = NumberPattern::parse("CAPA-{year}-{seq:4}").unwrap();
-        assert_eq!(pattern.scope(2026, 1), pattern.scope(2026, 12));
-        assert_ne!(pattern.scope(2026, 1), pattern.scope(2027, 1));
-        assert_eq!(pattern.scope(2026, 1), "CAPA-2026-{seq:4}");
+        assert_eq!(pattern.scope(&at(2026, 1)), pattern.scope(&at(2026, 12)));
+        assert_ne!(pattern.scope(&at(2026, 1)), pattern.scope(&at(2027, 1)));
+        assert_eq!(pattern.scope(&at(2026, 1)), "CAPA-2026-{seq:4}");
+    }
+
+    // r[verify akt.number.sequence]
+    #[test]
+    fn counts_separately_in_each_parent() {
+        let pattern = NumberPattern::parse("{parent}-HOTFIX-{seq:4}").unwrap();
+        let first = NumberContext {
+            parent: Some("RELEASE-2026-0001"),
+            ..at(2026, 1)
+        };
+        let second = NumberContext {
+            parent: Some("RELEASE-2026-0002"),
+            ..at(2026, 1)
+        };
+        assert_ne!(pattern.scope(&first), pattern.scope(&second));
+        assert_eq!(pattern.scope(&first), "RELEASE-2026-0001-HOTFIX-{seq:4}");
     }
 }

@@ -1,5 +1,7 @@
 //! The akt type document, as submitted.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// An akt type, as a tenant writes it:
@@ -36,6 +38,45 @@ pub struct AktTypeDocument {
     pub states: Vec<StateDef>,
     #[serde(default)]
     pub transitions: Vec<TransitionDef>,
+    /// The akt types whose akter this type's akter may contain.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contains: Vec<ContainsDef>,
+    /// The akt types an akt of this type must be created in.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub created_in: Vec<String>,
+    /// How this type's akter are shown as boards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub board: Option<BoardDef>,
+}
+
+/// One akt type this type's akter may contain.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContainsDef {
+    /// The contained akt type's key.
+    #[serde(rename = "type")]
+    pub akt_type: String,
+    /// An akt of that type may be in at most one container of this type.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub exclusive: bool,
+}
+
+/// A container's board.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BoardDef {
+    pub columns: Vec<ColumnDef>,
+}
+
+/// One column of a board.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ColumnDef {
+    pub key: String,
+    pub name: String,
+    /// Per contained akt type, by key, the states that fall in this column.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub states: BTreeMap<String, Vec<String>>,
 }
 
 /// One field.

@@ -8,6 +8,9 @@ mod document;
 mod number;
 mod validate;
 
-pub use document::{AktTypeDocument, ChoiceOption, FieldDef, FieldKind, StateDef, TransitionDef};
-pub use number::{NumberPattern, PatternError};
+pub use document::{
+    AktTypeDocument, BoardDef, ChoiceOption, ColumnDef, ContainsDef, FieldDef, FieldKind, StateDef,
+    TransitionDef,
+};
+pub use number::{NumberContext, NumberPattern, PatternError};
 pub use validate::{AktType, Problem, validate};

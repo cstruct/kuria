@@ -2,7 +2,11 @@
 
 use std::collections::BTreeSet;
 
-use crate::document::{AktTypeDocument, FieldDef, FieldKind, StateDef, TransitionDef};
+use std::collections::BTreeMap;
+
+use crate::document::{
+    AktTypeDocument, BoardDef, ContainsDef, FieldDef, FieldKind, StateDef, TransitionDef,
+};
 use crate::number::NumberPattern;
 
 /// A validated akt type: its document, which is what is stored, and its
@@ -58,6 +62,25 @@ impl AktType {
         self.document.transitions.iter().find(|t| t.key == key)
     }
 
+    /// How this type contains akter of the type `key`, if it does.
+    #[must_use]
+    pub fn contains(&self, key: &str) -> Option<&ContainsDef> {
+        self.document.contains.iter().find(|c| c.akt_type == key)
+    }
+
+    /// The akt types an akt of this type must be created in; empty if it can
+    /// be created anywhere.
+    #[must_use]
+    pub fn created_in(&self) -> &[String] {
+        &self.document.created_in
+    }
+
+    /// The board's configuration, if it has one.
+    #[must_use]
+    pub fn board(&self) -> Option<&BoardDef> {
+        self.document.board.as_ref()
+    }
+
     /// The state akter of this type are created in.
     ///
     /// # Panics
@@ -84,7 +107,50 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
         .map_err(|e| problems.add("number", e.to_string()))
         .ok();
 
-    let fields = problems.unique_keys("fields", document.fields.iter().map(|f| f.key.as_str()));
+    let fields = fields(&mut problems, &document);
+    let states = problems.unique_keys(
+        "states",
+        document.states.iter().map(|s| s.key.as_str()),
+        "key",
+    );
+    for (i, state) in document.states.iter().enumerate() {
+        problems.name(&format!("states[{i}].name"), &state.name);
+    }
+    let initial = document.states.iter().filter(|s| s.initial).count();
+    if initial != 1 {
+        problems.add(
+            "states",
+            format!("exactly one state must be initial, not {initial}"),
+        );
+    }
+
+    transitions(&mut problems, &document, &fields, &states);
+
+    let contained = containment(&mut problems, &document);
+    if let Some(board) = &document.board {
+        board_columns(&mut problems, board, &contained);
+    }
+    // r[impl akt.number.pattern]
+    if number.as_ref().is_some_and(NumberPattern::uses_parent) && document.created_in.is_empty() {
+        problems.add(
+            "number",
+            "{parent} needs `created_in`, naming what the akt is created in",
+        );
+    }
+
+    match (problems.0.is_empty(), number) {
+        (true, Some(number)) => Ok(AktType { document, number }),
+        _ => Err(problems.0),
+    }
+}
+
+/// Checks the fields, and returns their keys.
+fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSet<&'a str> {
+    let keys = problems.unique_keys(
+        "fields",
+        document.fields.iter().map(|f| f.key.as_str()),
+        "key",
+    );
     for (i, field) in document.fields.iter().enumerate() {
         let path = format!("fields[{i}]");
         problems.name(&format!("{path}.name"), &field.name);
@@ -98,6 +164,7 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
             problems.unique_keys(
                 &format!("{path}.options"),
                 field.options.iter().map(|o| o.key.as_str()),
+                "key",
             );
             for (j, option) in field.options.iter().enumerate() {
                 problems.name(&format!("{path}.options[{j}].name"), &option.name);
@@ -115,22 +182,20 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
             );
         }
     }
+    keys
+}
 
-    let states = problems.unique_keys("states", document.states.iter().map(|s| s.key.as_str()));
-    for (i, state) in document.states.iter().enumerate() {
-        problems.name(&format!("states[{i}].name"), &state.name);
-    }
-    let initial = document.states.iter().filter(|s| s.initial).count();
-    if initial != 1 {
-        problems.add(
-            "states",
-            format!("exactly one state must be initial, not {initial}"),
-        );
-    }
-
+/// Checks the transitions against the type's fields and states.
+fn transitions(
+    problems: &mut Problems,
+    document: &AktTypeDocument,
+    fields: &BTreeSet<&str>,
+    states: &BTreeSet<&str>,
+) {
     problems.unique_keys(
         "transitions",
         document.transitions.iter().map(|t| t.key.as_str()),
+        "key",
     );
     for (i, transition) in document.transitions.iter().enumerate() {
         let path = format!("transitions[{i}]");
@@ -172,10 +237,60 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
             }
         }
     }
+}
 
-    match (problems.0.is_empty(), number) {
-        (true, Some(number)) => Ok(AktType { document, number }),
-        _ => Err(problems.0),
+/// Checks `contains` and `created_in`, and returns the contained akt types'
+/// keys.
+// r[impl container.contains]
+// r[impl container.created-in]
+fn containment<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSet<&'a str> {
+    let contained = problems.unique_keys(
+        "contains",
+        document.contains.iter().map(|c| c.akt_type.as_str()),
+        "type",
+    );
+    problems.unique_keys(
+        "created_in",
+        document.created_in.iter().map(String::as_str),
+        "",
+    );
+    contained
+}
+
+/// Checks a board's columns against the akt types the type contains.
+// r[impl board.columns]
+fn board_columns(problems: &mut Problems, board: &BoardDef, contained: &BTreeSet<&str>) {
+    problems.unique_keys(
+        "board.columns",
+        board.columns.iter().map(|c| c.key.as_str()),
+        "key",
+    );
+    // Which column each state of each akt type already fell in.
+    let mut placed: BTreeMap<(&str, &str), &str> = BTreeMap::new();
+    for (i, column) in board.columns.iter().enumerate() {
+        let path = format!("board.columns[{i}]");
+        if column.key == "unmapped" {
+            problems.add(
+                &format!("{path}.key"),
+                "`unmapped` is the column for members no column names",
+            );
+        }
+        problems.name(&format!("{path}.name"), &column.name);
+        for (akt_type, states) in &column.states {
+            let path = format!("{path}.states.{akt_type}");
+            if !contained.contains(akt_type.as_str()) {
+                problems.add(&path, format!("the akt type doesn't contain `{akt_type}`"));
+            }
+            for (j, state) in states.iter().enumerate() {
+                problems.key(&format!("{path}[{j}]"), state);
+                if let Some(other) = placed.insert((akt_type, state), &column.key) {
+                    problems.add(
+                        &format!("{path}[{j}]"),
+                        format!("`{akt_type}.{state}` is already in the column `{other}`"),
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -233,20 +348,24 @@ impl Problems {
         }
     }
 
-    /// Checks each key and that none repeats, and returns them.
+    /// Checks each key and that none repeats, and returns them. Each key's
+    /// path is `path[i].member`, or `path[i]` when `member` is empty.
     fn unique_keys<'a>(
         &mut self,
         path: &str,
         keys: impl Iterator<Item = &'a str>,
+        member: &str,
     ) -> BTreeSet<&'a str> {
         let mut seen = BTreeSet::new();
         for (i, key) in keys.enumerate() {
-            self.key(&format!("{path}[{i}].key"), key);
+            let at = if member.is_empty() {
+                format!("{path}[{i}]")
+            } else {
+                format!("{path}[{i}].{member}")
+            };
+            self.key(&at, key);
             if !seen.insert(key) {
-                self.add(
-                    &format!("{path}[{i}].key"),
-                    format!("`{key}` is used twice"),
-                );
+                self.add(&at, format!("`{key}` is used twice"));
             }
         }
         seen
@@ -382,6 +501,98 @@ mod tests {
                 "number: the pattern needs exactly one {seq} or {seq:N}, not 0",
                 "fields[0].options: only choice fields have options",
                 "fields[1].options: a choice field needs at least one option",
+            ]
+        );
+    }
+
+    fn release_candidate() -> serde_json::Value {
+        json!({
+            "key": "release_candidate",
+            "name": "Release candidate",
+            "number": "{parent}-RC-{seq:4}",
+            "created_in": ["release"],
+            "contains": [{ "type": "epic" }, { "type": "backlog_item", "exclusive": true }],
+            "states": [
+                { "key": "testing", "name": "Testing", "initial": true },
+                { "key": "accepted", "name": "Accepted", "final": true }
+            ],
+            "board": { "columns": [
+                { "key": "todo", "name": "To do",
+                  "states": { "backlog_item": ["open"], "epic": ["open"] } },
+                { "key": "done", "name": "Done",
+                  "states": { "backlog_item": ["done"], "epic": ["done"] } }
+            ] }
+        })
+    }
+
+    // r[verify container.contains]
+    // r[verify container.created-in]
+    // r[verify board.columns]
+    #[test]
+    fn accepts_a_container_with_a_board() {
+        let document: AktTypeDocument = serde_json::from_value(release_candidate()).unwrap();
+        let ty = validate(document).unwrap();
+        assert!(ty.contains("backlog_item").unwrap().exclusive);
+        assert!(!ty.contains("epic").unwrap().exclusive);
+        assert!(ty.contains("release").is_none());
+        assert_eq!(ty.created_in(), ["release".to_owned()]);
+        assert_eq!(ty.board().unwrap().columns.len(), 2);
+    }
+
+    // r[verify container.contains]
+    #[test]
+    fn checks_what_a_type_contains() {
+        let mut document = release_candidate();
+        document["contains"] =
+            json!([{ "type": "Epic" }, { "type": "story" }, { "type": "story" }]);
+        document["board"] = json!(null);
+        assert_eq!(
+            problems(document.clone()),
+            vec![
+                "contains[0].type: `Epic` must be up to 64 lowercase letters, digits and `_`, starting with a letter",
+                "contains[2].type: `story` is used twice",
+            ]
+        );
+        document["contains"] = json!([{ "type": "story", "max": 1 }]);
+        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+    }
+
+    // r[verify container.created-in]
+    // r[verify akt.number.pattern]
+    #[test]
+    fn parent_numbers_need_created_in() {
+        let mut document = release_candidate();
+        document["created_in"] = json!([]);
+        assert_eq!(
+            problems(document.clone()),
+            vec!["number: {parent} needs `created_in`, naming what the akt is created in"]
+        );
+        document["created_in"] = json!(["release", "release"]);
+        assert_eq!(
+            problems(document),
+            vec!["created_in[1]: `release` is used twice"]
+        );
+    }
+
+    // r[verify board.columns]
+    #[test]
+    fn checks_board_columns() {
+        let mut document = release_candidate();
+        document["board"] = json!({ "columns": [
+            { "key": "unmapped", "name": "Other" },
+            { "key": "todo", "name": " ",
+              "states": { "bug": ["new"], "epic": ["open", "open"] } },
+            { "key": "todo", "name": "Again", "states": { "epic": ["open"] } }
+        ] });
+        assert_eq!(
+            problems(document),
+            vec![
+                "board.columns[2].key: `todo` is used twice",
+                "board.columns[0].key: `unmapped` is the column for members no column names",
+                "board.columns[1].name: a name can't be empty",
+                "board.columns[1].states.bug: the akt type doesn't contain `bug`",
+                "board.columns[1].states.epic[1]: `epic.open` is already in the column `todo`",
+                "board.columns[2].states.epic[0]: `epic.open` is already in the column `todo`",
             ]
         );
     }
