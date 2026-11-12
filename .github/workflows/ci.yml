@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  # Linux only: the tests need the development Postgres, Valkey and S3
+  # gateway, which run in Docker.
+  check:
+    name: Lint and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Rust, Node and tracey, as pinned in mise.toml.
+      - name: Install tools
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+
+      - name: Restore Cargo dependencies and build artifacts
+        id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml', 'Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ci-${{ runner.os }}-${{ runner.arch }}-
+
+      # Formatting, clippy, the app's lints and types, the schema file's
+      # drift, and spec references.
+      - name: Lint
+        run: mise run lint
+
+      # Starts the development services, then runs the Rust and app tests.
+      - name: Test
+        run: mise run test
+
+      - name: Save Cargo dependencies and build artifacts
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Stop the development services
+        if: always()
+        run: mise run db:down
+
+  # The app in a browser against a seeded Konklav (e2e/README.md).
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install tools
+        uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
+
+      - name: Restore Cargo dependencies and build artifacts
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mise.toml', 'Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ci-${{ runner.os }}-${{ runner.arch }}-
+
+      # Chromium with the system libraries it needs on the runner.
+      - name: Install Playwright's browser
+        run: |
+          mise run e2e:install
+          cd e2e && npx playwright install --with-deps chromium
+
+      - name: Run the end-to-end tests
+        run: mise run e2e
+
+      - name: Keep the report and traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-report
+          path: |
+            e2e/.state/report
+            e2e/.state/results
+          retention-days: 14
+
+      - name: Stop the services
+        if: always()
+        run: |
+          mise run e2e:down
+          mise run db:down

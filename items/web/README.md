@@ -21,7 +21,18 @@ server serves from its own origin, and Kuria's login page.
   The types are generated into `src/lib/graphql/generated` (not checked
   in) from [`schema.graphql`](schema.graphql), which `kuria-server schema`
   prints.
-- [`src/routes`](src/routes): the app's pages.
+- [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
+  each field kind's editor, input and text (`values.ts`), refusals
+  (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
+  type contains, drafts and allows (`document.ts`), accessible names
+  (`labels.ts`), uploads, and the field editor and display components.
+- [`src/lib/login`](src/lib/login): the login page's DPoP key, Konklav's
+  subject-facing API and the flow for each login request.
+- [`src/routes`](src/routes): the pages: akt types, akter by type, an
+  akt, creating one (in containers, with `?in=`), contacts, and `/login`.
+
+Tracey doesn't read `.svelte` files, so the rules the app implements are
+implemented, and annotated, in `.ts` modules the components call.
 
 ## Running
 
@@ -45,7 +56,8 @@ npm test
 
 runs the Vitest unit tests; `npm run check` type-checks and
 `npm run lint` checks formatting and lints. `mise run lint` and
-`mise run test` include them.
+`mise run test` include them. `mise run e2e` runs the app in a browser
+against a seeded Konklav ([`e2e/`](../../e2e/README.md)).
 
 ## Traceability
 

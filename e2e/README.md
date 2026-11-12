@@ -1,0 +1,74 @@
+# End-to-end tests
+
+Kuria's app in a real browser, signed in through its login page against a
+real Konklav: Playwright drives the built app, served by the Kuria server,
+which relies on a seeded Konklav 1.7.0.
+
+## Running
+
+```sh
+mise run e2e
+```
+
+starts the development services (`mise run db:up`), builds the app, starts
+and seeds a fresh Konklav (`mise run e2e:up`), and runs Playwright, which
+starts the Kuria server itself and waits for `/healthz`. Konklav keeps
+running afterwards; `mise run e2e:down` stops it. To run the tests again
+against the same Konklav, or one of them:
+
+```sh
+mise exec -- npx --prefix e2e playwright test -g "release"
+```
+
+The first run installs Chromium (`mise run e2e:install`) and compiles the
+server. A failed test keeps its trace and screenshots in
+`.state/results`; `npx playwright show-trace <trace.zip>` replays it.
+
+## The stack
+
+| Piece | Where | What |
+|---|---|---|
+| Konklav | `cstruct/konklav:1.7.0`, ports 18080–18082 | Its subject-facing, relying and control surfaces; issuer and login URL are Kuria's |
+| Konklav's Postgres | `konklav-dev-postgres:18.6-jsonschema0.3.4` | Built from [`konklav/postgres`](konklav/postgres/Dockerfile), a copy of Konklav's, where missing; in memory |
+| Kuria | `localhost:18090`, a fresh `kuria_e2e` database | The server serving `items/web/build`, as Konklav's login application (`KURIA_LOGIN_APP`) |
+| Valkey, S3 | the development ones | As for the other tests |
+
+- [`compose.yaml`](compose.yaml) and [`konklav/`](konklav): Konklav, its
+  configuration and test-only secrets.
+- [`scripts/keys.ts`](scripts/keys.ts): Konklav's signing keys, made once
+  into `.state/keys`.
+- [`scripts/setup.ts`](scripts/setup.ts): seeds Konklav over the control
+  plane with the catalog (Kuria's actions and the `kuria_akt_type` scope
+  kind), the tenant, the release-management example's roles, a developer, a
+  release manager and a head of product with test-only passwords, Kuria's
+  OIDC client and service principal, and the admin and the build pipeline
+  as software with secret keys. It writes Kuria's configuration to
+  `.state/kuria.env` and what the tests use to `.state/seeded.json`.
+- [`scripts/serve.ts`](scripts/serve.ts): the Kuria server for the tests.
+- [`support/`](support): signing people in, working in the app by roles
+  and labels, and the API as software uses it.
+
+Software signs in to Konklav with its secret key and moves into the
+tenant, so its tokens carry Konklav's own audience; Kuria accepts that
+beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
+
+## The tests
+
+- [`tests/sign-in.spec.ts`](tests/sign-in.spec.ts): signing in through the
+  login page, a wrong password, and single sign-on.
+- [`tests/release-flow.spec.ts`](tests/release-flow.spec.ts): the
+  [release-management example](../docs/examples/release-management/README.md)
+  from planning to a closed release, as a developer and a release manager
+  in two browsers, with the build pipeline through the API. It asserts
+  what [`release_flow.rs`](../items/server/tests/release_flow.rs) asserts
+  through GraphQL.
+
+Not covered yet: linking a contact at sign-in. Konklav 1.7 reports a
+password's email as unverified, so a password sign-in never links one; the
+server's tests cover linking with a fake provider.
+
+## Traceability
+
+Playwright specs reference the rules of
+[`frontend.md`](../docs/spec/frontend.md) and
+[`login.md`](../docs/spec/login.md) as `r[verify ...]`.

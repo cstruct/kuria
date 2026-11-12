@@ -54,6 +54,17 @@ others.
   rebuilt still ships; a candidate that must not ship a component removes
   it.
 
+## Trying it in a browser
+
+```sh
+mise run e2e
+```
+
+walks this example in Kuria's app ([`e2e/`](../../../e2e/README.md)): a
+developer and a release manager sign in, plan a release, work two
+candidates and a hotfix, give the go for a contact, and draft the notes
+and the artifacts that ship.
+
 ## Defining it
 
 Submit each document with `defineAktType`. Their order doesn't matter:
