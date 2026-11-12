@@ -186,6 +186,8 @@ pub fn router_storing(
             sessions: None,
             changes: None,
             storage,
+            web: None,
+            login_proxy: None,
         },
     )
     .unwrap()

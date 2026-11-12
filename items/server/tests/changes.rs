@@ -55,6 +55,8 @@ impl Instance {
                     waker: relay.waker(),
                 }),
                 storage: kuria_server::attachments::Storage::in_memory(1 << 20),
+                web: None,
+                login_proxy: None,
             },
         )
         .unwrap();

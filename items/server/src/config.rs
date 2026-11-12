@@ -57,6 +57,14 @@ pub struct Config {
     /// The largest attachment accepted, in bytes (`KURIA_ATTACHMENT_LIMIT`,
     /// 100 MiB by default).
     pub attachment_limit: u64,
+    /// The tenant a sign-in that names none is for (`KURIA_DEFAULT_TENANT`).
+    pub default_tenant: Option<uuid::Uuid>,
+    /// The built app, to serve from the server's own origin
+    /// (`KURIA_WEB_DIR`).
+    pub web_dir: Option<std::path::PathBuf>,
+    /// Whether the server is Konklav's login application, proxying its
+    /// subject-facing surface (`KURIA_LOGIN_APP`, `false` by default).
+    pub login_app: bool,
     /// Whether cookies are `Secure` and `__Host-` prefixed
     /// (`KURIA_SECURE_COOKIES`, `true` by default). Turn it off only for
     /// local development over plain HTTP.
@@ -126,16 +134,7 @@ impl Config {
                 ConfigError::Invalid("KURIA_PUBLIC_URL", "expected an absolute URL".to_owned())
             })?],
         };
-        let secure_cookies = match lookup("KURIA_SECURE_COOKIES").as_deref() {
-            None | Some("" | "true") => true,
-            Some("false") => false,
-            Some(other) => {
-                return Err(ConfigError::Invalid(
-                    "KURIA_SECURE_COOKIES",
-                    format!("expected true or false, not {other}"),
-                ));
-            }
-        };
+        let secure_cookies = flag(&lookup, "KURIA_SECURE_COOKIES", true)?;
         let trusted_proxies = lookup("KURIA_TRUSTED_PROXIES")
             .unwrap_or_default()
             .split(',')
@@ -164,6 +163,13 @@ impl Config {
             })?,
             _ => 100 * 1024 * 1024,
         };
+        let default_tenant = match lookup("KURIA_DEFAULT_TENANT") {
+            Some(tenant) if !tenant.is_empty() => Some(tenant.parse().map_err(|_| {
+                ConfigError::Invalid("KURIA_DEFAULT_TENANT", "expected a tenant id".to_owned())
+            })?),
+            _ => None,
+        };
+        let login_app = flag(&lookup, "KURIA_LOGIN_APP", false)?;
         let rate_limit_secret = required("KURIA_RATE_LIMIT_SECRET")?;
         if rate_limit_secret.len() < 32 {
             return Err(ConfigError::Invalid(
@@ -189,6 +195,11 @@ impl Config {
             trusted_proxies,
             storage,
             attachment_limit,
+            default_tenant,
+            web_dir: lookup("KURIA_WEB_DIR")
+                .filter(|d| !d.is_empty())
+                .map(std::path::PathBuf::from),
+            login_app,
             secure_cookies,
             public_url,
         })
@@ -216,6 +227,24 @@ fn origin(url: &str) -> Option<String> {
     let (scheme, rest) = url.split_once("://")?;
     let authority = rest.split(['/', '?', '#']).next()?;
     (!scheme.is_empty() && !authority.is_empty()).then(|| format!("{scheme}://{authority}"))
+}
+
+/// The variable `name` as `true` or `false`, `default` when it is unset or
+/// empty.
+fn flag(
+    lookup: &impl Fn(&str) -> Option<String>,
+    name: &'static str,
+    default: bool,
+) -> Result<bool, ConfigError> {
+    match lookup(name).as_deref() {
+        None | Some("") => Ok(default),
+        Some("true") => Ok(true),
+        Some("false") => Ok(false),
+        Some(other) => Err(ConfigError::Invalid(
+            name,
+            format!("expected true or false, not {other}"),
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -291,5 +320,41 @@ mod tests {
             Config::from_lookup(lookup(&vars)),
             Err(ConfigError::Invalid("KONKLAV_SERVICE_KEY", _))
         ));
+    }
+
+    #[test]
+    fn reads_the_app_the_login_page_and_the_default_tenant() {
+        let config = Config::from_lookup(lookup(&COMPLETE)).unwrap();
+        assert_eq!(
+            (config.web_dir, config.login_app, config.default_tenant),
+            (None, false, None)
+        );
+        let mut vars = COMPLETE.to_vec();
+        vars.extend([
+            ("KURIA_WEB_DIR", "/srv/kuria"),
+            ("KURIA_LOGIN_APP", "true"),
+            (
+                "KURIA_DEFAULT_TENANT",
+                "01900000-0000-7000-8000-000000000001",
+            ),
+        ]);
+        let config = Config::from_lookup(lookup(&vars)).unwrap();
+        assert_eq!(
+            config.web_dir.unwrap(),
+            std::path::PathBuf::from("/srv/kuria")
+        );
+        assert!(config.login_app);
+        assert_eq!(
+            config.default_tenant.unwrap().to_string(),
+            "01900000-0000-7000-8000-000000000001"
+        );
+        for (name, value) in [("KURIA_LOGIN_APP", "yes"), ("KURIA_DEFAULT_TENANT", "shop")] {
+            let mut vars = COMPLETE.to_vec();
+            vars.push((name, value));
+            assert!(
+                matches!(Config::from_lookup(lookup(&vars)), Err(ConfigError::Invalid(n, _)) if n == name),
+                "{name}={value}"
+            );
+        }
     }
 }

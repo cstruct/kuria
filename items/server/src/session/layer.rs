@@ -20,6 +20,11 @@ pub(crate) async fn authenticate(
     next: Next,
 ) -> Response {
     let sessions = &state.sessions;
+    // Only the API and the sign-in routes read the cookie: not the app's
+    // files, and not the requests the login page sends to Konklav.
+    if !is_api(request.uri().path()) {
+        return next.run(request).await;
+    }
     // r[impl session.request]
     if request.headers().contains_key(header::AUTHORIZATION) {
         return next.run(request).await;
@@ -58,6 +63,13 @@ pub(crate) async fn authenticate(
             error(StatusCode::INTERNAL_SERVER_ERROR, "internal")
         }
     }
+}
+
+/// Whether `path` is one of the routes a session cookie authenticates.
+fn is_api(path: &str) -> bool {
+    ["/graphql", "/attachments", "/auth/"]
+        .iter()
+        .any(|prefix| path == prefix.trim_end_matches('/') || path.starts_with(prefix))
 }
 
 /// Whether a cookie request must name an allowed origin: anything that may

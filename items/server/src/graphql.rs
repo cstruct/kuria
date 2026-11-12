@@ -41,6 +41,23 @@ pub fn schema(akter: Akter, hub: Option<Hub>) -> KuriaSchema {
     .finish()
 }
 
+/// The schema in GraphQL's schema language, for clients' generated types.
+///
+/// # Panics
+///
+/// Never: the pool it builds the schema with connects lazily, and never
+/// does.
+#[must_use]
+pub fn schema_sdl() -> String {
+    // A pool that is never used: building the schema connects to nothing.
+    let pool = kuria_store::connect(&kuria_store::ConnectOptions {
+        url: "postgres://unused@127.0.0.1:1/unused".to_owned(),
+        max_connections: 1,
+    })
+    .expect("a pool that connects lazily");
+    schema(Akter::new(pool, None), None).sdl()
+}
+
 /// Who is making a request, from its verified token. Every request's data
 /// holds one; resolvers read the tenant from here and nowhere else.
 #[derive(Clone, Copy, Debug)]
@@ -93,4 +110,20 @@ pub struct Viewer {
     subject: ID,
     /// The tenant the request acts in.
     tenant: ID,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn prints_the_schema() {
+        let sdl = super::schema_sdl();
+        for part in [
+            "type Akt",
+            "union FieldValue",
+            "union Someone",
+            "type Mutation",
+        ] {
+            assert!(sdl.contains(part), "the schema lacks {part}");
+        }
+    }
 }

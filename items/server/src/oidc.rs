@@ -81,14 +81,28 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 impl Provider {
     /// Reads the provider's endpoints from `<issuer>/.well-known/openid-configuration`.
     pub async fn discover(issuer: &str, client: Client) -> Result<Self, ProviderError> {
+        Self::discover_at(issuer, issuer, client).await
+    }
+
+    /// Reads the provider's endpoints from `<url>/.well-known/openid-configuration`,
+    /// where `url` reaches the provider directly, such as when the issuer
+    /// is Kuria's own origin, proxying it. The endpoints the server calls
+    /// itself (token, revocation, userinfo) are rebased from the issuer onto
+    /// `url`; the authorization endpoint, which browsers open, stays as
+    /// discovered.
+    // r[impl login.discovery]
+    pub async fn discover_at(
+        url: &str,
+        issuer: &str,
+        client: Client,
+    ) -> Result<Self, ProviderError> {
+        let url = url.trim_end_matches('/');
         let http = reqwest::Client::builder()
             .timeout(TIMEOUT)
             .build()
             .map_err(|e| ProviderError::Unavailable(e.to_string()))?;
-        let url = format!(
-            "{}/.well-known/openid-configuration",
-            issuer.trim_end_matches('/')
-        );
+        let base = url;
+        let url = format!("{base}/.well-known/openid-configuration");
         let response = http
             .get(&url)
             .send()
@@ -110,12 +124,17 @@ impl Provider {
                 discovery.issuer
             )));
         }
+        let issuer_base = issuer.trim_end_matches('/');
+        let rebase = |endpoint: String| match endpoint.strip_prefix(issuer_base) {
+            Some(rest) if base != issuer_base => format!("{base}{rest}"),
+            _ => endpoint,
+        };
         Ok(Self {
-            issuer: discovery.issuer,
             authorization_endpoint: discovery.authorization_endpoint,
-            token_endpoint: discovery.token_endpoint,
-            revocation_endpoint: discovery.revocation_endpoint,
-            userinfo_endpoint: discovery.userinfo_endpoint,
+            token_endpoint: rebase(discovery.token_endpoint),
+            revocation_endpoint: discovery.revocation_endpoint.map(rebase),
+            userinfo_endpoint: discovery.userinfo_endpoint.map(rebase),
+            issuer: discovery.issuer,
             client_id: client.id,
             client_secret: client.secret,
             redirect_uri: client.redirect_uri,

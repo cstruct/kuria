@@ -55,7 +55,8 @@ async fn login(State(state): State<SessionState>, Query(params): Query<LoginPara
     let code_verifier = random_token(32);
     let code_challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
         .encode(Sha256::digest(code_verifier.as_bytes()));
-    let scope = match params.tenant {
+    // r[impl session.login.default-tenant]
+    let scope = match params.tenant.or(sessions.default_tenant) {
         // r[impl person.from-sign-in]
         Some(tenant) => format!("openid profile email tenant:{tenant}"),
         None => "openid profile email".to_owned(),

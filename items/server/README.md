@@ -32,6 +32,15 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   and catching up on erasures it may have missed from a time stored in the
   database.
 - Refusing cookie requests from origins it isn't configured for.
+- Serving the built app ([`src/web.rs`](src/web.rs)) for every `GET` no
+  other route takes, with a fallback page for the app's paths, a Content
+  Security Policy allowing its inline bootstrap by hash, and caching for
+  hashed assets.
+- As Konklav's login application, proxying Konklav's subject-facing surface
+  (`/v1`, `/.well-known`) on its own origin for the login page, without
+  Kuria's cookies; and discovering the provider from Konklav directly.
+- Printing its GraphQL schema (`kuria-server schema`) for the app's
+  generated types.
 - Following Konklav's change feed as a service principal, so revoked sessions
   and new signing keys take effect without a restart.
 - Handing resolvers the subject and tenant of the verified token, and nothing
@@ -153,11 +162,14 @@ The server is configured from the environment:
 | `KURIA_S3_REGION` | The bucket's region, `us-east-1` by default |
 | `KURIA_S3_ACCESS_KEY`, `KURIA_S3_SECRET_KEY` | Credentials for the bucket; without them, the standard AWS environment and instance credentials |
 | `KURIA_ATTACHMENT_LIMIT` | The largest upload in bytes, 100 MiB by default |
+| `KURIA_WEB_DIR` | The built app (`items/web/build`) to serve; none by default |
+| `KURIA_LOGIN_APP` | `true` to be Konklav's login application: proxying its subject-facing surface, with Konklav's issuer this server's public URL and its login URL `<public URL>/login`; `false` by default |
+| `KURIA_DEFAULT_TENANT` | The tenant a sign-in that names none is for; none by default |
 | `KURIA_TRUSTED_PROXIES` | Comma-separated addresses or CIDR networks whose `X-Forwarded-For` names the client; none by default |
 | `KONKLAV_ISSUER` | Konklav's issuer, as its tokens' `iss` names it; the OpenID provider is discovered from it |
 | `KONKLAV_AUDIENCE` | The audience Kuria's tokens carry |
 | `KONKLAV_RELYING_URL` | Konklav's relying surface |
-| `KONKLAV_SUBJECT_URL` | Konklav's subject-facing surface, where the service principal logs in |
+| `KONKLAV_SUBJECT_URL` | Konklav's subject-facing surface, where the service principal logs in and the OpenID provider is discovered |
 | `KONKLAV_SERVICE_KEY` | The service principal's secret key, as `<key id>.<secret>` |
 
 ```sh
@@ -241,6 +253,10 @@ mise run test
   as its user, and erasing; `user` fields and checkboxes naming contacts,
   only the tenant's, emails hidden from akt readers, and a linked contact
   shown as its user in values and drafts while the stored values stay.
+- [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
+  CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
+  left out, cookies and redirects passed back); and discovering the
+  provider from Konklav when its issuer is Kuria's origin.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, retrying a failed
@@ -267,5 +283,8 @@ against a fake of Konklav's OpenID provider only.
   [`changes.md`](../../docs/spec/changes.md) (`changes.*`) and
   [`people.md`](../../docs/spec/people.md) (`person.*`) and
   [`attachments.md`](../../docs/spec/attachments.md) (`attachment.*`) and
-  [`contacts.md`](../../docs/spec/contacts.md) (`contact.*`).
+  [`contacts.md`](../../docs/spec/contacts.md) (`contact.*`),
+  [`login.md`](../../docs/spec/login.md) (`login.proxy`,
+  `login.discovery`, `login.csp`) and
+  [`frontend.md`](../../docs/spec/frontend.md) (`app.serve`, `app.csp`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

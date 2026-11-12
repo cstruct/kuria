@@ -39,6 +39,8 @@ pub struct BrowserSessions {
     pub allowed_origins: Vec<String>,
     /// How often one client address may start a sign-in.
     pub sign_in_limit: RateLimit,
+    /// The tenant a sign-in that names none is for.
+    pub default_tenant: Option<uuid::Uuid>,
 }
 
 /// The windows of [`sign_in_limit`]: ten sign-ins a minute, a hundred an

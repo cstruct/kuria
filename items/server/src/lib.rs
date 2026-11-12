@@ -14,7 +14,8 @@ mod graphql;
 mod http;
 pub mod oidc;
 pub mod session;
+pub mod web;
 
 pub use config::{Config, ConfigError, StorageConfig};
-pub use graphql::{KuriaSchema, schema};
+pub use graphql::{KuriaSchema, schema, schema_sdl};
 pub use http::{AppError, Changes, Options, app};

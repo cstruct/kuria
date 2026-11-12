@@ -11,6 +11,7 @@ use kuria_server::changes::{Hub, Relay};
 use kuria_server::erasure::handle_erasures;
 use kuria_server::oidc::{self, Provider};
 use kuria_server::session::{self, BrowserSessions, Cookies, SessionCipher};
+use kuria_server::web::{LoginProxy, Web};
 use kuria_server::{Changes, Config, Options, app};
 use kuria_store::{ConnectOptions, Pool};
 use tracing_subscriber::EnvFilter;
@@ -40,6 +41,12 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // `kuria-server schema` prints the GraphQL schema, for the app's
+    // generated types.
+    if std::env::args().nth(1).as_deref() == Some("schema") {
+        print!("{}", kuria_server::schema_sdl());
+        return Ok(());
+    }
     let config = Config::from_env()?;
 
     // r[impl auth.service-principal]
@@ -65,7 +72,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!(?applied, "applied migrations");
     }
 
-    let provider = Provider::discover(
+    // From Konklav directly: the issuer may be this server's own origin,
+    // proxying Konklav, which isn't listening yet.
+    let provider = Provider::discover_at(
+        &config.subject_url,
         &config.issuer,
         oidc::Client {
             id: config.oidc_client_id.clone(),
@@ -89,6 +99,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         cookies: Cookies::new(config.secure_cookies),
         allowed_origins: config.allowed_origins.clone(),
         sign_in_limit,
+        default_tenant: config.default_tenant,
     });
     tokio::spawn(handle_erasures(
         pool.clone(),
@@ -121,6 +132,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             sessions: Some(sessions),
             changes: Some(Changes { hub, waker }),
             storage,
+            web: config.web_dir.as_deref().map(Web::load).transpose()?,
+            login_proxy: if config.login_app {
+                Some(LoginProxy::new(&config.subject_url)?)
+            } else {
+                None
+            },
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

@@ -58,6 +58,11 @@ pub struct Options {
     pub changes: Option<Changes>,
     /// Where attachments are stored, and how large they may be.
     pub storage: Storage,
+    /// The built app, served for every `GET` no other route takes.
+    pub web: Option<crate::web::Web>,
+    /// The proxy to Konklav's subject-facing surface, when the server is
+    /// Konklav's login application.
+    pub login_proxy: Option<crate::web::LoginProxy>,
 }
 
 /// What delivers change events: the hub subscriptions join, and what wakes
@@ -81,6 +86,8 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         sessions,
         changes,
         storage,
+        web,
+        login_proxy,
     } = options;
     let konklav = Konklav::builder(host.clone())
         // r[impl auth.dpop]
@@ -134,6 +141,12 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             decider,
         })
         .merge(attachment_routes);
+    if let Some(proxy) = login_proxy {
+        router = router.merge(proxy.router());
+    }
+    if let Some(web) = web {
+        router = router.merge(web.router());
+    }
 
     if let Some(sessions) = sessions {
         let state = SessionState { sessions, host };

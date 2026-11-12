@@ -44,6 +44,8 @@ struct Limits {
     name: String,
     windows: Vec<RateLimitWindow>,
     trusted_proxies: Vec<String>,
+    /// The tenant a sign-in that names none is for.
+    default_tenant: Option<uuid::Uuid>,
 }
 
 impl Default for Limits {
@@ -52,6 +54,7 @@ impl Default for Limits {
             name: unique_name("test"),
             windows: SIGN_IN_WINDOWS.to_vec(),
             trusted_proxies: Vec::new(),
+            default_tenant: None,
         }
     }
 }
@@ -96,6 +99,7 @@ impl World {
             cookies: Cookies::new(true),
             allowed_origins: vec![PUBLIC_URL.to_owned()],
             sign_in_limit: sign_in_limit(limits).await,
+            default_tenant: limits.default_tenant,
         });
         let router = kuria_server::app(
             FakeHost::new(),
@@ -107,6 +111,8 @@ impl World {
                 sessions: Some(sessions),
                 changes: None,
                 storage: kuria_server::attachments::Storage::in_memory(1 << 20),
+                web: None,
+                login_proxy: None,
             },
         )
         .unwrap();
@@ -272,6 +278,28 @@ async fn asks_for_no_tenant_unless_named() {
     let world = World::new().await;
     let (_, _, params) = world.start("").await;
     assert_eq!(params["scope"], "openid profile email");
+}
+
+// r[verify session.login.default-tenant]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sign_in_naming_no_tenant_is_for_the_default_one() {
+    let other = uuid::Uuid::now_v7();
+    let world = World::with(&Limits {
+        default_tenant: Some(TENANT.parse().unwrap()),
+        ..Limits::default()
+    })
+    .await;
+    let (_, _, params) = world.start("").await;
+    assert_eq!(
+        params["scope"],
+        format!("openid profile email tenant:{TENANT}")
+    );
+    // A named tenant still wins.
+    let (_, _, params) = world.start(&format!("?tenant={other}")).await;
+    assert_eq!(
+        params["scope"],
+        format!("openid profile email tenant:{other}")
+    );
 }
 
 // r[verify session.login.callback]
