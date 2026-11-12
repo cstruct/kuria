@@ -113,6 +113,10 @@ pub struct TransitionDef {
     /// Fields that must hold a value once it has been performed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<String>,
+    /// A Konklav action performing it requires, besides
+    /// `kuria:akter:transition`, such as `capa:approve_closure`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref, reason = "serde's signature")]

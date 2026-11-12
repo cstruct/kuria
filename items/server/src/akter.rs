@@ -8,6 +8,8 @@ use chrono::{DateTime, Datelike, Utc};
 use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
 use kuria_config::{AktType, AktTypeDocument, Problem, validate};
+
+use crate::authorize::{Authorizer, Permission, Unavailable};
 use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json};
 use kuria_store::Pool;
 use kuria_store::akter::{self as store, AktRow, AktTypeVersion, RevisionRow};
@@ -19,6 +21,13 @@ use uuid::Uuid;
 pub struct Actor {
     pub subject: SubjectId,
     pub tenant: TenantId,
+}
+
+/// Who is acting, with what decides their permissions.
+#[derive(Clone, Copy)]
+pub struct Caller<'a> {
+    pub actor: Actor,
+    pub auth: &'a Authorizer,
 }
 
 /// Why a change to akt types or akter failed.
@@ -36,6 +45,10 @@ pub enum AktError {
     Refused(#[from] Refusal),
     #[error("the akt is at revision {current}, not {expected}")]
     Stale { expected: i32, current: i32 },
+    #[error("not permitted")]
+    Forbidden,
+    #[error("{0}")]
+    Unavailable(#[from] Unavailable),
     #[error("internal error")]
     Internal(String),
 }
@@ -95,7 +108,16 @@ impl Akter {
     /// Validates `document` and stores it as the next version of its key.
     // r[impl akt.type.document]
     // r[impl akt.type.tenant]
-    pub async fn define_type(&self, actor: Actor, document: Json) -> Result<StoredType, AktError> {
+    // r[impl authz.define]
+    pub async fn define_type(
+        &self,
+        caller: Caller<'_>,
+        document: Json,
+    ) -> Result<StoredType, AktError> {
+        let Caller { actor, auth } = caller;
+        if !auth.allows(&Permission::DefineTypes).await? {
+            return Err(AktError::Forbidden);
+        }
         let parsed: AktTypeDocument = serde_json::from_value(document)
             .map_err(|e| AktError::UnreadableType(e.to_string()))?;
         let ty = validate(parsed).map_err(AktError::InvalidType)?;
@@ -118,13 +140,15 @@ impl Akter {
     /// Creates an akt of the akt type `key`.
     // r[impl akt.create]
     // r[impl akt.revision.atomic]
+    // r[impl authz.create]
     pub async fn create(
         &self,
-        actor: Actor,
+        caller: Caller<'_>,
         key: &str,
         fields: &Map<String, Json>,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
+        let Caller { actor, auth } = caller;
         let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
@@ -132,6 +156,17 @@ impl Akter {
             let row = store::latest_type_version(conn, tenant, key)
                 .await?
                 .ok_or_else(|| AktError::UnknownType(key.to_owned()))?;
+            if !auth.sees_type(key).await? {
+                return Err(AktError::UnknownType(key.to_owned()));
+            }
+            if !auth
+                .allows(&Permission::Create {
+                    key: key.to_owned(),
+                })
+                .await?
+            {
+                return Err(AktError::Forbidden);
+            }
             let stored = StoredType::read(row)?;
             let outcome = kuria_engine::create(&stored.ty, fields)?;
             let now = Utc::now();
@@ -157,20 +192,24 @@ impl Akter {
 
     /// Edits the akt `number`, based on `expected_revision`.
     // r[impl akt.edit]
+    // r[impl authz.edit]
     pub async fn edit(
         &self,
-        actor: Actor,
+        caller: Caller<'_>,
         number: &str,
         expected_revision: i32,
         fields: &Map<String, Json>,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
         self.change(
-            actor,
+            caller,
             number,
             expected_revision,
             None,
             reason,
+            |ty| Permission::Edit {
+                key: ty.key().to_owned(),
+            },
             |ty, current| kuria_engine::edit(ty, current, fields),
         )
         .await
@@ -179,9 +218,10 @@ impl Akter {
     /// Performs `transition` on the akt `number`, based on
     /// `expected_revision`.
     // r[impl akt.transition]
+    // r[impl authz.transition]
     pub async fn transition(
         &self,
-        actor: Actor,
+        caller: Caller<'_>,
         number: &str,
         expected_revision: i32,
         transition: &str,
@@ -189,11 +229,15 @@ impl Akter {
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
         self.change(
-            actor,
+            caller,
             number,
             expected_revision,
             Some(transition.to_owned()),
             reason,
+            |ty| Permission::Transition {
+                key: ty.key().to_owned(),
+                action: ty.transition(transition).and_then(|t| t.action.clone()),
+            },
             |ty, current| kuria_engine::transition(ty, current, transition, fields),
         )
         .await
@@ -202,15 +246,22 @@ impl Akter {
     // r[impl akt.revision.concurrency]
     // r[impl akt.revision.atomic]
     // r[impl akt.version-pinned]
+    // r[impl authz.read]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the one internal path for edits and transitions"
+    )]
     async fn change(
         &self,
-        actor: Actor,
+        caller: Caller<'_>,
         number: &str,
         expected_revision: i32,
         transition: Option<String>,
         reason: Option<String>,
+        permission: impl FnOnce(&AktType) -> Permission + Send,
         decide: impl FnOnce(&AktType, &Current) -> Result<Outcome, Refusal> + Send,
     ) -> Result<AktRow, AktError> {
+        let Caller { actor, auth } = caller;
         let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
@@ -218,18 +269,31 @@ impl Akter {
             let mut akt = store::lock_akt_by_number(conn, tenant, number)
                 .await?
                 .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
-            if akt.revision != expected_revision {
-                return Err(AktError::Stale {
-                    expected: expected_revision,
-                    current: akt.revision,
-                });
-            }
             // The akt's own version, not the type's latest.
             let row = store::type_versions_by_id(conn, tenant, &[akt.type_version_id])
                 .await?
                 .pop()
                 .ok_or_else(|| AktError::Internal(format!("akt {number} has no akt type")))?;
             let stored = StoredType::read(row)?;
+            // An akt the subject can't read doesn't exist for them, so this
+            // comes before anything that would tell them otherwise.
+            if !auth
+                .allows(&Permission::Read {
+                    key: stored.ty.key().to_owned(),
+                })
+                .await?
+            {
+                return Err(AktError::NotFound(number.to_owned()));
+            }
+            if !auth.allows(&permission(&stored.ty)).await? {
+                return Err(AktError::Forbidden);
+            }
+            if akt.revision != expected_revision {
+                return Err(AktError::Stale {
+                    expected: expected_revision,
+                    current: akt.revision,
+                });
+            }
             let current = Current {
                 state: akt.state.clone(),
                 fields: fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))

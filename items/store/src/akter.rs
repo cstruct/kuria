@@ -267,25 +267,23 @@ pub async fn lock_akt_by_number(
         .optional()
 }
 
-/// Up to `limit` akter, newest first, optionally only of the akt type
-/// `key` and in `state`.
+/// Up to `limit` akter of the akt types `keys`, newest first, optionally only
+/// in `state`.
 pub async fn list_akter(
     conn: &mut Connection,
     tenant: Uuid,
-    key: Option<&str>,
+    keys: &[String],
     state: Option<&str>,
     limit: i64,
 ) -> QueryResult<Vec<AktRow>> {
     let mut query = akt::table
         .inner_join(akt_type_version::table)
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt_type_version::key.eq_any(keys))
         .select(AktRow::as_select())
         .order(akt::created_at.desc())
         .limit(limit)
         .into_boxed();
-    if let Some(key) = key {
-        query = query.filter(akt_type_version::key.eq(key.to_owned()));
-    }
     if let Some(state) = state {
         query = query.filter(akt::state.eq(state.to_owned()));
     }

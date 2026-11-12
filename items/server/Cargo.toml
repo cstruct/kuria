@@ -17,6 +17,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 diesel = { version = "2.3", default-features = false, features = ["postgres_backend"] }
 diesel-async = { version = "0.9", features = ["postgres"] }
 getrandom = "0.3"
+konklav-authz = "=1.7.0"
 konklav-axum = "=1.7.0"
 konklav-core = "=1.7.0"
 konklav-relying = "=1.7.0"

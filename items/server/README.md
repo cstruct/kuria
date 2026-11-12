@@ -31,9 +31,15 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   in one transaction ([`src/akter.rs`](src/akter.rs) is the only code that
   writes them).
 
-Not yet: subscriptions, publishing change events to Valkey, links,
-signatures, and authorization finer than the token kind. **Any subject with
-a tenant token can define akt types and change any akt in its tenant.**
+- Authorizing every operation on akt types and akter by asking Konklav,
+  through the relying client, for Kuria's actions tenant-wide or at the akt
+  type ([`src/authorize.rs`](src/authorize.rs)). Decisions are remembered for
+  one request. Akter a subject may not read are invisible to them.
+- Refusing DPoP-bound tokens on `/graphql`: their proof is answered once, so
+  Kuria can't decide more than once for them.
+
+Not yet: subscriptions, publishing change events to Valkey, links and
+signatures.
 
 ## Entry points
 
@@ -55,13 +61,19 @@ a tenant token can define akt types and change any akt in its tenant.**
   Mutations: `defineAktType`, `createAkt`, `editAkt`, `performTransition`.
   Errors carry a `code` extension: `INVALID_AKT_TYPE` (with `problems`),
   `UNKNOWN_AKT_TYPE`, `NOT_FOUND`, `REFUSED`, `STALE` (with
-  `currentRevision`) or `INTERNAL`.
+  `currentRevision`), `FORBIDDEN`, `UNAVAILABLE` or `INTERNAL`.
 - [`src/akter.rs`](src/akter.rs): the write path for akt types and akter.
 - [`src/main.rs`](src/main.rs) reads [`Config`](src/config.rs), migrates the
   database, discovers Konklav's OpenID provider, starts the relying client,
   waits up to 30 seconds for its caches to be trusted, and serves.
 
 ## Running
+
+Konklav's catalog must declare Kuria's actions, `kuria:akt_types:define`,
+`kuria:akter:read`, `kuria:akter:create`, `kuria:akter:edit` and
+`kuria:akter:transition`, the scope kind `kuria_akt_type`, and any action an
+akt type's transitions name. Roles grant them tenant-wide or at one akt type
+(the scope id is the akt type's key).
 
 The server is configured from the environment:
 
@@ -113,6 +125,12 @@ mise run test
   numbering (also ten concurrent creates), field kinds and refusals, edits
   and their revisions and hashes, stale revisions, transitions, pinned akt
   type versions, append-only revisions, and change events in order.
+- [`tests/authorization.rs`](tests/authorization.rs) uses a fake decider
+  that grants actions per token, tenant-wide or at an akt type
+  ([`tests/support/decider.rs`](tests/support/decider.rs)): defining, which
+  akt types and akter are visible, creating, editing, transitions and their
+  own actions, tenant-wide grants, Konklav failing, decisions lasting one
+  request, and DPoP-bound tokens.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -129,5 +147,6 @@ against a fake of Konklav's OpenID provider only.
 - Specs: [`authentication.md`](../../docs/spec/authentication.md)
   (`auth.*`), [`browser-sessions.md`](../../docs/spec/browser-sessions.md)
   (`session.*`), [`erasure.md`](../../docs/spec/erasure.md)
-  (`erasure.*`) and [`akter.md`](../../docs/spec/akter.md) (`akt.*`).
+  (`erasure.*`), [`akter.md`](../../docs/spec/akter.md) (`akt.*`) and
+  [`authorization.md`](../../docs/spec/authorization.md) (`authz.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

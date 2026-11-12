@@ -17,7 +17,8 @@ use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
 use super::Principal;
-use crate::akter::{AktError, Akter, StoredType};
+use crate::akter::{AktError, Akter, Caller, StoredType};
+use crate::authorize::{Authorizer, Permission};
 
 /// The most akter one query lists.
 const MAX_LIST: i32 = 200;
@@ -28,6 +29,28 @@ fn principal<'a>(ctx: &Context<'a>) -> async_graphql::Result<&'a Principal> {
 
 fn akter<'a>(ctx: &Context<'a>) -> async_graphql::Result<&'a Akter> {
     ctx.data::<Akter>()
+}
+
+fn authorizer<'a>(ctx: &Context<'a>) -> async_graphql::Result<&'a Authorizer> {
+    ctx.data::<Authorizer>()
+}
+
+/// Whether the request may read the akter of the akt type `key`.
+async fn reads(ctx: &Context<'_>, key: &str) -> async_graphql::Result<bool> {
+    authorizer(ctx)?
+        .allows(&Permission::Read {
+            key: key.to_owned(),
+        })
+        .await
+        .map_err(|e| error(e.into()))
+}
+
+/// Whether the request may see the akt type `key`.
+async fn sees_type(ctx: &Context<'_>, key: &str) -> async_graphql::Result<bool> {
+    authorizer(ctx)?
+        .sees_type(key)
+        .await
+        .map_err(|e| error(e.into()))
 }
 
 /// An [`AktError`] as a GraphQL error with a `code` extension, and for an
@@ -62,6 +85,14 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::UnknownType(_) => coded(message, "UNKNOWN_AKT_TYPE"),
         AktError::NotFound(_) => coded(message, "NOT_FOUND"),
         AktError::Refused(_) => coded(message, "REFUSED"),
+        AktError::Forbidden => coded(message, "FORBIDDEN"),
+        AktError::Unavailable(detail) => {
+            tracing::warn!("akter: {detail}");
+            coded(
+                "authorization is unavailable; try again".to_owned(),
+                "UNAVAILABLE",
+            )
+        }
         AktError::Stale { current, .. } => {
             async_graphql::Error::new(message).extend_with(|_, e| {
                 e.set("code", "STALE");
@@ -107,9 +138,14 @@ impl AkterQuery {
         let rows = store::latest_type_versions(&mut conn, tenant)
             .await
             .map_err(internal)?;
-        rows.into_iter()
-            .map(|row| StoredType::read(row).map(AktType).map_err(error))
-            .collect()
+        let mut visible = Vec::new();
+        for row in rows {
+            // r[impl authz.read-types]
+            if sees_type(ctx, &row.key).await? {
+                visible.push(AktType(StoredType::read(row).map_err(error)?));
+            }
+        }
+        Ok(visible)
     }
 
     /// An akt type: its latest version, or the version named.
@@ -126,8 +162,12 @@ impl AkterQuery {
             None => store::latest_type_version(&mut conn, tenant, &key).await,
         }
         .map_err(internal)?;
-        row.map(|row| StoredType::read(row).map(AktType).map_err(error))
-            .transpose()
+        match row {
+            Some(row) if sees_type(ctx, &row.key).await? => {
+                Ok(Some(AktType(StoredType::read(row).map_err(error)?)))
+            }
+            _ => Ok(None),
+        }
     }
 
     /// The akt numbered `number`.
@@ -140,7 +180,12 @@ impl AkterQuery {
         else {
             return Ok(None);
         };
-        Ok(with_types(&mut conn, tenant, vec![row]).await?.pop())
+        let akt = with_types(&mut conn, tenant, vec![row]).await?.pop();
+        // r[impl authz.read]
+        match akt {
+            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Ok(Some(akt)),
+            _ => Ok(None),
+        }
     }
 
     /// Akter, newest first: of one akt type and in one state, if given, and
@@ -155,10 +200,22 @@ impl AkterQuery {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let limit = first.unwrap_or(50).clamp(1, MAX_LIST);
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        // r[impl authz.read]
+        // Only the akt types the subject may read are asked for, so the
+        // limit counts akter they can see.
+        let mut readable = Vec::new();
+        for ty in store::latest_type_versions(&mut conn, tenant)
+            .await
+            .map_err(internal)?
+        {
+            if key.as_ref().is_none_or(|k| *k == ty.key) && reads(ctx, &ty.key).await? {
+                readable.push(ty.key);
+            }
+        }
         let rows = store::list_akter(
             &mut conn,
             tenant,
-            key.as_deref(),
+            &readable,
             state.as_deref(),
             i64::from(limit),
         )
@@ -239,9 +296,12 @@ impl Mutation {
         ctx: &Context<'_>,
         document: Json<JsonValue>,
     ) -> async_graphql::Result<AktType> {
-        let actor = principal(ctx)?.actor();
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
         akter(ctx)?
-            .define_type(actor, document.0)
+            .define_type(caller, document.0)
             .await
             .map(AktType)
             .map_err(error)
@@ -253,11 +313,14 @@ impl Mutation {
         ctx: &Context<'_>,
         input: CreateAktInput,
     ) -> async_graphql::Result<Akt> {
-        let actor = principal(ctx)?.actor();
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
         let row = akter
-            .create(actor, &input.key, &fields, input.reason)
+            .create(caller, &input.key, &fields, input.reason)
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -265,11 +328,14 @@ impl Mutation {
 
     /// Edits an akt's field values.
     async fn edit_akt(&self, ctx: &Context<'_>, input: EditAktInput) -> async_graphql::Result<Akt> {
-        let actor = principal(ctx)?.actor();
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
         let fields = field_values(Some(input.fields))?;
         let akter = akter(ctx)?;
         let row = akter
-            .edit(actor, &input.number, input.revision, &fields, input.reason)
+            .edit(caller, &input.number, input.revision, &fields, input.reason)
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -281,12 +347,15 @@ impl Mutation {
         ctx: &Context<'_>,
         input: PerformTransitionInput,
     ) -> async_graphql::Result<Akt> {
-        let actor = principal(ctx)?.actor();
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
         let row = akter
             .transition(
-                actor,
+                caller,
                 &input.number,
                 input.revision,
                 &input.transition,

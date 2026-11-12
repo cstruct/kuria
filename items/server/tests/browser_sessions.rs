@@ -103,6 +103,7 @@ impl World {
                 public_url: PUBLIC_URL.to_owned(),
                 trusted_proxies: limits.trusted_proxies.clone(),
                 pool: db.pool().clone(),
+                decider: support::decider::FakeDecider::allowing_tenant(),
                 sessions: Some(sessions),
             },
         )

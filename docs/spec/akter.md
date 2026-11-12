@@ -5,8 +5,8 @@ moves through and how its number reads all come from its akt type, which is
 configuration a tenant submits at runtime. Every change to an akt is kept as
 an akt revision.
 
-Not yet covered here: links, signatures, structured tables, obligations,
-and authorization by akt type and transition.
+Not yet covered here: links, signatures, structured tables and
+obligations. Who may do what is in [authorization](authorization.md).
 
 ## Akt types
 
@@ -28,7 +28,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
   type defines, and every field it requires is a field the type defines;
 - no transition starts from a final state;
 - every choice field has at least one option;
-- the number pattern is valid (`akt.number.pattern`).
+- the number pattern is valid (`akt.number.pattern`);
+- every action a transition names is valid (`authz.transition-action`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or

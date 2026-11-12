@@ -22,3 +22,5 @@ Specs:
   erases, without missing an erasure
 - [akter](akter.md): akt types, fields, akt numbers, creating, editing and
   transitioning akter, akt revisions and change events
+- [authorization](authorization.md): Kuria's actions in Konklav's catalog,
+  and what each operation on akt types and akter requires

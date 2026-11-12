@@ -98,11 +98,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(sweep_login_attempts(pool.clone()));
 
     let router = app(
-        Arc::new(client),
+        Arc::new(client.clone()),
         Options {
             public_url: config.public_url.clone(),
             trusted_proxies: config.trusted_proxies.clone(),
             pool: pool.clone(),
+            decider: Arc::new(client.clone()),
             sessions: Some(sessions),
         },
     )?;

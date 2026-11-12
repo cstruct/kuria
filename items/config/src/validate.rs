@@ -157,6 +157,12 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
                 format!("no state `{}`", transition.to),
             );
         }
+        // r[impl authz.transition-action]
+        if let Some(action) = &transition.action
+            && let Err(message) = check_action(action)
+        {
+            problems.add(&format!("{path}.action"), message);
+        }
         for (j, required) in transition.requires.iter().enumerate() {
             if !fields.contains(required.as_str()) {
                 problems.add(
@@ -171,6 +177,30 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
         (true, Some(number)) => Ok(AktType { document, number }),
         _ => Err(problems.0),
     }
+}
+
+/// Whether `action` can name a Konklav action: colon-delimited parts of
+/// lowercase letters, digits, `_` and `-`, outside the `konklav:` namespace.
+fn check_action(action: &str) -> Result<(), String> {
+    let parts: Vec<&str> = action.split(':').collect();
+    let well_formed = parts.len() >= 2
+        && parts.iter().all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+        });
+    if !well_formed {
+        return Err(format!(
+            "`{action}` must be colon-delimited lowercase parts, such as `capa:approve_closure`"
+        ));
+    }
+    if parts[0] == "konklav" {
+        return Err(format!(
+            "`{action}` is in the `konklav:` namespace, which is Konklav's own"
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Default)]
@@ -317,6 +347,26 @@ mod tests {
                 "transitions[1].from: a transition starts from at least one state",
             ]
         );
+    }
+
+    // r[verify authz.transition-action]
+    #[test]
+    fn checks_the_action_a_transition_names() {
+        let mut document = capa();
+        document["transitions"][0]["action"] = json!("capa:approve_closure");
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        for (action, message) in [
+            ("approve", "must be colon-delimited lowercase parts"),
+            ("capa:Approve", "must be colon-delimited lowercase parts"),
+            ("capa::x", "must be colon-delimited lowercase parts"),
+            ("konklav:control:all", "is in the `konklav:` namespace"),
+        ] {
+            document["transitions"][0]["action"] = json!(action);
+            let found = problems(document.clone());
+            assert_eq!(found.len(), 1, "{action}");
+            assert!(found[0].starts_with("transitions[0].action: "), "{action}");
+            assert!(found[0].contains(message), "{action}: {}", found[0]);
+        }
     }
 
     // r[verify akt.type.validation]

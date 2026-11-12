@@ -33,7 +33,11 @@ struct World {
 impl World {
     async fn new() -> Self {
         let db = TestDatabase::new().await;
-        let router = router_with(&FakeHost::new(), db.pool().clone());
+        let router = router_with(
+            &FakeHost::new(),
+            db.pool().clone(),
+            support::decider::FakeDecider::allowing_tenant(),
+        );
         Self { db, router }
     }
 

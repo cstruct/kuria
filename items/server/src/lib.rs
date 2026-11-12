@@ -5,6 +5,7 @@
 //! relying client.
 
 pub mod akter;
+pub mod authorize;
 mod config;
 pub mod erasure;
 mod graphql;

@@ -3,6 +3,7 @@
 
 #![allow(dead_code)]
 
+pub mod decider;
 pub mod konklav;
 
 use std::net::SocketAddr;
@@ -52,8 +53,9 @@ pub fn claims_in(kind: &str, tenant: &str) -> AccessClaims {
 }
 
 /// Stands in for a started `RelyingClient`. It accepts bearer tokens starting
-/// with `tenant` or `identity`, with claims of that kind, and `other-tenant`,
-/// a tenant token in `OTHER_TENANT`; refuses `invalid`,
+/// with `tenant` or `identity`, with claims of that kind, `tenant-dpop`, a
+/// tenant token bound to a DPoP key, and `other-tenant`, a tenant token in
+/// `OTHER_TENANT`; refuses `invalid`,
 /// refuses the proof of `bad-proof`, fails for `unreachable`, and decides
 /// by token kind alone.
 #[derive(Default)]
@@ -72,6 +74,13 @@ impl FakeHost {
 
     fn token(presented: &Presented) -> Result<Verified<AccessClaims>, Error> {
         match presented.access_token().unwrap_or_default() {
+            "tenant-dpop" => {
+                let mut bound = claims("tenant");
+                bound.cnf = Some(konklav_token::Confirmation {
+                    jkt: "thumbprint".to_owned(),
+                });
+                Ok(Verified::Valid(bound))
+            }
             token if token.starts_with("tenant") => Ok(Verified::Valid(claims("tenant"))),
             "other-tenant" => Ok(Verified::Valid(claims_in("tenant", OTHER_TENANT))),
             token if token.starts_with("identity") => Ok(Verified::Valid(claims("identity"))),
@@ -129,17 +138,23 @@ impl RelyingHost for FakeHost {
 
 /// The server's router, deciding through `host`.
 pub fn router(host: &Arc<FakeHost>) -> Router {
-    router_with(host, unused_pool())
+    router_with(host, unused_pool(), decider::FakeDecider::allowing_tenant())
 }
 
-/// The server's router, deciding through `host` and storing in `pool`.
-pub fn router_with(host: &Arc<FakeHost>, pool: kuria_store::Pool) -> Router {
+/// The server's router, verifying through `host`, deciding permissions
+/// through `decider` and storing in `pool`.
+pub fn router_with(
+    host: &Arc<FakeHost>,
+    pool: kuria_store::Pool,
+    decider: Arc<decider::FakeDecider>,
+) -> Router {
     kuria_server::app(
         host.clone(),
         kuria_server::Options {
             public_url: PUBLIC_URL.to_owned(),
             trusted_proxies: Vec::new(),
             pool,
+            decider,
             sessions: None,
         },
     )

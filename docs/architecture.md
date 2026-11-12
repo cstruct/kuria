@@ -100,7 +100,7 @@ Mutations follow what people do, not table rows: `createAkt`, `editAkt`, `perfor
 
 - Typed links make deep queries easy to write and expensive to run. The server enforces a maximum depth and complexity per query.
 - Nested lookups (an akt's links, a link's target, a target's type) go through dataloaders to avoid one query per row.
-- Authorization is checked in resolvers, per akt type, field and transition, not only at the endpoint.
+- Authorization is checked per operation, by akt type and transition, not only at the endpoint (see Identity and access).
 
 ## Storage
 
@@ -146,7 +146,8 @@ Sending events rather than whole objects means permissions are checked in one pl
   - Cookies are sent automatically, so cookie requests that can change something, and every WebSocket upgrade, must come from an allowed `Origin`, and `POST /graphql` takes only `application/json`, which a cross-site page cannot send without a CORS preflight.
   - WebSocket upgrades carry the cookie like any request, so subscriptions need no token in the URL.
   - Serving the frontend on Kuria's own site is required by `SameSite=Strict`; in development, Vite proxies `/graphql` and `/auth` to the server.
-- *Open:* authorization finer than the endpoint. A DPoP proof is accepted once, so for API clients presenting DPoP, resolvers cannot each ask the relying client for a decision. Browser requests present a bearer token, which can be decided on several times. Per-akt-type and per-transition checks will need decisions evaluated from the request's verified claims and cached entitlements, or one decision per request covering everything its operation needs.
+- Operations are authorized one permission at a time ([spec](spec/authorization.md)). Kuria's actions (`kuria:akt_types:define`, `kuria:akter:read`, `…:create`, `…:edit`, `…:transition`) are Konklav catalog data, required tenant-wide or at the scope `kuria_akt_type:<key>`, so a Konklav role grants them for every akt type or for one. A transition can name one more action of its own, such as `capa:approve_closure`. Each permission is decided by the relying client for the request's bearer token, mostly from its cached entitlements, and remembered for the rest of the request.
+- Akter a subject may not read are invisible: `null`, left out of lists, and `NOT_FOUND` to mutations, decided before anything that could reveal them, such as a stale revision.
 - Roles named in akt type configuration map to Konklav roles. Kuria evaluates those roles against the data Konklav publishes, and adds its own checks for what only Kuria knows, such as separation of duties on a specific akt.
 - *Open:* signing. A signature should probably require the signer to authenticate again at the moment of signing. How Konklav supports that, and what Kuria stores as proof, has to be settled before `akt_revision` and `signature` are fixed.
 
@@ -184,4 +185,4 @@ Some things are simpler outside GraphQL:
 - Row-level security in Postgres alongside tenant filtering in queries.
 - Object storage for attachments, and how exports include them.
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
-- Authorization of akt types and akter: who may define akt types, and who may create, edit and transition akter of each type. Until then, any subject with a tenant token can do all of it.
+- DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. A Konklav change could lift that, such as letting one accepted presentation answer several decisions within its request.

@@ -18,6 +18,7 @@ use konklav_axum::{
 use konklav_token::TokenKind;
 
 use crate::akter::Akter;
+use crate::authorize::{Authorizer, Decider};
 use crate::graphql::{KuriaSchema, Principal, schema};
 use crate::session::{self, BrowserSessions, SessionState};
 use kuria_store::Pool;
@@ -42,6 +43,8 @@ pub struct Options {
     /// Kuria's database, for akt types and akter. Connections are opened
     /// when first needed.
     pub pool: Pool,
+    /// What decides permissions for a request's token: the relying client.
+    pub decider: Arc<dyn Decider>,
     /// Browser sessions. Without them, only token-authenticated requests are
     /// served.
     pub sessions: Option<Arc<BrowserSessions>>,
@@ -56,6 +59,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         public_url,
         trusted_proxies,
         pool,
+        decider,
         sessions,
     } = options;
     let konklav = Konklav::builder(host.clone())
@@ -80,7 +84,10 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             "/graphql",
             post(graphql).route_layer(api.route(&Policy::new())?),
         )
-        .with_state(schema(Akter::new(pool)));
+        .with_state(GraphqlState {
+            schema: schema(Akter::new(pool)),
+            decider,
+        });
 
     if let Some(sessions) = sessions {
         let state = SessionState { sessions, host };
@@ -96,15 +103,48 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     Ok(router)
 }
 
+/// What the GraphQL endpoint needs.
+#[derive(Clone)]
+struct GraphqlState {
+    schema: KuriaSchema,
+    decider: Arc<dyn Decider>,
+}
+
 /// Executes a GraphQL request as the subject and in the tenant of its
 /// verified token.
 // r[impl auth.tenant]
 async fn graphql(
-    State(schema): State<KuriaSchema>,
+    State(state): State<GraphqlState>,
     token: TenantToken,
     headers: HeaderMap,
     request: GraphQLRequest,
 ) -> Response {
+    // r[impl authz.sender-constrained]
+    if token.cnf.is_some() {
+        return (
+            StatusCode::FORBIDDEN,
+            axum::Json(
+                serde_json::json!({ "error": { "code": "sender_constrained_unsupported" } }),
+            ),
+        )
+            .into_response();
+    }
+    // Verified by Konklav's layer; a bearer token, since it has no `cnf`.
+    let Some(bearer) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split_once(' '))
+        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+        .map(|(_, token)| token.trim().to_owned())
+    else {
+        return (
+            StatusCode::FORBIDDEN,
+            axum::Json(
+                serde_json::json!({ "error": { "code": "sender_constrained_unsupported" } }),
+            ),
+        )
+            .into_response();
+    };
     // r[impl session.graphql-json]
     let json = headers
         .get(header::CONTENT_TYPE)
@@ -124,6 +164,12 @@ async fn graphql(
         subject: token.sub,
         tenant,
     };
-    GraphQLResponse::from(schema.execute(request.into_inner().data(principal)).await)
-        .into_response()
+    let authorizer = Authorizer::new(state.decider.clone(), bearer);
+    GraphQLResponse::from(
+        state
+            .schema
+            .execute(request.into_inner().data(principal).data(authorizer))
+            .await,
+    )
+    .into_response()
 }
