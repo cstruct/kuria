@@ -25,7 +25,9 @@ use std::sync::Arc;
 use chrono::{DateTime, Datelike, Utc};
 use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
-use kuria_config::{AktType, AktTypeDocument, NumberContext, Problem, validate};
+use kuria_config::{
+    AktType, AktTypeDocument, NumberContext, Problem, check_state_references, validate,
+};
 use tokio::sync::Notify;
 
 use crate::authorize::{Authorizer, Permission, Unavailable};
@@ -188,17 +190,36 @@ impl Akter {
         // Stored as it validated, so what is kept is exactly what was checked.
         let definition =
             serde_json::to_value(ty.document()).map_err(|e| AktError::Internal(e.to_string()))?;
+        let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
-        let row = store::insert_type_version(
-            &mut conn,
-            actor.tenant.into(),
-            ty.key(),
-            &definition,
-            actor.subject.into(),
-            Utc::now(),
-        )
-        .await?;
-        Ok(StoredType { row, ty })
+        let conn: &mut kuria_store::Connection = &mut conn;
+        conn.transaction::<_, AktError, _>(async |conn| {
+            // r[impl akt.type.state-references]
+            // One definition at a time per tenant, so two can't each pass
+            // against the other's old version.
+            store::next_counter(conn, tenant, "types").await?;
+            let others = store::latest_type_versions(conn, tenant)
+                .await?
+                .into_iter()
+                .filter(|row| row.key != ty.key())
+                .map(|row| StoredType::read(row).map(|stored| stored.ty))
+                .collect::<Result<Vec<_>, _>>()?;
+            let problems = check_state_references(&ty, &others);
+            if !problems.is_empty() {
+                return Err(AktError::InvalidType(problems));
+            }
+            let row = store::insert_type_version(
+                conn,
+                tenant,
+                ty.key(),
+                &definition,
+                actor.subject.into(),
+                Utc::now(),
+            )
+            .await?;
+            Ok(StoredType { row, ty })
+        })
+        .await
     }
 
     /// Edits the akt `number`, based on `expected_revision`.

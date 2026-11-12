@@ -169,8 +169,9 @@ mise run test
   epic, moves as rank events, concurrent moves, and the permissions for
   arranging, moving, creating inside and listing.
 - [`tests/boards.rs`](tests/boards.rs): stories and bugs in shared columns,
-  rank order within a column, `unmapped`, a container without columns, and
-  members the subject can't read.
+  rank order within a column, `unmapped`, a container without columns,
+  members the subject can't read, and state references checked across akt
+  types when either is defined.
 - [`tests/drafts.rs`](tests/drafts.rs): release notes drafted from a
   release's candidates, hotfix and an epic inside a candidate, leaving out
   a backlog's unshipped item, what the drafter can't read and a rejected

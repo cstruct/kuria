@@ -235,3 +235,96 @@ async fn a_board_leaves_out_what_the_subject_cant_read() {
         ])
     );
 }
+
+const DEFINE: &str = "mutation($d: JSON!) { defineAktType(document: $d) { version } }";
+
+fn problems(answer: &Value) -> Vec<String> {
+    answer["errors"][0]["extensions"]["problems"]
+        .as_array()
+        .map(|problems| {
+            problems
+                .iter()
+                .map(|p| {
+                    format!(
+                        "{}: {}",
+                        p["path"].as_str().unwrap(),
+                        p["message"].as_str().unwrap()
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+impl World {
+    async fn define(&self, document: &Value) -> Value {
+        send(
+            &self.router,
+            graphql_with("tenant", DEFINE, &json!({ "d": document })),
+        )
+        .await
+        .json()
+    }
+}
+
+fn type_named(key: &str) -> Value {
+    types().into_iter().find(|t| t["key"] == key).unwrap()
+}
+
+// r[verify akt.type.state-references]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_member_type_cant_drop_a_state_the_board_shows() {
+    let world = World::new().await;
+    // A story without `doing`, which the epic's board shows.
+    let mut story = type_named("story");
+    story["states"].as_array_mut().unwrap().remove(1);
+    story["transitions"] = json!([]);
+    let answer = world.define(&story).await;
+    assert_eq!(
+        problems(&answer),
+        [
+            "states: `epic` names the state `doing` at board.columns[1].states.story[0]; stop naming it there first"
+        ]
+    );
+
+    // Taking it off the board first, then dropping it, works.
+    let mut epic = type_named("epic");
+    epic["board"]["columns"][1]["states"] = json!({ "bug": ["fixing"] });
+    assert!(world.define(&epic).await.get("errors").is_none());
+    let answer = world.define(&story).await;
+    assert!(answer.get("errors").is_none(), "{answer}");
+}
+
+// r[verify akt.type.state-references]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_board_cant_name_a_state_its_member_type_lacks() {
+    let world = World::new().await;
+    let mut epic = type_named("epic");
+    epic["board"]["columns"][2]["states"]["story"] = json!(["done", "shipped"]);
+    let answer = world.define(&epic).await;
+    assert_eq!(
+        problems(&answer),
+        ["board.columns[2].states.story[1]: `story` has no state `shipped`"]
+    );
+}
+
+// r[verify akt.type.state-references]
+#[tokio::test(flavor = "multi_thread")]
+async fn documents_can_be_defined_in_any_order() {
+    let db = TestDatabase::new().await;
+    let router = router_with(
+        &FakeHost::new(),
+        db.pool().clone(),
+        FakeDecider::allowing_tenant(),
+    );
+    // The epic first: its board names `story` and `bug`, not yet defined.
+    for key in ["epic", "story", "bug"] {
+        let answer = send(
+            &router,
+            graphql_with("tenant", DEFINE, &json!({ "d": type_named(key) })),
+        )
+        .await
+        .json();
+        assert!(answer.get("errors").is_none(), "{key}: {answer}");
+    }
+}

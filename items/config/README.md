@@ -17,12 +17,16 @@ Akt type documents: their model, their validation, and number patterns.
   month and parent number), and gives the scope that numbers sharing a
   sequence have in common, which includes the parent's number.
 
+- `check_state_references`: the states one akt type names of another (board
+  columns, draft recipes' `states`), checked against the latest versions of
+  the tenant's other akt types in both directions.
 - `LineTemplate`: parses and renders a draft recipe's line, such as
   `{number} {field:title}`.
 
-What the document can't check is left to the server: whether the akt types
-it names in `contains`, `created_in` and board columns exist, and whether the
-states a column names are states of those types.
+What one document can't check alone, the server checks with
+`check_state_references` when it is defined. Whether the akt types named in
+`contains` and `created_in` exist is left open, so documents can be defined
+in any order.
 
 No I/O: everything here is tested without a database.
 

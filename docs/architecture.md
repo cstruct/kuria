@@ -209,6 +209,7 @@ Some things are simpler outside GraphQL:
 - Board columns are configured on the container's akt type.
 - A container's akt type can say in which states it accepts each member type (`while`), and draft recipes can count akter only in some states (`states`).
 - Moving an akt from one container to another is a transfer: one change, recorded once on the akt and on both containers.
+- States one akt type names of another, in board columns and draft recipes, are checked whenever either is defined: a reference must name a state the latest version has, and a new version can't drop a state another still names. Definitions in a tenant are checked one at a time.
 
 ## Open decisions
 
@@ -216,5 +217,4 @@ Some things are simpler outside GraphQL:
 - Row-level security in Postgres alongside tenant filtering in queries.
 - Object storage for attachments, and how exports include them.
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
-- Board columns name states of other akt types, whose newer versions may rename them; members in such states show as `unmapped`.
 - DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. A Konklav change could lift that, such as letting one accepted presentation answer several decisions within its request.

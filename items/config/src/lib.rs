@@ -7,6 +7,7 @@
 mod document;
 mod draft;
 mod number;
+mod references;
 mod validate;
 
 pub use document::{
@@ -15,4 +16,5 @@ pub use document::{
 };
 pub use draft::{DraftDef, GroupBy, LineTemplate, LineValues, MAX_DEPTH};
 pub use number::{NumberContext, NumberPattern, PatternError};
+pub use references::{StateReference, check_state_references};
 pub use validate::{AktType, Problem, validate};

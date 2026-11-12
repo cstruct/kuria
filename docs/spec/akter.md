@@ -41,6 +41,20 @@ r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or
 define the akt types of its own tenant.
 
+r[akt.type.state-references]
+Board columns (`board.columns`) and draft recipes (`draft.states`) name
+states of other akt types. Defining an akt type MUST be refused, with a
+problem for each, when:
+
+- it names a state that the latest version of the named akt type doesn't
+  have, if that akt type is defined; or
+- it lacks a state that the latest version of another akt type names for
+  it, so that the other akt type must stop naming the state first.
+
+Akt types that aren't defined yet MAY be named, so that documents can be
+submitted in any order. Definitions in one tenant MUST be checked one at a
+time, so that two can't each pass against the other's old version.
+
 ## Fields
 
 r[akt.field.kinds]

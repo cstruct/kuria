@@ -16,6 +16,10 @@ A container's board MUST show each member it may be shown to in the column
 that names the member's akt type and current state, in rank order, and the
 columns in the order configured.
 
+Which states a column may name is checked against the akt types it names
+whenever either is defined (`akt.type.state-references`), so a renamed state
+can't silently empty a column.
+
 r[board.unmapped]
 A member whose akt type and state no column names MUST be shown in an extra
 column, `unmapped`, after the configured ones, rather than left out.
