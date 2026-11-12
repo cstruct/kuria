@@ -7,12 +7,6 @@ import { join } from 'node:path';
 import { defineExample } from '../support/example.ts';
 import { KURIA, seeded } from '../support/stack.ts';
 
-const server = spawn('node', [join(import.meta.dirname, 'serve.ts')], { stdio: 'inherit' });
-const stop = () => server.kill('SIGINT');
-process.on('SIGINT', stop);
-process.on('SIGTERM', stop);
-server.on('exit', (code) => process.exit(code ?? 0));
-
 async function healthy(): Promise<boolean> {
 	try {
 		return (await fetch(`${KURIA}/healthz`)).ok;
@@ -20,6 +14,16 @@ async function healthy(): Promise<boolean> {
 		return false;
 	}
 }
+
+if (await healthy()) {
+	throw new Error(`Something already answers on ${KURIA}: stop it first (an earlier Kuria server?).`);
+}
+
+const server = spawn('node', [join(import.meta.dirname, 'serve.ts')], { stdio: 'inherit' });
+const stop = () => server.kill('SIGINT');
+process.on('SIGINT', stop);
+process.on('SIGTERM', stop);
+server.on('exit', (code) => process.exit(code ?? 0));
 
 // The first start compiles the server.
 for (let i = 0; !(await healthy()); i++) {
