@@ -6,6 +6,28 @@ Nothing here names a specific organization's process. Each capability is stated 
 
 Terms follow [nomenclature.md](nomenclature.md). Terms that are not defined there yet are written in plain words.
 
+## Coverage so far
+
+What Kuria implements today, with the specs that hold the rules. Everything
+else in this document is still to come.
+
+| Area | Covered | Specs |
+|---|---|---|
+| Akt types and fields | Akt types as runtime documents, versioned; the field kinds `text`, `choice`, `choices`, `date`, `subject` and `reference`; required fields | [akter](spec/akter.md) |
+| Workflow | States, transitions with required fields, final states, and an extra permission per transition | [akter](spec/akter.md), [authorization](spec/authorization.md) |
+| Links and nesting | Containment: many containers per akt, exclusivity, no cycles, frozen final containers, creating inside containers | [containers](spec/containers.md) |
+| Ordering and boards | One priority order per tenant, moves, boards with configured columns | [ordering](spec/ordering.md), [boards](spec/boards.md) |
+| Numbering | Number patterns with `{year}`, `{month}`, `{parent}` and a sequence | [akter](spec/akter.md) |
+| Records and integrity | Append-only revisions with author, reason and a state hash; membership history; change events | [akter](spec/akter.md), [containers](spec/containers.md) |
+| Drafting | Fields drafted from the akter around them, such as release notes | [drafts](spec/drafts.md) |
+| Identity and access | Konklav authentication, browser sessions, authorization per akt type and transition, erasure | [authentication](spec/authentication.md), [browser sessions](spec/browser-sessions.md), [authorization](spec/authorization.md), [erasure](spec/erasure.md) |
+
+The release, backlog and epic processes run on this today: see
+[the release-management example](examples/release-management/README.md).
+Not yet: other link kinds and traceability, signatures, structured tables,
+computed fields, deadlines, obligations, reporting, subscriptions and the
+frontend.
+
 ## Processes to cover
 
 Kuria must be configurable, without code changes, to run at least these processes as akt types:

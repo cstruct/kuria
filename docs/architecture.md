@@ -47,25 +47,26 @@ The workspace splits by ownership, as Konklav does:
 
 | Crate | Owns | I/O |
 |---|---|---|
-| `core` | Identifier and revision types used by several crates. Kept tiny. | none |
-| `config` | The model of akt types, fields, states, transitions and link kinds, and its validation. | none |
-| `engine` | Evaluating a transition against an akt and its configuration: conditions, prohibitions, required fields, derived fields, obligations. | none |
-| `store` | Diesel models, migrations, queries, and writing revisions. | Postgres |
-| `api` | The GraphQL schema and transport types. | none |
-| `server` | axum routes, resolvers, Konklav integration, subscriptions, webhooks. | all |
+| `config` | Akt type documents: fields, states, transitions, containment, boards, draft recipes and number patterns, and their validation. | none |
+| `engine` | What a create, edit or transition produces, field values, state hashes, rank keys, board placement and drafts. | none |
+| `store` | Diesel models, migrations and queries. | Postgres |
+| `server` | axum routes, the GraphQL schema and resolvers, Konklav integration, browser sessions, erasure, and the write path for akter. | all |
+| `test-support` | Test databases and Valkey for the other crates' tests. | Postgres |
+
+Planned, once there is a reason: a tiny `core` for identifier types several crates share, and an `api` crate for transport types when a client other than the server needs them.
 
 `config` and `engine` take values in and return values out. Every rule that decides whether an akt may move, and what it looks like afterwards, can therefore be tested without a database. That is where most of the tests should be.
 
 ### Writing an akt
 
-Every change to an akt goes through one path:
+Every change to an akt goes through one path, `items/server/src/akter.rs` and its submodules:
 
-1. Load the akt, its current revision, and the configuration version of its akt type.
-2. Ask `engine` whether the requested transition or edit is allowed, and what it produces: new field values, derived fields, obligations, links to create.
-3. In one transaction: append the revision, update the current state, write links and obligations, and append a change event to the outbox.
-4. Reject the write if the akt's current revision is no longer the one loaded in step 1 (optimistic concurrency).
+1. Load the akt, its current revision, and the akt type version it was created with.
+2. Ask Konklav whether the caller may (see Identity and access), and `engine` whether the change is allowed and what it produces.
+3. In one transaction: append the revision, update the current state, write memberships, and append a change event to the outbox.
+4. Reject an edit or transition if the akt's current revision is no longer the one the client named (optimistic concurrency).
 
-No other code writes to the akt tables.
+No other code writes to the akt tables. Every path takes its locks in one order, so no two changes deadlock: the tenant's order lock, then akt rows by id, then number counters, then the change-event counter.
 
 ## GraphQL schema
 
@@ -79,13 +80,17 @@ type Akt {
   number: String!
   type: AktType!
   state: State!
+  revision: Int!
+  rank: String!
   fields: [FieldValue!]!
-  links(kind: String, direction: LinkDirection): [Link!]!
+  members(type: String, first: Int): [Akt!]!
+  containers: [Akt!]!
+  board(first: Int): Board!
   revisions: [AktRevision!]!
 }
 
-union FieldValue = TextValue | ChoiceValue | ScaleValue | DateValue
-                 | SubjectValue | ReferenceValue | TableValue | ...
+union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue
+                 | SubjectValue | ReferenceValue
 ```
 
 Typing comes from the field kind, not from the akt type. The React app reads the `AktType` (its fields, states and transitions) and builds forms, boards and views from it.
@@ -94,42 +99,57 @@ A schema generated per configuration would give each akt type its own GraphQL ty
 
 ### Mutations
 
-Mutations follow what people do, not table rows: `createAkt`, `editAkt`, `performTransition`, `addLink`, `sign`. Each takes the revision the client last saw, and fails if it is stale.
+Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Later: `addLink` and `sign`.
+
+Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDDEN`, `NOT_FOUND`, `CYCLE` or `FROZEN`; the server README lists them all.
 
 ### Limits
 
 - Typed links make deep queries easy to write and expensive to run. The server enforces a maximum depth and complexity per query.
-- Nested lookups (an akt's links, a link's target, a target's type) go through dataloaders to avoid one query per row.
+- Nested lookups avoid one query per row: a list's akt types are read in one query, and a board's members in one, whatever its size. Dataloaders come when links make nesting deeper.
 - Authorization is checked per operation, by akt type and transition, not only at the endpoint (see Identity and access).
 
 ## Storage
 
 | Table | Holds |
 |---|---|
-| `akt_type_version` | Each version of each akt type's configuration. Immutable once used. |
-| `akt` | The current state of each akt: type, configuration version, state, and fields as JSONB. |
-| `akt_revision` | Every change to every akt, append only: author, capacity they acted in, transition, reason, the fields that changed, and a hash of the result. |
-| `akt_link` | Typed links between akter: kind, source, target, and optionally the target revision it pins. |
-| `signature` | Electronic signatures: signer, meaning, the revision and hash signed, and when. |
-| `obligation` | Open obligations created by transitions, with due dates. |
-| `attachment` | Metadata of uploaded files. The bytes live in object storage. |
-| `change_event` | The outbox: one row per change, in order (a sequence per tenant), naming the tenant, the akt and its new revision, and when it was published to Valkey. |
+| `akt_type`, `akt_type_version` | Each akt type key's latest version, and every version as submitted. Immutable once created. |
+| `akt` | The current state of each akt: type version, state, fields as JSONB, current revision, and rank. |
+| `akt_revision` | Every change to every akt, append only (a trigger refuses updates and deletes): author, transition, reason, the fields that changed, a membership it added or removed, and the SHA-256 of the result. |
+| `akt_membership` | Current memberships, container and member. Their history is in both akter's revisions. |
+| `tenant_counter` | Per-tenant counters and locks: akt number sequences per pattern scope, the change-event sequence, and the order lock. |
+| `change_event` | The outbox: one row per change, in order (a sequence per tenant), naming the tenant, the akt and, for a `revision` event, its new revision, or for a `rank` event, none; and when it was published to Valkey. |
 | `erasure_watermark` | The time Kuria has handled Konklav's erasures up to: the latest erasure read from Konklav's list. One row, moved only forward. |
 | `login_attempt` | Browser sign-ins started at Konklav and not completed: the `state`, the PKCE verifier and where to return. Kept for ten minutes. |
 | `browser_session` | Browser sessions: the SHA-256 of the session cookie, the subject and tenant, and the Konklav tokens, encrypted. |
 
+Planned: `akt_link` (typed links besides containment), `signature`, `obligation` and `attachment`.
+
 - `akt_revision` is the record of truth. `akt` is a projection of it that is kept in the same transaction, so it is always consistent and can be rebuilt.
 - Fields are JSONB in `akt` so that queries can filter on any field with GIN indexes. Each value is validated against its field kind before it is written, so the JSON has a known shape.
-- Links are rows, not JSON, because traceability queries run over them and need indexes in both directions.
+- Memberships are rows, not JSON, because boards and drafts query them in both directions; links will be too.
 - Every revision records the configuration version it was validated against, so an old akt can still be read correctly after its akt type has changed.
-- Once an akt reaches a final state, `store` refuses any further revision except a transition the configuration explicitly allows from that state.
+- An akt in a final state can't be edited or transitioned, and if it is a container its members are frozen. It can still join or leave other containers: a finished item can still go into a release candidate.
 - All tables carry the tenant, taken from Konklav. Every query filters on it. *Open:* whether to also use Postgres row-level security as a second line of defence.
+
+## Containers, order and boards
+
+Containment is the one link kind Kuria builds in ([containers](spec/containers.md), [ordering](spec/ordering.md), [boards](spec/boards.md)).
+
+- An akt type says what its akter may contain (`contains`, optionally `exclusive`), and an akt type may have to be created inside another (`created_in`), which `{parent}` in its number pattern then renders: `RELEASE-2026-0001-RC-0001`.
+- An akt can be in many containers, such as a backlog, an epic and a release candidate. Containment is acyclic, checked with a recursive query under the container's lock.
+- Every akt has one rank in its tenant, a fractional-indexing key sorted byte by byte (`COLLATE "C"`). Every list of members and every board orders by it, so a move made on one board shows on every board. A move places an akt directly before or after a neighbour, disturbing nothing else.
+- Every rank change takes the tenant's order lock first, so two never compute the same key; the unique index on `(tenant_id, rank)` stays as a guard.
+- A board maps the states of the container's member types into columns its akt type configures, then an `unmapped` column. Placement is a pure function in `engine`.
+- A multiline text field can be drafted from the akter around it by a recipe on the field ([drafts](spec/drafts.md)), such as release notes from what a release's candidates and hotfixes contain. A draft is an ordinary edit.
+
+`docs/examples/release-management` shows these together, and `items/server/tests/release_flow.rs` walks a release through it.
 
 ## Real-time updates
 
 Postgres is the record of every change, and Valkey carries them to the instances and keeps a short window of recent ones. Nothing is written to Valkey that is not already committed in Postgres.
 
-1. **Outbox.** The transaction that writes a revision also appends a `change_event` row, with the tenant's next sequence number. The event names the tenant, the akt and its new revision, and nothing else.
+1. **Outbox.** The transaction that writes a revision, or moves an akt, also appends a `change_event` row, with the tenant's next sequence number. The event names the tenant, the akt, and its new revision or that its rank changed, and nothing else. (Writing the outbox is built; steps 2 to 4 are not yet.)
 2. **Publishing.** After the commit, the writing instance adds the event to the tenant's stream in Valkey (`XADD`, trimmed to a bounded length) and marks the row published. A relay, run by one instance at a time under a Postgres advisory lock, publishes any row still unpublished a few seconds later, so an instance that dies between commit and publish loses nothing. An event may therefore be published twice; consumers ignore sequence numbers they have seen.
 3. **Delivery.** Each instance reads the streams of the tenants it has subscribers in (`XREAD BLOCK`) and passes each event to the subscriptions that may see that akt. A subscription delivers small events ("akt X is now at revision N"), and the client fetches what it needs through ordinary queries.
 4. **Catching up.** A client keeps the last sequence number it saw. When it comes back, it asks for everything after it: the server answers from the Valkey stream while the cursor is inside its window, and from `change_event` in Postgres when it is older. Either way the client gets the same events in the same order, filtered by the same permissions.
@@ -177,7 +197,11 @@ Some things are simpler outside GraphQL:
 ## Decided
 
 - Akt types are written as whole documents and submitted through the API (`defineAktType`); each submission becomes a new, immutable akt type version. A UI editor or a CLI pushing files from version control can sit on top.
-- Akt numbers come from a number pattern in each akt type, such as `CAPA-{year}-{seq:4}`, counting per tenant and per pattern as rendered without its sequence.
+- Akt numbers come from a number pattern in each akt type, such as `CAPA-{year}-{seq:4}`, counting per tenant and per pattern as rendered without its sequence. `{parent}` counts separately within each parent.
+- One shared priority order per tenant, rather than an order per container.
+- Joining and leaving a container is a revision of both akter; a move is not.
+- Release notes are an akt drafted from members, not a special document.
+- Board columns are configured on the container's akt type.
 
 ## Open decisions
 
@@ -185,4 +209,8 @@ Some things are simpler outside GraphQL:
 - Row-level security in Postgres alongside tenant filtering in queries.
 - Object storage for attachments, and how exports include them.
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
+- Board columns name states of other akt types, whose newer versions may rename them; members in such states show as `unmapped`.
+- Draft recipes can't yet filter by state, so release notes include a rejected candidate's members.
+- A container can't yet say in which of its states it accepts members, so a released release still takes new candidates.
+- Moving an akt between two containers of an exclusive type is a remove and an add, not one step.
 - DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. A Konklav change could lift that, such as letting one accepted presentation answer several decisions within its request.
