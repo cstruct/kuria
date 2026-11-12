@@ -37,6 +37,7 @@ async fn insert(conn: &mut Connection, tenant: Uuid, ty: Uuid, number: &str, ran
         created_at: Utc::now(),
         updated_at: Utc::now(),
         rank: rank.to_owned(),
+        title: None,
     };
     akter::insert_akt(conn, &row).await.unwrap();
     row
@@ -68,6 +69,7 @@ async fn ranks_are_unique_per_tenant() {
     };
     let duplicate = AktRow {
         rank: "a0".to_owned(),
+        title: None,
         ..row
     };
     assert!(akter::insert_akt(&mut conn, &duplicate).await.is_err());
@@ -269,4 +271,86 @@ async fn the_migration_ranks_existing_akter_in_creation_order() {
         assert_eq!(rank, &nth_appended(n as u64), "{number}");
     }
     assert_eq!(ranked[0].0, "I-69");
+}
+
+// r[verify akt.title]
+#[tokio::test(flavor = "multi_thread")]
+async fn the_migration_gives_existing_akter_their_titles() {
+    let db = TestDatabase::unmigrated().await;
+    // Up to the migration before titles.
+    for _ in 0..7 {
+        run_next_migration(db.pool()).await.unwrap().unwrap();
+    }
+    let mut conn = db.pool().get().await.unwrap();
+    let pool = db.pool();
+    let version = |definition: serde_json::Value| async move {
+        let mut conn = pool.get().await.unwrap();
+        akter::insert_type_version(&mut conn, TENANT, "t", &definition, SUBJECT, Utc::now())
+            .await
+            .unwrap()
+            .id
+    };
+    let text = |key: &str, required: bool, multiline: bool| json!({ "key": key, "name": key, "kind": "text", "required": required, "multiline": multiline });
+    // Its presentation names the title.
+    let presented = version(json!({
+        "fields": [text("summary", true, false), text("headline", false, false)],
+        "presentation": { "title": "headline" }
+    }))
+    .await;
+    // The first required single-line text field, after a multiline one and
+    // an optional one.
+    let defaulted = version(json!({
+        "fields": [text("notes", true, true), text("label", false, false), text("name", true, false)]
+    }))
+    .await;
+    // None.
+    let untitled = version(json!({ "fields": [text("notes", false, true)] })).await;
+
+    let akt = |number: &str, ty: Uuid, fields: serde_json::Value| {
+        diesel::sql_query(
+            "insert into akt (id, tenant_id, number, type_version_id, state, fields, revision, created_at, updated_at, rank)
+             values ($1, $2, $3, $4, 'open', $5, 1, now(), now(), $6)",
+        )
+        .bind::<diesel::sql_types::Uuid, _>(Uuid::now_v7())
+        .bind::<diesel::sql_types::Uuid, _>(TENANT)
+        .bind::<diesel::sql_types::Text, _>(number.to_owned())
+        .bind::<diesel::sql_types::Uuid, _>(ty)
+        .bind::<diesel::sql_types::Jsonb, _>(fields)
+        .bind::<diesel::sql_types::Text, _>(number.to_owned())
+    };
+    for query in [
+        akt(
+            "A-1",
+            presented,
+            json!({ "summary": "s", "headline": " Passkeys " }),
+        ),
+        akt("A-2", presented, json!({ "summary": "s" })),
+        akt(
+            "A-3",
+            defaulted,
+            json!({ "notes": "n", "label": "l", "name": "Crash" }),
+        ),
+        akt("A-4", untitled, json!({ "notes": "n" })),
+    ] {
+        query.execute(&mut conn).await.unwrap();
+    }
+    drop(conn);
+    run_next_migration(db.pool()).await.unwrap().unwrap();
+
+    let mut conn = db.pool().get().await.unwrap();
+    let titles: Vec<(String, Option<String>)> = akt::table
+        .order(akt::number)
+        .select((akt::number, akt::title))
+        .load(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(
+        titles,
+        [
+            ("A-1".to_owned(), Some("Passkeys".to_owned())),
+            ("A-2".to_owned(), None),
+            ("A-3".to_owned(), Some("Crash".to_owned())),
+            ("A-4".to_owned(), None),
+        ]
+    );
 }

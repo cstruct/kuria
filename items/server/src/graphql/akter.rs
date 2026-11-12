@@ -215,6 +215,10 @@ impl AkterQuery {
         #[graphql(name = "type")] key: Option<String>,
         state: Option<String>,
         first: Option<i32>,
+        #[graphql(
+            desc = "Akter whose number starts with this, or whose title contains each of its words, ignoring case; the most recently changed first."
+        )]
+        search: Option<String>,
     ) -> async_graphql::Result<Vec<Akt>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let limit = first.unwrap_or(50).clamp(1, MAX_LIST);
@@ -231,15 +235,24 @@ impl AkterQuery {
                 readable.push(ty.key);
             }
         }
-        let rows = store::list_akter(
-            &mut conn,
-            tenant,
-            &readable,
-            state.as_deref(),
-            i64::from(limit),
-        )
-        .await
-        .map_err(internal)?;
+        // r[impl akt.search]
+        let rows = match &search {
+            Some(text) => store::search_akter(&mut conn, tenant, &readable, text, i64::from(limit))
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .filter(|row| state.as_ref().is_none_or(|s| *s == row.state))
+                .collect(),
+            None => store::list_akter(
+                &mut conn,
+                tenant,
+                &readable,
+                state.as_deref(),
+                i64::from(limit),
+            )
+            .await
+            .map_err(internal)?,
+        };
         with_types(&mut conn, tenant, rows).await
     }
 }
@@ -595,8 +608,21 @@ impl AktType {
                 name: s.name.clone(),
                 initial: s.initial,
                 is_final: s.is_final,
+                tone: self.0.ty.tone(&s.key).into(),
             })
             .collect()
+    }
+
+    /// How its akter are shown: the title field, and what cards and lists
+    /// show.
+    // r[impl akt.type.presentation]
+    async fn presentation(&self) -> Presentation {
+        let presentation = &self.0.ty.document().presentation;
+        Presentation {
+            title: self.0.ty.title_field().map(|f| f.key.clone()),
+            card: presentation.card.clone(),
+            list: presentation.list.clone(),
+        }
     }
 
     async fn transitions(&self) -> Vec<Transition> {
@@ -720,6 +746,41 @@ pub struct State {
     initial: bool,
     #[graphql(name = "final")]
     is_final: bool,
+    /// How the state is shown, as the akt type's presentation says.
+    tone: Tone,
+}
+
+/// How strongly, and in which sense, a state is shown.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+pub enum Tone {
+    Neutral,
+    Active,
+    Success,
+    Warning,
+    Danger,
+}
+
+impl From<kuria_config::Tone> for Tone {
+    fn from(tone: kuria_config::Tone) -> Self {
+        match tone {
+            kuria_config::Tone::Neutral => Self::Neutral,
+            kuria_config::Tone::Active => Self::Active,
+            kuria_config::Tone::Success => Self::Success,
+            kuria_config::Tone::Warning => Self::Warning,
+            kuria_config::Tone::Danger => Self::Danger,
+        }
+    }
+}
+
+/// How an akt type's akter are shown.
+#[derive(SimpleObject)]
+pub struct Presentation {
+    /// The key of the field whose value is each akt's title, if any.
+    title: Option<String>,
+    /// The fields board cards show after the title.
+    card: Vec<String>,
+    /// The fields lists of this type's akter show as columns.
+    list: Vec<String>,
 }
 
 #[derive(SimpleObject)]
@@ -796,6 +857,12 @@ impl Akt {
         &self.row.number
     }
 
+    /// Its title: the value of its akt type's title field, if it has one.
+    // r[impl akt.title]
+    async fn title(&self) -> Option<&str> {
+        self.row.title.as_deref()
+    }
+
     /// The akt type version the akt was created with.
     #[graphql(name = "type")]
     async fn akt_type(&self) -> AktType {
@@ -812,6 +879,7 @@ impl Akt {
             name: state.name.clone(),
             initial: state.initial,
             is_final: state.is_final,
+            tone: self.ty.ty.tone(&state.key).into(),
         })
     }
 

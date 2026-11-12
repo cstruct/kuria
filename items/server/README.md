@@ -100,6 +100,9 @@ Not yet: links other than containment, and signatures.
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
   `eraseContact`; and the query `contacts`.
+  An akt has its `title`, an akt type its `presentation` (title field,
+  card and list fields) and each state its `tone`; `akter(search:)` finds
+  akter by a number's beginning or a title's words.
   A revision's `by` is `User { id name email }`; `user` fields are
   `UserValue { user: Someone }`, `Someone` being a `User` or a
   `Contact { id displayName name email user }`; checkboxes are
@@ -253,6 +256,10 @@ mise run test
   as its user, and erasing; `user` fields and checkboxes naming contacts,
   only the tenant's, emails hidden from akt readers, and a linked contact
   shown as its user in values and drafts while the stored values stay.
+- [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation
+  and tones, titles by the presentation or by default and kept through
+  edits and transitions, and searching by number and title words, across
+  types, only what the subject may read, with `%` and `_` taken literally.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
   CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
   left out, cookies and redirects passed back); and discovering the

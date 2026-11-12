@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 use std::collections::BTreeMap;
 
 use crate::document::{
-    AktTypeDocument, BoardDef, ContainsDef, FieldDef, FieldKind, StateDef, TransitionDef,
+    AktTypeDocument, BoardDef, ContainsDef, FieldDef, FieldKind, MAX_CARD_FIELDS, StateDef, Tone,
+    TransitionDef,
 };
 use crate::draft::{DraftDef, LineTemplate, MAX_DEPTH};
 use crate::number::NumberPattern;
@@ -36,6 +37,31 @@ impl AktType {
     #[must_use]
     pub fn document(&self) -> &AktTypeDocument {
         &self.document
+    }
+
+    /// The field whose value is an akt's title: the presentation's, else
+    /// the first required single-line text field, if there is one.
+    // r[impl akt.type.presentation]
+    #[must_use]
+    pub fn title_field(&self) -> Option<&FieldDef> {
+        let fields = &self.document.fields;
+        match &self.document.presentation.title {
+            Some(key) => fields.iter().find(|f| &f.key == key),
+            None => fields
+                .iter()
+                .find(|f| f.kind == FieldKind::Text && f.required && !f.multiline),
+        }
+    }
+
+    /// How the state `key` is shown.
+    #[must_use]
+    pub fn tone(&self, key: &str) -> Tone {
+        self.document
+            .presentation
+            .tones
+            .get(key)
+            .copied()
+            .unwrap_or_default()
     }
 
     #[must_use]
@@ -126,6 +152,8 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     }
 
     transitions(&mut problems, &document, &fields, &states);
+
+    presentation(&mut problems, &document);
 
     let contained = containment(&mut problems, &document);
     if let Some(board) = &document.board {
@@ -246,6 +274,46 @@ fn transitions(
                     format!("no field `{required}`"),
                 );
             }
+        }
+    }
+}
+
+/// Checks the presentation's fields and states.
+// r[impl akt.type.presentation]
+fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
+    let presentation = &document.presentation;
+    let field = |key: &str| document.fields.iter().find(|f| f.key == key);
+    if let Some(title) = &presentation.title {
+        match field(title) {
+            None => problems.add("presentation.title", format!("no field `{title}`")),
+            Some(f) if f.kind != FieldKind::Text || f.multiline => problems.add(
+                "presentation.title",
+                format!("the title must be a single-line text field, and `{title}` isn't"),
+            ),
+            Some(_) => {}
+        }
+    }
+    for (list, keys) in [("card", &presentation.card), ("list", &presentation.list)] {
+        let path = format!("presentation.{list}");
+        problems.unique_keys(&path, keys.iter().map(String::as_str), "");
+        for (i, key) in keys.iter().enumerate() {
+            if field(key).is_none() {
+                problems.add(&format!("{path}[{i}]"), format!("no field `{key}`"));
+            }
+        }
+    }
+    if presentation.card.len() > MAX_CARD_FIELDS {
+        problems.add(
+            "presentation.card",
+            format!("a card shows at most {MAX_CARD_FIELDS} fields"),
+        );
+    }
+    for state in presentation.tones.keys() {
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(
+                &format!("presentation.tones.{state}"),
+                format!("no state `{state}`"),
+            );
         }
     }
 }
@@ -698,6 +766,52 @@ mod tests {
                                     "line": "{number} {field:title}", "group_by": "type" } }],
             "states": [{ "key": "draft", "name": "Draft", "initial": true }]
         })
+    }
+
+    // r[verify akt.type.presentation]
+    #[test]
+    fn checks_the_presentation() {
+        let mut document = capa();
+        document["presentation"] = json!({
+            "title": "title", "card": ["severity"], "list": ["severity", "root_cause"],
+            "tones": { "closed": "success" }
+        });
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert_eq!(ty.title_field().unwrap().key, "title");
+        assert_eq!(ty.tone("closed"), Tone::Success);
+        assert_eq!(ty.tone("open"), Tone::Neutral);
+
+        document["presentation"] = json!({
+            "title": "root_cause", "card": ["severity", "severity", "nope", "title", "x"],
+            "list": ["nope"], "tones": { "gone": "danger" }
+        });
+        let found = problems(document.clone());
+        for expected in [
+            "presentation.title: the title must be a single-line text field, and `root_cause` isn't",
+            "presentation.card[1]: `severity` is used twice",
+            "presentation.card[2]: no field `nope`",
+            "presentation.card: a card shows at most 4 fields",
+            "presentation.list[0]: no field `nope`",
+            "presentation.tones.gone: no state `gone`",
+        ] {
+            assert!(
+                found.iter().any(|p| p == expected),
+                "{expected} not in {found:?}"
+            );
+        }
+        document["presentation"] = json!({ "tones": { "open": "loud" } });
+        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+    }
+
+    // r[verify akt.type.presentation]
+    #[test]
+    fn titles_default_to_the_first_required_single_line_text_field() {
+        let ty = validate(serde_json::from_value(capa()).unwrap()).unwrap();
+        assert_eq!(ty.title_field().unwrap().key, "title");
+        let mut untitled = capa();
+        untitled["fields"][0]["required"] = json!(false);
+        let ty = validate(serde_json::from_value(untitled).unwrap()).unwrap();
+        assert!(ty.title_field().is_none());
     }
 
     // r[verify draft.recipe]

@@ -49,7 +49,54 @@ pub struct AktTypeDocument {
     /// How this type's akter are shown as boards.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board: Option<BoardDef>,
+    /// How this type's akter are shown: title, cards, lists and tones.
+    #[serde(default, skip_serializing_if = "PresentationDef::is_empty")]
+    pub presentation: PresentationDef,
 }
+
+/// How an akt type's akter are shown:
+///
+/// ```json
+/// { "title": "title", "card": ["kind", "assignee"], "list": ["kind"],
+///   "tones": { "rejected": "danger", "accepted": "success" } }
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PresentationDef {
+    /// The single-line text field shown as each akt's title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// The fields shown on board cards, after the title; at most four.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub card: Vec<String>,
+    /// The fields shown as columns where the type's akter are listed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub list: Vec<String>,
+    /// Per state key, how it is shown; `neutral` for states not named.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub tones: BTreeMap<String, Tone>,
+}
+
+impl PresentationDef {
+    fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+/// How strongly, and in which sense, a state is shown.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Tone {
+    #[default]
+    Neutral,
+    Active,
+    Success,
+    Warning,
+    Danger,
+}
+
+/// The most fields a board card shows after the title.
+pub const MAX_CARD_FIELDS: usize = 4;
 
 /// One akt type this type's akter may contain.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

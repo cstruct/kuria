@@ -7,6 +7,10 @@ type Akt {
 	id: ID!
 	number: String!
 	"""
+	Its title: the value of its akt type's title field, if it has one.
+	"""
+	title: String
+	"""
 	The akt type version the akt was created with.
 	"""
 	type: AktType!
@@ -91,6 +95,11 @@ type AktType {
 	numberPattern: String!
 	fields: [Field!]!
 	states: [State!]!
+	"""
+	How its akter are shown: the title field, and what cards and lists
+	show.
+	"""
+	presentation: Presentation!
 	transitions: [Transition!]!
 	"""
 	The document this version was defined by.
@@ -492,6 +501,24 @@ input PerformTransitionInput {
 	reason: String
 }
 
+"""
+How an akt type's akter are shown.
+"""
+type Presentation {
+	"""
+	The key of the field whose value is each akt's title, if any.
+	"""
+	title: String
+	"""
+	The fields board cards show after the title.
+	"""
+	card: [String!]!
+	"""
+	The fields lists of this type's akter show as columns.
+	"""
+	list: [String!]!
+}
+
 type Query {
 	"""
 	The subject making this request, in the tenant of its token.
@@ -513,7 +540,12 @@ type Query {
 	Akter, newest first: of one akt type and in one state, if given, and
 	at most `first` of them (50 by default, 200 at most).
 	"""
-	akter(type: String, state: String, first: Int): [Akt!]!
+	akter(		type: String,		state: String,		first: Int,
+		"""
+		Akter whose number starts with this, or whose title contains each of its words, ignoring case; the most recently changed first.
+		"""
+		search: String
+	): [Akt!]!
 	"""
 	The tenant's contacts, by name.
 	"""
@@ -554,11 +586,26 @@ type State {
 	name: String!
 	initial: Boolean!
 	final: Boolean!
+	"""
+	How the state is shown, as the akt type's presentation says.
+	"""
+	tone: Tone!
 }
 
 type TextValue {
 	field: String!
 	text: String!
+}
+
+"""
+How strongly, and in which sense, a state is shown.
+"""
+enum Tone {
+	NEUTRAL
+	ACTIVE
+	SUCCESS
+	WARNING
+	DANGER
 }
 
 """

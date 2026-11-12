@@ -349,6 +349,7 @@ impl Akter {
                 akt.state = outcome.state.clone();
                 akt.fields = Json::Object(fields_to_json(&outcome.fields));
                 akt.revision = expected_revision + 1;
+                akt.title = title_of(&stored.ty, &outcome.fields);
                 akt.updated_at = now;
                 if !store::update_akt(conn, &akt, expected_revision).await? {
                     return Err(AktError::Internal(format!(
@@ -450,6 +451,20 @@ async fn type_of(
         .pop()
         .ok_or_else(|| AktError::Internal(format!("akt {} has no akt type", akt.number)))?;
     StoredType::read(row)
+}
+
+/// The title the fields give an akt of `ty`, if its type has a title field
+/// and it holds text.
+// r[impl akt.title]
+fn title_of(
+    ty: &AktType,
+    fields: &std::collections::BTreeMap<String, kuria_engine::Value>,
+) -> Option<String> {
+    let field = ty.title_field()?;
+    match fields.get(&field.key)? {
+        kuria_engine::Value::Text(text) if !text.trim().is_empty() => Some(text.trim().to_owned()),
+        _ => None,
+    }
 }
 
 /// Refuses a change whose new values name a contact the tenant doesn't

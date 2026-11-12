@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 use super::{
     AktError, Akter, Caller, StoredType, check_contacts, hold_attachments, membership_entry,
-    next_number, rank_after_last, record_membership, require, require_read, revision, type_of,
+    next_number, rank_after_last, record_membership, require, require_read, revision, title_of,
+    type_of,
 };
 use crate::authorize::Permission;
 
@@ -93,6 +94,7 @@ impl Akter {
                     created_at: now,
                     updated_at: now,
                     rank: rank_after_last(conn, tenant).await?,
+                    title: title_of(&stored.ty, &outcome.fields),
                 };
                 store::insert_akt(conn, &akt).await?;
                 check_contacts(conn, tenant, &outcome).await?;

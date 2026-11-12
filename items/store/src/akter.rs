@@ -166,6 +166,8 @@ pub struct AktRow {
     pub updated_at: DateTime<Utc>,
     /// The akt's place in its tenant's priority order.
     pub rank: String,
+    /// The value of its akt type's title field, kept by the write path.
+    pub title: Option<String>,
 }
 
 /// An akt revision, as stored.
@@ -213,6 +215,7 @@ pub async fn update_akt(
         akt::fields.eq(&row.fields),
         akt::revision.eq(row.revision),
         akt::updated_at.eq(row.updated_at),
+        akt::title.eq(&row.title),
     ))
     .execute(conn)
     .await?;
@@ -293,6 +296,56 @@ pub async fn list_akter(
         query = query.filter(akt::state.eq(state.to_owned()));
     }
     query.load(conn).await
+}
+
+/// Escapes `%`, `_` and `\` for a `like` pattern.
+fn like_escaped(text: &str) -> String {
+    text.replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
+/// The tenant's akter of the akt types `keys` that match `text`: whose
+/// number starts with it, or whose title contains each of its words,
+/// ignoring case; the most recently changed first, at most `limit`.
+// r[impl akt.search]
+pub async fn search_akter(
+    conn: &mut Connection,
+    tenant: Uuid,
+    keys: &[String],
+    text: &str,
+    limit: i64,
+) -> QueryResult<Vec<AktRow>> {
+    use diesel::dsl::sql;
+    use diesel::sql_types::{Bool, Nullable, Text};
+
+    let text = text.trim().to_lowercase();
+    if text.is_empty() {
+        return Ok(Vec::new());
+    }
+    diesel::define_sql_function!(fn lower(value: Nullable<Text>) -> Nullable<Text>);
+    let number = lower(akt::number.nullable()).like(format!("{}%", like_escaped(&text)));
+    let mut title: Box<
+        dyn BoxableExpression<akt::table, diesel::pg::Pg, SqlType = Nullable<Bool>>,
+    > = Box::new(sql::<Nullable<Bool>>("true"));
+    for word in text.split_whitespace() {
+        title = Box::new(title.and(lower(akt::title).like(format!("%{}%", like_escaped(word)))));
+    }
+    let matching = akt::table
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(number.or(title))
+        .filter(
+            akt::type_version_id.eq_any(
+                akt_type_version::table
+                    .filter(akt_type_version::tenant_id.eq(tenant))
+                    .filter(akt_type_version::key.eq_any(keys))
+                    .select(akt_type_version::id),
+            ),
+        )
+        .select(AktRow::as_select())
+        .order(akt::updated_at.desc())
+        .limit(limit);
+    matching.load(conn).await
 }
 
 /// An akt's revisions, oldest first.
