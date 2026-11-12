@@ -63,8 +63,8 @@ values as text:
 | `text` | itself |
 | `choice`, `choices` | the option's name, or the options' names joined with `, ` |
 | `date` | `YYYY-MM-DD` |
-| `user` | the user's name as `person.name` gives it |
-| `checkbox` | `yes` when checked |
+| `user` | the user's name as `person.name` gives it, or the contact's as `contact.show` gives it |
+| `checkbox` | `yes` when checked for its checker; `yes, for <name> (checked by <name>)` when checked for someone else, each named as for `user` |
 | `reference` | its label, else its URL |
 | `git` | the repository, then `@` and the tag if any, then the SHA's first 12 digits in parentheses if any |
 | `docker` | the repository, then `:` and the tag if any, then `@` and the digest |

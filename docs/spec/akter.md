@@ -67,7 +67,7 @@ fits the field's kind:
 | `choice` | The key of one of the field's options. |
 | `choices` | A list of distinct keys of the field's options. |
 | `date` | A calendar date, `YYYY-MM-DD`. |
-| `user` | A person or piece of software, as a Konklav subject identifier, shown by name ([people](people.md)). |
+| `user` | A person or piece of software: a user, as a Konklav subject identifier, shown by name ([people](people.md)), or a contact, as `{"contact": <identifier>}` ([contacts](contacts.md)). |
 | `checkbox` | Checked or not; see `akt.field.checkbox`. |
 | `reference` | A link to something outside Kuria: an absolute `http` or `https` URL, and optionally a label. |
 | `git` | A commit in a git repository: the repository, as an `https` URL or an `ssh` remote such as `git@host:team/app.git`, and a commit SHA (40 or 64 lowercase hexadecimal digits), a tag, or both. |
@@ -78,7 +78,10 @@ r[akt.field.checkbox]
 A `checkbox` field MUST take `true` to check it and `false` to clear it.
 Checking it MUST record the subject who checked it and when, taken from the
 change, never from the input, and the record MUST stay until the box is
-cleared. A transition that requires a `checkbox` field MUST need it
+cleared. A box MAY be checked for someone else with `{"for": <user>}`,
+`<user>` being a value a `user` field takes; the record MUST then also say
+whom it was checked for, and checking it for the checker MUST be the same
+as `true`. A transition that requires a `checkbox` field MUST need it
 checked.
 
 r[akt.field.attachment]

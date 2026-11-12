@@ -54,11 +54,18 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `field kind`
   - What values a field takes: `text`, `choice`, `choices`, `date`, `user`, `checkbox`, `reference`, `git`, `docker` or `attachment`, so far.
 
-- `user` (field kind)
-  - A field naming a Konklav subject, shown by the person's name. Prefer `user` in field and API names; `subject` stays the term for the identity itself.
-
 - `person`
   - What Kuria knows about a subject to show them: the name and email recorded at their last browser sign-in.
+
+- `contact`
+  - A person a tenant names before, or without, them being a user (a subject who signs in to Kuria): a name and an optional email, kept per tenant. The subject who first signs in to the tenant with that email, verified, is linked to it, and from then on it is shown as them.
+  - Values keep naming the contact after it is linked; only how they are shown changes.
+
+- `user` (field kind)
+  - A field naming a Konklav subject or a contact, shown by name. Prefer `user` in field and API names; `subject` stays the term for the identity itself. In GraphQL a value names `Someone`: a `User` or a `Contact`.
+
+- `checked for`
+  - Whom a checkbox was checked for, when someone checked it on another's behalf: "Approved: Bob, checked by Alice". Without it, a box is checked for whoever checked it.
 
 - `attachment`
   - A file uploaded to Kuria, immutable, stored in object storage by its SHA-256 and held by akter in `attachment` fields.

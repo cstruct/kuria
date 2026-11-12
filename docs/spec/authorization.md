@@ -18,6 +18,8 @@ catalog, and for no others except those akt types name:
 | `kuria:akter:create` | at the akt type, to create its akter |
 | `kuria:akter:edit` | at the akt type, to edit its akter |
 | `kuria:akter:transition` | at the akt type, to perform its transitions |
+| `kuria:contacts:read` | tenant-wide, to list contacts with their emails |
+| `kuria:contacts:manage` | tenant-wide, to add, edit, erase and list contacts |
 
 An action required at an akt type MUST be required at the scope of kind
 `kuria_akt_type` whose id is the akt type's key, so that either a

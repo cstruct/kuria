@@ -35,3 +35,5 @@ Specs:
 - [attachments](attachments.md): uploading and reading files, their storage,
   and SBOMs
 - [people](people.md): the names Kuria shows for users, from sign-in
+- [contacts](contacts.md): people a tenant names before they are users,
+  and linking them to the users they become
