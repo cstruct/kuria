@@ -272,7 +272,8 @@ async fn exchange(state: &SessionState, code: &str, verifier: &str) -> Result<Si
 }
 
 /// Records the signed-in subject's name and email from Konklav's userinfo
-/// endpoint. Best effort: a sign-in doesn't fail for want of a name.
+/// endpoint, and links the tenant's contact with that email if Konklav
+/// verified it. Best effort: a sign-in doesn't fail for want of a name.
 // r[impl person.from-sign-in]
 async fn record_person(
     state: &SessionState,
@@ -295,14 +296,31 @@ async fn record_person(
         tracing::warn!("the userinfo endpoint answered for another subject");
         return;
     }
+    let email = info.email.filter(|e| !e.trim().is_empty());
     let person = kuria_store::people::Person {
         subject_id: signed_in.subject,
         name: info.name.filter(|n| !n.trim().is_empty()),
-        email: info.email.filter(|e| !e.trim().is_empty()),
+        email: email.clone(),
         updated_at: Utc::now(),
     };
     if let Err(e) = kuria_store::people::record(conn, &person).await {
         tracing::warn!("recording the signed-in subject's name: {e}");
+    }
+    // r[impl contact.link]
+    if let Some(email) = email.filter(|_| info.email_verified == Some(true)) {
+        match kuria_store::contacts::link(
+            conn,
+            signed_in.tenant,
+            email.trim(),
+            signed_in.subject,
+            Utc::now(),
+        )
+        .await
+        {
+            Ok(true) => tracing::info!("linked a contact to the signed-in subject"),
+            Ok(false) => {}
+            Err(e) => tracing::warn!("linking a contact to the signed-in subject: {e}"),
+        }
     }
 }
 

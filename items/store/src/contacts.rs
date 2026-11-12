@@ -94,6 +94,32 @@ pub async fn edit_unlinked(
     Ok(changed == 1)
 }
 
+diesel::define_sql_function!(fn lower(text: diesel::sql_types::Nullable<diesel::sql_types::Text>) -> diesel::sql_types::Nullable<diesel::sql_types::Text>);
+
+/// Links the tenant's unlinked contact with `email`, whatever its case, to
+/// `subject`. Answers whether there was one.
+pub async fn link(
+    conn: &mut Connection,
+    tenant: Uuid,
+    email: &str,
+    subject: Uuid,
+    at: DateTime<Utc>,
+) -> QueryResult<bool> {
+    let linked = diesel::update(
+        contact::table
+            .filter(contact::tenant_id.eq(tenant))
+            .filter(lower(contact::email).eq(email.to_lowercase()))
+            .filter(contact::linked_subject.is_null()),
+    )
+    .set((
+        contact::linked_subject.eq(Some(subject)),
+        contact::linked_at.eq(Some(at)),
+    ))
+    .execute(conn)
+    .await?;
+    Ok(linked > 0)
+}
+
 /// Deletes a contact's name and email. Answers whether there was one.
 pub async fn erase(conn: &mut Connection, tenant: Uuid, id: Uuid) -> QueryResult<bool> {
     let changed = diesel::update(

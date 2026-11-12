@@ -186,7 +186,7 @@ Sending events rather than whole objects means permissions are checked in one pl
 
 When Konklav erases a subject, Kuria deletes what it holds about them ([spec](spec/erasure.md)). The relying client hands over a notice for each erasure, and says when some may have been missed, which it does on every start because it keeps its feed position in memory. Kuria then reads Konklav's durable list of erased subjects from the time stored in `erasure_watermark`, deletes, and only then moves that time forward. Every instance does this; deleting is idempotent and the stored time only moves forward, so they don't conflict.
 
-Today that means browser sessions and the recorded name and email. Akter will make it harder: a revision records who made it, and a QMS has to keep records for years.
+Today that means browser sessions, the recorded name and email, and the name and email of every contact linked to the subject; the contact itself stays, so the values naming it still read. Akter will make it harder: a revision records who made it, and a QMS has to keep records for years.
 
 - *Open:* what erasure does to akter. The likely answer is that records keep the subject's identifier, which Konklav keeps without personal data after an erasure, while anything Kuria copied about the person (names, email addresses in free text, attachments) is removed or redacted. The records' retention requirements have to be settled against that.
 

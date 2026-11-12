@@ -36,6 +36,10 @@ pub struct ProviderState {
     pub failing: bool,
     /// Answer userinfo requests with 500.
     pub userinfo_failing: bool,
+    /// The email userinfo answers, if not `alice@example.com`, and whether
+    /// it says it is verified.
+    pub email: Option<String>,
+    pub email_verified: Option<bool>,
     /// How long a refresh takes.
     pub refresh_delay: Duration,
 }
@@ -105,6 +109,13 @@ impl FakeProvider {
 
     pub fn set_userinfo_failing(&self, failing: bool) {
         self.state.lock().unwrap().userinfo_failing = failing;
+    }
+
+    /// Has userinfo answer `email`, verified or not, or not saying.
+    pub fn set_email(&self, email: &str, verified: Option<bool>) {
+        let mut state = self.state.lock().unwrap();
+        state.email = Some(email.to_owned());
+        state.email_verified = verified;
     }
 
     pub fn set_refresh_delay(&self, delay: Duration) {
@@ -212,9 +223,19 @@ async fn revoke(
 
 /// Answers for any bearer token: the test subject, Alice.
 async fn userinfo(State(state): State<Arc<Mutex<ProviderState>>>, headers: HeaderMap) -> Response {
-    if state.lock().unwrap().userinfo_failing {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
+    let (email, verified) = {
+        let state = state.lock().unwrap();
+        if state.userinfo_failing {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        (
+            state
+                .email
+                .clone()
+                .unwrap_or_else(|| "alice@example.com".to_owned()),
+            state.email_verified,
+        )
+    };
     if !headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -222,10 +243,13 @@ async fn userinfo(State(state): State<Arc<Mutex<ProviderState>>>, headers: Heade
     {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    Json(json!({
+    let mut info = json!({
         "sub": super::SUBJECT,
         "name": "Alice Example",
-        "email": "alice@example.com",
-    }))
-    .into_response()
+        "email": email,
+    });
+    if let Some(verified) = verified {
+        info["email_verified"] = json!(verified);
+    }
+    Json(info).into_response()
 }

@@ -19,12 +19,16 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   encrypted on the server, and authenticating their requests by an
   `HttpOnly` session cookie.
 - Recording people's names and emails from Konklav's userinfo endpoint at
-  browser sign-in, and showing `user` fields and revision authors by name.
+  browser sign-in, and showing `user` fields and revision authors by name;
+  and, when userinfo says the email is verified, linking the tenant's
+  contact with that email to the subject signing in.
 - Refreshing browser sessions' access tokens before they expire, one refresh
   per session at a time across every instance.
 - Rate limiting sign-in starts per client address, shared between instances
   through Valkey.
-- Deleting an erased subject's browser sessions when Konklav erases them,
+- Deleting an erased subject's browser sessions, recorded name and email,
+  and the names and emails of contacts linked to them when Konklav erases
+  them,
   and catching up on erasures it may have missed from a time stored in the
   database.
 - Refusing cookie requests from origins it isn't configured for.
@@ -172,7 +176,9 @@ mise run test
   storage, replacing a session, origins, JSON-only GraphQL, refreshing
   (including five concurrent requests refreshing once), refused and failed
   refreshes, signing out, and rate limits on starting a sign-in (per client
-  address, shared between two servers, and with and without a trusted proxy).
+  address, shared between two servers, and with and without a trusted proxy),
+  recording the person, and linking a contact by a verified email only, in
+  the tenant signed in to only, and never relinking one.
   They need the development Postgres and Valkey (`mise run db:up`).
 - [`tests/akter.rs`](tests/akter.rs) goes through GraphQL against a fresh
   database: akt type versions and their validation, tenant isolation,
@@ -231,8 +237,9 @@ mise run test
   shown as its user in values and drafts while the stored values stay.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
-  up from the stored time, the time never moving back, and retrying a
-  failed catch-up while live notices keep being handled.
+  up from the stored time, the time never moving back, retrying a failed
+  catch-up while live notices keep being handled, and erasing names and
+  the contacts linked to the subject.
 - Unit tests in `src/` cover the configuration, the cipher, the cookies and
   `return_to`.
 

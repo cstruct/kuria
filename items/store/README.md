@@ -22,11 +22,13 @@ the queries the server runs.
     tenant's order lock, and locking several akter in a fixed order.
   - [`people`](src/people.rs): the names and emails recorded at sign-in.
   - [`contacts`](src/contacts.rs): contacts, telling a taken email apart
-    from other failures, and editing only unlinked ones.
+    from other failures, editing only unlinked ones, and linking the
+    unlinked one with an email, whatever its case.
   - [`attachments`](src/attachments.rs): attachments' metadata, which akt
     fields hold which attachment, and the akt types of an attachment's
     holders.
-  - [`erasure`](src/erasure.rs): deleting what Kuria holds about a subject,
+  - [`erasure`](src/erasure.rs): deleting what Kuria holds about a subject
+    (sessions, their name and email, and those of contacts linked to them),
     and the time erasures are handled up to.
 
 The migrations also make `akt_revision` append only: a trigger refuses every

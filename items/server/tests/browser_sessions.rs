@@ -718,3 +718,79 @@ async fn a_sign_in_without_a_name_still_succeeds() {
     world.sign_in().await;
     assert_eq!(person(&world).await, None);
 }
+
+/// Adds a contact with `email` to `tenant`, linked to `linked` if given,
+/// and returns its id.
+async fn add_contact(
+    world: &World,
+    tenant: &str,
+    email: &str,
+    linked: Option<uuid::Uuid>,
+) -> uuid::Uuid {
+    let id = uuid::Uuid::now_v7();
+    let mut conn = world.db.pool().get().await.unwrap();
+    kuria_store::contacts::insert(
+        &mut conn,
+        &kuria_store::contacts::Contact {
+            id,
+            tenant_id: tenant.parse().unwrap(),
+            name: Some("Alice".to_owned()),
+            email: Some(email.to_owned()),
+            linked_subject: linked,
+            linked_at: linked.map(|_| Utc::now()),
+            created_by: uuid::Uuid::nil(),
+            created_at: Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+    id
+}
+
+async fn linked_to(world: &World, id: uuid::Uuid) -> Option<uuid::Uuid> {
+    use kuria_store::schema::contact;
+    let mut conn = world.db.pool().get().await.unwrap();
+    contact::table
+        .find(id)
+        .select(contact::linked_subject)
+        .first(&mut conn)
+        .await
+        .unwrap()
+}
+
+// r[verify contact.link]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_verified_email_links_the_tenants_contact() {
+    let world = World::new().await;
+    let mine = add_contact(&world, TENANT, "Alice@Example.com", None).await;
+    let elsewhere = add_contact(&world, support::OTHER_TENANT, "alice@example.com", None).await;
+    world.konklav.set_email("alice@example.com", Some(true));
+    world.sign_in().await;
+    let alice: uuid::Uuid = support::SUBJECT.parse().unwrap();
+    assert_eq!(linked_to(&world, mine).await, Some(alice));
+    // Only in the tenant signed in to.
+    assert_eq!(linked_to(&world, elsewhere).await, None);
+}
+
+// r[verify contact.link]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unverified_email_links_nothing() {
+    for verified in [Some(false), None] {
+        let world = World::new().await;
+        let contact = add_contact(&world, TENANT, "alice@example.com", None).await;
+        world.konklav.set_email("alice@example.com", verified);
+        world.sign_in().await;
+        assert_eq!(linked_to(&world, contact).await, None, "{verified:?}");
+    }
+}
+
+// r[verify contact.link]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_linked_contact_stays_linked() {
+    let world = World::new().await;
+    let someone = uuid::Uuid::now_v7();
+    let contact = add_contact(&world, TENANT, "alice@example.com", Some(someone)).await;
+    world.konklav.set_email("alice@example.com", Some(true));
+    world.sign_in().await;
+    assert_eq!(linked_to(&world, contact).await, Some(someone));
+}

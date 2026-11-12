@@ -295,3 +295,54 @@ async fn an_erasure_deletes_the_persons_name() {
         1
     );
 }
+
+// r[verify contact.erasure]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_erasure_deletes_the_names_of_contacts_linked_to_them() {
+    use kuria_store::contacts::{self, Contact};
+    let world = World::new().await;
+    let mut conn = world.pool().get().await.unwrap();
+    let contact = |linked: Option<Uuid>, email: &str| Contact {
+        id: Uuid::now_v7(),
+        tenant_id: Uuid::nil(),
+        name: Some("Someone".to_owned()),
+        email: Some(email.to_owned()),
+        linked_subject: linked,
+        linked_at: linked.map(|_| Utc::now()),
+        created_by: Uuid::nil(),
+        created_at: Utc::now(),
+    };
+    let alices = contact(Some(ALICE), "alice@example.com");
+    let bobs = contact(Some(BOB), "bob@example.com");
+    let unlinked = contact(None, "carl@example.com");
+    for c in [&alices, &bobs, &unlinked] {
+        contacts::insert(&mut conn, c).await.unwrap();
+    }
+    drop(conn);
+    let erased = world.list.erase(ALICE, 1_000);
+    world.notices.send(ErasureNotice::Erased(erased)).unwrap();
+    world
+        .eventually("the contact linked to Alice is erased", || async {
+            let mut conn = world.pool().get().await.unwrap();
+            contacts::find(&mut conn, Uuid::nil(), &[alices.id])
+                .await
+                .unwrap()[0]
+                .name
+                .is_none()
+        })
+        .await;
+    let mut conn = world.pool().get().await.unwrap();
+    let left = contacts::find(&mut conn, Uuid::nil(), &[alices.id, bobs.id, unlinked.id])
+        .await
+        .unwrap();
+    for c in left {
+        if c.id == alices.id {
+            assert_eq!(
+                (c.name, c.email, c.linked_subject),
+                (None, None, Some(ALICE))
+            );
+        } else {
+            assert!(c.name.is_some() && c.email.is_some(), "{c:?}");
+        }
+    }
+}

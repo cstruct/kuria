@@ -46,6 +46,9 @@ pub struct UserInfo {
     pub sub: String,
     pub name: Option<String>,
     pub email: Option<String>,
+    /// Whether the provider verified `email`.
+    #[serde(default)]
+    pub email_verified: Option<bool>,
 }
 
 #[derive(Debug, thiserror::Error)]
