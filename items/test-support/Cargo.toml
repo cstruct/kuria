@@ -1,0 +1,18 @@
+[package]
+name = "kuria-test-support"
+description = "Test helpers shared by Kuria's software items"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+diesel = { version = "2.3", default-features = false, features = ["postgres_backend"] }
+diesel-async = { version = "0.9", features = ["postgres"] }
+kuria-store = { path = "../store" }
+tokio = { version = "1.54.1", features = ["rt"] }
+uuid = { version = "1", features = ["v7"] }
+
+[lints]
+workspace = true

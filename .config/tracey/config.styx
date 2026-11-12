@@ -1,0 +1,19 @@
+specs (
+    {
+        name kuria
+        include (
+            docs/spec/**/*.md
+        )
+        impls (
+            {
+                name rust
+                include (
+                    items/**/*.rs
+                )
+                exclude (
+                    target/**
+                )
+            }
+        )
+    }
+)

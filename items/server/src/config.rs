@@ -1,0 +1,250 @@
+//! The server's configuration, read from the environment.
+
+use std::net::SocketAddr;
+
+use konklav_relying::Config as RelyingConfig;
+use konklav_relying_client::ClientConfig;
+
+/// What the server needs to run. It holds secrets, so it is not `Debug`.
+#[derive(Clone)]
+pub struct Config {
+    /// The address to listen on (`KURIA_LISTEN`, `0.0.0.0:8080` by default).
+    pub listen: SocketAddr,
+    /// The URL clients address the server by, without a trailing slash
+    /// (`KURIA_PUBLIC_URL`). DPoP proofs name it rather than the address the
+    /// server listens on.
+    pub public_url: String,
+    /// Konklav's issuer, as its tokens' `iss` names it (`KONKLAV_ISSUER`).
+    pub issuer: String,
+    /// The audience Kuria's tokens carry (`KONKLAV_AUDIENCE`).
+    pub audience: String,
+    /// Konklav's relying surface (`KONKLAV_RELYING_URL`).
+    pub relying_url: String,
+    /// Konklav's subject-facing surface, where the service principal logs in
+    /// (`KONKLAV_SUBJECT_URL`).
+    pub subject_url: String,
+    /// The service principal's secret key id (`KONKLAV_SERVICE_KEY`, as
+    /// `<key id>.<secret>`).
+    pub key_id: String,
+    /// The service principal's secret.
+    pub secret: String,
+    /// Kuria's own database (`DATABASE_URL`).
+    pub database_url: String,
+    /// Kuria's OIDC client id at Konklav, for browser sign-in
+    /// (`KURIA_OIDC_CLIENT_ID`).
+    pub oidc_client_id: String,
+    /// Kuria's OIDC client secret (`KURIA_OIDC_CLIENT_SECRET`).
+    pub oidc_client_secret: String,
+    /// The key browser sessions' tokens are encrypted under, 32 bytes in
+    /// base64 (`KURIA_SESSION_KEY`).
+    pub session_key: String,
+    /// The origins cookie requests may come from (`KURIA_ALLOWED_ORIGINS`,
+    /// comma-separated; the public URL's origin by default).
+    pub allowed_origins: Vec<String>,
+    /// Valkey, for state the server instances share, such as rate limits
+    /// (`KURIA_VALKEY_URL`, a `redis://` URL).
+    pub valkey_url: String,
+    /// The secret rate-limit keys are hashed under before they reach Valkey,
+    /// at least 32 bytes (`KURIA_RATE_LIMIT_SECRET`). Every instance must
+    /// share it.
+    pub rate_limit_secret: String,
+    /// The proxies whose `X-Forwarded-For` names the client, as addresses or
+    /// CIDR networks (`KURIA_TRUSTED_PROXIES`, comma-separated; none by
+    /// default).
+    pub trusted_proxies: Vec<String>,
+    /// Whether cookies are `Secure` and `__Host-` prefixed
+    /// (`KURIA_SECURE_COOKIES`, `true` by default). Turn it off only for
+    /// local development over plain HTTP.
+    pub secure_cookies: bool,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("{0} must be set")]
+    Missing(&'static str),
+    #[error("{0} is invalid: {1}")]
+    Invalid(&'static str, String),
+}
+
+impl Config {
+    /// Reads the configuration from the process environment.
+    pub fn from_env() -> Result<Self, ConfigError> {
+        Self::from_lookup(|name| std::env::var(name).ok())
+    }
+
+    /// Reads the configuration through `lookup`, which returns a variable's
+    /// value or `None` when it is unset.
+    pub fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, ConfigError> {
+        let required = |name: &'static str| {
+            lookup(name)
+                .filter(|value| !value.is_empty())
+                .ok_or(ConfigError::Missing(name))
+        };
+        let listen = match lookup("KURIA_LISTEN") {
+            Some(listen) => listen.parse().map_err(|e: std::net::AddrParseError| {
+                ConfigError::Invalid("KURIA_LISTEN", e.to_string())
+            })?,
+            None => SocketAddr::from(([0, 0, 0, 0], 8080)),
+        };
+        let public_url = required("KURIA_PUBLIC_URL")?
+            .trim_end_matches('/')
+            .to_owned();
+        let key = required("KONKLAV_SERVICE_KEY")?;
+        let Some((key_id, secret)) = key.split_once('.') else {
+            return Err(ConfigError::Invalid(
+                "KONKLAV_SERVICE_KEY",
+                "expected <key id>.<secret>".to_owned(),
+            ));
+        };
+        let allowed_origins = match lookup("KURIA_ALLOWED_ORIGINS") {
+            Some(origins) if !origins.trim().is_empty() => origins
+                .split(',')
+                .map(|o| o.trim().trim_end_matches('/').to_owned())
+                .filter(|o| !o.is_empty())
+                .collect(),
+            _ => vec![origin(&public_url).ok_or_else(|| {
+                ConfigError::Invalid("KURIA_PUBLIC_URL", "expected an absolute URL".to_owned())
+            })?],
+        };
+        let secure_cookies = match lookup("KURIA_SECURE_COOKIES").as_deref() {
+            None | Some("" | "true") => true,
+            Some("false") => false,
+            Some(other) => {
+                return Err(ConfigError::Invalid(
+                    "KURIA_SECURE_COOKIES",
+                    format!("expected true or false, not {other}"),
+                ));
+            }
+        };
+        let trusted_proxies = lookup("KURIA_TRUSTED_PROXIES")
+            .unwrap_or_default()
+            .split(',')
+            .map(|p| p.trim().to_owned())
+            .filter(|p| !p.is_empty())
+            .collect();
+        let rate_limit_secret = required("KURIA_RATE_LIMIT_SECRET")?;
+        if rate_limit_secret.len() < 32 {
+            return Err(ConfigError::Invalid(
+                "KURIA_RATE_LIMIT_SECRET",
+                "expected at least 32 bytes".to_owned(),
+            ));
+        }
+        Ok(Self {
+            listen,
+            issuer: required("KONKLAV_ISSUER")?,
+            audience: required("KONKLAV_AUDIENCE")?,
+            relying_url: required("KONKLAV_RELYING_URL")?,
+            subject_url: required("KONKLAV_SUBJECT_URL")?,
+            key_id: key_id.to_owned(),
+            secret: secret.to_owned(),
+            database_url: required("DATABASE_URL")?,
+            oidc_client_id: required("KURIA_OIDC_CLIENT_ID")?,
+            oidc_client_secret: required("KURIA_OIDC_CLIENT_SECRET")?,
+            session_key: required("KURIA_SESSION_KEY")?,
+            allowed_origins,
+            valkey_url: required("KURIA_VALKEY_URL")?,
+            rate_limit_secret,
+            trusted_proxies,
+            secure_cookies,
+            public_url,
+        })
+    }
+
+    /// The relying client's configuration.
+    #[must_use]
+    pub fn client(&self) -> ClientConfig {
+        ClientConfig {
+            relying_url: self.relying_url.clone(),
+            subject_url: self.subject_url.clone(),
+            key_id: self.key_id.clone(),
+            secret: self.secret.clone(),
+            core: RelyingConfig {
+                issuer: self.issuer.clone(),
+                audiences: vec![self.audience.clone()],
+                ..RelyingConfig::default()
+            },
+        }
+    }
+}
+
+/// The origin of an absolute URL: its scheme and authority.
+fn origin(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once("://")?;
+    let authority = rest.split(['/', '?', '#']).next()?;
+    (!scheme.is_empty() && !authority.is_empty()).then(|| format!("{scheme}://{authority}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    fn lookup(vars: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
+        let vars: HashMap<String, String> = vars
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        move |name| vars.get(name).cloned()
+    }
+
+    const COMPLETE: [(&str, &str); 12] = [
+        ("KURIA_VALKEY_URL", "redis://localhost:6379"),
+        (
+            "KURIA_RATE_LIMIT_SECRET",
+            "0123456789abcdef0123456789abcdef",
+        ),
+        ("KURIA_PUBLIC_URL", "https://kuria.example/app/"),
+        ("DATABASE_URL", "postgres://localhost/kuria"),
+        ("KURIA_OIDC_CLIENT_ID", "kuria"),
+        ("KURIA_OIDC_CLIENT_SECRET", "client-secret"),
+        (
+            "KURIA_SESSION_KEY",
+            "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+        ),
+        ("KONKLAV_ISSUER", "https://auth.example"),
+        ("KONKLAV_AUDIENCE", "kuria"),
+        ("KONKLAV_RELYING_URL", "http://konklav:8081"),
+        ("KONKLAV_SUBJECT_URL", "http://konklav:8080"),
+        ("KONKLAV_SERVICE_KEY", "key-1.s3cret"),
+    ];
+
+    #[test]
+    fn reads_a_complete_configuration() {
+        let config = Config::from_lookup(lookup(&COMPLETE)).unwrap();
+        assert_eq!(config.listen, SocketAddr::from(([0, 0, 0, 0], 8080)));
+        assert_eq!(config.public_url, "https://kuria.example/app");
+        assert_eq!(
+            config.allowed_origins,
+            vec!["https://kuria.example".to_owned()]
+        );
+        assert!(config.secure_cookies);
+        assert_eq!(config.trusted_proxies, Vec::<String>::new());
+        assert_eq!(config.key_id, "key-1");
+        assert_eq!(config.secret, "s3cret");
+        assert_eq!(config.client().core.audiences, vec!["kuria".to_owned()]);
+    }
+
+    #[test]
+    fn names_a_missing_variable() {
+        let vars: Vec<_> = COMPLETE
+            .into_iter()
+            .filter(|(name, _)| *name != "KONKLAV_ISSUER")
+            .collect();
+        let Err(error) = Config::from_lookup(lookup(&vars)) else {
+            panic!("a configuration without KONKLAV_ISSUER");
+        };
+        assert_eq!(error.to_string(), "KONKLAV_ISSUER must be set");
+    }
+
+    #[test]
+    fn refuses_a_service_key_without_a_secret() {
+        let mut vars = COMPLETE.to_vec();
+        vars.retain(|(name, _)| *name != "KONKLAV_SERVICE_KEY");
+        vars.push(("KONKLAV_SERVICE_KEY", "key-1"));
+        assert!(matches!(
+            Config::from_lookup(lookup(&vars)),
+            Err(ConfigError::Invalid("KONKLAV_SERVICE_KEY", _))
+        ));
+    }
+}

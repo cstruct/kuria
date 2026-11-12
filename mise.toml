@@ -1,0 +1,51 @@
+[tools]
+rust = { version = "1.99.0", components = "rustfmt,clippy,rust-analyzer,rust-src" }
+# Tracks the spec in docs/spec against the code, from its GitHub releases.
+"github:bearcove/tracey" = "1.4.0"
+
+[env]
+# Below the ephemeral port ranges, and apart from Konklav's development
+# Postgres, so both can run at once.
+KURIA_DEV_PG_PORT = "15442"
+DATABASE_URL = "postgres://kuria:kuria@localhost:{{env.KURIA_DEV_PG_PORT}}/kuria"
+# Valkey, which speaks Redis' protocol, reached with a redis:// URL.
+KURIA_DEV_VALKEY_PORT = "16389"
+KURIA_VALKEY_URL = "redis://localhost:{{env.KURIA_DEV_VALKEY_PORT}}"
+
+[tasks."db:up"]
+description = "Start the local Postgres and Valkey and wait until they accept connections"
+run = "docker compose -f dev/compose.yaml up -d --wait"
+
+[tasks."db:down"]
+description = "Stop the local Postgres and Valkey, keeping Postgres' data"
+run = "docker compose -f dev/compose.yaml down"
+
+[tasks."db:reset"]
+description = "Stop the local Postgres and Valkey and delete Postgres' data"
+run = "docker compose -f dev/compose.yaml down --volumes"
+
+[tasks."db:psql"]
+description = "Open psql against the local database"
+run = "docker compose -f dev/compose.yaml exec postgres psql -U kuria -d kuria"
+
+[tasks.build]
+description = "Build every crate"
+run = "cargo build --workspace"
+
+[tasks.test]
+description = "Run every test; database tests use isolated databases on the local Postgres"
+depends = ["db:up"]
+run = "cargo test --workspace"
+
+[tasks.lint]
+description = "Check formatting, lints and spec traceability"
+run = [
+    "cargo fmt --all --check",
+    "cargo clippy --workspace --all-targets -- -D warnings",
+    "tracey query validate",
+]
+
+[tasks.serve]
+description = "Run the server, configured from the environment (see items/server/README.md)"
+depends = ["db:up"]
+run = "cargo run -q -p kuria-server"

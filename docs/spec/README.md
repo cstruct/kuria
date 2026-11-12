@@ -1,0 +1,22 @@
+# Kuria Specs
+
+This directory holds the Tracey-managed requirements for Kuria.
+
+Use the vocabulary in [`../nomenclature.md`](../nomenclature.md).
+
+Rules are defined with standalone `r[...]` markers. Implementation and tests
+reference them from code comments as `r[impl ...]` and `r[verify ...]`, and
+`mise run lint` checks that every reference names a rule.
+
+Write a rule for behavior that other software items or people depend on and
+that should stay true across refactors. Rationale and design choices belong in
+[`../architecture.md`](../architecture.md), which is not normative.
+
+Specs:
+
+- [authentication](authentication.md): Kuria as a Konklav relying system, and
+  how requests are authenticated
+- [browser sessions](browser-sessions.md): signing browsers in through
+  Konklav, session cookies, refreshing and cross-site requests
+- [erasure](erasure.md): deleting what Kuria holds about a subject Konklav
+  erases, without missing an erasure

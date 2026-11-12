@@ -1,0 +1,36 @@
+name: kuria-dev
+
+services:
+  postgres:
+    image: postgres:18.1
+    environment:
+      POSTGRES_USER: kuria
+      POSTGRES_PASSWORD: kuria
+      POSTGRES_DB: kuria
+    ports:
+      - "${KURIA_DEV_PG_PORT:-15442}:5432"
+    # Postgres 18 images keep data in a versioned directory below
+    # /var/lib/postgresql, so the volume is mounted there.
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kuria -d kuria"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  # Shared, short-lived state: rate limits now, live change events later.
+  # Nothing in it is a record, so nothing is persisted.
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${KURIA_DEV_VALKEY_PORT:-16389}:6379"
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
