@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use kuria_config::{DraftDef, GroupBy, LineTemplate, LineValues};
+use serde_json::Value as Json;
 
 /// One akt a draft lists, with what its line may show.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -58,8 +59,106 @@ pub fn render(recipe: &DraftDef, listed: &[Listed]) -> String {
     }
 }
 
+/// Of `found`, what the recipe lists by `latest_by` and `exclude`: with
+/// `latest_by`, of the akter with the same value in that field only the one
+/// `newness` ranks highest, those without a value each; then without the
+/// akter whose `exclude`d field holds one of its options. `value` gives an
+/// akt's stored value of a field, if it has one. What is kept keeps its
+/// order.
+// r[impl draft.latest]
+pub fn select<T, N: Ord>(
+    recipe: &DraftDef,
+    found: Vec<T>,
+    newness: impl Fn(&T) -> N,
+    value: impl Fn(&T, &str) -> Option<Json>,
+) -> Vec<T> {
+    let mut kept: Vec<bool> = vec![true; found.len()];
+    if let Some(key) = &recipe.latest_by {
+        // Per value, the index of the newest akt holding it.
+        let mut newest: Vec<(Json, usize)> = Vec::new();
+        for (i, akt) in found.iter().enumerate() {
+            let Some(held) = value(akt, key).filter(|v| !v.is_null()) else {
+                continue;
+            };
+            match newest.iter_mut().find(|(v, _)| *v == held) {
+                Some((_, best)) => {
+                    if newness(akt) > newness(&found[*best]) {
+                        kept[*best] = false;
+                        *best = i;
+                    } else {
+                        kept[i] = false;
+                    }
+                }
+                None => newest.push((held, i)),
+            }
+        }
+    }
+    let excluded = |akt: &T| {
+        recipe.exclude.iter().any(|(key, options)| {
+            let holds = |v: &Json| v.as_str().is_some_and(|k| options.iter().any(|o| o == k));
+            match value(akt, key) {
+                Some(Json::Array(keys)) => keys.iter().any(holds),
+                Some(v) => holds(&v),
+                None => false,
+            }
+        })
+    };
+    found
+        .into_iter()
+        .zip(kept)
+        .filter(|(akt, kept)| *kept && !excluded(akt))
+        .map(|(akt, _)| akt)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    // r[verify draft.latest]
+    #[test]
+    fn lists_the_newest_per_value_unless_excluded() {
+        let recipe: DraftDef = serde_json::from_value(json!({
+            "types": ["artifact"], "line": "{number}",
+            "latest_by": "component", "exclude": { "change": ["removed"] }
+        }))
+        .unwrap();
+        // (number, created, component, change)
+        let found = vec![
+            ("A-1", 1, Some("backend"), "built"),
+            ("A-2", 2, Some("frontend"), "built"),
+            ("A-3", 5, Some("backend"), "built"),
+            ("A-4", 4, Some("docs"), "built"),
+            ("A-5", 6, Some("docs"), "removed"),
+            ("A-6", 3, None, "built"),
+            ("A-7", 7, None, "built"),
+            ("A-8", 0, Some("backend"), "built"),
+        ];
+        let kept = select(
+            &recipe,
+            found,
+            |a| a.1,
+            |a, key| match key {
+                "component" => a.2.map(|c| json!(c)),
+                "change" => Some(json!(a.3)),
+                _ => None,
+            },
+        );
+        let numbers: Vec<_> = kept.iter().map(|a| a.0).collect();
+        assert_eq!(numbers, vec!["A-2", "A-3", "A-6", "A-7"]);
+    }
+
+    // r[verify draft.latest]
+    #[test]
+    fn excludes_by_any_of_several_options() {
+        let recipe: DraftDef = serde_json::from_value(json!({
+            "types": ["item"], "line": "{number}", "exclude": { "tags": ["internal"] }
+        }))
+        .unwrap();
+        let found = vec![("I-1", json!(["internal", "ui"])), ("I-2", json!(["ui"]))];
+        let kept = select(&recipe, found, |_| 0, |a, _| Some(a.1.clone()));
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].0, "I-2");
+    }
+
     use serde_json::json;
 
     use super::*;

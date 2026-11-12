@@ -16,5 +16,5 @@ pub use document::{
 };
 pub use draft::{DraftDef, GroupBy, LineTemplate, LineValues, MAX_DEPTH};
 pub use number::{NumberContext, NumberPattern, PatternError};
-pub use references::{StateReference, check_state_references};
+pub use references::{StateReference, check_field_references, check_state_references};
 pub use validate::{AktType, Problem, validate};

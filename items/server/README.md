@@ -193,8 +193,9 @@ mise run test
 - [`tests/drafts.rs`](tests/drafts.rs): release notes drafted from a
   release's candidates, hotfix and an epic inside a candidate, leaving out
   a backlog's unshipped item, what the drafter can't read and a rejected
-  candidate's items, and refused
-  as an edit would be.
+  candidate's items, refused as an edit would be, users and attachments by
+  name, and each component's newest artifact across candidates, leaving
+  out a component whose newest artifact is a removal.
 - [`tests/release_flow.rs`](tests/release_flow.rs) walks one release with
   the example configuration in
   [`docs/examples/release-management`](../../docs/examples/release-management/README.md),

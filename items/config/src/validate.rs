@@ -286,6 +286,20 @@ fn draft_recipe(problems: &mut Problems, path: &str, field: &FieldDef, draft: &D
         problems.key(&at, akt_type);
         problems.unique_keys(&at, states.iter().map(String::as_str), "");
     }
+    // r[impl draft.latest]
+    // Whether the listed akt types have these fields is checked with them
+    // (`check_field_references`).
+    if let Some(key) = &draft.latest_by {
+        problems.key(&format!("{path}.latest_by"), key);
+    }
+    for (key, options) in &draft.exclude {
+        let at = format!("{path}.exclude.{key}");
+        problems.key(&at, key);
+        if options.is_empty() {
+            problems.add(&at, "exclude at least one option");
+        }
+        problems.unique_keys(&at, options.iter().map(String::as_str), "");
+    }
 }
 
 /// Checks `contains` and `created_in`, and returns the contained akt types'
@@ -692,6 +706,27 @@ mod tests {
         let mut document = notes();
         document["number"] = json!("{parent}-NOTES-{seq}");
         assert_eq!(problems(document), Vec::<String>::new());
+    }
+
+    // r[verify draft.latest]
+    #[test]
+    fn checks_latest_by_and_exclude() {
+        let mut document = notes();
+        document["number"] = json!("{parent}-NOTES-{seq}");
+        document["fields"][0]["draft"]["latest_by"] = json!("Component");
+        document["fields"][0]["draft"]["exclude"] =
+            json!({ "change": [], "kind": ["removed", "removed"] });
+        let found = problems(document);
+        assert_eq!(found.len(), 3, "{found:?}");
+        assert!(found[0].starts_with("fields[0].draft.latest_by: "));
+        assert_eq!(
+            found[1],
+            "fields[0].draft.exclude.change: exclude at least one option"
+        );
+        assert_eq!(
+            found[2],
+            "fields[0].draft.exclude.kind[1]: `removed` is used twice"
+        );
     }
 
     // r[verify draft.recipe]

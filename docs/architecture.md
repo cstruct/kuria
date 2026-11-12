@@ -212,7 +212,7 @@ Some things are simpler outside GraphQL:
 - Joining and leaving a container is a revision of both akter; a move is not.
 - Release notes are an akt drafted from members, not a special document.
 - Board columns are configured on the container's akt type.
-- A container's akt type can say in which states it accepts each member type (`while`), and draft recipes can count akter only in some states (`states`).
+- A container's akt type can say in which states it accepts each member type (`while`), and draft recipes can count akter only in some states (`states`), only the newest per value of a field (`latest_by`), and leave out akter by a choice (`exclude`): a release's artifacts are the newest per component across all its candidates and hotfixes, and a removal is just a newest artifact that `exclude` drops.
 - Moving an akt from one container to another is a transfer: one change, recorded once on the akt and on both containers.
 - States one akt type names of another, in board columns and draft recipes, are checked whenever either is defined: a reference must name a state the latest version has, and a new version can't drop a state another still names. Definitions in a tenant are checked one at a time.
 - Attachments' bytes are in S3-compatible object storage, content-addressed per tenant; their metadata, SBOM summaries and holders are in Postgres. An upload no akt holds yet is visible only to its uploader.

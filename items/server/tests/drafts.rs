@@ -372,3 +372,122 @@ async fn shows_users_by_name_in_drafts() {
         format!("{item} by Alice Example")
     );
 }
+
+/// Akt types for builds: artifacts, removals among them, inside candidates
+/// of a build release, and a manifest drafted from the newest per component.
+fn build_types() -> Vec<Value> {
+    vec![
+        json!({ "key": "artifact", "name": "Artifacts", "number": "ART-{seq}",
+                "fields": [
+                    { "key": "component", "name": "Component", "kind": "text", "required": true },
+                    { "key": "change", "name": "Change", "kind": "choice",
+                      "options": [{ "key": "built", "name": "Built" },
+                                  { "key": "removed", "name": "Removed" }] },
+                    { "key": "sbom", "name": "SBOM", "kind": "attachment", "format": "sbom" }
+                ],
+                "states": open_only() }),
+        json!({ "key": "build_candidate", "name": "Candidate", "number": "{parent}-C{seq}",
+                "created_in": ["build_release"], "states": open_only(),
+                "contains": [{ "type": "artifact" }] }),
+        json!({ "key": "manifest", "name": "Manifest", "number": "{parent}-M{seq}",
+                "created_in": ["build_release"], "states": open_only(),
+                "fields": [{ "key": "text", "name": "Text", "kind": "text", "multiline": true,
+                             "draft": { "through": ["build_candidate"], "depth": 2,
+                                        "types": ["artifact"],
+                                        "line": "{field:component} {number} {field:sbom}",
+                                        "latest_by": "component",
+                                        "exclude": { "change": ["removed"] } } }] }),
+        json!({ "key": "build_release", "name": "Build release", "number": "BUILD-{seq}",
+                "states": open_only(),
+                "contains": [{ "type": "build_candidate" }, { "type": "manifest" }] }),
+    ]
+}
+
+// r[verify draft.latest]
+// r[verify draft.render]
+#[tokio::test(flavor = "multi_thread")]
+async fn lists_each_components_newest_artifact_unless_removed() {
+    let world = World::new().await;
+    for document in build_types() {
+        world
+            .ok(
+                "tenant",
+                "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+                json!({ "d": document }),
+            )
+            .await;
+    }
+    let upload = send(
+        &world.router,
+        axum::http::Request::post("/attachments")
+            .header("authorization", "Bearer tenant")
+            .header("x-attachment-name", "backend.spdx.json")
+            .body(axum::body::Body::from(
+                json!({ "spdxVersion": "SPDX-2.3", "packages": [] }).to_string(),
+            ))
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(upload.status, 201, "{}", upload.body);
+    let sbom = upload.json()["id"].clone();
+
+    let release = world.create("build_release", &[], json!({})).await;
+    let c1 = world
+        .create("build_candidate", &[&release], json!({}))
+        .await;
+    let built = |component: &str| json!({ "component": component, "change": "built" });
+    world.create("artifact", &[&c1], built("backend")).await;
+    world.create("artifact", &[&c1], built("frontend")).await;
+    world.create("artifact", &[&c1], built("docs")).await;
+    let c2 = world
+        .create("build_candidate", &[&release], json!({}))
+        .await;
+    let backend = world
+        .create(
+            "artifact",
+            &[&c2],
+            json!({ "component": "backend", "change": "built", "sbom": sbom }),
+        )
+        .await;
+    world
+        .create(
+            "artifact",
+            &[&c2],
+            json!({ "component": "docs", "change": "removed" }),
+        )
+        .await;
+    let manifest = world.create("manifest", &[&release], json!({})).await;
+
+    let drafted = world.draft("tenant", &manifest, 1, "text").await;
+    assert!(drafted.get("errors").is_none(), "{drafted}");
+    assert_eq!(
+        drafted["data"]["draftField"]["fields"][0]["text"],
+        // In rank order; an empty field gives an empty text.
+        format!("frontend ART-2 \nbackend {backend} backend.spdx.json")
+    );
+}
+
+// r[verify draft.latest]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_recipe_must_name_fields_its_listed_types_have() {
+    let world = World::new().await;
+    for document in build_types() {
+        world
+            .ok(
+                "tenant",
+                "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+                json!({ "d": document }),
+            )
+            .await;
+    }
+    let mut artifact = build_types().remove(0);
+    artifact["fields"][1]["options"] = json!([{ "key": "built", "name": "Built" }]);
+    let answer = world
+        .run(
+            "tenant",
+            "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+            json!({ "d": artifact }),
+        )
+        .await;
+    assert_eq!(code(&answer), "INVALID_AKT_TYPE", "{answer}");
+}

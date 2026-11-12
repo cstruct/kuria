@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use kuria_engine::draft::{Listed, render};
+use kuria_engine::draft::{Listed, render, select};
 use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow};
 use kuria_store::containers;
@@ -102,11 +102,18 @@ impl Akter {
             }
         }
 
-        let mut listed_rows: Vec<AktRow> = found
+        let listed_rows: Vec<AktRow> = found
             .into_iter()
             .filter(|(_, key)| recipe.types.contains(key))
             .map(|(row, _)| row)
             .collect();
+        // r[impl draft.latest]
+        let mut listed_rows = select(
+            &recipe,
+            listed_rows,
+            |row| (row.created_at, row.id),
+            |row, key| row.fields.get(key).cloned(),
+        );
         listed_rows.sort_by(|a, b| a.rank.cmp(&b.rank));
         let listed = describe(&mut conn, tenant, &listed_rows).await?;
         Ok(render(&recipe, &listed))

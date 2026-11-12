@@ -11,6 +11,13 @@ use serde::{Deserialize, Serialize};
 ///   "types": ["epic", "backlog_item"], "line": "{number} {field:title}",
 ///   "group_by": "type" }
 /// ```
+///
+/// or, listing each component's newest artifact unless it is a removal:
+///
+/// ```json
+/// { "types": ["artifact"], "line": "{field:component} {field:image}",
+///   "latest_by": "component", "exclude": { "change": ["removed"] } }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DraftDef {
@@ -30,6 +37,14 @@ pub struct DraftDef {
     /// akt types not named.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub states: BTreeMap<String, Vec<String>>,
+    /// A field key: of the listed akter with the same value there, only the
+    /// most recently created is listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_by: Option<String>,
+    /// Per field key, option keys: listed akter whose field holds one of
+    /// them are left out.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub exclude: BTreeMap<String, Vec<String>>,
 }
 
 impl DraftDef {

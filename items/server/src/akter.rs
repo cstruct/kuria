@@ -27,7 +27,7 @@ use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
 use kuria_config::{
     AktType, AktTypeDocument, AttachmentFormat, FieldKind, NumberContext, Problem,
-    check_state_references, validate,
+    check_field_references, check_state_references, validate,
 };
 use tokio::sync::Notify;
 
@@ -205,7 +205,8 @@ impl Akter {
                 .filter(|row| row.key != ty.key())
                 .map(|row| StoredType::read(row).map(|stored| stored.ty))
                 .collect::<Result<Vec<_>, _>>()?;
-            let problems = check_state_references(&ty, &others);
+            let mut problems = check_state_references(&ty, &others);
+            problems.extend(check_field_references(&ty, &others));
             if !problems.is_empty() {
                 return Err(AktError::InvalidType(problems));
             }

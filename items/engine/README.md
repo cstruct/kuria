@@ -20,7 +20,8 @@ produces, or why it is refused.
   and state falls in, or `unmapped`.
 - `draft::render`: a draft's text from the akter its recipe lists, grouped
   by akt type if the recipe says so; `Value::display` gives each value's
-  text.
+  text. `draft::select` keeps, with `latest_by`, only the newest akt per
+  value of that field, and then leaves out what `exclude` names.
 - `sbom::detect`: whether a file is an SPDX or CycloneDX JSON document, and
   its summary: format, specification version, name and component count.
 - `state_hash`: the SHA-256 of an akt's state and field values as canonical

@@ -21,11 +21,15 @@ Akt type documents: their model, their validation, and number patterns.
 - `check_state_references`: the states one akt type names of another (board
   columns, draft recipes' `states`), checked against the latest versions of
   the tenant's other akt types in both directions.
+- `check_field_references`: the fields and options draft recipes name of
+  the akt types they list (`latest_by`, `exclude`), checked the same way:
+  some listed akt type must have each, and a listed akt type can't drop one
+  a recipe still needs.
 - `LineTemplate`: parses and renders a draft recipe's line, such as
   `{number} {field:title}`.
 
 What one document can't check alone, the server checks with
-`check_state_references` when it is defined. Whether the akt types named in
+`check_state_references` and `check_field_references` when it is defined. Whether the akt types named in
 `contains` and `created_in` exist is left open, so documents can be defined
 in any order.
 
