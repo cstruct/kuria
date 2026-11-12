@@ -47,6 +47,8 @@ export function createClient(): Client {
 	});
 	return new Client({
 		url: '/graphql',
+		// The server takes GraphQL only as a JSON POST.
+		preferGetMethod: false,
 		fetchOptions: { credentials: 'same-origin' },
 		exchanges: [
 			mapExchange({

@@ -16,8 +16,10 @@ pub struct Config {
     pub public_url: String,
     /// Konklav's issuer, as its tokens' `iss` names it (`KONKLAV_ISSUER`).
     pub issuer: String,
-    /// The audience Kuria's tokens carry (`KONKLAV_AUDIENCE`).
-    pub audience: String,
+    /// The audiences Kuria accepts tokens for (`KONKLAV_AUDIENCE`,
+    /// comma-separated): its OIDC client's, for browsers, and Konklav's own,
+    /// if software that signs in to Konklav directly calls Kuria.
+    pub audiences: Vec<String>,
     /// Konklav's relying surface (`KONKLAV_RELYING_URL`).
     pub relying_url: String,
     /// Konklav's subject-facing surface, where the service principal logs in
@@ -135,12 +137,7 @@ impl Config {
             })?],
         };
         let secure_cookies = flag(&lookup, "KURIA_SECURE_COOKIES", true)?;
-        let trusted_proxies = lookup("KURIA_TRUSTED_PROXIES")
-            .unwrap_or_default()
-            .split(',')
-            .map(|p| p.trim().to_owned())
-            .filter(|p| !p.is_empty())
-            .collect();
+        let trusted_proxies = list(&lookup("KURIA_TRUSTED_PROXIES").unwrap_or_default());
         let storage = StorageConfig {
             bucket: required("KURIA_S3_BUCKET")?,
             endpoint: lookup("KURIA_S3_ENDPOINT").filter(|e| !e.is_empty()),
@@ -180,7 +177,7 @@ impl Config {
         Ok(Self {
             listen,
             issuer: required("KONKLAV_ISSUER")?,
-            audience: required("KONKLAV_AUDIENCE")?,
+            audiences: list(&required("KONKLAV_AUDIENCE")?),
             relying_url: required("KONKLAV_RELYING_URL")?,
             subject_url: required("KONKLAV_SUBJECT_URL")?,
             key_id: key_id.to_owned(),
@@ -215,7 +212,7 @@ impl Config {
             secret: self.secret.clone(),
             core: RelyingConfig {
                 issuer: self.issuer.clone(),
-                audiences: vec![self.audience.clone()],
+                audiences: self.audiences.clone(),
                 ..RelyingConfig::default()
             },
         }
@@ -227,6 +224,14 @@ fn origin(url: &str) -> Option<String> {
     let (scheme, rest) = url.split_once("://")?;
     let authority = rest.split(['/', '?', '#']).next()?;
     (!scheme.is_empty() && !authority.is_empty()).then(|| format!("{scheme}://{authority}"))
+}
+
+/// A comma-separated list, without blanks.
+fn list(text: &str) -> Vec<String> {
+    text.split(',')
+        .map(|item| item.trim().to_owned())
+        .filter(|item| !item.is_empty())
+        .collect()
 }
 
 /// The variable `name` as `true` or `false`, `default` when it is unset or
@@ -297,6 +302,13 @@ mod tests {
         assert_eq!(config.key_id, "key-1");
         assert_eq!(config.secret, "s3cret");
         assert_eq!(config.client().core.audiences, vec!["kuria".to_owned()]);
+        let mut vars = COMPLETE.to_vec();
+        vars.retain(|(name, _)| *name != "KONKLAV_AUDIENCE");
+        vars.push(("KONKLAV_AUDIENCE", "kuria, konklav"));
+        assert_eq!(
+            Config::from_lookup(lookup(&vars)).unwrap().audiences,
+            ["kuria", "konklav"]
+        );
     }
 
     #[test]

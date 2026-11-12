@@ -167,7 +167,7 @@ The server is configured from the environment:
 | `KURIA_DEFAULT_TENANT` | The tenant a sign-in that names none is for; none by default |
 | `KURIA_TRUSTED_PROXIES` | Comma-separated addresses or CIDR networks whose `X-Forwarded-For` names the client; none by default |
 | `KONKLAV_ISSUER` | Konklav's issuer, as its tokens' `iss` names it; the OpenID provider is discovered from it |
-| `KONKLAV_AUDIENCE` | The audience Kuria's tokens carry |
+| `KONKLAV_AUDIENCE` | The audiences Kuria accepts tokens for, comma-separated: its OIDC client's, and Konklav's own (`konklav`) if software that signs in to Konklav directly, with a secret key, calls Kuria |
 | `KONKLAV_RELYING_URL` | Konklav's relying surface |
 | `KONKLAV_SUBJECT_URL` | Konklav's subject-facing surface, where the service principal logs in and the OpenID provider is discovered |
 | `KONKLAV_SERVICE_KEY` | The service principal's secret key, as `<key id>.<secret>` |

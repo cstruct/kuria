@@ -85,3 +85,34 @@ description = "Build the app into items/web/build, which KURIA_WEB_DIR serves"
 depends = ["web:install"]
 dir = "items/web"
 run = "npm run build"
+
+[tasks."e2e:install"]
+description = "Install the end-to-end tests' dependencies and Playwright's Chromium"
+dir = "e2e"
+run = ["npm ci --no-audit --no-fund", "npx playwright install chromium"]
+sources = ["package.json", "package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks."e2e:up"]
+description = "Start and seed the end-to-end Konklav (cstruct/konklav:1.7.0)"
+depends = ["e2e:install"]
+dir = "e2e"
+run = [
+    "node scripts/keys.ts",
+    # Seeding runs once against an empty Konklav.
+    "docker compose -f compose.yaml down --volumes",
+    "docker compose -f compose.yaml up -d --wait --wait-timeout 300 postgres",
+    "docker compose -f compose.yaml up -d konklav",
+    "node scripts/setup.ts",
+]
+
+[tasks."e2e:down"]
+description = "Stop the end-to-end Konklav and forget it"
+dir = "e2e"
+run = "docker compose -f compose.yaml down --volumes"
+
+[tasks.e2e]
+description = "Run the end-to-end tests: a seeded Konklav, the Kuria server serving the built app, and Playwright"
+depends = ["db:up", "web:build", "e2e:up"]
+dir = "e2e"
+run = "npx playwright test"

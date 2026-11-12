@@ -1,0 +1,43 @@
+// Konklav for Kuria's end-to-end tests. Paths are inside the container.
+//
+// Kuria is the login application: its server proxies the subject-facing
+// surface on its own origin, so Konklav's issuer and login URL are Kuria's.
+
+listen {
+    subject "0.0.0.0:8080"
+    relying "0.0.0.0:8081"
+    control "0.0.0.0:8082"
+}
+
+database {
+    host postgres
+    port 5432
+    name konklav
+    user konklav
+    max_connections 10
+}
+
+telemetry {
+    service_name konklav-kuria-e2e
+    logs {level "info"}
+}
+
+tokens {
+    issuer "http://localhost:18090"
+    audience konklav
+    signing_key_file "/keys/signing-key.pem"
+}
+
+// Only Kuria's login page signs people in to Konklav itself, with sessions
+// bound to the page's DPoP key.
+browser {
+    allowed_origins ("http://localhost:18090")
+    // Plain HTTP on localhost.
+    secure_cookies false
+    require_dpop true
+}
+
+oidc_provider {
+    id_token_key_file "/keys/id-token-key.pem"
+    login_url "http://localhost:18090/login"
+}

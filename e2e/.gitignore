@@ -1,0 +1,3 @@
+node_modules
+# Keys, secrets, reports and traces of the last run.
+/.state/
