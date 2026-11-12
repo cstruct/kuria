@@ -1,0 +1,645 @@
+input AddContactInput {
+	name: String!
+	email: String
+}
+
+type Akt {
+	id: ID!
+	number: String!
+	"""
+	The akt type version the akt was created with.
+	"""
+	type: AktType!
+	state: State!
+	"""
+	The latest revision's number.
+	"""
+	revision: Int!
+	"""
+	The fields that hold a value, in the akt type's order.
+	"""
+	fields: [FieldValue!]!
+	createdAt: DateTime!
+	updatedAt: DateTime!
+	"""
+	The akt's place in its tenant's priority order. Lists of akter are
+	in this order.
+	"""
+	rank: String!
+	"""
+	Its members that the subject may read, in rank order: of one akt
+	type if given, and at most `first` (50 by default, 200 at most).
+	"""
+	members(type: String, first: Int): [Akt!]!
+	"""
+	The akt as a board: its members that the subject may read, in the
+	columns its akt type configures and then `unmapped`, each in rank
+	order. At most `first` members are shown (500 by default, 1000 at
+	most).
+	"""
+	board(first: Int): Board!
+	"""
+	The containers it is in that the subject may read, in rank order.
+	"""
+	containers: [Akt!]!
+	"""
+	Every revision, oldest first.
+	"""
+	revisions: [AktRevision!]!
+}
+
+type AktRevision {
+	revision: Int!
+	"""
+	The subject who made the change.
+	"""
+	author: ID!
+	"""
+	Who made the change, shown by name.
+	"""
+	by: User!
+	transition: String
+	reason: String
+	"""
+	The field values the change set, with `null` for those it cleared.
+	"""
+	changes: JSON!
+	"""
+	The state the akt was left in.
+	"""
+	state: String!
+	"""
+	For a membership revision, what it added or removed: `added` or
+	`removed` with the containers on a member, `added_member` or
+	`removed_member` with the members on a container.
+	"""
+	membership: JSON
+	"""
+	SHA-256 of the resulting state and field values, in hex.
+	"""
+	hash: String!
+	createdAt: DateTime!
+}
+
+type AktType {
+	key: String!
+	version: Int!
+	name: String!
+	"""
+	The number pattern, such as `CAPA-{year}-{seq:4}`.
+	"""
+	numberPattern: String!
+	fields: [Field!]!
+	states: [State!]!
+	transitions: [Transition!]!
+	"""
+	The document this version was defined by.
+	"""
+	document: JSON!
+	createdAt: DateTime!
+	createdBy: ID!
+}
+
+type Attachment {
+	id: ID!
+	"""
+	Where its bytes are downloaded from, relative to Kuria's URL.
+	"""
+	url: String!
+	name: String!
+	mediaType: String!
+	"""
+	Its size in bytes.
+	"""
+	size: Int!
+	"""
+	Its SHA-256, in lowercase hexadecimal.
+	"""
+	sha256: String!
+	uploadedBy: User!
+	uploadedAt: DateTime!
+	"""
+	The SBOM's summary, if Kuria recognised it as one.
+	"""
+	sbom: Sbom
+}
+
+"""
+What files an attachment field holds.
+"""
+enum AttachmentFormat {
+	ANY
+	SBOM
+}
+
+type AttachmentValue {
+	field: String!
+	attachment: Attachment!
+}
+
+"""
+A container's members in columns.
+"""
+type Board {
+	"""
+	The configured columns, then `unmapped`.
+	"""
+	columns: [BoardColumn!]!
+}
+
+"""
+One column of a board.
+"""
+type BoardColumn {
+	key: String!
+	name: String!
+	"""
+	Its members, in rank order.
+	"""
+	akter: [Akt!]!
+}
+
+"""
+That an akt changed. Fetch what you need about it with a query.
+"""
+type ChangeEvent {
+	"""
+	The change's place in its tenant's sequence: pass the last one seen
+	as `after` when reconnecting.
+	"""
+	seq: Int!
+	kind: ChangeKind!
+	akt: ID!
+	number: String!
+	"""
+	The new revision, for a `REVISION` change.
+	"""
+	revision: Int
+}
+
+enum ChangeKind {
+	"""
+	The akt has a new revision.
+	"""
+	REVISION
+	"""
+	The akt moved in its tenant's order.
+	"""
+	RANK
+}
+
+type ChangesSubscription {
+	"""
+	The tenant's changes to akter the subscriber may read, in sequence
+	order: first every one after `after`, if given, then new ones as they
+	happen. Ends when the connection's access token expires.
+	"""
+	changes(after: Int): ChangeEvent!
+}
+
+"""
+A checked box. An unchecked box holds no value, so it isn't listed.
+"""
+type CheckboxValue {
+	field: String!
+	"""
+	Always true: listed boxes are checked.
+	"""
+	checked: Boolean!
+	"""
+	Who checked it.
+	"""
+	by: User!
+	"""
+	When it was checked.
+	"""
+	at: DateTime!
+	"""
+	Whom it was checked for: the user who checked it, unless they
+	checked it for someone else.
+	"""
+	for: Someone!
+}
+
+type ChoiceOption {
+	key: String!
+	name: String!
+}
+
+type ChoiceValue {
+	field: String!
+	option: ChoiceOption!
+}
+
+type ChoicesValue {
+	field: String!
+	options: [ChoiceOption!]!
+}
+
+type Contact {
+	id: ID!
+	"""
+	How the contact is shown: as the user it is linked to, else by its
+	name, else, once erased, by its identifier.
+	"""
+	displayName: String!
+	"""
+	Its own name; `null` once erased.
+	"""
+	name: String
+	"""
+	Its email, to those who may list contacts; `null` to anyone else.
+	"""
+	email: String
+	"""
+	The user it is linked to, once they signed in.
+	"""
+	user: User
+	linkedAt: DateTime
+	createdBy: User!
+	createdAt: DateTime!
+}
+
+"""
+What creating an akt takes.
+"""
+input CreateAktInput {
+	"""
+	The akt type's key; the akt gets its latest version.
+	"""
+	type: String!
+	"""
+	Field keys to values.
+	"""
+	fields: JSON
+	reason: String
+	"""
+	The containers to create it in, by number; the first is its parent.
+	"""
+	in: [String!]! = []
+}
+
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+
+type DateValue {
+	field: String!
+	"""
+	`YYYY-MM-DD`.
+	"""
+	date: String!
+}
+
+"""
+A container image.
+"""
+type DockerValue {
+	field: String!
+	repository: String!
+	"""
+	`sha256:` and 64 hexadecimal digits.
+	"""
+	digest: String!
+	tag: String
+}
+
+"""
+What drafting a field takes.
+"""
+input DraftFieldInput {
+	number: String!
+	"""
+	The revision the draft is based on.
+	"""
+	revision: Int!
+	"""
+	The field to draft, which must declare a recipe.
+	"""
+	field: String!
+	reason: String
+}
+
+"""
+What editing an akt takes.
+"""
+input EditAktInput {
+	number: String!
+	"""
+	The revision the edit is based on.
+	"""
+	revision: Int!
+	"""
+	Field keys to values; `null` clears a field.
+	"""
+	fields: JSON!
+	reason: String
+}
+
+input EditContactInput {
+	id: ID!
+	name: String!
+	email: String
+}
+
+type Field {
+	key: String!
+	name: String!
+	kind: FieldKind!
+	description: String
+	required: Boolean!
+	multiline: Boolean!
+	options: [ChoiceOption!]!
+	"""
+	For attachment fields: what files they hold.
+	"""
+	format: AttachmentFormat
+}
+
+enum FieldKind {
+	TEXT
+	CHOICE
+	CHOICES
+	DATE
+	USER
+	CHECKBOX
+	REFERENCE
+	GIT
+	DOCKER
+	ATTACHMENT
+}
+
+"""
+A field's value, by its kind.
+"""
+union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue
+
+"""
+A commit in a git repository.
+"""
+type GitValue {
+	field: String!
+	repository: String!
+	sha: String
+	tag: String
+}
+
+"""
+A scalar that can represent any JSON value.
+"""
+scalar JSON
+
+"""
+What adding to or removing from a container takes.
+"""
+input MembershipInput {
+	"""
+	The container's number.
+	"""
+	container: String!
+	"""
+	The member's number.
+	"""
+	member: String!
+	reason: String
+}
+
+"""
+What moving an akt takes: exactly one of `before` and `after`.
+"""
+input MoveAktInput {
+	number: String!
+	"""
+	The akt to place it directly before.
+	"""
+	before: String
+	"""
+	The akt to place it directly after.
+	"""
+	after: String
+}
+
+type Mutation {
+	"""
+	Submits an akt type document, creating the next version of its key.
+	"""
+	defineAktType(document: JSON!): AktType!
+	"""
+	Creates an akt.
+	"""
+	createAkt(input: CreateAktInput!): Akt!
+	"""
+	Edits an akt's field values.
+	"""
+	editAkt(input: EditAktInput!): Akt!
+	"""
+	Moves an akt along one of its akt type's transitions.
+	"""
+	performTransition(input: PerformTransitionInput!): Akt!
+	"""
+	Adds an akt to a container, and returns the container.
+	"""
+	addToContainer(input: MembershipInput!): Akt!
+	"""
+	Removes an akt from a container, and returns the container.
+	"""
+	removeFromContainer(input: MembershipInput!): Akt!
+	"""
+	Transfers an akt from one container to another as one change, and
+	returns the container it joined.
+	"""
+	transferMember(input: TransferInput!): Akt!
+	"""
+	Fills a field with the draft its recipe gives, as an edit.
+	"""
+	draftField(input: DraftFieldInput!): Akt!
+	"""
+	Moves an akt directly before or after another, on every board.
+	"""
+	moveAkt(input: MoveAktInput!): Akt!
+	"""
+	Adds a contact to the tenant.
+	"""
+	addContact(input: AddContactInput!): Contact!
+	"""
+	Changes an unlinked contact's name and email.
+	"""
+	editContact(input: EditContactInput!): Contact!
+	"""
+	Deletes a contact's name and email, keeping the contact so that the
+	values naming it still read.
+	"""
+	eraseContact(id: ID!): Contact!
+}
+
+"""
+What performing a transition takes.
+"""
+input PerformTransitionInput {
+	number: String!
+	"""
+	The revision the transition is based on.
+	"""
+	revision: Int!
+	transition: String!
+	"""
+	Field values to set on the way; `null` clears a field.
+	"""
+	fields: JSON
+	reason: String
+}
+
+type Query {
+	"""
+	The subject making this request, in the tenant of its token.
+	"""
+	viewer: Viewer!
+	"""
+	The latest version of every akt type in the tenant.
+	"""
+	aktTypes: [AktType!]!
+	"""
+	An akt type: its latest version, or the version named.
+	"""
+	aktType(key: String!, version: Int): AktType
+	"""
+	The akt numbered `number`.
+	"""
+	akt(number: String!): Akt
+	"""
+	Akter, newest first: of one akt type and in one state, if given, and
+	at most `first` of them (50 by default, 200 at most).
+	"""
+	akter(type: String, state: String, first: Int): [Akt!]!
+	"""
+	The tenant's contacts, by name.
+	"""
+	contacts: [Contact!]!
+}
+
+type ReferenceValue {
+	field: String!
+	url: String!
+	label: String
+}
+
+"""
+What Kuria recognised of an SBOM.
+"""
+type Sbom {
+	format: SbomFormat!
+	specVersion: String!
+	name: String
+	"""
+	How many packages (SPDX) or components (CycloneDX) it lists.
+	"""
+	components: Int!
+}
+
+enum SbomFormat {
+	SPDX
+	CYCLONEDX
+}
+
+"""
+A user or a contact, as a value names them.
+"""
+union Someone = User | Contact
+
+type State {
+	key: String!
+	name: String!
+	initial: Boolean!
+	final: Boolean!
+}
+
+type TextValue {
+	field: String!
+	text: String!
+}
+
+"""
+What transferring an akt between containers takes.
+"""
+input TransferInput {
+	"""
+	The akt to transfer.
+	"""
+	member: String!
+	"""
+	The container it leaves.
+	"""
+	from: String!
+	"""
+	The container it joins.
+	"""
+	to: String!
+	reason: String
+}
+
+type Transition {
+	key: String!
+	name: String!
+	from: [String!]!
+	to: String!
+	requires: [String!]!
+}
+
+type User {
+	"""
+	The Konklav subject identifier.
+	"""
+	id: ID!
+	"""
+	The name recorded at their last browser sign-in, else their email,
+	else their identifier.
+	"""
+	name: String!
+	"""
+	The email recorded at their last browser sign-in.
+	"""
+	email: String
+}
+
+type UserValue {
+	field: String!
+	"""
+	The user or contact it names.
+	"""
+	user: Someone!
+}
+
+"""
+The subject making a request, in the tenant of its token.
+"""
+type Viewer {
+	"""
+	The subject's Konklav identifier.
+	"""
+	subject: ID!
+	"""
+	The tenant the request acts in.
+	"""
+	tenant: ID!
+}
+
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
+schema {
+	query: Query
+	mutation: Mutation
+	subscription: ChangesSubscription
+}

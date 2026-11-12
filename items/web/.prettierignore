@@ -1,0 +1,13 @@
+# Package Managers
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Miscellaneous
+/static/
+
+# Printed by `kuria-server schema`, compared as it is.
+schema.graphql
+src/lib/graphql/generated/

@@ -1,5 +1,7 @@
 [tools]
 rust = { version = "1.99.0", components = "rustfmt,clippy,rust-analyzer,rust-src" }
+# The app in items/web, and the end-to-end tests.
+node = "24.20.0"
 # Tracks the spec in docs/spec against the code, from its GitHub releases.
 "github:bearcove/tracey" = "1.4.0"
 
@@ -40,14 +42,19 @@ run = "cargo build --workspace"
 
 [tasks.test]
 description = "Run every test; database tests use isolated databases on the local Postgres"
-depends = ["db:up"]
-run = "cargo test --workspace"
+depends = ["db:up", "web:install"]
+run = ["cargo test --workspace", "npm --prefix items/web test"]
 
 [tasks.lint]
 description = "Check formatting, lints and spec traceability"
+depends = ["web:install"]
 run = [
     "cargo fmt --all --check",
     "cargo clippy --workspace --all-targets -- -D warnings",
+    # The app's schema file is what the server serves.
+    "cargo run -q -p kuria-server -- schema | diff -u items/web/schema.graphql -",
+    "npm --prefix items/web run lint",
+    "npm --prefix items/web run check",
     "tracey query validate",
 ]
 
@@ -55,3 +62,26 @@ run = [
 description = "Run the server, configured from the environment (see items/server/README.md)"
 depends = ["db:up"]
 run = "cargo run -q -p kuria-server"
+
+[tasks."web:install"]
+description = "Install the app's dependencies from its lockfile"
+dir = "items/web"
+run = "npm ci --no-audit --no-fund"
+sources = ["package.json", "package-lock.json"]
+outputs = ["node_modules/.package-lock.json"]
+
+[tasks."web:schema"]
+description = "Write the server's GraphQL schema to items/web/schema.graphql, for the app's types"
+run = "cargo run -q -p kuria-server -- schema > items/web/schema.graphql"
+
+[tasks."web:dev"]
+description = "Serve the app with Vite on http://localhost:5173, passing the API to `mise run serve`"
+depends = ["web:install"]
+dir = "items/web"
+run = "npm run dev"
+
+[tasks."web:build"]
+description = "Build the app into items/web/build, which KURIA_WEB_DIR serves"
+depends = ["web:install"]
+dir = "items/web"
+run = "npm run build"
