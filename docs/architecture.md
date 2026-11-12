@@ -7,7 +7,7 @@ This is a starting point. Decisions marked *open* are not settled yet.
 ## Overview
 
 ```
- browser ──── React app (Vite)
+ browser ──── Svelte app (Vite)
                  │  GraphQL queries and mutations over HTTP
                  │  GraphQL subscriptions over WebSocket
                  ▼
@@ -27,7 +27,7 @@ This is a starting point. Decisions marked *open* are not settled yet.
 ```
 
 - **Kuria server**: one Rust binary serving GraphQL, a few plain HTTP endpoints, and WebSocket subscriptions. It can run as several instances behind a load balancer. Instances share nothing except Postgres and Valkey.
-- **React app**: a single-page app built with Vite, talking to the server only through GraphQL, plus the HTTP endpoints for files.
+- **Svelte app**: a single-page app written in Svelte and built with Vite, talking to the server only through GraphQL, plus the HTTP endpoints for files.
 - **Postgres**: the record. It holds every akt, its full history, its links, the runtime configuration, and every change event.
 - **Valkey**: state the instances share that is not a record: live change events, a short window of recent ones, and rate limits. Losing it loses nothing that cannot be rebuilt from Postgres, so it is run without persistence.
 - **Object storage**: any S3-compatible store, holding attachments' bytes under their SHA-256 per tenant. Locally, versitygw.
@@ -100,7 +100,7 @@ union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue
 union Someone = User | Contact
 ```
 
-Typing comes from the field kind, not from the akt type. The React app reads the `AktType` (its fields, states and transitions) and builds forms, boards and views from it.
+Typing comes from the field kind, not from the akt type. The Svelte app reads the `AktType` (its fields, states and transitions) and builds forms, boards and views from it.
 
 A schema generated per configuration would give each akt type its own GraphQL type, but the frontend's generated client code would then depend on a tenant's configuration and break whenever it changed. That trade is not worth it.
 
@@ -206,9 +206,9 @@ Some things are simpler outside GraphQL:
 
 ## Frontend
 
-- **Vite** and **React**, with TypeScript.
+- **Svelte** and **Vite**, with TypeScript.
 - **graphql-codegen** generates typed operations from the fixed schema.
-- **urql** with **Graphcache** as the GraphQL client: a normalized cache, and subscription events that mark the akter they name as stale so they are refetched.
+- **urql** (its framework-independent core, with `@urql/svelte`) and **Graphcache** as the GraphQL client: a normalized cache, and subscription events that mark the akter they name as stale so they are refetched.
 - Forms, boards and akt views are built from `AktType` definitions at runtime, not written per akt type.
 
 ## Decided
