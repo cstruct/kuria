@@ -51,7 +51,9 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Contacts ([`src/graphql/contacts.rs`](src/graphql/contacts.rs)):
   adding, editing, erasing and listing the people a tenant names before
   they are users, one per email, with `kuria:contacts:manage` and
-  `kuria:contacts:read`.
+  `kuria:contacts:read`. `user` values and checked boxes name a user or a
+  contact (`Someone` in GraphQL); the write path takes only the tenant's
+  contacts, and drafts show them by name.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
 
@@ -224,7 +226,9 @@ mise run test
 - [`tests/contacts.rs`](tests/contacts.rs): adding and listing contacts
   and their permissions, names and emails checked, one per email per
   tenant regardless of case, editing until linked, a linked contact shown
-  as its user, and erasing.
+  as its user, and erasing; `user` fields and checkboxes naming contacts,
+  only the tenant's, emails hidden from akt readers, and a linked contact
+  shown as its user in values and drafts while the stored values stay.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a

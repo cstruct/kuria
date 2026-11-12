@@ -440,7 +440,7 @@ async fn a_release_from_planning_to_closed() {
     let go = world
         .ok(
             ADMIN,
-            "query($n: String!) { akt(number: $n) { fields { ... on CheckboxValue { field checked by { id } } ... on UserValue { field user { id } } } } }",
+            "query($n: String!) { akt(number: $n) { fields { ... on CheckboxValue { field checked by { id } } ... on UserValue { field user { ... on User { id } } } } } }",
             json!({ "n": release }),
         )
         .await;

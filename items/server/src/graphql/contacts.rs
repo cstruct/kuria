@@ -1,15 +1,15 @@
 //! Contacts: people a tenant names before, or without, them being users.
 
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object};
 use chrono::{DateTime, Utc};
 use kuria_store::contacts::{self, Contact as Row, ContactError};
-use kuria_store::people;
 use uuid::Uuid;
 
 use super::Principal;
-use super::people::{User, display_name};
+use super::people::{User, contact_name};
 use crate::akter::Akter;
 use crate::authorize::{Authorizer, Permission, Unavailable};
 
@@ -60,65 +60,99 @@ async fn require(ctx: &Context<'_>, permission: &Permission) -> async_graphql::R
     }
 }
 
-/// A person a tenant names before, or without, them being a user.
-pub struct Contact(pub Row);
+/// A person a tenant names before, or without, them being a user: loaded,
+/// or named by a value and loaded when a field needs it.
+pub enum Contact {
+    Loaded(Row),
+    Named(Uuid),
+}
+
+impl Contact {
+    fn id(&self) -> Uuid {
+        match self {
+            Self::Loaded(row) => row.id,
+            Self::Named(id) => *id,
+        }
+    }
+
+    /// The contact's row; `None` if the tenant has no such contact.
+    async fn row(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Cow<'_, Row>>> {
+        match self {
+            Self::Loaded(row) => Ok(Some(Cow::Borrowed(row))),
+            Self::Named(id) => {
+                let tenant = tenant(ctx)?;
+                let mut conn = connection(ctx).await?;
+                Ok(contacts::find(&mut conn, tenant, &[*id])
+                    .await
+                    .map_err(internal)?
+                    .pop()
+                    .map(Cow::Owned))
+            }
+        }
+    }
+
+    async fn loaded(&self, ctx: &Context<'_>) -> async_graphql::Result<Cow<'_, Row>> {
+        self.row(ctx)
+            .await?
+            .ok_or_else(|| coded(format!("there is no contact `{}`", self.id()), "NOT_FOUND"))
+    }
+}
 
 #[Object]
 impl Contact {
-    async fn id(&self) -> ID {
-        ID(self.0.id.to_string())
+    #[graphql(name = "id")]
+    async fn graphql_id(&self) -> ID {
+        ID(self.id().to_string())
     }
 
     /// How the contact is shown: as the user it is linked to, else by its
     /// name, else, once erased, by its identifier.
     // r[impl contact.show]
     async fn display_name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        if let Some(subject) = self.0.linked_subject {
-            let mut conn = connection(ctx).await?;
-            let person = people::find(&mut conn, &[subject])
-                .await
-                .map_err(internal)?
-                .pop();
-            if person
-                .as_ref()
-                .is_some_and(|p| p.name.is_some() || p.email.is_some())
-            {
-                return Ok(display_name(subject, person.as_ref()));
-            }
-        }
-        Ok(self.0.name.clone().unwrap_or_else(|| self.0.id.to_string()))
+        let Some(row) = self.row(ctx).await? else {
+            return Ok(self.id().to_string());
+        };
+        let mut conn = connection(ctx).await?;
+        contact_name(&mut conn, &row).await.map_err(internal)
     }
 
     /// Its own name; `null` once erased.
-    async fn name(&self) -> Option<&str> {
-        self.0.name.as_deref()
+    async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<String>> {
+        Ok(self.row(ctx).await?.and_then(|r| r.name.clone()))
     }
 
     /// Its email, to those who may list contacts; `null` to anyone else.
     // r[impl contact.show]
-    async fn email(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<&str>> {
+    async fn email(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<String>> {
         let reads = authorizer(ctx)?
             .reads_contacts()
             .await
             .map_err(|e| unavailable(&e))?;
-        Ok(if reads { self.0.email.as_deref() } else { None })
+        if !reads {
+            return Ok(None);
+        }
+        Ok(self.row(ctx).await?.and_then(|r| r.email.clone()))
     }
 
     /// The user it is linked to, once they signed in.
-    async fn user(&self) -> Option<User> {
-        self.0.linked_subject.map(User)
+    async fn user(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<User>> {
+        Ok(self
+            .row(ctx)
+            .await?
+            .and_then(|r| r.linked_subject)
+            .map(User))
     }
 
-    async fn linked_at(&self) -> Option<DateTime<Utc>> {
-        self.0.linked_at
+    async fn linked_at(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<DateTime<Utc>>> {
+        Ok(self.row(ctx).await?.and_then(|r| r.linked_at))
     }
 
-    async fn created_by(&self) -> User {
-        User(self.0.created_by)
+    async fn created_by(&self, ctx: &Context<'_>) -> async_graphql::Result<User> {
+        Ok(User(self.loaded(ctx).await?.created_by))
     }
 
-    async fn created_at(&self) -> DateTime<Utc> {
-        self.0.created_at
+    async fn created_at(&self, ctx: &Context<'_>) -> async_graphql::Result<DateTime<Utc>> {
+        Ok(self.loaded(ctx).await?.created_at)
     }
 }
 
@@ -143,7 +177,7 @@ impl ContactsQuery {
             .await
             .map_err(internal)?
             .into_iter()
-            .map(Contact)
+            .map(Contact::Loaded)
             .collect())
     }
 }
@@ -189,7 +223,7 @@ impl ContactsMutation {
         };
         let mut conn = connection(ctx).await?;
         contacts::insert(&mut conn, &row).await.map_err(refused)?;
-        Ok(Contact(row))
+        Ok(Contact::Loaded(row))
     }
 
     /// Changes an unlinked contact's name and email.
@@ -219,7 +253,7 @@ impl ContactsMutation {
                 "LINKED",
             ));
         }
-        Ok(Contact(row))
+        Ok(Contact::Loaded(row))
     }
 
     /// Deletes a contact's name and email, keeping the contact so that the
@@ -241,7 +275,7 @@ impl ContactsMutation {
             .map_err(internal)?
             .pop()
             .ok_or_else(|| internal("an erased contact is gone"))?;
-        Ok(Contact(row))
+        Ok(Contact::Loaded(row))
     }
 }
 

@@ -293,3 +293,266 @@ async fn erasing_a_contact_keeps_only_its_identifier() {
         "NOT_FOUND"
     );
 }
+
+/// A reader of akter who may not list contacts.
+const AKT_READER: &str = "tenant-akt-reader";
+
+const DOCUMENT: &str = "number revision fields {
+    __typename
+    ... on UserValue { field user { __typename ... on User { id } ... on Contact { id displayName email } } }
+    ... on CheckboxValue { field by { id } for { __typename ... on User { id } ... on Contact { id displayName } } }
+}";
+
+impl World {
+    /// A `doc` akt type with an owner and an approval, in `folder`s, and a
+    /// `summary` drafted from a folder's docs.
+    async fn define_documents(&self) {
+        let open = json!([{ "key": "open", "name": "Open", "initial": true }]);
+        for document in [
+            json!({ "key": "doc", "name": "Document", "number": "DOC-{seq}", "states": open,
+                    "fields": [{ "key": "owner", "name": "Owner", "kind": "user" },
+                               { "key": "approved", "name": "Approved", "kind": "checkbox" }] }),
+            json!({ "key": "folder", "name": "Folder", "number": "F-{seq}", "states": open,
+                    "contains": [{ "type": "doc" }, { "type": "summary" }] }),
+            json!({ "key": "summary", "name": "Summary", "number": "{parent}-S{seq}",
+                    "created_in": ["folder"], "states": open,
+                    "fields": [{ "key": "text", "name": "Text", "kind": "text", "multiline": true,
+                                 "draft": { "types": ["doc"],
+                                            "line": "{number} {field:owner}: {field:approved}" } }] }),
+        ] {
+            let answer = self
+                .run(
+                    MANAGER,
+                    "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+                    json!({ "d": document }),
+                )
+                .await;
+            assert!(answer.get("errors").is_none(), "{answer}");
+        }
+    }
+
+    async fn create_doc(&self, inside: &[&str], fields: Value) -> Value {
+        self.run(
+            MANAGER,
+            &format!("mutation($in: [String!]!, $f: JSON) {{ createAkt(input: {{ type: \"doc\", in: $in, fields: $f }}) {{ {DOCUMENT} }} }}"),
+            json!({ "in": inside, "f": fields }),
+        )
+        .await
+    }
+
+    async fn doc(&self, token: &str, number: &str) -> Value {
+        self.run(
+            token,
+            &format!("query($n: String!) {{ akt(number: $n) {{ {DOCUMENT} }} }}"),
+            json!({ "n": number }),
+        )
+        .await
+    }
+
+    async fn stored_fields(&self, number: &str) -> Value {
+        let mut conn = self.db.pool().get().await.unwrap();
+        kuria_store::schema::akt::table
+            .filter(kuria_store::schema::akt::number.eq(number))
+            .select(kuria_store::schema::akt::fields)
+            .first(&mut conn)
+            .await
+            .unwrap()
+    }
+}
+
+fn field<'a>(akt: &'a Value, key: &str) -> &'a Value {
+    akt["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["field"] == key)
+        .unwrap_or_else(|| panic!("no {key} in {akt}"))
+}
+
+async fn world_with_documents() -> World {
+    let db = TestDatabase::new().await;
+    let decider: Arc<FakeDecider> = FakeDecider::allowing_tenant();
+    decider.grant(READER, &[READ_CONTACTS]);
+    decider.grant(OTHER, &[MANAGE_CONTACTS]);
+    decider.grant(AKT_READER, &[kuria_server::authorize::READ]);
+    let router = router_with(&FakeHost::new(), db.pool().clone(), decider);
+    let world = World { db, router };
+    world.define_documents().await;
+    world
+}
+
+// r[verify akt.field.kinds]
+// r[verify contact.show]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_user_field_names_a_contact() {
+    let world = world_with_documents().await;
+    let bob = world.added("Bob", Some("bob@supplier.example")).await;
+    let created = world
+        .create_doc(&[], json!({ "owner": { "contact": bob["id"] } }))
+        .await;
+    assert!(created.get("errors").is_none(), "{created}");
+    let created = &created["data"]["createAkt"];
+    assert_eq!(
+        field(created, "owner")["user"],
+        json!({ "__typename": "Contact", "id": bob["id"], "displayName": "Bob",
+                "email": "bob@supplier.example" })
+    );
+    // An akt reader sees the contact's name, not its email.
+    let number = created["number"].as_str().unwrap();
+    let read = world.doc(AKT_READER, number).await;
+    assert_eq!(
+        field(&read["data"]["akt"], "owner")["user"],
+        json!({ "__typename": "Contact", "id": bob["id"], "displayName": "Bob", "email": null })
+    );
+}
+
+// r[verify contact.reference]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_value_names_only_the_tenants_contacts() {
+    let world = world_with_documents().await;
+    let theirs = world
+        .run(
+            OTHER,
+            "mutation { addContact(input: { name: \"Bob\" }) { id } }",
+            json!({}),
+        )
+        .await["data"]["addContact"]["id"]
+        .clone();
+    for fields in [
+        json!({ "owner": { "contact": theirs } }),
+        json!({ "owner": { "contact": Uuid::now_v7().to_string() } }),
+        json!({ "approved": { "for": { "contact": theirs } } }),
+    ] {
+        let refused = world.create_doc(&[], fields.clone()).await;
+        assert_eq!(code(&refused), "REFUSED", "{fields}: {refused}");
+    }
+}
+
+// r[verify akt.field.checkbox]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_box_is_checked_for_a_contact_or_a_user() {
+    let world = world_with_documents().await;
+    let bob = world.added("Bob", None).await;
+    let for_bob = world
+        .create_doc(
+            &[],
+            json!({ "approved": { "for": { "contact": bob["id"] } } }),
+        )
+        .await;
+    assert!(for_bob.get("errors").is_none(), "{for_bob}");
+    let approved = field(&for_bob["data"]["createAkt"], "approved");
+    assert_eq!(approved["by"]["id"], support::SUBJECT);
+    assert_eq!(
+        approved["for"],
+        json!({ "__typename": "Contact", "id": bob["id"], "displayName": "Bob" })
+    );
+
+    let colleague = Uuid::now_v7().to_string();
+    let for_colleague = world
+        .create_doc(&[], json!({ "approved": { "for": colleague } }))
+        .await;
+    let approved = field(&for_colleague["data"]["createAkt"], "approved");
+    assert_eq!(
+        approved["for"],
+        json!({ "__typename": "User", "id": colleague })
+    );
+
+    // Checked for oneself, `for` is the checker.
+    let mine = world.create_doc(&[], json!({ "approved": true })).await;
+    let approved = field(&mine["data"]["createAkt"], "approved");
+    assert_eq!(
+        approved["for"],
+        json!({ "__typename": "User", "id": support::SUBJECT })
+    );
+}
+
+// r[verify contact.values]
+// r[verify draft.render]
+#[tokio::test(flavor = "multi_thread")]
+async fn linking_a_contact_changes_how_values_show_not_what_they_hold() {
+    let world = world_with_documents().await;
+    let bob = world.added("Bob", Some("bob@supplier.example")).await;
+    let folder = world
+        .run(
+            MANAGER,
+            "mutation { createAkt(input: { type: \"folder\" }) { number } }",
+            json!({}),
+        )
+        .await["data"]["createAkt"]["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let created = world
+        .create_doc(
+            &[&folder],
+            json!({ "owner": { "contact": bob["id"] }, "approved": { "for": { "contact": bob["id"] } } }),
+        )
+        .await;
+    let number = created["data"]["createAkt"]["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let summary = world
+        .run(
+            MANAGER,
+            "mutation($f: String!) { createAkt(input: { type: \"summary\", in: [$f] }) { number } }",
+            json!({ "f": folder }),
+        )
+        .await["data"]["createAkt"]["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let draft = |revision: i32| {
+        let world = &world;
+        let summary = summary.clone();
+        async move {
+            world
+                .run(
+                    MANAGER,
+                    "mutation($n: String!, $r: Int!) { draftField(input: { number: $n, revision: $r, field: \"text\" }) { fields { ... on TextValue { text } } } }",
+                    json!({ "n": summary, "r": revision }),
+                )
+                .await["data"]["draftField"]["fields"][0]["text"]
+                .clone()
+        }
+    };
+    assert_eq!(
+        draft(1).await,
+        format!(
+            "{number} Bob: yes, for Bob (checked by {})",
+            support::SUBJECT
+        )
+    );
+    let before = world.stored_fields(&number).await;
+
+    // Bob signs in as a user Kuria knows by name.
+    let subject = Uuid::now_v7();
+    world.link(&bob["id"], subject).await;
+    let mut conn = world.db.pool().get().await.unwrap();
+    kuria_store::people::record(
+        &mut conn,
+        &kuria_store::people::Person {
+            subject_id: subject,
+            name: Some("Robert Builder".to_owned()),
+            email: None,
+            updated_at: Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+    drop(conn);
+
+    assert_eq!(world.stored_fields(&number).await, before);
+    let shown = world.doc(MANAGER, &number).await;
+    assert_eq!(
+        field(&shown["data"]["akt"], "owner")["user"]["displayName"],
+        "Robert Builder"
+    );
+    assert_eq!(
+        draft(2).await,
+        format!(
+            "{number} Robert Builder: yes, for Robert Builder (checked by {})",
+            support::SUBJECT
+        )
+    );
+}

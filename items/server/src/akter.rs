@@ -355,6 +355,7 @@ impl Akter {
                         "akt {number} moved while locked"
                     )));
                 }
+                check_contacts(conn, tenant, &outcome).await?;
                 hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
                 store::append_revision(
                     conn,
@@ -449,6 +450,35 @@ async fn type_of(
         .pop()
         .ok_or_else(|| AktError::Internal(format!("akt {} has no akt type", akt.number)))?;
     StoredType::read(row)
+}
+
+/// Refuses a change whose new values name a contact the tenant doesn't
+/// have.
+// r[impl contact.reference]
+async fn check_contacts(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    outcome: &Outcome,
+) -> Result<(), AktError> {
+    for (key, value) in &outcome.changes {
+        let Some(value) = value else { continue };
+        let named: Vec<Uuid> = value
+            .named()
+            .iter()
+            .filter_map(kuria_engine::Someone::contact)
+            .collect();
+        if named.is_empty() {
+            continue;
+        }
+        let found = kuria_store::contacts::find(conn, tenant, &named).await?;
+        if let Some(missing) = named.iter().find(|id| !found.iter().any(|c| c.id == **id)) {
+            return Err(AktError::Refused(Refusal::InvalidValue {
+                field: key.clone(),
+                reason: format!("there is no contact `{missing}`"),
+            }));
+        }
+    }
+    Ok(())
 }
 
 /// Checks the attachments `outcome` puts in `akt`'s fields, and records

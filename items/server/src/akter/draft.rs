@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use kuria_engine::draft::{Listed, render, select};
-use kuria_engine::{Value, fields_from_json};
+use kuria_engine::{Someone, Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow};
 use kuria_store::containers;
 use serde_json::{Map, Value as Json};
@@ -120,19 +120,19 @@ impl Akter {
     }
 }
 
-/// How the user `subject` is shown, remembered for the rest of the draft.
-async fn user_name(
+/// Looks up how everyone `value` names is shown, if it isn't known yet.
+async fn learn_names(
     conn: &mut kuria_store::Connection,
-    names: &mut HashMap<Uuid, String>,
-    subject: Uuid,
-) -> Result<String, AktError> {
-    if let Some(name) = names.get(&subject) {
-        return Ok(name.clone());
+    tenant: Uuid,
+    names: &mut HashMap<Someone, String>,
+    value: &Value,
+) -> Result<(), AktError> {
+    for someone in value.named() {
+        if let std::collections::hash_map::Entry::Vacant(slot) = names.entry(someone) {
+            slot.insert(crate::graphql::someone_name(conn, tenant, someone).await?);
+        }
     }
-    let person = kuria_store::people::find(conn, &[subject]).await?.pop();
-    let name = crate::graphql::display_name(subject, person.as_ref());
-    names.insert(subject, name.clone());
-    Ok(name)
+    Ok(())
 }
 
 async fn reads(auth: &Authorizer, key: &str) -> Result<bool, AktError> {
@@ -166,7 +166,7 @@ async fn describe(
     rows: &[AktRow],
 ) -> Result<Vec<Listed>, AktError> {
     let mut types: HashMap<Uuid, StoredType> = HashMap::new();
-    let mut names: HashMap<Uuid, String> = HashMap::new();
+    let mut names: HashMap<Someone, String> = HashMap::new();
     let mut listed = Vec::with_capacity(rows.len());
     for row in rows {
         if let std::collections::hash_map::Entry::Vacant(slot) = types.entry(row.type_version_id) {
@@ -180,14 +180,19 @@ async fn describe(
             let Some(def) = ty.ty.field(key) else {
                 continue;
             };
+            learn_names(conn, tenant, &mut names, value).await?;
             let text = match value {
                 // r[impl draft.render]
-                Value::User(subject) => user_name(conn, &mut names, *subject).await?,
                 Value::Attachment(id) => kuria_store::attachments::find(conn, tenant, &[*id])
                     .await?
                     .pop()
                     .map_or_else(|| id.to_string(), |a| a.name),
-                other => other.display(def),
+                other => other.display(def, &|someone| {
+                    names
+                        .get(someone)
+                        .cloned()
+                        .unwrap_or_else(|| format!("{someone:?}"))
+                }),
             };
             fields.insert(key.clone(), text);
         }

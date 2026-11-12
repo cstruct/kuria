@@ -18,7 +18,7 @@ use serde_json::{Map, Value as Json};
 
 pub use hash::state_hash;
 pub use rank::{RankError, nth_appended, rank_between};
-pub use value::{Change, Input, Value, fields_from_json, fields_to_json};
+pub use value::{Change, Input, Someone, Value, fields_from_json, fields_to_json};
 
 /// An akt's state and field values.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

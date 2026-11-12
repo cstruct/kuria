@@ -21,7 +21,7 @@ const AKT: &str = "number type { key version } state { key } revision
         ... on ChoiceValue { field option { key name } }
         ... on ChoicesValue { field options { key } }
         ... on DateValue { field date }
-        ... on UserValue { field user { id } }
+        ... on UserValue { field user { ... on User { id } } }
         ... on ReferenceValue { field url label }
     }";
 
@@ -487,7 +487,7 @@ async fn shows_users_by_name() {
     let world = World::new().await;
     world.define(capa()).await;
     let query = format!(
-        "mutation {{ createAkt(input: {{ type: \"capa\", fields: {{ title: \"T\", owner: \"{SUBJECT}\" }} }}) {{ number fields {{ ... on UserValue {{ field user {{ id name email }} }} }} revisions {{ by {{ name }} }} }} }}"
+        "mutation {{ createAkt(input: {{ type: \"capa\", fields: {{ title: \"T\", owner: \"{SUBJECT}\" }} }}) {{ number fields {{ ... on UserValue {{ field user {{ ... on User {{ id name email }} }} }} }} revisions {{ by {{ name }} }} }} }}"
     );
     // Never signed in: shown by identifier.
     let created = world.data(&query, json!({})).await["createAkt"].clone();
@@ -506,7 +506,7 @@ async fn shows_users_by_name() {
     let number = created["number"].as_str().unwrap();
     let data = world
         .data(
-            "query($n: String!) { akt(number: $n) { fields { ... on UserValue { user { name email } } } revisions { by { name } } } }",
+            "query($n: String!) { akt(number: $n) { fields { ... on UserValue { user { ... on User { name email } } } } revisions { by { name } } } }",
             json!({ "n": number }),
         )
         .await;

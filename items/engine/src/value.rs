@@ -13,6 +13,51 @@ use kuria_config::{AktType, FieldDef, FieldKind};
 use serde_json::{Map, Value as Json, json};
 use uuid::Uuid;
 
+/// A person or piece of software a value names: a user, by their Konklav
+/// subject identifier, or a contact of the tenant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Someone {
+    User(Uuid),
+    Contact(Uuid),
+}
+
+impl Someone {
+    /// Reads a subject identifier, or `{"contact": <identifier>}`.
+    // r[impl contact.reference]
+    pub fn from_json(json: &Json) -> Result<Self, String> {
+        if let Some(text) = json.as_str() {
+            return Uuid::parse_str(text)
+                .map(Self::User)
+                .map_err(|_| format!("`{text}` is not a subject identifier"));
+        }
+        let object = members(json, &["contact"])
+            .map_err(|_| "expected a subject identifier or {\"contact\": <identifier>}")?;
+        object
+            .get("contact")
+            .and_then(Json::as_str)
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .map(Self::Contact)
+            .ok_or_else(|| "a contact is named by its identifier".to_owned())
+    }
+
+    #[must_use]
+    pub fn to_json(&self) -> Json {
+        match self {
+            Self::User(subject) => json!(subject.to_string()),
+            Self::Contact(id) => json!({ "contact": id.to_string() }),
+        }
+    }
+
+    /// The contact it names, if it names one.
+    #[must_use]
+    pub fn contact(&self) -> Option<Uuid> {
+        match self {
+            Self::Contact(id) => Some(*id),
+            Self::User(_) => None,
+        }
+    }
+}
+
 /// A field value, of its field's kind.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
@@ -20,11 +65,13 @@ pub enum Value {
     Choice(String),
     Choices(Vec<String>),
     Date(NaiveDate),
-    User(Uuid),
-    /// A checked box: who checked it and when.
+    User(Someone),
+    /// A checked box: who checked it and when, and whom for if not for
+    /// themselves.
     Checkbox {
         by: Uuid,
         at: DateTime<Utc>,
+        on_behalf_of: Option<Someone>,
     },
     Reference {
         url: String,
@@ -64,21 +111,33 @@ pub enum Input {
 impl Value {
     /// Reads a request's input for `field`: like [`Value::from_json`],
     /// except that a checkbox takes `true` to check it, recording `change`,
-    /// and `false` to clear it.
+    /// `{"for": <user>}` to check it for someone else, and `false` to clear
+    /// it.
     // r[impl akt.field.checkbox]
     pub fn from_input(field: &FieldDef, json: &Json, change: Change) -> Result<Input, String> {
         if json.is_null() {
             return Ok(Input::Clear);
         }
         if field.kind == FieldKind::Checkbox {
-            return match json.as_bool() {
-                Some(true) => Ok(Input::Set(Self::Checkbox {
+            let checked = |on_behalf_of: Option<Someone>| {
+                Input::Set(Self::Checkbox {
                     by: change.by,
                     at: change.at,
-                })),
-                Some(false) => Ok(Input::Clear),
-                None => Err("expected true or false".to_owned()),
+                    // Checking it for oneself is checking it.
+                    on_behalf_of: on_behalf_of.filter(|s| *s != Someone::User(change.by)),
+                })
             };
+            if let Some(checked_now) = json.as_bool() {
+                return Ok(if checked_now {
+                    checked(None)
+                } else {
+                    Input::Clear
+                });
+            }
+            let object =
+                members(json, &["for"]).map_err(|_| "expected true, false or {\"for\": <user>}")?;
+            let on_behalf_of = object.get("for").ok_or("say whom it is checked for")?;
+            return Ok(checked(Some(Someone::from_json(on_behalf_of)?)));
         }
         Self::from_json(field, json).map(Input::Set)
     }
@@ -88,8 +147,9 @@ impl Value {
     /// - `text`: a string, without line breaks unless the field is multiline
     /// - `choice`: an option key; `choices`: a list of distinct option keys
     /// - `date`: `YYYY-MM-DD`
-    /// - `user`: a subject identifier
-    /// - `checkbox`: `{"checked_by": …, "checked_at": …}`
+    /// - `user`: a subject identifier, or `{"contact": <identifier>}`
+    /// - `checkbox`: `{"checked_by": …, "checked_at": …, "for": <user>}`,
+    ///   `for` only when checked for someone else
     /// - `reference`: `{"url": "https://…", "label": "…"}`, the label optional
     /// - `git`: `{"repository": …, "sha": …, "tag": …}`, at least one of the
     ///   last two
@@ -137,12 +197,7 @@ impl Value {
                     .map(Self::Date)
                     .ok_or_else(|| format!("`{text}` is not a date, YYYY-MM-DD"))
             }
-            FieldKind::User => {
-                let text = json.as_str().ok_or("expected a subject identifier")?;
-                Uuid::parse_str(text)
-                    .map(Self::User)
-                    .map_err(|_| format!("`{text}` is not a subject identifier"))
-            }
+            FieldKind::User => Someone::from_json(json).map(Self::User),
             FieldKind::Checkbox => checkbox(json),
             FieldKind::Reference => reference(json),
             FieldKind::Git => git(json),
@@ -156,10 +211,26 @@ impl Value {
         }
     }
 
-    /// The value as text, for drafts.
+    /// Everyone the value names: a user field's user or contact, and a
+    /// checkbox's checker and whom it was checked for.
+    #[must_use]
+    pub fn named(&self) -> Vec<Someone> {
+        match self {
+            Self::User(someone) => vec![*someone],
+            Self::Checkbox {
+                by, on_behalf_of, ..
+            } => std::iter::once(Someone::User(*by))
+                .chain(*on_behalf_of)
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The value as text, for drafts, showing the people it names by
+    /// `person`.
     // r[impl draft.render]
     #[must_use]
-    pub fn display(&self, field: &FieldDef) -> String {
+    pub fn display(&self, field: &FieldDef, person: &dyn Fn(&Someone) -> String) -> String {
         let name = |key: &str| {
             field
                 .options
@@ -172,8 +243,20 @@ impl Value {
             Self::Choice(key) => name(key),
             Self::Choices(keys) => keys.iter().map(|k| name(k)).collect::<Vec<_>>().join(", "),
             Self::Date(date) => date.format("%Y-%m-%d").to_string(),
-            Self::User(subject) | Self::Attachment(subject) => subject.to_string(),
-            Self::Checkbox { .. } => "yes".to_owned(),
+            Self::User(someone) => person(someone),
+            Self::Attachment(id) => id.to_string(),
+            Self::Checkbox {
+                on_behalf_of: None, ..
+            } => "yes".to_owned(),
+            Self::Checkbox {
+                by,
+                on_behalf_of: Some(someone),
+                ..
+            } => format!(
+                "yes, for {} (checked by {})",
+                person(someone),
+                person(&Someone::User(*by))
+            ),
             Self::Reference { url, label } => label.clone().unwrap_or_else(|| url.clone()),
             Self::Git {
                 repository,
@@ -214,11 +297,17 @@ impl Value {
             Self::Text(text) | Self::Choice(text) => json!(text),
             Self::Choices(keys) => json!(keys),
             Self::Date(date) => json!(date.format("%Y-%m-%d").to_string()),
-            Self::User(subject) | Self::Attachment(subject) => json!(subject.to_string()),
-            Self::Checkbox { by, at } => json!({
+            Self::User(someone) => someone.to_json(),
+            Self::Attachment(id) => json!(id.to_string()),
+            Self::Checkbox {
+                by,
+                at,
+                on_behalf_of,
+            } => without_nulls(json!({
                 "checked_by": by.to_string(),
                 "checked_at": at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
-            }),
+                "for": on_behalf_of.as_ref().map(Someone::to_json),
+            })),
             Self::Reference { url, label } => without_nulls(json!({ "url": url, "label": label })),
             Self::Git {
                 repository,
@@ -235,7 +324,7 @@ impl Value {
 }
 
 fn checkbox(json: &Json) -> Result<Value, String> {
-    let object = members(json, &["checked_by", "checked_at"])?;
+    let object = members(json, &["checked_by", "checked_at", "for"])?;
     let by = object
         .get("checked_by")
         .and_then(Json::as_str)
@@ -246,9 +335,11 @@ fn checkbox(json: &Json) -> Result<Value, String> {
         .and_then(Json::as_str)
         .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
         .ok_or("a checked box needs when it was checked")?;
+    let on_behalf_of = object.get("for").map(Someone::from_json).transpose()?;
     Ok(Value::Checkbox {
         by,
         at: at.with_timezone(&Utc),
+        on_behalf_of,
     })
 }
 

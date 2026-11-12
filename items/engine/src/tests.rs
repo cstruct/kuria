@@ -274,6 +274,7 @@ fn checking_records_who_and_when_and_keeps_the_first() {
     let checked = Value::Checkbox {
         by: change().by,
         at: change().at,
+        on_behalf_of: None,
     };
     assert_eq!(created.fields["verified"], checked);
 
@@ -453,7 +454,8 @@ fn shows_the_new_kinds_as_text() {
         change(),
     )
     .unwrap();
-    let text = |key: &str| outcome.fields[key].display(ty.field(key).unwrap());
+    let text =
+        |key: &str| outcome.fields[key].display(ty.field(key).unwrap(), &|_| "Alice".to_owned());
     assert_eq!(text("verified"), "yes");
     assert_eq!(
         text("source"),
@@ -494,4 +496,150 @@ fn holds_an_attachment_by_its_identifier() {
             "{value}: {refused:?}"
         );
     }
+}
+
+const BOB: &str = "01900000-0000-7000-8000-0000000000b0";
+const CONTACT: &str = "01900000-0000-7000-8000-0000000000c1";
+
+fn someone_named(someone: &Someone) -> String {
+    match someone {
+        Someone::User(id) if id.to_string() == BOB => "Bob".to_owned(),
+        Someone::User(_) => "Alice".to_owned(),
+        Someone::Contact(_) => "Carl".to_owned(),
+    }
+}
+
+// r[verify akt.field.checkbox]
+#[test]
+fn a_box_is_checked_for_someone_else() {
+    let ty = capa();
+    for (whom, someone) in [
+        (json!(BOB), Someone::User(Uuid::parse_str(BOB).unwrap())),
+        (
+            json!({ "contact": CONTACT }),
+            Someone::Contact(Uuid::parse_str(CONTACT).unwrap()),
+        ),
+    ] {
+        let created = create(
+            &ty,
+            &input(json!({ "title": "T", "verified": { "for": whom } })),
+            change(),
+        )
+        .unwrap();
+        let checked = &created.fields["verified"];
+        assert_eq!(
+            checked,
+            &Value::Checkbox {
+                by: change().by,
+                at: change().at,
+                on_behalf_of: Some(someone),
+            }
+        );
+        assert_eq!(checked.named(), vec![Someone::User(change().by), someone]);
+        // Stored with `for`, and read back.
+        let stored = fields_to_json(&created.fields);
+        assert_eq!(stored["verified"]["for"], someone.to_json());
+        assert_eq!(fields_from_json(&ty, &stored).unwrap(), created.fields);
+    }
+    // For the checker is the same as `true`.
+    let mine = create(
+        &ty,
+        &input(json!({ "title": "T", "verified": { "for": change().by.to_string() } })),
+        change(),
+    )
+    .unwrap();
+    assert!(matches!(
+        mine.fields["verified"],
+        Value::Checkbox {
+            on_behalf_of: None,
+            ..
+        }
+    ));
+    assert!(
+        fields_to_json(&mine.fields)["verified"]
+            .get("for")
+            .is_none()
+    );
+    for bad in [
+        json!({}),
+        json!({ "for": "Bob" }),
+        json!({ "for": BOB, "by": BOB }),
+        json!({ "for": { "contact": "nope" } }),
+    ] {
+        assert!(
+            create(
+                &ty,
+                &input(json!({ "title": "T", "verified": bad.clone() })),
+                change()
+            )
+            .is_err(),
+            "{bad}"
+        );
+    }
+}
+
+// r[verify akt.field.kinds]
+// r[verify contact.reference]
+#[test]
+fn a_user_field_names_a_user_or_a_contact() {
+    let ty = capa();
+    let user = create(&ty, &input(json!({ "title": "T", "owner": BOB })), change()).unwrap();
+    // A plain subject identifier, as values were stored before contacts.
+    assert_eq!(fields_to_json(&user.fields)["owner"], json!(BOB));
+    let contact = create(
+        &ty,
+        &input(json!({ "title": "T", "owner": { "contact": CONTACT } })),
+        change(),
+    )
+    .unwrap();
+    assert_eq!(
+        contact.fields["owner"],
+        Value::User(Someone::Contact(Uuid::parse_str(CONTACT).unwrap()))
+    );
+    assert_eq!(
+        fields_to_json(&contact.fields)["owner"],
+        json!({ "contact": CONTACT })
+    );
+    for bad in [
+        json!({ "contact": CONTACT, "name": "Carl" }),
+        json!({ "user": BOB }),
+    ] {
+        assert!(
+            create(
+                &ty,
+                &input(json!({ "title": "T", "owner": bad.clone() })),
+                change()
+            )
+            .is_err(),
+            "{bad}"
+        );
+    }
+}
+
+// r[verify draft.render]
+#[test]
+fn shows_whom_a_box_was_checked_for() {
+    let ty = capa();
+    let text = |fields: Json| {
+        let outcome = create(&ty, &input(fields), change()).unwrap();
+        let key = if outcome.fields.contains_key("verified") {
+            "verified"
+        } else {
+            "owner"
+        };
+        outcome.fields[key].display(ty.field(key).unwrap(), &someone_named)
+    };
+    assert_eq!(text(json!({ "title": "T", "verified": true })), "yes");
+    assert_eq!(
+        text(json!({ "title": "T", "verified": { "for": BOB } })),
+        "yes, for Bob (checked by Alice)"
+    );
+    assert_eq!(
+        text(json!({ "title": "T", "verified": { "for": { "contact": CONTACT } } })),
+        "yes, for Carl (checked by Alice)"
+    );
+    assert_eq!(
+        text(json!({ "title": "T", "owner": { "contact": CONTACT } })),
+        "Carl"
+    );
 }

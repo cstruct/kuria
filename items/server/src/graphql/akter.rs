@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use super::Principal;
 use super::attachments::Attachment;
-use super::people::User;
+use super::people::{Someone, User};
 use crate::akter::{AktError, Akter, Caller, Place, StoredType};
 use crate::authorize::{Authorizer, Permission};
 
@@ -971,15 +971,22 @@ impl FieldValue {
                 field,
                 date: date.format("%Y-%m-%d").to_string(),
             }),
-            Value::User(subject) => Self::User(UserValue {
+            Value::User(someone) => Self::User(UserValue {
                 field,
-                user: User(*subject),
+                user: (*someone).into(),
             }),
-            Value::Checkbox { by, at } => Self::Checkbox(CheckboxValue {
+            Value::Checkbox {
+                by,
+                at,
+                on_behalf_of,
+            } => Self::Checkbox(CheckboxValue {
                 field,
                 checked: true,
                 by: User(*by),
                 at: *at,
+                on_behalf_of: on_behalf_of
+                    .unwrap_or(kuria_engine::Someone::User(*by))
+                    .into(),
             }),
             Value::Git {
                 repository,
@@ -1048,7 +1055,8 @@ pub struct DateValue {
 #[derive(SimpleObject)]
 pub struct UserValue {
     field: String,
-    user: User,
+    /// The user or contact it names.
+    user: Someone,
 }
 
 /// A checked box. An unchecked box holds no value, so it isn't listed.
@@ -1061,6 +1069,10 @@ pub struct CheckboxValue {
     by: User,
     /// When it was checked.
     at: DateTime<Utc>,
+    /// Whom it was checked for: the user who checked it, unless they
+    /// checked it for someone else.
+    #[graphql(name = "for")]
+    on_behalf_of: Someone,
 }
 
 /// A commit in a git repository.

@@ -14,7 +14,7 @@ mod changes;
 mod contacts;
 mod people;
 
-pub(crate) use people::display_name;
+pub(crate) use people::someone_name;
 
 use async_graphql::{Context, ID, Object, Schema, SimpleObject};
 use konklav_core::{SubjectId, TenantId};
