@@ -16,6 +16,9 @@ produces, or why it is refused.
   between two others. Keys are compared byte by byte.
 - `board::column_of`: which column of a board a member of a given akt type
   and state falls in, or `unmapped`.
+- `draft::render`: a draft's text from the akter its recipe lists, grouped
+  by akt type if the recipe says so; `Value::display` gives each value's
+  text.
 - `state_hash`: the SHA-256 of an akt's state and field values as canonical
   JSON (no whitespace, object members in key order), independent of how
   `serde_json` orders maps.

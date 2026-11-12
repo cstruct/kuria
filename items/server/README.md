@@ -33,6 +33,8 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Containers: adding and removing members (recorded on both akter), creating
   akter inside containers with `{parent}` numbers, and moving akter in their
   tenant's one priority order.
+- Drafting a field, such as release notes, from the akter around its akt by
+  the field's recipe, as an ordinary edit.
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt
@@ -62,7 +64,8 @@ signatures.
   [`src/graphql/akter.rs`](src/graphql/akter.rs) for akt types, akter and
   revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
-  `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt`.
+  `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt`,
+  `draftField`.
   `Akt` also has `rank`, `members`, `containers` and `board` (its members
   in its akt type's columns, then `unmapped`, each in rank order), and a
   revision its `membership`.
@@ -74,7 +77,8 @@ signatures.
 - [`src/akter.rs`](src/akter.rs): the write path for akt types and akter,
   with [`create`](src/akter/create.rs),
   [`membership`](src/akter/membership.rs) and
-  [`ordering`](src/akter/ordering.rs). Every path takes its locks in one
+  [`ordering`](src/akter/ordering.rs) and [`draft`](src/akter/draft.rs).
+  Every path takes its locks in one
   order: the tenant's order lock, akt rows by id, number counters, then the
   change-event counter.
 - [`src/main.rs`](src/main.rs) reads [`Config`](src/config.rs), migrates the
@@ -154,6 +158,10 @@ mise run test
 - [`tests/boards.rs`](tests/boards.rs): stories and bugs in shared columns,
   rank order within a column, `unmapped`, a container without columns, and
   members the subject can't read.
+- [`tests/drafts.rs`](tests/drafts.rs): release notes drafted from a
+  release's candidates, hotfix and an epic inside a candidate, leaving out
+  a backlog's unshipped item and what the drafter can't read, and refused
+  as an edit would be.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a
@@ -174,5 +182,6 @@ against a fake of Konklav's OpenID provider only.
   [`authorization.md`](../../docs/spec/authorization.md) (`authz.*`),
   [`containers.md`](../../docs/spec/containers.md) (`container.*`) and
   [`ordering.md`](../../docs/spec/ordering.md) (`order.*`) and
-  [`boards.md`](../../docs/spec/boards.md) (`board.*`).
+  [`boards.md`](../../docs/spec/boards.md) (`board.*`) and
+  [`drafts.md`](../../docs/spec/drafts.md) (`draft.*`).
 - Design: [`docs/architecture.md`](../../docs/architecture.md).

@@ -7,7 +7,8 @@ Akt type documents: their model, their validation, and number patterns.
 - `AktTypeDocument`: the document a tenant submits to define an akt type,
   with its fields, states, transitions and number pattern, and for a
   container what it `contains`, what it must be `created_in` and its
-  `board` columns. Unknown members are refused, so a typo can't be silently
+  `board` columns, and per multiline text field a `draft` recipe. Unknown
+  members are refused, so a typo can't be silently
   ignored.
 - `validate`: checks a document and returns every problem with its path
   (`fields[2].options`), or an `AktType` the engine can use.
@@ -15,6 +16,9 @@ Akt type documents: their model, their validation, and number patterns.
   `{parent}-RC-{seq:4}`, renders akt numbers from a `NumberContext` (year,
   month and parent number), and gives the scope that numbers sharing a
   sequence have in common, which includes the parent's number.
+
+- `LineTemplate`: parses and renders a draft recipe's line, such as
+  `{number} {field:title}`.
 
 What the document can't check is left to the server: whether the akt types
 it names in `contains`, `created_in` and board columns exist, and whether the
@@ -33,4 +37,5 @@ cargo test -p kuria-config
 - Specs: [`docs/spec/akter.md`](../../docs/spec/akter.md) (`akt.type.*`,
   `akt.number.*`), [`containers.md`](../../docs/spec/containers.md)
   (`container.contains`, `container.created-in`) and
-  [`boards.md`](../../docs/spec/boards.md) (`board.columns`).
+  [`boards.md`](../../docs/spec/boards.md) (`board.columns`) and
+  [`drafts.md`](../../docs/spec/drafts.md) (`draft.recipe`, `draft.line`).

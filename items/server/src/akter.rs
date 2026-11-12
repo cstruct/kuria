@@ -7,12 +7,14 @@
 //! - [`create`]: creating akter, also inside containers.
 //! - [`membership`]: adding members to containers and removing them.
 //! - [`ordering`]: moving akter in their tenant's order.
+//! - [`draft`]: drafting a field from the akter around its akt.
 //!
 //! Locks are always taken in one order, so no two changes deadlock: the
 //! tenant's order lock, then akt rows (by id), then number counters, then
 //! the change-event counter.
 
 mod create;
+mod draft;
 mod membership;
 mod ordering;
 
@@ -85,6 +87,8 @@ pub enum AktError {
     },
     #[error("an akt can't be moved next to itself")]
     SelfMove,
+    #[error("the field `{0}` has no draft recipe")]
+    NotDraftable(String),
     #[error("{0}")]
     Unavailable(#[from] Unavailable),
     #[error("internal error")]

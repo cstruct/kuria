@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use crate::document::{
     AktTypeDocument, BoardDef, ContainsDef, FieldDef, FieldKind, StateDef, TransitionDef,
 };
+use crate::draft::{DraftDef, LineTemplate, MAX_DEPTH};
 use crate::number::NumberPattern;
 
 /// A validated akt type: its document, which is what is stored, and its
@@ -175,6 +176,9 @@ fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSe
                 "only choice fields have options",
             );
         }
+        if let Some(draft) = &field.draft {
+            draft_recipe(problems, &format!("{path}.draft"), field, draft);
+        }
         if field.multiline && field.kind != FieldKind::Text {
             problems.add(
                 &format!("{path}.multiline"),
@@ -236,6 +240,39 @@ fn transitions(
                 );
             }
         }
+    }
+}
+
+/// Checks a field's draft recipe.
+// r[impl draft.recipe]
+fn draft_recipe(problems: &mut Problems, path: &str, field: &FieldDef, draft: &DraftDef) {
+    if field.kind != FieldKind::Text || !field.multiline {
+        problems.add(path, "only multiline text fields can be drafted");
+    }
+    if !(1..=MAX_DEPTH).contains(&draft.depth) {
+        problems.add(
+            &format!("{path}.depth"),
+            format!("a depth is from 1 to {MAX_DEPTH}"),
+        );
+    }
+    if draft.types.is_empty() {
+        problems.add(
+            &format!("{path}.types"),
+            "a draft lists at least one akt type",
+        );
+    }
+    problems.unique_keys(
+        &format!("{path}.types"),
+        draft.types.iter().map(String::as_str),
+        "",
+    );
+    problems.unique_keys(
+        &format!("{path}.through"),
+        draft.through.iter().map(String::as_str),
+        "",
+    );
+    if let Err(message) = LineTemplate::parse(&draft.line) {
+        problems.add(&format!("{path}.line"), message);
     }
 }
 
@@ -595,5 +632,55 @@ mod tests {
                 "board.columns[2].states.epic[0]: `epic.open` is already in the column `todo`",
             ]
         );
+    }
+
+    fn notes() -> serde_json::Value {
+        json!({
+            "key": "release_notes",
+            "name": "Release notes",
+            "number": "{parent}-NOTES",
+            "created_in": ["release"],
+            "fields": [{ "key": "text", "name": "Text", "kind": "text", "multiline": true,
+                         "draft": { "through": ["release_candidate", "hotfix"], "depth": 2,
+                                    "types": ["epic", "backlog_item"],
+                                    "line": "{number} {field:title}", "group_by": "type" } }],
+            "states": [{ "key": "draft", "name": "Draft", "initial": true }]
+        })
+    }
+
+    // r[verify draft.recipe]
+    #[test]
+    fn accepts_a_draft_recipe() {
+        let mut document = notes();
+        document["number"] = json!("{parent}-NOTES-{seq}");
+        assert_eq!(problems(document), Vec::<String>::new());
+    }
+
+    // r[verify draft.recipe]
+    #[test]
+    fn checks_draft_recipes() {
+        let mut document = notes();
+        document["number"] = json!("{parent}-NOTES-{seq}");
+        document["fields"][0]["multiline"] = json!(false);
+        document["fields"][0]["draft"]["depth"] = json!(6);
+        document["fields"][0]["draft"]["types"] = json!([]);
+        document["fields"][0]["draft"]["through"] = json!(["Hotfix"]);
+        document["fields"][0]["draft"]["line"] = json!("{title}");
+        let found = problems(document.clone());
+        assert_eq!(found.len(), 5, "{found:?}");
+        for (expected, problem) in [
+            "fields[0].draft: only multiline text fields can be drafted",
+            "fields[0].draft.depth: a depth is from 1 to 5",
+            "fields[0].draft.types: a draft lists at least one akt type",
+            "fields[0].draft.through[0]: `Hotfix` must be",
+            "fields[0].draft.line: `{title}` is not a placeholder",
+        ]
+        .iter()
+        .zip(&found)
+        {
+            assert!(problem.starts_with(expected), "{problem}");
+        }
+        document["fields"][0]["draft"]["colour"] = json!("red");
+        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
     }
 }

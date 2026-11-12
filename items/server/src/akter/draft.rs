@@ -1,0 +1,168 @@
+//! Drafting a field from the akter around its akt.
+
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+use kuria_config::FieldDef;
+use kuria_engine::draft::{Listed, render};
+use kuria_engine::fields_from_json;
+use kuria_store::akter::{self as store, AktRow};
+use kuria_store::containers;
+use serde_json::{Map, Value as Json};
+use uuid::Uuid;
+
+use super::{AktError, Akter, Caller, StoredType, require_read, type_of};
+use crate::authorize::{Authorizer, Permission};
+
+/// More members than any recipe should ever meet in one container.
+const PER_CONTAINER: i64 = 10_000;
+
+impl Akter {
+    /// Drafts the field `field` of the akt `number` by its recipe, as an
+    /// edit based on `expected_revision`.
+    // r[impl draft.edit]
+    pub async fn draft_field(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+        expected_revision: i32,
+        field: &str,
+        reason: Option<String>,
+    ) -> Result<AktRow, AktError> {
+        let text = self.draft(caller, number, field).await?;
+        let mut fields = Map::new();
+        fields.insert(field.to_owned(), Json::String(text));
+        let reason = reason.or_else(|| Some(format!("Drafted {field}")));
+        // An ordinary edit: the same permission, revision and final-state
+        // rules, and an ordinary revision.
+        self.edit(caller, number, expected_revision, &fields, reason)
+            .await
+    }
+
+    /// The draft text of the field `field` of the akt `number`.
+    // r[impl draft.sources]
+    async fn draft(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+        field: &str,
+    ) -> Result<String, AktError> {
+        let auth = caller.auth;
+        let tenant: Uuid = caller.actor.tenant.into();
+        let mut conn = self.pool.get().await?;
+        let akt = store::akt_by_number(&mut conn, tenant, number)
+            .await?
+            .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
+        let ty = type_of(&mut conn, tenant, &akt).await?;
+        require_read(auth, &ty, number).await?;
+        let Some(recipe) = ty.ty.field(field).and_then(|f| f.draft.clone()) else {
+            return Err(AktError::NotDraftable(field.to_owned()));
+        };
+
+        // Every akt type the subject may read: what may be looked inside
+        // and listed at all.
+        let mut readable = Vec::new();
+        for version in store::latest_type_versions(&mut conn, tenant).await? {
+            if reads(auth, &version.key).await? {
+                readable.push(version.key);
+            }
+        }
+
+        let mut seen: HashSet<Uuid> = HashSet::from([akt.id]);
+        let mut found: Vec<(AktRow, String)> = Vec::new();
+        let mut frontier: Vec<Uuid> = Vec::new();
+        for (container, key) in containers::containers_of(&mut conn, tenant, akt.id).await? {
+            if readable.contains(&key) && seen.insert(container.id) {
+                frontier.push(container.id);
+            }
+        }
+        for _ in 0..recipe.depth {
+            if frontier.is_empty() {
+                break;
+            }
+            let members =
+                containers::members_of(&mut conn, tenant, &frontier, &readable, PER_CONTAINER)
+                    .await?;
+            let keys = type_keys(&mut conn, tenant, &members).await?;
+            frontier = Vec::new();
+            for (_, member) in members {
+                if !seen.insert(member.id) {
+                    continue;
+                }
+                let key = keys[&member.type_version_id].clone();
+                if recipe.through.is_empty() || recipe.through.contains(&key) {
+                    frontier.push(member.id);
+                }
+                found.push((member, key));
+            }
+        }
+
+        let mut listed_rows: Vec<AktRow> = found
+            .into_iter()
+            .filter(|(_, key)| recipe.types.contains(key))
+            .map(|(row, _)| row)
+            .collect();
+        listed_rows.sort_by(|a, b| a.rank.cmp(&b.rank));
+        let listed = describe(&mut conn, tenant, &listed_rows).await?;
+        Ok(render(&recipe, &listed))
+    }
+}
+
+async fn reads(auth: &Authorizer, key: &str) -> Result<bool, AktError> {
+    Ok(auth
+        .allows(&Permission::Read {
+            key: key.to_owned(),
+        })
+        .await?)
+}
+
+/// The akt type key of each type version `members` use.
+async fn type_keys(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    members: &[(Uuid, AktRow)],
+) -> Result<HashMap<Uuid, String>, AktError> {
+    let mut ids: Vec<Uuid> = members.iter().map(|(_, m)| m.type_version_id).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    Ok(store::type_versions_by_id(conn, tenant, &ids)
+        .await?
+        .into_iter()
+        .map(|v| (v.id, v.key))
+        .collect())
+}
+
+/// What each line of the draft may show about `rows`.
+async fn describe(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    rows: &[AktRow],
+) -> Result<Vec<Listed>, AktError> {
+    let mut types: HashMap<Uuid, StoredType> = HashMap::new();
+    let mut listed = Vec::with_capacity(rows.len());
+    for row in rows {
+        if let std::collections::hash_map::Entry::Vacant(slot) = types.entry(row.type_version_id) {
+            slot.insert(type_of(conn, tenant, row).await?);
+        }
+        let ty = &types[&row.type_version_id];
+        let values = fields_from_json(&ty.ty, row.fields.as_object().unwrap_or(&Map::new()))
+            .map_err(|e| AktError::Internal(format!("akt {}: {e}", row.number)))?;
+        let fields: BTreeMap<String, String> = values
+            .iter()
+            .filter_map(|(key, value)| {
+                let def: &FieldDef = ty.ty.field(key)?;
+                Some((key.clone(), value.display(def)))
+            })
+            .collect();
+        listed.push(Listed {
+            number: row.number.clone(),
+            akt_type: ty.ty.key().to_owned(),
+            type_name: ty.ty.document().name.clone(),
+            state: ty
+                .ty
+                .state(&row.state)
+                .map_or_else(|| row.state.clone(), |s| s.name.clone()),
+            fields,
+        });
+    }
+    Ok(listed)
+}

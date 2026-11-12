@@ -34,7 +34,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - every action a transition names is valid (`authz.transition-action`);
 - the keys in `contains` and `created_in` are valid akt type keys, each listed
   once (`container.contains`, `container.created-in`);
-- the board's columns are valid (`board.columns`).
+- the board's columns are valid (`board.columns`);
+- every draft recipe is valid (`draft.recipe`, `draft.line`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or

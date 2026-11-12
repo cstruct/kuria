@@ -89,7 +89,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::UnreadableType(_) => coded(message, "INVALID_AKT_TYPE"),
         AktError::UnknownType(_) => coded(message, "UNKNOWN_AKT_TYPE"),
         AktError::NotFound(_) => coded(message, "NOT_FOUND"),
-        AktError::Refused(_) => coded(message, "REFUSED"),
+        AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
         AktError::AlreadyMember { .. } => coded(message, "ALREADY_MEMBER"),
@@ -398,6 +398,17 @@ pub struct MembershipInput {
     reason: Option<String>,
 }
 
+/// What drafting a field takes.
+#[derive(InputObject)]
+pub struct DraftFieldInput {
+    number: String,
+    /// The revision the draft is based on.
+    revision: i32,
+    /// The field to draft, which must declare a recipe.
+    field: String,
+    reason: Option<String>,
+}
+
 /// What moving an akt takes: exactly one of `before` and `after`.
 #[derive(InputObject)]
 pub struct MoveAktInput {
@@ -441,6 +452,30 @@ impl ContainmentMutation {
         let akter = akter(ctx)?;
         let row = akter
             .remove_member(caller, &input.container, &input.member, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Fills a field with the draft its recipe gives, as an edit.
+    async fn draft_field(
+        &self,
+        ctx: &Context<'_>,
+        input: DraftFieldInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .draft_field(
+                caller,
+                &input.number,
+                input.revision,
+                &input.field,
+                input.reason,
+            )
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await

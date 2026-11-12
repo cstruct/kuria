@@ -100,5 +100,8 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `board`
   - A container shown as columns. The container's akt type configures the columns, naming which states of which member akt types fall in each.
 
+- `draft`
+  - Text a field is filled with from the akter around its akt, by the recipe its field declares, such as release notes from the items a release shipped. A draft is an ordinary edit.
+
 - `parent` (in a number pattern)
   - The container an akt was created in, whose akt number `{parent}` renders, as in `RELEASE-2026-0001-RC-0001`.

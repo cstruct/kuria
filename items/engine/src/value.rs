@@ -98,6 +98,29 @@ impl Value {
         }
     }
 
+    /// The value as text, for drafts: a text as itself, an option's name
+    /// (several joined with `, `), a date as `YYYY-MM-DD`, a subject's
+    /// identifier, a reference's label or else its URL.
+    // r[impl draft.render]
+    #[must_use]
+    pub fn display(&self, field: &FieldDef) -> String {
+        let name = |key: &str| {
+            field
+                .options
+                .iter()
+                .find(|o| o.key == key)
+                .map_or_else(|| key.to_owned(), |o| o.name.clone())
+        };
+        match self {
+            Self::Text(text) => text.clone(),
+            Self::Choice(key) => name(key),
+            Self::Choices(keys) => keys.iter().map(|k| name(k)).collect::<Vec<_>>().join(", "),
+            Self::Date(date) => date.format("%Y-%m-%d").to_string(),
+            Self::Subject(subject) => subject.to_string(),
+            Self::Reference { url, label } => label.clone().unwrap_or_else(|| url.clone()),
+        }
+    }
+
     /// The value's JSON form, as [`Value::from_json`] reads it.
     #[must_use]
     pub fn to_json(&self) -> Json {

@@ -4,6 +4,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::draft::DraftDef;
+
 /// An akt type, as a tenant writes it:
 ///
 /// ```json
@@ -97,6 +99,9 @@ pub struct FieldDef {
     /// For `choice` and `choices`: the options.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<ChoiceOption>,
+    /// For multiline `text`: how it is drafted from the akter around it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft: Option<DraftDef>,
 }
 
 /// What values a field takes.

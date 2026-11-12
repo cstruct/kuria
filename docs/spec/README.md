@@ -28,3 +28,5 @@ Specs:
   their history, and creating an akt inside a container
 - [ordering](ordering.md): one rank per akt, and moves
 - [boards](boards.md): a container's members in configured columns
+- [drafts](drafts.md): drafting a field, such as release notes, from the
+  akter around it
