@@ -32,3 +32,6 @@ Specs:
   akter around it
 - [changes](changes.md): publishing change events through Valkey, the
   `changes` subscription, catching up, and WebSocket connections
+- [attachments](attachments.md): uploading and reading files, their storage,
+  and SBOMs
+- [people](people.md): the names Kuria shows for users, from sign-in

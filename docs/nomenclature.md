@@ -52,7 +52,19 @@ Terms are introduced in dependency order: each definition only uses terms define
   - One named value an akt type defines, such as `severity`. Every field has a `field kind`.
 
 - `field kind`
-  - What values a field takes: `text`, `choice`, `choices`, `date`, `subject` or `reference`, so far.
+  - What values a field takes: `text`, `choice`, `choices`, `date`, `user`, `checkbox`, `reference`, `git`, `docker` or `attachment`, so far.
+
+- `user` (field kind)
+  - A field naming a Konklav subject, shown by the person's name. Prefer `user` in field and API names; `subject` stays the term for the identity itself.
+
+- `person`
+  - What Kuria knows about a subject to show them: the name and email recorded at their last browser sign-in.
+
+- `attachment`
+  - A file uploaded to Kuria, immutable, stored in object storage by its SHA-256 and held by akter in `attachment` fields.
+
+- `SBOM`
+  - A software bill of materials: an attachment Kuria recognised as SPDX or CycloneDX, with a summary of its format, version, name and component count.
 
 - `state`
   - Where an akt is in its akt type's workflow, such as `open` or `closed`. One state of each akt type is `initial`; states may be `final`, and an akt in a final state can no longer be edited.

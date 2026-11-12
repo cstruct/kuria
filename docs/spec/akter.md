@@ -63,12 +63,29 @@ fits the field's kind:
 
 | Kind | Value |
 |---|---|
-| `text` | A string. A `text` field is single-line unless it says `multiline`, and then refuses line breaks. |
+| `text` | A string. A `text` field is single-line, refusing line breaks, unless it says `multiline`. |
 | `choice` | The key of one of the field's options. |
 | `choices` | A list of distinct keys of the field's options. |
 | `date` | A calendar date, `YYYY-MM-DD`. |
-| `subject` | A Konklav subject identifier. |
+| `user` | A person or piece of software, as a Konklav subject identifier, shown by name ([people](people.md)). |
+| `checkbox` | Checked or not; see `akt.field.checkbox`. |
 | `reference` | A link to something outside Kuria: an absolute `http` or `https` URL, and optionally a label. |
+| `git` | A commit in a git repository: the repository, as an `https` URL or an `ssh` remote such as `git@host:team/app.git`, and a commit SHA (40 or 64 lowercase hexadecimal digits), a tag, or both. |
+| `docker` | A container image: its repository, such as `registry.example/team/backend`, its digest (`sha256:` and 64 lowercase hexadecimal digits), and optionally a tag. |
+| `attachment` | A file uploaded to Kuria, by its identifier; see `akt.field.attachment`. |
+
+r[akt.field.checkbox]
+A `checkbox` field MUST take `true` to check it and `false` to clear it.
+Checking it MUST record the subject who checked it and when, taken from the
+change, never from the input, and the record MUST stay until the box is
+cleared. A transition that requires a `checkbox` field MUST need it
+checked.
+
+r[akt.field.attachment]
+An `attachment` field MUST only hold an attachment of the akt's tenant. A
+field that says `"format": "sbom"` MUST only hold an attachment Kuria
+recognised as an SBOM ([attachments](attachments.md)). `format` MUST be
+refused on any other kind of field.
 
 r[akt.field.required]
 A field marked `required` MUST hold a value from the moment the akt is
