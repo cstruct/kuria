@@ -91,6 +91,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `exclusive`
   - Said of a container akt type when an akt may be a member of at most one of its akter at a time, such as one backlog.
 
+- `transfer`
+  - Ending an akt's membership in one container and starting one in another, as one change, such as moving an item from one backlog to another.
+
 - `rank`
   - An akt's place in its tenant's one priority order. Every board orders members by rank, so moving an akt on one board moves it on every board.
 

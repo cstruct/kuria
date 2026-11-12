@@ -252,3 +252,66 @@ async fn drafting_is_refused_as_an_edit_would_be() {
         "REFUSED"
     );
 }
+
+// r[verify draft.states]
+#[tokio::test(flavor = "multi_thread")]
+async fn counts_only_the_states_the_recipe_names() {
+    let world = World::new().await;
+    // Candidates that are accepted or rejected, and notes that count
+    // accepted ones only.
+    let candidate = json!({
+        "key": "release_candidate", "name": "Release candidate",
+        "number": "{parent}-RC-{seq:4}", "created_in": ["release"],
+        "states": [
+            { "key": "testing", "name": "Testing", "initial": true },
+            { "key": "accepted", "name": "Accepted", "final": true },
+            { "key": "rejected", "name": "Rejected", "final": true }
+        ],
+        "transitions": [
+            { "key": "accept", "name": "Accept", "from": ["testing"], "to": "accepted" },
+            { "key": "reject", "name": "Reject", "from": ["testing"], "to": "rejected" }
+        ],
+        "contains": [{ "type": "epic" }, { "type": "item" }]
+    });
+    let mut notes_type = types()
+        .into_iter()
+        .find(|t| t["key"] == "release_notes")
+        .unwrap();
+    notes_type["fields"][0]["draft"]["states"] = json!({ "release_candidate": ["accepted"] });
+    for document in [candidate, notes_type] {
+        world
+            .ok(
+                "tenant",
+                "mutation($d: JSON!) { defineAktType(document: $d) { version } }",
+                json!({ "d": document }),
+            )
+            .await;
+    }
+
+    let release = world.create("release", &[], json!({})).await;
+    let rejected = world
+        .create("release_candidate", &[&release], json!({}))
+        .await;
+    let accepted = world
+        .create("release_candidate", &[&release], json!({}))
+        .await;
+    let never = world.item(&[&rejected], "Never shipped", "feature").await;
+    let shipped = world.item(&[&accepted], "Shipped", "fix").await;
+    for (number, transition) in [(&rejected, "reject"), (&accepted, "accept")] {
+        world
+            .ok(
+                "tenant",
+                "mutation($n: String!, $t: String!) { performTransition(input: { number: $n, revision: 2, transition: $t }) { revision } }",
+                json!({ "n": number, "t": transition }),
+            )
+            .await;
+    }
+    let notes = world.create("release_notes", &[&release], json!({})).await;
+    let answer = world.draft("tenant", &notes, 1, "text").await;
+    let text = answer["data"]["draftField"]["fields"][0]["text"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{answer}"))
+        .to_owned();
+    assert_eq!(text, format!("## Backlog items\n{shipped} Shipped (Fix)"));
+    assert!(!text.contains(&never));
+}

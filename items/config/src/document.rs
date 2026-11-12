@@ -61,6 +61,19 @@ pub struct ContainsDef {
     /// An akt of that type may be in at most one container of this type.
     #[serde(default, skip_serializing_if = "is_false")]
     pub exclusive: bool,
+    /// The states of this type in which it accepts new members of that
+    /// type; any state if empty.
+    #[serde(default, rename = "while", skip_serializing_if = "Vec::is_empty")]
+    pub accepting: Vec<String>,
+}
+
+impl ContainsDef {
+    /// Whether a container in `state` accepts new members of this type.
+    // r[impl container.while]
+    #[must_use]
+    pub fn accepts_in(&self, state: &str) -> bool {
+        self.accepting.is_empty() || self.accepting.iter().any(|s| s == state)
+    }
 }
 
 /// A container's board.

@@ -23,14 +23,17 @@ others.
   the backlog moves it in its epic too.
 - A release is planned, tested, released, and finally closed when it is no
   longer maintained. Its release candidates and hotfixes are created inside
-  it and numbered after it. While it is released but not closed it still
-  takes hotfixes; once it is closed, its members are frozen.
+  it and numbered after it. It takes candidates only while planning or
+  testing, and hotfixes only once released; once it is closed, its members
+  are frozen.
+- Replanning an item into another backlog is a transfer: one step, recorded
+  on the item and both backlogs.
 - Release candidates and hotfixes are accepted or deployed with evidence:
   the build, and for a candidate its test record, as references.
-- The release notes are drafted from what the release's candidates and
-  hotfixes contain, including the items inside their epics, but not from
-  its backlogs, whose items may not have shipped. The draft is then edited
-  and approved.
+- The release notes are drafted from what the release's accepted candidates
+  and deployed hotfixes contain, including the items inside their epics,
+  but not from its backlogs, whose items may not have shipped, nor from
+  rejected candidates. The draft is then edited and approved.
 
 ## Defining it
 

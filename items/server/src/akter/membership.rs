@@ -1,10 +1,11 @@
-//! Adding members to containers and removing them.
+//! Adding members to containers, removing them, and transferring them from
+//! one container to another.
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use diesel_async::AsyncConnection;
 use kuria_store::akter::AktRow;
 use kuria_store::containers::{self, MembershipRow};
-use serde_json::json;
+use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
 use super::{
@@ -13,13 +14,10 @@ use super::{
 };
 use crate::authorize::Permission;
 
-/// Both sides of a membership, locked and with their akt types, after the
-/// checks every membership change makes.
-struct Pair {
-    container: AktRow,
-    container_type: StoredType,
-    member: AktRow,
-    member_type: StoredType,
+/// An akt, locked, with its akt type.
+struct Locked {
+    akt: AktRow,
+    ty: StoredType,
 }
 
 impl Akter {
@@ -33,67 +31,35 @@ impl Akter {
         member: &str,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        let Caller { actor, .. } = caller;
-        let tenant: Uuid = actor.tenant.into();
+        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         conn.transaction::<_, AktError, _>(async |conn| {
-            let mut pair = lock_pair(conn, caller, tenant, container, member).await?;
-            let Pair {
-                container: c,
-                container_type,
-                member: m,
-                member_type,
-            } = &pair;
-
-            // r[impl container.contains]
-            let Some(contains) = container_type.ty.contains(member_type.ty.key()) else {
-                return Err(AktError::NotContainable {
-                    container: c.number.clone(),
-                    member: member_type.ty.key().to_owned(),
-                });
-            };
-            if containers::is_member(conn, tenant, c.id, m.id).await? {
-                return Err(AktError::AlreadyMember {
-                    container: c.number.clone(),
-                    member: m.number.clone(),
-                });
-            }
-            // r[impl container.exclusive]
-            if contains.exclusive
-                && let Some((other, _)) = containers::containers_of(conn, tenant, m.id)
-                    .await?
-                    .into_iter()
-                    .find(|(_, key)| key == container_type.ty.key())
-            {
-                return Err(AktError::Exclusive {
-                    member: m.number.clone(),
-                    other: other.number,
-                    akt_type: container_type.ty.key().to_owned(),
-                });
-            }
-            // r[impl container.acyclic]
-            if containers::contains(conn, tenant, m.id, c.id).await? {
-                return Err(AktError::Cycle {
-                    container: c.number.clone(),
-                    member: m.number.clone(),
-                });
-            }
-
+            let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
+            require_edit(caller, &c).await?;
+            check_unfrozen(&c)?;
+            check_accepts(conn, tenant, &c, &m, None).await?;
             let now = Utc::now();
-            containers::insert_membership(
+            insert(conn, caller, tenant, &c, &m, now).await?;
+            record(
                 conn,
-                &MembershipRow {
-                    tenant_id: tenant,
-                    container_id: c.id,
-                    member_id: m.id,
-                    added_at: now,
-                    added_by: actor.subject.into(),
-                },
+                caller,
+                &mut m,
+                reason.as_deref(),
+                json!({ "added": [membership_entry(&c.akt)] }),
+                now,
             )
             .await?;
-            record_both(conn, &mut pair, caller, reason, "added", now).await?;
-            Ok(pair.container)
+            record(
+                conn,
+                caller,
+                &mut c,
+                reason.as_deref(),
+                json!({ "added_member": [membership_entry(&m.akt)] }),
+                now,
+            )
+            .await?;
+            Ok(c.akt)
         })
         .await
     }
@@ -112,102 +78,266 @@ impl Akter {
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         conn.transaction::<_, AktError, _>(async |conn| {
-            let mut pair = lock_pair(conn, caller, tenant, container, member).await?;
-            if !containers::delete_membership(conn, tenant, pair.container.id, pair.member.id)
-                .await?
-            {
-                return Err(AktError::NotMember {
-                    container: pair.container.number.clone(),
-                    member: pair.member.number.clone(),
-                });
-            }
-            record_both(conn, &mut pair, caller, reason, "removed", Utc::now()).await?;
-            Ok(pair.container)
+            let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
+            require_edit(caller, &c).await?;
+            check_unfrozen(&c)?;
+            end(conn, tenant, &c, &m).await?;
+            let now = Utc::now();
+            record(
+                conn,
+                caller,
+                &mut m,
+                reason.as_deref(),
+                json!({ "removed": [membership_entry(&c.akt)] }),
+                now,
+            )
+            .await?;
+            record(
+                conn,
+                caller,
+                &mut c,
+                reason.as_deref(),
+                json!({ "removed_member": [membership_entry(&m.akt)] }),
+                now,
+            )
+            .await?;
+            Ok(c.akt)
+        })
+        .await
+    }
+
+    /// Transfers the akt `member` from the container `from` to the container
+    /// `to`, as one change, and returns `to`.
+    // r[impl container.transfer]
+    // r[impl authz.transfer]
+    pub async fn transfer_member(
+        &self,
+        caller: Caller<'_>,
+        member: &str,
+        from: &str,
+        to: &str,
+        reason: Option<String>,
+    ) -> Result<AktRow, AktError> {
+        let tenant: Uuid = caller.actor.tenant.into();
+        if from == to {
+            return Err(AktError::AlreadyMember {
+                container: to.to_owned(),
+                member: member.to_owned(),
+            });
+        }
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        conn.transaction::<_, AktError, _>(async |conn| {
+            let [mut source, mut target, mut m] =
+                lock(conn, caller, tenant, [from, to, member]).await?;
+            require_edit(caller, &source).await?;
+            require_edit(caller, &target).await?;
+            check_unfrozen(&source)?;
+            check_unfrozen(&target)?;
+            end(conn, tenant, &source, &m).await?;
+            // The membership just ended doesn't count against exclusivity.
+            check_accepts(conn, tenant, &target, &m, Some(source.akt.id)).await?;
+            let now = Utc::now();
+            insert(conn, caller, tenant, &target, &m, now).await?;
+            record(
+                conn,
+                caller,
+                &mut m,
+                reason.as_deref(),
+                json!({
+                    "removed": [membership_entry(&source.akt)],
+                    "added": [membership_entry(&target.akt)],
+                }),
+                now,
+            )
+            .await?;
+            record(
+                conn,
+                caller,
+                &mut source,
+                reason.as_deref(),
+                json!({ "removed_member": [membership_entry(&m.akt)] }),
+                now,
+            )
+            .await?;
+            record(
+                conn,
+                caller,
+                &mut target,
+                reason.as_deref(),
+                json!({ "added_member": [membership_entry(&m.akt)] }),
+                now,
+            )
+            .await?;
+            Ok(target.akt)
         })
         .await
     }
 }
 
-/// Locks both akter and checks what adding and removing have in common: both
-/// exist and are readable, the caller may edit the container, and it isn't
-/// frozen.
+/// Locks the akter `numbers`, refusing a missing or unreadable one as not
+/// found, and returns them in the order named. The last is the member;
+/// naming one akt twice is a cycle.
 // r[impl authz.membership]
-async fn lock_pair(
+async fn lock<const N: usize>(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
     tenant: Uuid,
-    container: &str,
-    member: &str,
-) -> Result<Pair, AktError> {
-    let auth = caller.auth;
-    if container == member {
+    numbers: [&str; N],
+) -> Result<[Locked; N], AktError> {
+    let member = numbers[N - 1];
+    if let Some(container) = numbers[..N - 1].iter().find(|n| **n == member) {
         // r[impl container.acyclic]
         return Err(AktError::Cycle {
-            container: container.to_owned(),
+            container: (*container).to_owned(),
             member: member.to_owned(),
         });
     }
-    let mut locked = containers::lock_akter(conn, tenant, &[container, member]).await?;
-    let mut take = |number: &str| {
-        locked
+    let mut rows = containers::lock_akter(conn, tenant, &numbers).await?;
+    let mut locked = Vec::with_capacity(N);
+    for number in numbers {
+        let akt = rows
             .iter()
             .position(|row| row.number == number)
-            .map(|i| locked.swap_remove(i))
-            .ok_or_else(|| AktError::NotFound(number.to_owned()))
-    };
-    let (c, m) = (take(container)?, take(member)?);
-    let container_type = type_of(conn, tenant, &c).await?;
-    require_read(auth, &container_type, &c.number).await?;
-    let member_type = type_of(conn, tenant, &m).await?;
-    require_read(auth, &member_type, &m.number).await?;
+            .map(|i| rows.swap_remove(i))
+            .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
+        let ty = type_of(conn, tenant, &akt).await?;
+        require_read(caller.auth, &ty, number).await?;
+        locked.push(Locked { akt, ty });
+    }
+    Ok(locked
+        .try_into()
+        .unwrap_or_else(|_| unreachable!("one per number")))
+}
+
+/// Refuses a caller who may not edit the container `c`.
+async fn require_edit(caller: Caller<'_>, c: &Locked) -> Result<(), AktError> {
     require(
-        auth,
+        caller.auth,
         Permission::Edit {
-            key: container_type.ty.key().to_owned(),
+            key: c.ty.ty.key().to_owned(),
+        },
+    )
+    .await
+}
+
+/// Refuses a container in a final state.
+// r[impl container.frozen]
+fn check_unfrozen(c: &Locked) -> Result<(), AktError> {
+    if is_final(&c.ty, &c.akt) {
+        return Err(AktError::Frozen(c.akt.number.clone()));
+    }
+    Ok(())
+}
+
+/// Refuses what would stop `c` from gaining `m` as a member: a type it
+/// doesn't contain, a membership `m` already has, a state it doesn't
+/// accept that type in, exclusivity (not counting `ending`), and cycles.
+async fn check_accepts(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    c: &Locked,
+    m: &Locked,
+    ending: Option<Uuid>,
+) -> Result<(), AktError> {
+    // r[impl container.contains]
+    let Some(contains) = c.ty.ty.contains(m.ty.ty.key()) else {
+        return Err(AktError::NotContainable {
+            container: c.akt.number.clone(),
+            member: m.ty.ty.key().to_owned(),
+        });
+    };
+    if containers::is_member(conn, tenant, c.akt.id, m.akt.id).await? {
+        return Err(AktError::AlreadyMember {
+            container: c.akt.number.clone(),
+            member: m.akt.number.clone(),
+        });
+    }
+    // r[impl container.while]
+    if !contains.accepts_in(&c.akt.state) {
+        return Err(AktError::NotAccepting {
+            container: c.akt.number.clone(),
+            member_type: m.ty.ty.key().to_owned(),
+            state: c.akt.state.clone(),
+        });
+    }
+    // r[impl container.exclusive]
+    if contains.exclusive
+        && let Some((other, _)) = containers::containers_of(conn, tenant, m.akt.id)
+            .await?
+            .into_iter()
+            .find(|(row, key)| key == c.ty.ty.key() && Some(row.id) != ending)
+    {
+        return Err(AktError::Exclusive {
+            member: m.akt.number.clone(),
+            other: other.number,
+            akt_type: c.ty.ty.key().to_owned(),
+        });
+    }
+    // r[impl container.acyclic]
+    if containers::contains(conn, tenant, m.akt.id, c.akt.id).await? {
+        return Err(AktError::Cycle {
+            container: c.akt.number.clone(),
+            member: m.akt.number.clone(),
+        });
+    }
+    Ok(())
+}
+
+async fn insert(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    tenant: Uuid,
+    c: &Locked,
+    m: &Locked,
+    now: DateTime<Utc>,
+) -> Result<(), AktError> {
+    containers::insert_membership(
+        conn,
+        &MembershipRow {
+            tenant_id: tenant,
+            container_id: c.akt.id,
+            member_id: m.akt.id,
+            added_at: now,
+            added_by: caller.actor.subject.into(),
         },
     )
     .await?;
-    // r[impl container.frozen]
-    if is_final(&container_type, &c) {
-        return Err(AktError::Frozen(c.number));
-    }
-    Ok(Pair {
-        container: c,
-        container_type,
-        member: m,
-        member_type,
-    })
+    Ok(())
 }
 
-/// Records the change on both akter: `added` or `removed` on the member,
-/// `added_member` or `removed_member` on the container.
-async fn record_both(
+/// Ends `m`'s membership in `c`, refusing if there is none.
+async fn end(
     conn: &mut kuria_store::Connection,
-    pair: &mut Pair,
-    caller: Caller<'_>,
-    reason: Option<String>,
-    change: &str,
-    now: chrono::DateTime<Utc>,
+    tenant: Uuid,
+    c: &Locked,
+    m: &Locked,
 ) -> Result<(), AktError> {
-    let on_member = json!({ change: [membership_entry(&pair.container)] });
-    let on_container = json!({ format!("{change}_member"): [membership_entry(&pair.member)] });
+    if containers::delete_membership(conn, tenant, c.akt.id, m.akt.id).await? {
+        Ok(())
+    } else {
+        Err(AktError::NotMember {
+            container: c.akt.number.clone(),
+            member: m.akt.number.clone(),
+        })
+    }
+}
+
+async fn record(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    akt: &mut Locked,
+    reason: Option<&str>,
+    membership: Json,
+    now: DateTime<Utc>,
+) -> Result<(), AktError> {
     record_membership(
         conn,
-        &pair.member_type,
-        &mut pair.member,
+        &akt.ty,
+        &mut akt.akt,
         caller.actor,
-        reason.clone(),
-        on_member,
-        now,
-    )
-    .await?;
-    record_membership(
-        conn,
-        &pair.container_type,
-        &mut pair.container,
-        caller.actor,
-        reason,
-        on_container,
+        reason.map(str::to_owned),
+        membership,
         now,
     )
     .await

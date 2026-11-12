@@ -274,6 +274,11 @@ fn draft_recipe(problems: &mut Problems, path: &str, field: &FieldDef, draft: &D
     if let Err(message) = LineTemplate::parse(&draft.line) {
         problems.add(&format!("{path}.line"), message);
     }
+    for (akt_type, states) in &draft.states {
+        let at = format!("{path}.states.{akt_type}");
+        problems.key(&at, akt_type);
+        problems.unique_keys(&at, states.iter().map(String::as_str), "");
+    }
 }
 
 /// Checks `contains` and `created_in`, and returns the contained akt types'
@@ -286,6 +291,17 @@ fn containment<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BT
         document.contains.iter().map(|c| c.akt_type.as_str()),
         "type",
     );
+    // r[impl container.while]
+    for (i, contains) in document.contains.iter().enumerate() {
+        for (j, state) in contains.accepting.iter().enumerate() {
+            if !document.states.iter().any(|s| &s.key == state) {
+                problems.add(
+                    &format!("contains[{i}].while[{j}]"),
+                    format!("no state `{state}`"),
+                );
+            }
+        }
+    }
     problems.unique_keys(
         "created_in",
         document.created_in.iter().map(String::as_str),
@@ -682,5 +698,43 @@ mod tests {
         }
         document["fields"][0]["draft"]["colour"] = json!("red");
         assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+    }
+
+    // r[verify container.while]
+    #[test]
+    fn checks_the_states_a_container_accepts_in() {
+        let mut document = release_candidate();
+        document["contains"][0]["while"] = json!(["testing", "shipped"]);
+        assert_eq!(
+            problems(document.clone()),
+            vec!["contains[0].while[1]: no state `shipped`"]
+        );
+        document["contains"][0]["while"] = json!(["testing"]);
+        let document: AktTypeDocument = serde_json::from_value(document).unwrap();
+        let ty = validate(document).unwrap();
+        let epic = ty.contains("epic").unwrap();
+        assert!(epic.accepts_in("testing"));
+        assert!(!epic.accepts_in("accepted"));
+        assert!(ty.contains("backlog_item").unwrap().accepts_in("accepted"));
+    }
+
+    // r[verify draft.states]
+    #[test]
+    fn checks_a_drafts_states() {
+        let mut document = notes();
+        document["number"] = json!("{parent}-NOTES-{seq}");
+        document["fields"][0]["draft"]["states"] =
+            json!({ "release_candidate": ["accepted", "accepted"], "Hotfix": ["deployed"] });
+        let found = problems(document.clone());
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found[0].starts_with("fields[0].draft.states.Hotfix: `Hotfix` must be"));
+        assert!(found[1].contains("`accepted` is used twice"));
+        document["fields"][0]["draft"]["states"] = json!({ "release_candidate": ["accepted"] });
+        let document: AktTypeDocument = serde_json::from_value(document).unwrap();
+        let ty = validate(document).unwrap();
+        let recipe = ty.field("text").unwrap().draft.as_ref().unwrap();
+        assert!(recipe.counts("release_candidate", "accepted"));
+        assert!(!recipe.counts("release_candidate", "rejected"));
+        assert!(recipe.counts("hotfix", "open"));
     }
 }

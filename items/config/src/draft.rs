@@ -1,5 +1,7 @@
 //! Draft recipes: how a field is drafted from the akter around its akt.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// A field's draft recipe:
@@ -24,6 +26,22 @@ pub struct DraftDef {
     pub line: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<GroupBy>,
+    /// Per akt type, the states in which its akter count; all states for
+    /// akt types not named.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub states: BTreeMap<String, Vec<String>>,
+}
+
+impl DraftDef {
+    /// Whether an akt of `akt_type` in `state` counts: is looked inside and
+    /// may be listed.
+    // r[impl draft.states]
+    #[must_use]
+    pub fn counts(&self, akt_type: &str, state: &str) -> bool {
+        self.states
+            .get(akt_type)
+            .is_none_or(|states| states.iter().any(|s| s == state))
+    }
 }
 
 /// How drafted lines are grouped.

@@ -136,7 +136,7 @@ Planned: `akt_link` (typed links besides containment), `signature`, `obligation`
 
 Containment is the one link kind Kuria builds in ([containers](spec/containers.md), [ordering](spec/ordering.md), [boards](spec/boards.md)).
 
-- An akt type says what its akter may contain (`contains`, optionally `exclusive`), and an akt type may have to be created inside another (`created_in`), which `{parent}` in its number pattern then renders: `RELEASE-2026-0001-RC-0001`.
+- An akt type says what its akter may contain (`contains`, optionally `exclusive`, and `while` for the states it accepts them in), and an akt type may have to be created inside another (`created_in`), which `{parent}` in its number pattern then renders: `RELEASE-2026-0001-RC-0001`.
 - An akt can be in many containers, such as a backlog, an epic and a release candidate. Containment is acyclic, checked with a recursive query under the container's lock.
 - Every akt has one rank in its tenant, a fractional-indexing key sorted byte by byte (`COLLATE "C"`). Every list of members and every board orders by it, so a move made on one board shows on every board. A move places an akt directly before or after a neighbour, disturbing nothing else.
 - Every rank change takes the tenant's order lock first, so two never compute the same key; the unique index on `(tenant_id, rank)` stays as a guard.
@@ -202,6 +202,8 @@ Some things are simpler outside GraphQL:
 - Joining and leaving a container is a revision of both akter; a move is not.
 - Release notes are an akt drafted from members, not a special document.
 - Board columns are configured on the container's akt type.
+- A container's akt type can say in which states it accepts each member type (`while`), and draft recipes can count akter only in some states (`states`).
+- Moving an akt from one container to another is a transfer: one change, recorded once on the akt and on both containers.
 
 ## Open decisions
 
@@ -210,7 +212,4 @@ Some things are simpler outside GraphQL:
 - Object storage for attachments, and how exports include them.
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
 - Board columns name states of other akt types, whose newer versions may rename them; members in such states show as `unmapped`.
-- Draft recipes can't yet filter by state, so release notes include a rejected candidate's members.
-- A container can't yet say in which of its states it accepts members, so a released release still takes new candidates.
-- Moving an akt between two containers of an exclusive type is a remove and an add, not one step.
 - DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. A Konklav change could lift that, such as letting one accepted presentation answer several decisions within its request.

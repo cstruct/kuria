@@ -17,6 +17,7 @@ A multiline text field MAY declare a recipe in `draft`:
 | `types` | The akt types to list, by key; at least one. |
 | `line` | The text of each listed akt, with placeholders. |
 | `group_by` | `type` to list akter under a heading per akt type; one list if left out. |
+| `states` | Per akt type, by key, the states in which its akter count; all states for akt types it doesn't name. |
 
 A recipe on any other field, or with an invalid key, depth or line, MUST be
 refused with the akt type document.
@@ -35,6 +36,12 @@ looking further inside only members whose akt types `through` lists, and
 list every akt found whose akt type `types` lists, once, without the akt
 itself. It MUST leave out, and not look inside, every akt the drafting
 subject may not read.
+
+r[draft.states]
+An akt whose akt type the recipe's `states` names, and whose state it
+doesn't list, MUST be neither looked inside nor listed, so that, for
+instance, a rejected release candidate's members stay out of the release
+notes.
 
 r[draft.render]
 Each listed akt MUST give one line, its placeholders replaced: a field's

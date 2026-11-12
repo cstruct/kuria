@@ -71,7 +71,10 @@ impl Akter {
         let mut found: Vec<(AktRow, String)> = Vec::new();
         let mut frontier: Vec<Uuid> = Vec::new();
         for (container, key) in containers::containers_of(&mut conn, tenant, akt.id).await? {
-            if readable.contains(&key) && seen.insert(container.id) {
+            if readable.contains(&key)
+                && recipe.counts(&key, &container.state)
+                && seen.insert(container.id)
+            {
                 frontier.push(container.id);
             }
         }
@@ -89,6 +92,10 @@ impl Akter {
                     continue;
                 }
                 let key = keys[&member.type_version_id].clone();
+                // r[impl draft.states]
+                if !recipe.counts(&key, &member.state) {
+                    continue;
+                }
                 if recipe.through.is_empty() || recipe.through.contains(&key) {
                     frontier.push(member.id);
                 }

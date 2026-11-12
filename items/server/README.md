@@ -30,7 +30,8 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   GraphQL, with every change written as an akt revision and a change event
   in one transaction ([`src/akter.rs`](src/akter.rs) and its submodules are
   the only code that writes them).
-- Containers: adding and removing members (recorded on both akter), creating
+- Containers: adding, removing and transferring members (recorded on the
+  akter involved), only in the states a container accepts them in; creating
   akter inside containers with `{parent}` numbers, and moving akter in their
   tenant's one priority order.
 - Drafting a field, such as release notes, from the akter around its akt by
@@ -64,8 +65,8 @@ signatures.
   [`src/graphql/akter.rs`](src/graphql/akter.rs) for akt types, akter and
   revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
-  `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt`,
-  `draftField`.
+  `performTransition`, `addToContainer`, `removeFromContainer`,
+  `transferMember`, `moveAkt`, `draftField`.
   `Akt` also has `rank`, `members`, `containers` and `board` (its members
   in its akt type's columns, then `unmapped`, each in rank order), and a
   revision its `membership`.
@@ -73,6 +74,7 @@ signatures.
   `UNKNOWN_AKT_TYPE`, `NOT_FOUND`, `REFUSED`, `STALE` (with
   `currentRevision`), `FORBIDDEN`, `UNAVAILABLE`, `NOT_CONTAINABLE`,
   `ALREADY_MEMBER`, `NOT_MEMBER`, `EXCLUSIVE`, `CYCLE`, `FROZEN`,
+  `NOT_ACCEPTING`,
   `CREATED_IN`, `BAD_REQUEST` or `INTERNAL`.
 - [`src/akter.rs`](src/akter.rs): the write path for akt types and akter,
   with [`create`](src/akter/create.rs),
@@ -152,7 +154,9 @@ mise run test
 - [`tests/containers.rs`](tests/containers.rs): many containers per akt,
   removing, exclusivity, cycles, frozen containers, membership revisions on
   both akter, release candidates and hotfixes numbered inside their release,
-  creating inside several containers, a move in a backlog showing in an
+  creating inside several containers, transfers between exclusive
+  containers, containers accepting members only in some states, a move in
+  a backlog showing in an
   epic, moves as rank events, concurrent moves, and the permissions for
   arranging, moving, creating inside and listing.
 - [`tests/boards.rs`](tests/boards.rs): stories and bugs in shared columns,
@@ -160,7 +164,8 @@ mise run test
   members the subject can't read.
 - [`tests/drafts.rs`](tests/drafts.rs): release notes drafted from a
   release's candidates, hotfix and an epic inside a candidate, leaving out
-  a backlog's unshipped item and what the drafter can't read, and refused
+  a backlog's unshipped item, what the drafter can't read and a rejected
+  candidate's items, and refused
   as an edit would be.
 - [`tests/release_flow.rs`](tests/release_flow.rs) walks one release with
   the example configuration in

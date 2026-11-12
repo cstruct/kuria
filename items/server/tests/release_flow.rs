@@ -270,6 +270,11 @@ async fn a_release_from_planning_to_closed() {
     assert_eq!(rc1, format!("RELEASE-{year}-0001-RC-0001"));
     world.added(RM, &rc1, &epic).await;
     world.added(RM, &rc1, &crash).await;
+    // Tried in the first candidate only, and dropped.
+    let experiment = world
+        .item(&[&backlog], "Experimental search", "feature")
+        .await;
+    world.added(RM, &rc1, &experiment).await;
 
     // Work moves across the candidate's board as it is done.
     world.finish(&crash).await;
@@ -279,7 +284,7 @@ async fn a_release_from_planning_to_closed() {
     );
     assert_eq!(
         world.column(&rc1, "todo").await,
-        std::slice::from_ref(&epic)
+        [epic.clone(), experiment.clone()]
     );
 
     // The first candidate fails; the second ships everything.
@@ -333,6 +338,30 @@ async fn a_release_from_planning_to_closed() {
     world
         .transitioned(RM, &release, "release", released_fields)
         .await;
+
+    // Once released, it takes hotfixes but no more candidates.
+    let late_rc = world
+        .run(
+            RM,
+            "mutation($r: String!) { createAkt(input: { type: \"release_candidate\", in: [$r] }) { number } }",
+            json!({ "r": release }),
+        )
+        .await;
+    assert_eq!(code(&late_rc), "NOT_ACCEPTING");
+
+    // The dropped experiment is replanned into the next release's backlog,
+    // in one step.
+    let next_backlog = world
+        .create(DEV, "backlog", &[], json!({ "title": "Summer backlog" }))
+        .await;
+    let transferred = world
+        .run(
+            DEV,
+            "mutation($m: String!, $f: String!, $t: String!) { transferMember(input: { member: $m, from: $f, to: $t, reason: \"Next release\" }) { number } }",
+            json!({ "m": experiment, "f": backlog, "t": next_backlog }),
+        )
+        .await;
+    assert!(transferred.get("errors").is_none(), "{transferred}");
 
     // A released release still takes hotfixes.
     let hotfix = world

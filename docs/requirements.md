@@ -15,7 +15,7 @@ else in this document is still to come.
 |---|---|---|
 | Akt types and fields | Akt types as runtime documents, versioned; the field kinds `text`, `choice`, `choices`, `date`, `subject` and `reference`; required fields | [akter](spec/akter.md) |
 | Workflow | States, transitions with required fields, final states, and an extra permission per transition | [akter](spec/akter.md), [authorization](spec/authorization.md) |
-| Links and nesting | Containment: many containers per akt, exclusivity, no cycles, frozen final containers, creating inside containers | [containers](spec/containers.md) |
+| Links and nesting | Containment: many containers per akt, exclusivity, no cycles, frozen final containers, accepting members only in some states, creating inside containers, transfers | [containers](spec/containers.md) |
 | Ordering and boards | One priority order per tenant, moves, boards with configured columns | [ordering](spec/ordering.md), [boards](spec/boards.md) |
 | Numbering | Number patterns with `{year}`, `{month}`, `{parent}` and a sequence | [akter](spec/akter.md) |
 | Records and integrity | Append-only revisions with author, reason and a state hash; membership history; change events | [akter](spec/akter.md), [containers](spec/containers.md) |

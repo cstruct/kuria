@@ -54,6 +54,14 @@ fn types() -> Vec<Value> {
         json!({ "key": "release_candidate", "name": "Release candidate",
                 "number": "{parent}-RC-{seq:4}", "created_in": ["release"], "fields": title,
                 "states": states("accepted"), "contains": [{ "type": "epic" }, { "type": "item" }] }),
+        json!({ "key": "sprint", "name": "Sprint", "number": "SPRINT-{seq}", "fields": title,
+                "states": [
+                    { "key": "planning", "name": "Planning", "initial": true },
+                    { "key": "active", "name": "Active" },
+                    { "key": "done", "name": "Done", "final": true }
+                ],
+                "transitions": [{ "key": "start", "name": "Start", "from": ["planning"], "to": "active" }],
+                "contains": [{ "type": "item", "while": ["planning"] }] }),
         json!({ "key": "hotfix", "name": "Hotfix", "number": "{parent}-HOTFIX-{seq:4}",
                 "created_in": ["release"], "fields": title, "states": states("deployed"),
                 "contains": [{ "type": "item" }] }),
@@ -167,10 +175,14 @@ impl World {
     }
 
     async fn finish(&self, number: &str) {
+        self.finish_with(number, "finish").await;
+    }
+
+    async fn finish_with(&self, number: &str, transition: &str) {
         let revision = self.revisions(number).await["revision"].as_i64().unwrap();
         self.ok(
-            "mutation($n: String!, $r: Int!) { performTransition(input: { number: $n, revision: $r, transition: \"finish\" }) { number } }",
-            json!({ "n": number, "r": revision }),
+            "mutation($n: String!, $r: Int!, $t: String!) { performTransition(input: { number: $n, revision: $r, transition: $t }) { number } }",
+            json!({ "n": number, "r": revision, "t": transition }),
         )
         .await;
     }
@@ -621,5 +633,149 @@ async fn lists_leave_out_what_the_subject_cant_read() {
     assert_eq!(
         data["data"]["i"]["containers"],
         json!([{ "number": backlog }])
+    );
+}
+
+const TRANSFER: &str = "mutation($m: String!, $f: String!, $t: String!) { transferMember(input: { member: $m, from: $f, to: $t, reason: \"Replanned\" }) { number } }";
+
+impl World {
+    async fn transfer(&self, token: &str, member: &str, from: &str, to: &str) -> Value {
+        self.run_as(token, TRANSFER, json!({ "m": member, "f": from, "t": to }))
+            .await
+    }
+}
+
+// r[verify container.transfer]
+#[tokio::test(flavor = "multi_thread")]
+async fn transfers_between_exclusive_containers_in_one_step() {
+    let world = World::new().await;
+    let first = world.create("backlog", &[]).await;
+    let second = world.create("backlog", &[]).await;
+    let item = world.create("item", &[&first]).await;
+    // Adding would break exclusivity; transferring doesn't.
+    assert_eq!(code(&world.add(&second, &item).await), "EXCLUSIVE");
+    let answer = world.transfer("tenant", &item, &first, &second).await;
+    assert!(answer.get("errors").is_none(), "{answer}");
+    assert_eq!(world.containers(&item).await, std::slice::from_ref(&second));
+
+    let history = world.revisions(&item).await;
+    let last = &history["revisions"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert_eq!(last["reason"], "Replanned");
+    assert_eq!(last["membership"]["removed"][0]["number"], first);
+    assert_eq!(last["membership"]["added"][0]["number"], second);
+    assert_eq!(
+        history["revision"], 2,
+        "one revision for the whole transfer"
+    );
+    let source = world.revisions(&first).await;
+    assert_eq!(
+        source["revisions"].as_array().unwrap().last().unwrap()["membership"]["removed_member"][0]
+            ["number"],
+        item
+    );
+    let target = world.revisions(&second).await;
+    assert_eq!(
+        target["revisions"].as_array().unwrap().last().unwrap()["membership"]["added_member"][0]["number"],
+        item
+    );
+}
+
+// r[verify container.transfer]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refused_transfer_changes_nothing() {
+    let world = World::new().await;
+    let backlog = world.create("backlog", &[]).await;
+    let epic = world.create("epic", &[]).await;
+    let group = world.create("group", &[]).await;
+    let item = world.create("item", &[&backlog]).await;
+    assert_eq!(
+        code(&world.transfer("tenant", &item, &epic, &backlog).await),
+        "NOT_MEMBER"
+    );
+    assert_eq!(
+        code(&world.transfer("tenant", &item, &backlog, &group).await),
+        "NOT_CONTAINABLE"
+    );
+    assert_eq!(
+        code(&world.transfer("tenant", &item, &backlog, &backlog).await),
+        "ALREADY_MEMBER"
+    );
+    assert_eq!(
+        world.containers(&item).await,
+        std::slice::from_ref(&backlog)
+    );
+    world.finish(&backlog).await;
+    assert_eq!(
+        code(&world.transfer("tenant", &item, &backlog, &epic).await),
+        "FROZEN"
+    );
+    assert_eq!(world.revisions(&item).await["revision"], 1);
+}
+
+// r[verify container.while]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_container_accepts_members_only_while_configured() {
+    let world = World::new().await;
+    let sprint = world.create("sprint", &[]).await;
+    let planned = world.create("item", &[&sprint]).await;
+    let late = world.create("item", &[]).await;
+    world.finish_with(&sprint, "start").await;
+    assert_eq!(code(&world.add(&sprint, &late).await), "NOT_ACCEPTING");
+    assert_eq!(
+        code(&world.try_create("item", &[&sprint]).await),
+        "NOT_ACCEPTING"
+    );
+    let other = world.create("sprint", &[]).await;
+    assert_eq!(
+        code(&world.transfer("tenant", &planned, &other, &sprint).await),
+        "NOT_MEMBER"
+    );
+    world.add(&other, &late).await;
+    assert_eq!(
+        code(&world.transfer("tenant", &late, &other, &sprint).await),
+        "NOT_ACCEPTING"
+    );
+    // Members can still leave.
+    assert!(
+        world
+            .remove(&sprint, &planned)
+            .await
+            .get("errors")
+            .is_none()
+    );
+}
+
+// r[verify authz.transfer]
+#[tokio::test(flavor = "multi_thread")]
+async fn transferring_needs_edit_at_both_containers() {
+    use kuria_server::authorize::{EDIT, READ};
+    let world = World::new().await;
+    let first = world.create("backlog", &[]).await;
+    let second = world.create("backlog", &[]).await;
+    let item = world.create("item", &[&first]).await;
+    world.decider.grant(ALICE, &[READ]);
+    world.decider.grant_at(ALICE, "backlog", &[EDIT]);
+    let epic = world.create("epic", &[]).await;
+    world.add(&first, &epic).await;
+    // Alice may edit backlogs but not epics.
+    let answer = world.transfer(ALICE, &epic, &first, &second).await;
+    assert!(answer.get("errors").is_none(), "{answer}");
+    let other_epic = world.create("epic", &[]).await;
+    world.add(&other_epic, &item).await;
+    assert_eq!(
+        code(&world.transfer(ALICE, &item, &other_epic, &second).await),
+        "FORBIDDEN"
+    );
+    let bob = "tenant-bob";
+    world.decider.grant_at(bob, "backlog", &[READ, EDIT]);
+    assert_eq!(
+        code(&world.transfer(bob, &item, &first, &second).await),
+        "NOT_FOUND",
+        "can't see the item"
     );
 }

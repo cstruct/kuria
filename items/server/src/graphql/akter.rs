@@ -97,6 +97,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::Exclusive { .. } => coded(message, "EXCLUSIVE"),
         AktError::Cycle { .. } => coded(message, "CYCLE"),
         AktError::Frozen(_) => coded(message, "FROZEN"),
+        AktError::NotAccepting { .. } => coded(message, "NOT_ACCEPTING"),
         AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
         AktError::SelfMove => coded(message, "BAD_REQUEST"),
         AktError::Unavailable(detail) => {
@@ -398,6 +399,18 @@ pub struct MembershipInput {
     reason: Option<String>,
 }
 
+/// What transferring an akt between containers takes.
+#[derive(InputObject)]
+pub struct TransferInput {
+    /// The akt to transfer.
+    member: String,
+    /// The container it leaves.
+    from: String,
+    /// The container it joins.
+    to: String,
+    reason: Option<String>,
+}
+
 /// What drafting a field takes.
 #[derive(InputObject)]
 pub struct DraftFieldInput {
@@ -452,6 +465,25 @@ impl ContainmentMutation {
         let akter = akter(ctx)?;
         let row = akter
             .remove_member(caller, &input.container, &input.member, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Transfers an akt from one container to another as one change, and
+    /// returns the container it joined.
+    async fn transfer_member(
+        &self,
+        ctx: &Context<'_>,
+        input: TransferInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .transfer_member(caller, &input.member, &input.from, &input.to, input.reason)
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await

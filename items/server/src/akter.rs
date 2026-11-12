@@ -80,6 +80,12 @@ pub enum AktError {
     Cycle { container: String, member: String },
     #[error("`{0}` is in a final state, so its members can't change")]
     Frozen(String),
+    #[error("`{container}` doesn't take new `{member_type}` akter while `{state}`")]
+    NotAccepting {
+        container: String,
+        member_type: String,
+        state: String,
+    },
     #[error("an akt of the type `{akt_type}` must be created in one of: {}", .allowed.join(", "))]
     CreatedIn {
         akt_type: String,

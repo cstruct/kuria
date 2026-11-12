@@ -21,8 +21,8 @@
   ],
   "contains": [
     { "type": "backlog" },
-    { "type": "release_candidate" },
-    { "type": "hotfix" },
+    { "type": "release_candidate", "while": ["planning", "testing"] },
+    { "type": "hotfix", "while": ["released"] },
     { "type": "release_notes", "exclusive": true }
   ],
   "board": { "columns": [

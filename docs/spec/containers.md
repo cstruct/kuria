@@ -18,6 +18,13 @@ An entry of `contains` MAY say `"exclusive": true`. An akt of that type
 MUST then be a member of at most one container of the containing akt type
 at a time.
 
+r[container.while]
+An entry of `contains` MAY say, in `while`, the states of the containing akt
+type in which it accepts new members of that type. A container MUST then
+refuse to gain a member of that type, by adding or by creating inside it,
+in any other state. `while` MUST name states of the containing akt type.
+Removing members is governed by `container.frozen` alone.
+
 r[container.created-in]
 An akt type document MAY list, in `created_in`, the akt types an akt of its
 type must be created in. Creating such an akt MUST name a container of one
@@ -40,6 +47,13 @@ and its members MUST be in the same tenant.
 r[container.remove]
 Removing an akt from a container MUST be refused when it isn't a member, or
 when the container is frozen.
+
+r[container.transfer]
+Transferring an akt from one container to another MUST be one change: it
+MUST be refused unless removing it from the first and adding it to the
+second would each be allowed, except that exclusivity MUST NOT count the
+membership the transfer ends. It MUST append one akt revision to the akt,
+recording both memberships, and one to each container, in one transaction.
 
 r[container.acyclic]
 Containment MUST be acyclic: an akt MUST NOT become a member of itself, or of

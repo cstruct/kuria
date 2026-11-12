@@ -80,6 +80,11 @@ member's. A container the subject can't read, or a member they can't read,
 MUST be refused as `NOT_FOUND`, so that nobody learns of or arranges an akt
 they can't see.
 
+r[authz.transfer]
+Transferring an akt between containers MUST require `kuria:akter:edit` at
+both containers' akt types and `kuria:akter:read` at the akt's. Any of the
+three the subject can't read MUST be refused as `NOT_FOUND`.
+
 r[authz.create-inside]
 Creating an akt inside containers MUST require, besides `authz.create`,
 `kuria:akter:edit` at each container's akt type. A container the subject

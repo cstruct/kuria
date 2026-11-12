@@ -187,6 +187,14 @@ fn check_containers(
         if super::is_final(parent_type, parent) {
             return Err(AktError::Frozen(parent.number.clone()));
         }
+        // r[impl container.while]
+        if !contains.accepts_in(&parent.state) {
+            return Err(AktError::NotAccepting {
+                container: parent.number.clone(),
+                member_type: ty.ty.key().to_owned(),
+                state: parent.state.clone(),
+            });
+        }
         // r[impl container.exclusive]
         if contains.exclusive {
             let key = parent_type.ty.key();
