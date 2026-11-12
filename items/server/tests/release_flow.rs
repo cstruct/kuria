@@ -6,7 +6,7 @@ mod support;
 
 use axum::Router;
 use chrono::{Datelike, Utc};
-use kuria_server::authorize::{CREATE, EDIT, READ, TRANSITION};
+use kuria_server::authorize::{CREATE, EDIT, MANAGE_CONTACTS, READ, TRANSITION};
 use kuria_test_support::TestDatabase;
 use serde_json::{Value, json};
 
@@ -31,7 +31,7 @@ const DOCUMENTS: [&str; 8] = [
 ];
 
 struct World {
-    _db: TestDatabase,
+    db: TestDatabase,
     router: Router,
 }
 
@@ -42,7 +42,7 @@ impl World {
         let decider = FakeDecider::allowing_tenant();
         roles(&decider);
         let router = router_with(&FakeHost::new(), db.pool().clone(), decider);
-        let world = Self { _db: db, router };
+        let world = Self { db, router };
         for document in DOCUMENTS {
             let document: Value = serde_json::from_str(document).unwrap();
             world
@@ -250,7 +250,7 @@ fn roles(decider: &FakeDecider) {
     for key in ["backlog", "epic", "backlog_item"] {
         decider.grant_at(DEV, key, &[CREATE, EDIT, TRANSITION]);
     }
-    decider.grant(RM, &[READ]);
+    decider.grant(RM, &[READ, MANAGE_CONTACTS]);
     for key in ["release", "release_candidate", "hotfix", "release_notes"] {
         decider.grant_at(RM, key, &[CREATE, EDIT, TRANSITION, "release:approve"]);
     }
@@ -434,19 +434,29 @@ async fn a_release_from_planning_to_closed() {
         "REFUSED",
         "releasing needs the go"
     );
-    let mut with_go = released_fields;
-    with_go["go"] = json!(true);
-    world.transitioned(RM, &release, "release", with_go).await;
-    let go = world
+    // The go comes from the head of product, who isn't a Kuria user yet:
+    // the release manager adds them as a contact and checks it for them.
+    let head = world
         .ok(
-            ADMIN,
-            "query($n: String!) { akt(number: $n) { fields { ... on CheckboxValue { field checked by { id } } ... on UserValue { field user { ... on User { id } } } } } }",
-            json!({ "n": release }),
+            RM,
+            "mutation { addContact(input: { name: \"Hedda Product\", email: \"hedda@shop.example\" }) { id } }",
+            json!({}),
         )
-        .await;
+        .await["addContact"]["id"]
+        .clone();
+    let mut with_go = released_fields;
+    with_go["go"] = json!({ "for": { "contact": head } });
+    world.transitioned(RM, &release, "release", with_go).await;
+    let go_query = "query($n: String!) { akt(number: $n) { fields {
+        ... on CheckboxValue { field checked by { id } for { ... on Contact { id displayName user { id } } } }
+        ... on UserValue { field user { ... on User { id } } } } } }";
+    let go = world.ok(ADMIN, go_query, json!({ "n": release })).await;
     let fields = go["akt"]["fields"].as_array().unwrap();
     assert!(fields.contains(&json!({ "field": "release_manager", "user": { "id": SUBJECT } })));
-    assert!(fields.contains(&json!({ "field": "go", "checked": true, "by": { "id": SUBJECT } })));
+    assert!(fields.contains(&json!({
+        "field": "go", "checked": true, "by": { "id": SUBJECT },
+        "for": { "id": head, "displayName": "Hedda Product", "user": null }
+    })));
 
     // Once released, it takes hotfixes but no more candidates.
     let late_rc = world
@@ -598,6 +608,40 @@ async fn a_release_from_planning_to_closed() {
         world.column(&release, "rejected").await,
         std::slice::from_ref(&rc1)
     );
+
+    // The head of product signs in with that email, verified, and is from
+    // then on shown as the user they became; the release still holds what
+    // was recorded.
+    let hedda = uuid::Uuid::now_v7();
+    let mut conn = world.db.pool().get().await.unwrap();
+    assert!(
+        kuria_store::contacts::link(
+            &mut conn,
+            support::TENANT.parse().unwrap(),
+            "Hedda@shop.example",
+            hedda,
+            Utc::now()
+        )
+        .await
+        .unwrap()
+    );
+    kuria_store::people::record(
+        &mut conn,
+        &kuria_store::people::Person {
+            subject_id: hedda,
+            name: Some("Hedda Produktsson".to_owned()),
+            email: Some("hedda@shop.example".to_owned()),
+            updated_at: Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+    drop(conn);
+    let go = world.ok(ADMIN, go_query, json!({ "n": release })).await;
+    assert!(go["akt"]["fields"].as_array().unwrap().contains(&json!({
+        "field": "go", "checked": true, "by": { "id": SUBJECT },
+        "for": { "id": head, "displayName": "Hedda Produktsson", "user": { "id": hedda.to_string() } }
+    })));
 
     // Closing the release freezes it.
     world.transitioned(RM, &release, "close", json!({})).await;

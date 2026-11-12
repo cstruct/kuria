@@ -89,10 +89,14 @@ Not yet: links other than containment, and signatures.
   revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
-  `transferMember`, `moveAkt`, `draftField`.
-  `user` fields and a revision's `by` are `User { id name email }`;
-  checkboxes are `CheckboxValue { checked by at }`, and git references and
-  images `GitValue` and `DockerValue`.
+  `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
+  `eraseContact`; and the query `contacts`.
+  A revision's `by` is `User { id name email }`; `user` fields are
+  `UserValue { user: Someone }`, `Someone` being a `User` or a
+  `Contact { id displayName name email user }`; checkboxes are
+  `CheckboxValue { checked by at for: Someone }`; git references and
+  images `GitValue` and `DockerValue`; attachments
+  `AttachmentValue { attachment { name mediaType size sha256 sbom url } }`.
   `Akt` also has `rank`, `members`, `containers` and `board` (its members
   in its akt type's columns, then `unmapped`, each in rank order), and a
   revision its `membership`.
@@ -100,8 +104,10 @@ Not yet: links other than containment, and signatures.
   `UNKNOWN_AKT_TYPE`, `NOT_FOUND`, `REFUSED`, `STALE` (with
   `currentRevision`), `FORBIDDEN`, `UNAVAILABLE`, `NOT_CONTAINABLE`,
   `ALREADY_MEMBER`, `NOT_MEMBER`, `EXCLUSIVE`, `CYCLE`, `FROZEN`,
-  `NOT_ACCEPTING`,
-  `CREATED_IN`, `BAD_REQUEST` or `INTERNAL`.
+  `NOT_ACCEPTING`, `CREATED_IN`, `BAD_REQUEST`, `INVALID_CONTACT`,
+  `DUPLICATE_EMAIL`, `LINKED` or `INTERNAL`. The attachment endpoints answer
+  JSON errors with a `code` of `invalid_name`, `not_found`, `unavailable`
+  or `internal`, and 413 for an upload over the limit.
 - [`src/changes.rs`](src/changes.rs): the [relay](src/changes/relay.rs),
   which publishes the outbox to Valkey and is woken by every committed write,
   and the [hub](src/changes/hub.rs), which wakes on Valkey, reads change

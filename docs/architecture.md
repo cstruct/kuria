@@ -92,7 +92,12 @@ type Akt {
 }
 
 union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue
-                 | SubjectValue | ReferenceValue
+                 | UserValue | CheckboxValue | ReferenceValue | GitValue
+                 | DockerValue | AttachmentValue
+
+# Whom a user field or a checkbox names: a user, or a contact who may not
+# be one yet.
+union Someone = User | Contact
 ```
 
 Typing comes from the field kind, not from the akt type. The React app reads the `AktType` (its fields, states and transitions) and builds forms, boards and views from it.
@@ -101,9 +106,9 @@ A schema generated per configuration would give each akt type its own GraphQL ty
 
 ### Mutations
 
-Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Later: `addLink` and `sign`.
+Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`; and for contacts `addContact`, `editContact` and `eraseContact`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Later: `addLink` and `sign`.
 
-Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDDEN`, `NOT_FOUND`, `CYCLE` or `FROZEN`; the server README lists them all.
+Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDDEN`, `NOT_FOUND`, `CYCLE`, `FROZEN` or `DUPLICATE_EMAIL`; the server README lists them all.
 
 ### Limits
 
@@ -177,7 +182,8 @@ Sending events rather than whole objects means permissions are checked in one pl
   - Cookies are sent automatically, so cookie requests that can change something, and every WebSocket upgrade, must come from an allowed `Origin`, and `POST /graphql` takes only `application/json`, which a cross-site page cannot send without a CORS preflight.
   - WebSocket upgrades carry the cookie like any request, so subscriptions need no token in the URL.
   - Serving the frontend on Kuria's own site is required by `SameSite=Strict`; in development, Vite proxies `/graphql` and `/auth` to the server.
-- Operations are authorized one permission at a time ([spec](spec/authorization.md)). Kuria's actions (`kuria:akt_types:define`, `kuria:akter:read`, `…:create`, `…:edit`, `…:transition`) are Konklav catalog data, required tenant-wide or at the scope `kuria_akt_type:<key>`, so a Konklav role grants them for every akt type or for one. A transition can name one more action of its own, such as `capa:approve_closure`. Each permission is decided by the relying client for the request's bearer token, mostly from its cached entitlements, and remembered for the rest of the request.
+- Operations are authorized one permission at a time ([spec](spec/authorization.md)). Kuria's actions (`kuria:akt_types:define`, `kuria:akter:read`, `…:create`, `…:edit`, `…:transition`, and tenant-wide `kuria:contacts:read` and `…:manage`) are Konklav catalog data, required tenant-wide or at the scope `kuria_akt_type:<key>`, so a Konklav role grants them for every akt type or for one. A transition can name one more action of its own, such as `capa:approve_closure`. Each permission is decided by the relying client for the request's bearer token, mostly from its cached entitlements, and remembered for the rest of the request.
+- People: Konklav keeps no profile data, so Kuria records a subject's name and email from userinfo at browser sign-in ([spec](spec/people.md)). A tenant can also name people who aren't users yet as contacts; the first subject to sign in to the tenant with a contact's email, verified, is linked to it, and values naming the contact show that user from then on without changing ([spec](spec/contacts.md)). Only a verified email links, so nobody takes over someone else's approvals by claiming an address.
 - Akter a subject may not read are invisible: `null`, left out of lists, and `NOT_FOUND` to mutations, decided before anything that could reveal them, such as a stale revision.
 - Roles named in akt type configuration map to Konklav roles. Kuria evaluates those roles against the data Konklav publishes, and adds its own checks for what only Kuria knows, such as separation of duties on a specific akt.
 - *Open:* signing. A signature should probably require the signer to authenticate again at the moment of signing. How Konklav supports that, and what Kuria stores as proof, has to be settled before `akt_revision` and `signature` are fixed.

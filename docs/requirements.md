@@ -13,18 +13,21 @@ else in this document is still to come.
 
 | Area | Covered | Specs |
 |---|---|---|
-| Akt types and fields | Akt types as runtime documents, versioned; the field kinds `text`, `choice`, `choices`, `date`, `subject` and `reference`; required fields | [akter](spec/akter.md) |
+| Akt types and fields | Akt types as runtime documents, versioned; the field kinds `text`, `choice`, `choices`, `date`, `user`, `checkbox` (who checked it, and for whom), `reference`, `git`, `docker` and `attachment`; required fields | [akter](spec/akter.md) |
+| Attachments | Uploads in S3-compatible storage, immutable and stored once per tenant; SPDX and CycloneDX SBOMs recognised and summarised; downloads to readers of the akter holding them | [attachments](spec/attachments.md) |
+| People | Users shown by the names recorded at sign-in; contacts named before they are users, linked to them at sign-in by a verified email | [people](spec/people.md), [contacts](spec/contacts.md) |
 | Workflow | States, transitions with required fields, final states, and an extra permission per transition | [akter](spec/akter.md), [authorization](spec/authorization.md) |
 | Links and nesting | Containment: many containers per akt, exclusivity, no cycles, frozen final containers, accepting members only in some states, creating inside containers, transfers | [containers](spec/containers.md) |
 | Ordering and boards | One priority order per tenant, moves, boards with configured columns | [ordering](spec/ordering.md), [boards](spec/boards.md) |
 | Numbering | Number patterns with `{year}`, `{month}`, `{parent}` and a sequence | [akter](spec/akter.md) |
 | Records and integrity | Append-only revisions with author, reason and a state hash; membership history; change events | [akter](spec/akter.md), [containers](spec/containers.md) |
-| Drafting | Fields drafted from the akter around them, such as release notes | [drafts](spec/drafts.md) |
+| Drafting | Fields drafted from the akter around them, such as release notes, also the newest akt per value of a field, leaving out exclusions, such as the artifacts a release ships | [drafts](spec/drafts.md) |
 | Live updates | Change events published through Valkey, a `changes` subscription over WebSocket, catching up from a cursor | [changes](spec/changes.md) |
-| Identity and access | Konklav authentication, browser sessions, authorization per akt type and transition, erasure | [authentication](spec/authentication.md), [browser sessions](spec/browser-sessions.md), [authorization](spec/authorization.md), [erasure](spec/erasure.md) |
+| Identity and access | Konklav authentication, browser sessions, authorization per akt type and transition, erasure of sessions, names and linked contacts | [authentication](spec/authentication.md), [browser sessions](spec/browser-sessions.md), [authorization](spec/authorization.md), [erasure](spec/erasure.md) |
 
-The release, backlog and epic processes run on this today: see
-[the release-management example](examples/release-management/README.md).
+The release, backlog and epic processes run on this today, with build
+artifacts, SBOMs and a go for release given by someone who need not be a
+user: see [the release-management example](examples/release-management/README.md).
 Not yet: other link kinds and traceability, signatures, structured tables,
 computed fields, deadlines, obligations, reporting and the frontend.
 

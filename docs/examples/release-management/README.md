@@ -37,8 +37,12 @@ others.
   registers artifacts, and the release manager puts them into candidates
   and hotfixes. An artifact whose change is `removed` says that a candidate
   drops a component.
-- A release names its release manager, and can only be released once they
-  check *Go for release*, which records who checked it and when.
+- A release names its release manager, and can only be released once
+  *Go for release* is checked, which records who checked it and when. The
+  release manager can check it for whoever gave the go, such as a head of
+  product, who may be a contact rather than a user: "Go for release: Hedda,
+  checked by Alice". Once that person signs in with the contact's email,
+  verified, the release shows them as the user they became.
 - The release notes are drafted from what the release's accepted candidates
   and deployed hotfixes contain, including the items inside their epics,
   but not from its backlogs, whose items may not have shipped, nor from
@@ -74,7 +78,9 @@ Two roles cover the usual split:
 - **Developer**, tenant-wide: `kuria:akter:read`; and at `backlog`, `epic`
   and `backlog_item`: `kuria:akter:create`, `kuria:akter:edit` and
   `kuria:akter:transition`.
-- **Release manager**, tenant-wide: `kuria:akter:read`; and at `release`,
+- **Release manager**, tenant-wide: `kuria:akter:read` and
+  `kuria:contacts:manage`, to name approvers who aren't users yet; and at
+  `release`,
   `release_candidate`, `hotfix` and `release_notes`: `kuria:akter:create`,
   `kuria:akter:edit`, `kuria:akter:transition`, and `release:approve`.
 
