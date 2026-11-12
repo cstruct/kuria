@@ -1,0 +1,20 @@
+{
+  "key": "backlog",
+  "name": "Backlog",
+  "number": "BACKLOG-{seq:3}",
+  "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+  "states": [
+    { "key": "open", "name": "Open", "initial": true },
+    { "key": "closed", "name": "Closed", "final": true }
+  ],
+  "transitions": [{ "key": "close", "name": "Close", "from": ["open"], "to": "closed" }],
+  "contains": [{ "type": "backlog_item", "exclusive": true }, { "type": "epic" }],
+  "board": { "columns": [
+    { "key": "todo", "name": "To do",
+      "states": { "backlog_item": ["open"], "epic": ["open"] } },
+    { "key": "doing", "name": "In progress",
+      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"] } },
+    { "key": "done", "name": "Done",
+      "states": { "backlog_item": ["done"], "epic": ["done"] } }
+  ] }
+}

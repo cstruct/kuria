@@ -1,0 +1,35 @@
+{
+  "key": "release",
+  "name": "Release",
+  "number": "RELEASE-{year}-{seq:4}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "version", "name": "Version", "kind": "text" },
+    { "key": "released_on", "name": "Released on", "kind": "date" }
+  ],
+  "states": [
+    { "key": "planning", "name": "Planning", "initial": true },
+    { "key": "testing", "name": "Testing" },
+    { "key": "released", "name": "Released" },
+    { "key": "closed", "name": "Closed", "final": true }
+  ],
+  "transitions": [
+    { "key": "test", "name": "Start testing", "from": ["planning"], "to": "testing" },
+    { "key": "release", "name": "Release", "from": ["testing"], "to": "released",
+      "requires": ["version", "released_on"], "action": "release:approve" },
+    { "key": "close", "name": "End maintenance", "from": ["released"], "to": "closed" }
+  ],
+  "contains": [
+    { "type": "backlog" },
+    { "type": "release_candidate" },
+    { "type": "hotfix" },
+    { "type": "release_notes", "exclusive": true }
+  ],
+  "board": { "columns": [
+    { "key": "testing", "name": "Testing",
+      "states": { "release_candidate": ["testing"], "hotfix": ["open"] } },
+    { "key": "accepted", "name": "Accepted",
+      "states": { "release_candidate": ["accepted"], "hotfix": ["deployed"] } },
+    { "key": "rejected", "name": "Rejected", "states": { "release_candidate": ["rejected"] } }
+  ] }
+}

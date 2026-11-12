@@ -1,0 +1,24 @@
+{
+  "key": "release_notes",
+  "name": "Release notes",
+  "number": "{parent}-NOTES-{seq}",
+  "created_in": ["release"],
+  "fields": [
+    { "key": "text", "name": "Text", "kind": "text", "multiline": true,
+      "draft": {
+        "through": ["release_candidate", "hotfix", "epic"],
+        "depth": 3,
+        "types": ["epic", "backlog_item"],
+        "line": "- {number} {field:title} ({field:kind})",
+        "group_by": "type"
+      } }
+  ],
+  "states": [
+    { "key": "draft", "name": "Draft", "initial": true },
+    { "key": "approved", "name": "Approved", "final": true }
+  ],
+  "transitions": [
+    { "key": "approve", "name": "Approve", "from": ["draft"], "to": "approved",
+      "requires": ["text"], "action": "release:approve" }
+  ]
+}

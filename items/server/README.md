@@ -162,6 +162,12 @@ mise run test
   release's candidates, hotfix and an epic inside a candidate, leaving out
   a backlog's unshipped item and what the drafter can't read, and refused
   as an edit would be.
+- [`tests/release_flow.rs`](tests/release_flow.rs) walks one release with
+  the example configuration in
+  [`docs/examples/release-management`](../../docs/examples/release-management/README.md),
+  read straight from its files, as a developer and a release manager: from
+  planning through two release candidates, the release and a hotfix, to
+  drafted notes and a closed, frozen release.
 - [`tests/erasure.rs`](tests/erasure.rs) runs the erasure task against a
   stand-in for Konklav's list and a fresh database: live notices, catching
   up from the stored time, the time never moving back, and retrying a

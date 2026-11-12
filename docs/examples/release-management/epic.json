@@ -1,0 +1,25 @@
+{
+  "key": "epic",
+  "name": "Epic",
+  "number": "EPIC-{seq:3}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "goal", "name": "Goal", "kind": "text", "multiline": true }
+  ],
+  "states": [
+    { "key": "open", "name": "Open", "initial": true },
+    { "key": "in_progress", "name": "In progress" },
+    { "key": "done", "name": "Done", "final": true }
+  ],
+  "transitions": [
+    { "key": "start", "name": "Start", "from": ["open"], "to": "in_progress" },
+    { "key": "finish", "name": "Finish", "from": ["in_progress"], "to": "done" }
+  ],
+  "contains": [{ "type": "backlog_item", "exclusive": true }],
+  "board": { "columns": [
+    { "key": "todo", "name": "To do", "states": { "backlog_item": ["open"] } },
+    { "key": "doing", "name": "In progress", "states": { "backlog_item": ["in_progress"] } },
+    { "key": "review", "name": "In review", "states": { "backlog_item": ["in_review"] } },
+    { "key": "done", "name": "Done", "states": { "backlog_item": ["done"] } }
+  ] }
+}
