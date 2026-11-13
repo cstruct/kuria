@@ -8,6 +8,7 @@ use std::time::Duration;
 use konklav_relying_client::RelyingClient;
 use kuria_server::attachments::Storage;
 use kuria_server::changes::{Hub, Relay};
+use kuria_server::cli_relay::{self as relay, CliRelay};
 use kuria_server::erasure::handle_erasures;
 use kuria_server::oidc::{self, Provider};
 use kuria_server::session::{self, BrowserSessions, Cookies, SessionCipher};
@@ -38,6 +39,23 @@ async fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The CLI's login relay, holding codes in Valkey and limited by rate.
+fn cli_relay(
+    valkey: redis::aio::ConnectionManager,
+    rate_limit_secret: &str,
+) -> Result<Arc<CliRelay>, Box<dyn std::error::Error>> {
+    Ok(Arc::new(CliRelay {
+        limit: session::sign_in_limit(
+            "kuria.cli-relay",
+            relay::RELAY_WINDOWS.to_vec(),
+            valkey.clone(),
+            rate_limit_secret,
+        )?,
+        valkey,
+        hold: relay::HOLD,
+    }))
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -138,6 +156,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 None
             },
+            cli_relay: Some(cli_relay(valkey.clone(), &config.rate_limit_secret)?),
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

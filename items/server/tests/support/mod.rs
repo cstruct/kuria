@@ -213,6 +213,7 @@ pub fn router_storing(
             storage,
             web: None,
             login_proxy: None,
+            cli_relay: None,
         },
     )
     .unwrap()

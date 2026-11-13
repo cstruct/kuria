@@ -69,12 +69,14 @@ server. A failed test keeps its trace and screenshots in
   plane with the catalog (Kuria's actions and the `kuria_akt_type` scope
   kind), the tenant, the release-management example's roles, a developer, a
   release manager and a head of product with test-only passwords, Kuria's
-  OIDC client and service principal, and the admin and the build pipeline
+  OIDC client and service principal, the CLI's public DPoP client
+  `kuria-cli`, and the admin and the build pipeline
   as software with secret keys. It writes Kuria's configuration to
   `.state/kuria.env` and what the tests use to `.state/seeded.json`.
 - [`scripts/serve.ts`](scripts/serve.ts): the Kuria server for the tests.
 - [`support/`](support): signing people in, working in the app by roles
-  and labels, and the API as software uses it.
+  and labels, the API as software uses it, and DPoP proofs
+  ([`support/dpop.ts`](support/dpop.ts)).
 
 Each test's browser sends its own `X-Forwarded-For` address, which Kuria
 trusts from localhost here, so the sign-in rate limit counts each test as
@@ -88,6 +90,11 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
 
 - [`tests/sign-in.spec.ts`](tests/sign-in.spec.ts): signing in through the
   login page, a wrong password, and single sign-on.
+- [`tests/cli-login.spec.ts`](tests/cli-login.spec.ts): `kuria login`'s
+  flow without the CLI: a link authorized in another browser, the code
+  collected from the relay once and exchanged with a DPoP proof, GraphQL
+  with the bound token (and refused as a bearer token), a refresh; and
+  software's DPoP-bound secret-key sign-in, refused with another key.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
 - [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe

@@ -49,6 +49,7 @@ fn router(web: Option<Web>, login_proxy: Option<LoginProxy>) -> Router {
             storage: kuria_server::attachments::Storage::in_memory(1 << 20),
             web,
             login_proxy,
+            cli_relay: None,
         },
     )
     .unwrap()

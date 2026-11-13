@@ -26,6 +26,14 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   per session at a time across every instance.
 - Rate limiting sign-in starts per client address, shared between instances
   through Valkey.
+- Relaying `kuria login`'s authorization code ([`src/cli_relay.rs`](src/cli_relay.rs)):
+  `GET /cli/authorized`, the `kuria-cli` client's redirect URI, keeps the
+  code or OAuth error for its `state` in Valkey for two minutes (the first
+  redirect for a `state` wins) and tells the person to return to their
+  terminal; `POST /cli/authorized/collect` with `{"state"}` answers
+  `{"code"}` or `{"error", "error_description"}` once, and 204 while
+  nothing is kept. Both are limited per client address. Codes are never
+  exchanged or logged.
 - Deleting an erased subject's browser sessions, recorded name and email,
   the tenants they signed in to, and the names and emails of contacts linked to them when Konklav erases
   them,
@@ -178,6 +186,12 @@ The server is configured from the environment:
 | `KURIA_SESSION_KEY` | 32 bytes in base64, the key browser sessions' tokens are encrypted under (`openssl rand -base64 32`) |
 | `KURIA_OIDC_CLIENT_ID` | Kuria's OIDC client at Konklav: confidential, with the code and refresh grants, the `tenant` scope, and `<public URL>/auth/callback` as its redirect URI |
 | `KURIA_OIDC_CLIENT_SECRET` | That client's secret |
+
+`kuria login` needs one more OIDC client at Konklav, `kuria-cli`: public,
+requiring PKCE and DPoP, with the code and refresh grants, the `tenant`
+scope, audience `kuria`, and `<public URL>/cli/authorized` as its only
+redirect URI. The end-to-end seed registers it
+([`e2e/scripts/setup.ts`](../../e2e/scripts/setup.ts)).
 | `DATABASE_URL` | Kuria's Postgres database |
 | `KURIA_VALKEY_URL` | Valkey, as a `redis://` URL, for state the instances share |
 | `KURIA_RATE_LIMIT_SECRET` | At least 32 bytes, shared by every instance; rate-limit keys are hashed under it before they reach Valkey |
@@ -222,6 +236,10 @@ mise run test
   recording the person, and linking a contact by a verified email only, in
   the tenant signed in to only, and never relinking one.
   They need the development Postgres and Valkey (`mise run db:up`).
+- [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
+  Valkey: the relay keeping a code or an error until it is collected once,
+  the first redirect for a `state` winning, forgetting an uncollected code,
+  refusing malformed redirects and states, and its rate limit.
 - [`tests/akter.rs`](tests/akter.rs) goes through GraphQL against a fresh
   database: akt type versions and their validation, tenant isolation,
   numbering (also ten concurrent creates), field kinds and refusals, edits

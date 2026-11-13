@@ -1,7 +1,8 @@
 // Seeds the end-to-end Konklav over its control plane, with the bootstrap
 // token: the catalog with Kuria's actions, the tenant `shop`, the roles of
-// the release-management example, people, Kuria's OIDC client and service
-// principal, and service clients for the admin and the build pipeline.
+// the release-management example, people, Kuria's OIDC clients (the app's
+// and the CLI's) and service principal, and service clients for the admin
+// and the build pipeline.
 //
 // Writes .state/kuria.env (Kuria's configuration) and .state/seeded.json
 // (who and what the tests use). Konklav starts empty every run.
@@ -66,10 +67,7 @@ const ROLES: Record<string, ReturnType<typeof allow>> = {
 	reader: allow(['kuria:akter:read']),
 	'contacts-manager': allow(['kuria:contacts:manage']),
 	'developer-work': allow(['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition'], true),
-	'release-work': allow(
-		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'release:approve'],
-		true
-	),
+	'release-work': allow(['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'release:approve'], true),
 	'pipeline-work': allow(['kuria:akter:read', 'kuria:akter:create'], true)
 };
 
@@ -92,11 +90,7 @@ async function member(tenant: string, subject: string, grants: Grant[]) {
 	}
 }
 
-async function person(
-	tenant: string,
-	email: string,
-	grants: Grant[]
-): Promise<Person> {
+async function person(tenant: string, email: string, grants: Grant[]): Promise<Person> {
 	const subject = randomUUID();
 	const password = `${email.split('@')[0]}'s end-to-end password`;
 	await control('PUT', `/subjects/${subject}`, { kind: 'human' });
@@ -161,6 +155,17 @@ await control('PUT', '/oidc/clients/kuria', {
 	require_pkce: true
 });
 const { client_secret: kuriaSecret } = await control('POST', '/oidc/clients/kuria/secret');
+// `kuria login`: public, its tokens bound to the CLI's DPoP key, with
+// Kuria's relay as its redirect URI (docs/spec/cli.md, `cli.login`).
+await control('PUT', '/oidc/clients/kuria-cli', {
+	kind: 'public',
+	redirect_uris: [`${KURIA}/cli/authorized`],
+	audience: 'kuria',
+	scopes: ['openid', 'email', 'tenant'],
+	refresh: true,
+	require_pkce: true,
+	require_dpop: true
+});
 const kuria = await servicePrincipal();
 
 const clients = {

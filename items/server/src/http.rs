@@ -63,6 +63,8 @@ pub struct Options {
     /// The proxy to Konklav's subject-facing surface, when the server is
     /// Konklav's login application.
     pub login_proxy: Option<crate::web::LoginProxy>,
+    /// The CLI's login relay. Without it, `/cli/authorized` isn't served.
+    pub cli_relay: Option<Arc<crate::cli_relay::CliRelay>>,
 }
 
 /// What delivers change events: the hub subscriptions join, and what wakes
@@ -88,6 +90,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         storage,
         web,
         login_proxy,
+        cli_relay,
     } = options;
     let konklav = Konklav::builder(host.clone())
         // r[impl auth.dpop]
@@ -141,6 +144,9 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             decider,
         })
         .merge(attachment_routes);
+    if let Some(relay) = cli_relay {
+        router = router.merge(crate::cli_relay::router(relay)?);
+    }
     if let Some(proxy) = login_proxy {
         router = router.merge(proxy.router());
     }

@@ -57,6 +57,7 @@ impl Instance {
                 storage: kuria_server::attachments::Storage::in_memory(1 << 20),
                 web: None,
                 login_proxy: None,
+                cli_relay: None,
             },
         )
         .unwrap();

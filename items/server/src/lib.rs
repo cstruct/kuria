@@ -8,6 +8,7 @@ pub mod akter;
 pub mod attachments;
 pub mod authorize;
 pub mod changes;
+pub mod cli_relay;
 mod config;
 pub mod erasure;
 mod graphql;
