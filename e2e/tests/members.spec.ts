@@ -85,18 +85,19 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 });
 
 // r[verify app.akt-types]
+// r[verify app.filters]
 test('an akt type’s akter are listed, filtered by state and sorted', async ({ browser }) => {
 	await defineExample();
 	const admin = await api(seeded().clients.admin);
-	const create = async (title: string) =>
+	const create = async (title: string, fields: Record<string, unknown> = {}) =>
 		(
 			await admin.graphql<{ createAkt: { number: string } }>(
 				'mutation($f: JSON) { createAkt(input: { type: "backlog_item", fields: $f }) { number } }',
-				{ f: { title } }
+				{ f: { title, ...fields } }
 			)
 		).createAkt.number;
-	const older = await create('Older listed item');
-	const newer = await create('Newer listed item');
+	const older = await create('Older listed item', { kind: 'fix', assignee: seeded().people.developer.subject });
+	const newer = await create('Newer listed item', { kind: 'feature' });
 	await admin.graphql(
 		'mutation($n: String!) { performTransition(input: { number: $n, revision: 1, transition: "start" }) { number } }',
 		{ n: older }
@@ -120,6 +121,18 @@ test('an akt type’s akter are listed, filtered by state and sorted', async ({ 
 	await expect(page).toHaveURL(/state=in_progress/);
 	await expect.poll(mine).toEqual([older]);
 	await expect(table.getByRole('row', { name: /Older listed item/ })).toContainText('In progress');
+
+	// Filtered by field values, kept in the address.
+	await page.getByLabel('State').selectOption('');
+	await page.getByLabel('Kind').selectOption({ label: 'Feature' });
+	await expect(page).toHaveURL(/where\.kind=feature/);
+	await expect.poll(mine).toEqual([newer]);
+	await page.getByLabel('Kind').selectOption('');
+	await page.getByLabel('Assignee').selectOption({ label: 'Me' });
+	await expect(page).toHaveURL(/where\.assignee=me/);
+	await expect.poll(mine).toEqual([older]);
+	await page.reload();
+	await expect.poll(mine).toEqual([older]);
 });
 
 // r[verify akt.page]

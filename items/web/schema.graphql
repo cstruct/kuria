@@ -35,7 +35,12 @@ type Akt {
 	type if given, a page of at most `first` (50 by default, 200 at most)
 	after the cursor `after`.
 	"""
-	members(type: String, first: Int, after: String): AktConnection!
+	members(		type: String,		first: Int,		after: String,
+		"""
+		Conditions on field values, all of which a member must meet; `type` must be given.
+		"""
+		where: [FieldCondition!]
+	): AktConnection!
 	"""
 	The akt as a board: its members that the subject may read, in the
 	columns its akt type configures and then `unmapped`, each in rank
@@ -440,6 +445,22 @@ type Field {
 	format: AttachmentFormat
 }
 
+"""
+A condition on one field's value.
+"""
+input FieldCondition {
+	"""
+	The field's key.
+	"""
+	field: String!
+	"""
+	The value it must hold: a choice's option key; a date as
+	`YYYY-MM-DD`; a single-line text whole; for a `user` field or a
+	checkbox's `for`, `me`, a subject identifier, or `contact:<id>`.
+	"""
+	equals: String!
+}
+
 enum FieldKind {
 	TEXT
 	CHOICE
@@ -653,7 +674,11 @@ type Query {
 		"""
 		Akter whose number starts with this, or whose title contains each of its words, ignoring case; the most recently changed first.
 		"""
-		search: String
+		search: String,
+		"""
+		Conditions on field values, all of which an akt must meet; `type` must be given.
+		"""
+		where: [FieldCondition!]
 	): AktConnection!
 	"""
 	The tenant's contacts, by name.

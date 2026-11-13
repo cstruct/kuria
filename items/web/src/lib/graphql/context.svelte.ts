@@ -19,7 +19,10 @@ export interface Query<Data> {
 	readonly fetching: boolean;
 }
 
-/** Runs `document` with `variables()` for as long as the component lives. */
+/** Runs `document` with `variables()` for as long as the component lives,
+ * asking again only when the variables' values change: a variable built
+ * from what the cache answered is a new object whenever the cache updates,
+ * and asking again for it would ask forever. */
 export function query<Data, Variables extends AnyVariables>(
 	document: TypedDocumentNode<Data, Variables>,
 	variables: () => Variables
@@ -30,10 +33,11 @@ export function query<Data, Variables extends AnyVariables>(
 		error: CombinedError | undefined;
 		fetching: boolean;
 	}>({ data: undefined, error: undefined, fetching: true });
+	const asked = $derived(JSON.stringify(variables()));
 	$effect(() => {
 		state.fetching = true;
 		const subscription = client
-			.query(document, variables(), { requestPolicy: 'cache-and-network' })
+			.query(document, JSON.parse(asked) as Variables, { requestPolicy: 'cache-and-network' })
 			.subscribe((result) => {
 				// While what the cache held is refetched, after a change marked it
 				// stale, keep showing it rather than nothing.

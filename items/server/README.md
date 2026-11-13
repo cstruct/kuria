@@ -102,7 +102,11 @@ Not yet: links other than containment, and signatures.
   `akter`, search and an akt's `members` answer pages (`AktConnection`:
   `nodes` and `pageInfo { endCursor hasNextPage }`), keyset-paged by
   `first` and `after` (`src/graphql/page.rs`); a cursor names its list,
-  so another list refuses it.
+  so another list refuses it. `where` filters lists and members of one
+  akt type by field values (`src/graphql/filter.rs`), as JSON containment
+  on `akt.fields`: choices by key, users and checkboxes by `me` (and the
+  contacts linked to the viewer), a subject or `contact:<id>`, dates and
+  single-line text exactly.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
@@ -274,7 +278,9 @@ mise run test
   searching by number and title words, across types, only what the
   subject may read, with `%` and `_` taken literally, and lists and
   searches a page at a time, following cursors while the list changes
-  and refusing another list's.
+  and refusing another list's, and filtering by each kind of field and
+  its refusals; `tests/contacts.rs` filters by `me`, contacts linked to
+  the viewer included.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
   CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
   left out, cookies and redirects passed back); and discovering the

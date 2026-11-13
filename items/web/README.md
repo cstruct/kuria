@@ -31,7 +31,10 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
 
 ## Layout
 
-- [`src/lib/graphql`](src/lib/graphql): the client, its cache keys, and
+- [`src/lib/graphql`](src/lib/graphql): `query()` (which asks again only
+  when its variables' values change, since variables built from cached
+  answers are new objects on every cache update), the client, its cache
+  keys, and
   every operation, in `.ts` modules only, so `graphql-codegen` types them.
   The types are generated into `src/lib/graphql/generated` (not checked
   in) from [`schema.graphql`](schema.graphql), which `kuria-server schema`
@@ -65,14 +68,17 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
   (`labels.ts`), uploads, and the field editor and display components.
-- [`src/lib/home`](src/lib/home): Home's wording; the page shows the
-  akter changed most recently and a card per akt type.
+- [`src/lib/home`](src/lib/home): Home's wording and "My work"
+  (`work.ts`: one filtered list per user field and checkbox naming the
+  viewer); the page shows the akter changed most recently, "My work", and
+  a card per akt type.
 - [`src/lib/login`](src/lib/login): the login page's DPoP key, Konklav's
   subject-facing API and the flow for each login request.
 - [`src/routes`](src/routes): the pages: akt types, akter by type (a
   table of the presentation's list fields, filtered by state with
   `?state=` and sorted by rank with `?sort=rank`, 50 at a time with
-  "Load more"; `paging.ts`), an
+  "Load more"; `paging.ts`; filtered by field values in the address,
+  `?where.<field>=`, with `FilterBar` and `filters.ts`), an
   akt, creating one (in containers, with `?in=`), contacts, and `/login`.
 
 Tracey doesn't read `.svelte` files, so the rules the app implements are

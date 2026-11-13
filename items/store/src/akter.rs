@@ -275,6 +275,69 @@ pub async fn lock_akt_by_number(
         .optional()
 }
 
+/// One condition on an akt's field values (`akt.filter`): an akt meets it
+/// when any of its matches holds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Condition(pub Vec<Match>);
+
+/// One way an akt's fields can meet a condition.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Match {
+    /// The fields contain this JSON object (`@>`), as a value stores it.
+    Contains(serde_json::Value),
+    /// The checkbox `field` was checked by `subject` for themself: its
+    /// `checked_by` is the subject and it says no `for`.
+    CheckedForSelf { field: String, subject: String },
+}
+
+type AktFilter =
+    Box<dyn BoxableExpression<akt::table, diesel::pg::Pg, SqlType = diesel::sql_types::Bool>>;
+
+fn matched(m: &Match) -> AktFilter {
+    use diesel::dsl::sql;
+    use diesel::sql_types::Text;
+    match m {
+        Match::Contains(json) => Box::new(akt::fields.contains(json.clone())),
+        Match::CheckedForSelf { field, subject } => Box::new(
+            sql::<diesel::sql_types::Bool>("((akt.fields -> ")
+                .bind::<Text, _>(field.clone())
+                .sql(" ->> 'checked_by') = ")
+                .bind::<Text, _>(subject.clone())
+                .sql(" AND NOT ((akt.fields -> ")
+                .bind::<Text, _>(field.clone())
+                .sql(") ? 'for'))"),
+        ),
+    }
+}
+
+/// The ids of the tenant's akter that meet every condition, as a subquery.
+// r[impl akt.filter]
+pub(crate) fn meeting(
+    tenant: Uuid,
+    conditions: &[Condition],
+) -> Option<akt::BoxedQuery<'static, diesel::pg::Pg, diesel::sql_types::Uuid>> {
+    if conditions.is_empty() {
+        return None;
+    }
+    let mut ids = akt::table
+        .select(akt::id)
+        .filter(akt::tenant_id.eq(tenant))
+        .into_boxed();
+    for condition in conditions {
+        let any = condition
+            .0
+            .iter()
+            .map(matched)
+            .reduce(|a, b| Box::new(a.or(b)) as AktFilter);
+        ids = match any {
+            Some(any) => ids.filter(any),
+            // A condition nothing can meet.
+            None => ids.filter(diesel::dsl::sql::<diesel::sql_types::Bool>("false")),
+        };
+    }
+    Some(ids)
+}
+
 /// Where a page of akter, most recently changed first, ends: the last akt's
 /// change time and id. The next page starts after it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -294,17 +357,36 @@ impl ChangedAfter {
     }
 }
 
-/// Up to `limit` akter of the akt types `keys`, most recently changed first
-/// (ties by id, descending), optionally only in `state`, and after `after`.
+/// Which akter a list or search answers, and which page of them.
+#[derive(Clone, Copy, Debug)]
+pub struct Listing<'a> {
+    /// The akt types listed, by key.
+    pub keys: &'a [String],
+    /// Only akter in this state, if given.
+    pub state: Option<&'a str>,
+    /// Conditions every akt must meet.
+    pub conditions: &'a [Condition],
+    /// Where the previous page ended.
+    pub after: Option<ChangedAfter>,
+    pub limit: i64,
+}
+
+/// Up to `limit` akter of the listing's types, most recently changed first
+/// (ties by id, descending), optionally only in its state, meeting every
+/// condition, and after where the previous page ended.
 // r[impl akt.page]
 pub async fn list_akter(
     conn: &mut Connection,
     tenant: Uuid,
-    keys: &[String],
-    state: Option<&str>,
-    after: Option<ChangedAfter>,
-    limit: i64,
+    listing: &Listing<'_>,
 ) -> QueryResult<Vec<AktRow>> {
+    let Listing {
+        keys,
+        state,
+        conditions,
+        after,
+        limit,
+    } = *listing;
     let mut query = akt::table
         .inner_join(akt_type_version::table)
         .filter(akt::tenant_id.eq(tenant))
@@ -315,6 +397,9 @@ pub async fn list_akter(
         .into_boxed();
     if let Some(state) = state {
         query = query.filter(akt::state.eq(state.to_owned()));
+    }
+    if let Some(ids) = meeting(tenant, conditions) {
+        query = query.filter(akt::id.eq_any(ids));
     }
     if let Some(after) = after {
         query = query.filter(
@@ -344,7 +429,7 @@ fn like_escaped(text: &str) -> String {
         .replace('_', "\\_")
 }
 
-/// The tenant's akter of the akt types `keys` that match `text`: whose
+/// The tenant's akter of the listing's types that match `text`: whose
 /// number starts with it, or whose title contains each of its words,
 /// ignoring case, and in `state` if given; the most recently changed first
 /// (ties by id, descending), after `after`, at most `limit`.
@@ -353,15 +438,19 @@ fn like_escaped(text: &str) -> String {
 pub async fn search_akter(
     conn: &mut Connection,
     tenant: Uuid,
-    keys: &[String],
     text: &str,
-    state: Option<&str>,
-    after: Option<ChangedAfter>,
-    limit: i64,
+    listing: &Listing<'_>,
 ) -> QueryResult<Vec<AktRow>> {
     use diesel::dsl::sql;
     use diesel::sql_types::{Bool, Nullable, Text};
 
+    let Listing {
+        keys,
+        state,
+        conditions,
+        after,
+        limit,
+    } = *listing;
     let text = text.trim().to_lowercase();
     if text.is_empty() {
         return Ok(Vec::new());
@@ -391,6 +480,9 @@ pub async fn search_akter(
         .into_boxed();
     if let Some(state) = state {
         matching = matching.filter(akt::state.eq(state.to_owned()));
+    }
+    if let Some(ids) = meeting(tenant, conditions) {
+        matching = matching.filter(akt::id.eq_any(ids));
     }
     if let Some(after) = after {
         matching = matching.filter(

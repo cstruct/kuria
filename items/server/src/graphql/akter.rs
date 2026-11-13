@@ -23,6 +23,7 @@ use uuid::Uuid;
 
 use super::Principal;
 use super::attachments::Attachment;
+use super::filter::{self, FieldCondition};
 use super::page::{After, AktConnection, List, page_size};
 use super::people::{Someone, User};
 use crate::akter::{AktError, Akter, Caller, Place, StoredType};
@@ -210,6 +211,10 @@ impl AkterQuery {
     /// after the cursor `after`.
     // r[impl akt.list]
     // r[impl akt.page]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is one of the query's GraphQL arguments"
+    )]
     async fn akter(
         &self,
         ctx: &Context<'_>,
@@ -221,12 +226,24 @@ impl AkterQuery {
             desc = "Akter whose number starts with this, or whose title contains each of its words, ignoring case; the most recently changed first."
         )]
         search: Option<String>,
+        #[graphql(
+            name = "where",
+            desc = "Conditions on field values, all of which an akt must meet; `type` must be given."
+        )]
+        conditions: Option<Vec<FieldCondition>>,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
+        let conditions = conditions.unwrap_or_default();
+        let where_key = serde_json::to_string(&conditions).map_err(internal)?;
         let list = List::new(
             if search.is_some() { "search" } else { "akter" },
-            &[key.as_deref(), state.as_deref(), search.as_deref()],
+            &[
+                key.as_deref(),
+                state.as_deref(),
+                search.as_deref(),
+                Some(&where_key),
+            ],
         );
         let after = match list.after(after.as_deref())? {
             Some(After::Changed(changed)) => Some(changed),
@@ -246,29 +263,31 @@ impl AkterQuery {
                 readable.push(ty.key);
             }
         }
+        let conditions = match key.as_deref() {
+            _ if conditions.is_empty() => Vec::new(),
+            Some(key) => matching(ctx, &mut conn, tenant, key, &conditions).await?,
+            None => {
+                return Err(coded(
+                    "filtering by fields needs `type`".to_owned(),
+                    "BAD_REQUEST",
+                ));
+            }
+        };
+        let listing = store::Listing {
+            keys: &readable,
+            state: state.as_deref(),
+            conditions: &conditions,
+            after,
+            limit: size + 1,
+        };
         // r[impl akt.search]
         let rows = match &search {
-            Some(text) => store::search_akter(
-                &mut conn,
-                tenant,
-                &readable,
-                text,
-                state.as_deref(),
-                after,
-                size + 1,
-            )
-            .await
-            .map_err(internal)?,
-            None => store::list_akter(
-                &mut conn,
-                tenant,
-                &readable,
-                state.as_deref(),
-                after,
-                size + 1,
-            )
-            .await
-            .map_err(internal)?,
+            Some(text) => store::search_akter(&mut conn, tenant, text, &listing)
+                .await
+                .map_err(internal)?,
+            None => store::list_akter(&mut conn, tenant, &listing)
+                .await
+                .map_err(internal)?,
         };
         let (rows, page_info) = list.page(
             rows,
@@ -281,6 +300,55 @@ impl AkterQuery {
             page_info,
         })
     }
+}
+
+/// The store's conditions for `conditions` on fields of the akt type `key`,
+/// by its latest version: whom a user or checkbox condition names includes
+/// the contacts linked to a named user, so `me` finds values naming one.
+// r[impl akt.filter]
+async fn matching(
+    ctx: &Context<'_>,
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    key: &str,
+    conditions: &[FieldCondition],
+) -> async_graphql::Result<Vec<store::Condition>> {
+    let Some(row) = store::latest_type_versions(conn, tenant)
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .find(|row| row.key == key)
+    else {
+        return Err(coded(
+            format!("there is no akt type `{key}`"),
+            "BAD_REQUEST",
+        ));
+    };
+    let ty = StoredType::read(row).map_err(error)?;
+    let me: Uuid = principal(ctx)?.subject.into();
+    let mut matches = Vec::new();
+    for condition in conditions {
+        let field = filter::field_of(&ty.ty, condition)?;
+        let named = if matches!(field.kind, ConfigKind::User | ConfigKind::Checkbox) {
+            let (user, contact) = filter::named(&field.key, &condition.equals, me)?;
+            let mut named = filter::Named {
+                users: user.into_iter().collect(),
+                contacts: contact.into_iter().collect(),
+            };
+            if let Some(user) = user {
+                named.contacts.extend(
+                    kuria_store::contacts::linked_to(conn, tenant, user)
+                        .await
+                        .map_err(internal)?,
+                );
+            }
+            Some(named)
+        } else {
+            None
+        };
+        matches.push(filter::condition(field, &condition.equals, named.as_ref())?);
+    }
+    Ok(matches)
 }
 
 fn bad_cursor() -> async_graphql::Error {
@@ -1015,11 +1083,21 @@ impl Akt {
         #[graphql(name = "type")] key: Option<String>,
         first: Option<i32>,
         after: Option<String>,
+        #[graphql(
+            name = "where",
+            desc = "Conditions on field values, all of which a member must meet; `type` must be given."
+        )]
+        conditions: Option<Vec<FieldCondition>>,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
         let container = self.row.id.to_string();
-        let list = List::new("members", &[Some(&container), key.as_deref()]);
+        let conditions = conditions.unwrap_or_default();
+        let where_key = serde_json::to_string(&conditions).map_err(internal)?;
+        let list = List::new(
+            "members",
+            &[Some(&container), key.as_deref(), Some(&where_key)],
+        );
         let after = match list.after(after.as_deref())? {
             Some(After::Ranked(rank)) => Some(rank),
             Some(After::Changed(_)) => return Err(bad_cursor()),
@@ -1032,11 +1110,22 @@ impl Akt {
             }
         }
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let conditions = match key.as_deref() {
+            _ if conditions.is_empty() => Vec::new(),
+            Some(key) => matching(ctx, &mut conn, tenant, key, &conditions).await?,
+            None => {
+                return Err(coded(
+                    "filtering by fields needs `type`".to_owned(),
+                    "BAD_REQUEST",
+                ));
+            }
+        };
         let rows = containers::member_page(
             &mut conn,
             tenant,
             self.row.id,
             &readable,
+            &conditions,
             after.as_deref(),
             size + 1,
         )

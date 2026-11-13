@@ -7,6 +7,7 @@ import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
 // r[verify app.home]
+// r[verify app.my-work]
 // r[verify app.type-identity]
 test('home shows what changed recently and every akt type', async ({ browser }) => {
 	await defineExample();
@@ -29,6 +30,16 @@ test('home shows what changed recently and every akt type', async ({ browser }) 
 		.getByRole('listitem')
 		.filter({ has: page.getByRole('link', { name: 'Backlog', exact: true }) });
 	await expect(backlogs).toContainText(/\d+ akt(er)?/);
+
+	// My work: what names the viewer.
+	await admin.graphql(
+		'mutation($f: JSON) { createAkt(input: { type: "backlog_item", fields: $f }) { number } }',
+		{ f: { title: 'Assigned to the developer', assignee: seeded().people.developer.subject } }
+	);
+	await page.reload();
+	await expect(page.getByRole('list', { name: 'My work: Backlog item' })).toContainText(
+		'Assigned to the developer'
+	);
 
 	await recent.getByRole('link', { name: /Home-page backlog/ }).click();
 	await expect(page.getByTestId('number')).toContainText(createAkt.number);

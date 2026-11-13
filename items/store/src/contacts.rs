@@ -149,6 +149,20 @@ pub async fn link_by_hand(
     Ok(linked == 1)
 }
 
+/// The ids of the tenant's contacts linked to `subject`.
+pub async fn linked_to(
+    conn: &mut Connection,
+    tenant: Uuid,
+    subject: Uuid,
+) -> QueryResult<Vec<Uuid>> {
+    contact::table
+        .filter(contact::tenant_id.eq(tenant))
+        .filter(contact::linked_subject.eq(subject))
+        .select(contact::id)
+        .load(conn)
+        .await
+}
+
 /// Deletes a contact's name and email. Answers whether there was one.
 pub async fn erase(conn: &mut Connection, tenant: Uuid, id: Uuid) -> QueryResult<bool> {
     let changed = diesel::update(

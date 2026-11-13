@@ -21,6 +21,10 @@ export const Home = graphql(`
 		aktTypes {
 			...TypeMark
 			akterCount
+			fields {
+				key
+				kind
+			}
 		}
 		akter(first: 10) {
 			nodes {
@@ -42,7 +46,7 @@ export const Home = graphql(`
 `);
 
 export const AkterOfType = graphql(`
-	query AkterOfType($type: String!, $state: String, $after: String) {
+	query AkterOfType($type: String!, $state: String, $after: String, $where: [FieldCondition!]) {
 		aktType(key: $type) {
 			...ShownType
 			states {
@@ -50,7 +54,7 @@ export const AkterOfType = graphql(`
 				name
 			}
 		}
-		akter(type: $type, state: $state, first: 50, after: $after) {
+		akter(type: $type, state: $state, first: 50, after: $after, where: $where) {
 			nodes {
 				id
 				number
@@ -343,6 +347,52 @@ export const Contacts = graphql(`
 			linkedBy {
 				id
 				name
+			}
+		}
+	}
+`);
+
+/** What a type's list can be filtered by: its fields, and who is asking. */
+export const ListFilters = graphql(`
+	query ListFilters($type: String!) {
+		viewer {
+			subject
+		}
+		aktType(key: $type) {
+			key
+			version
+			fields {
+				key
+				name
+				kind
+				multiline
+				options {
+					key
+					name
+				}
+			}
+		}
+	}
+`);
+
+/** Akter of one type meeting conditions on their fields, such as those
+ * naming the viewer. */
+export const AkterWhere = graphql(`
+	query AkterWhere($type: String!, $where: [FieldCondition!], $first: Int) {
+		akter(type: $type, where: $where, first: $first) {
+			nodes {
+				id
+				number
+				title
+				updatedAt
+				state {
+					key
+					name
+					tone
+				}
+				type {
+					...TypeMark
+				}
 			}
 		}
 	}

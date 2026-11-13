@@ -229,8 +229,8 @@ pub async fn members_of(
         .collect())
 }
 
-/// Up to `limit` members of `container` of the akt types `keys`, in rank
-/// order, after the member ranked `after`. Ranks are unique in a tenant, so
+/// Up to `limit` members of `container` of the akt types `keys`, meeting
+/// every condition, in rank order, after the member ranked `after`. Ranks are unique in a tenant, so
 /// a rank says where a page ends.
 // r[impl akt.page]
 pub async fn member_page(
@@ -238,6 +238,7 @@ pub async fn member_page(
     tenant: Uuid,
     container: Uuid,
     keys: &[String],
+    conditions: &[crate::akter::Condition],
     after: Option<&str>,
     limit: i64,
 ) -> QueryResult<Vec<AktRow>> {
@@ -251,6 +252,9 @@ pub async fn member_page(
         .limit(limit)
         .select(AktRow::as_select())
         .into_boxed();
+    if let Some(ids) = crate::akter::meeting(tenant, conditions) {
+        query = query.filter(akt::id.eq_any(ids));
+    }
     if let Some(after) = after {
         query = query.filter(akt::rank.gt(after.to_owned()));
     }

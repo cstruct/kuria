@@ -678,3 +678,104 @@ async fn a_manager_links_a_contact_to_a_user_by_hand() {
         .await;
     assert_eq!(code(&again), "LINKED");
 }
+
+// r[verify akt.filter]
+#[tokio::test(flavor = "multi_thread")]
+async fn me_finds_values_naming_me_or_my_contacts() {
+    let world = world_with_documents().await;
+    let me: Uuid = support::SUBJECT.parse().unwrap();
+    let colleague = Uuid::now_v7();
+    let mine = world.added("Me, as a contact", None).await;
+    world.link(&mine["id"], me).await;
+    let bob = world.added("Bob", None).await;
+    let number = |v: &Value| {
+        v["data"]["createAkt"]["number"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let owned = number(
+        &world
+            .create_doc(&[], json!({ "owner": me.to_string() }))
+            .await,
+    );
+    let via_contact = number(
+        &world
+            .create_doc(&[], json!({ "owner": { "contact": mine["id"] } }))
+            .await,
+    );
+    let theirs = number(
+        &world
+            .create_doc(&[], json!({ "owner": colleague.to_string() }))
+            .await,
+    );
+    let bobs = number(
+        &world
+            .create_doc(&[], json!({ "owner": { "contact": bob["id"] } }))
+            .await,
+    );
+    // Checked by me for myself, by me for Bob, and for me by... me, as a contact.
+    let checked = number(&world.create_doc(&[], json!({ "approved": true })).await);
+    let for_bob = number(
+        &world
+            .create_doc(
+                &[],
+                json!({ "approved": { "for": { "contact": bob["id"] } } }),
+            )
+            .await,
+    );
+    let for_me = number(
+        &world
+            .create_doc(
+                &[],
+                json!({ "approved": { "for": { "contact": mine["id"] } } }),
+            )
+            .await,
+    );
+    let listed = |field: &str, equals: String| {
+        let world = &world;
+        let field = field.to_owned();
+        async move {
+            let answer = world
+                .run(
+                    MANAGER,
+                    "query($f: String!, $e: String!) { akter(type: \"doc\", where: [{ field: $f, equals: $e }]) { nodes { number } } }",
+                    json!({ "f": field, "e": equals }),
+                )
+                .await;
+            let mut numbers: Vec<String> = answer["data"]["akter"]["nodes"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{answer}"))
+                .iter()
+                .map(|a| a["number"].as_str().unwrap().to_owned())
+                .collect();
+            numbers.sort();
+            numbers
+        }
+    };
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
+    assert_eq!(
+        listed("owner", "me".into()).await,
+        sorted(vec![owned.clone(), via_contact.clone()])
+    );
+    assert_eq!(listed("owner", colleague.to_string()).await, [theirs]);
+    assert_eq!(
+        listed("owner", format!("contact:{}", bob["id"].as_str().unwrap())).await,
+        [bobs]
+    );
+    assert_eq!(
+        listed("approved", "me".into()).await,
+        sorted(vec![checked, for_me])
+    );
+    assert_eq!(
+        listed(
+            "approved",
+            format!("contact:{}", bob["id"].as_str().unwrap())
+        )
+        .await,
+        [for_bob]
+    );
+}

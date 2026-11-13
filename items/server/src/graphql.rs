@@ -12,6 +12,7 @@ mod akter;
 mod attachments;
 mod changes;
 mod contacts;
+mod filter;
 mod page;
 mod people;
 

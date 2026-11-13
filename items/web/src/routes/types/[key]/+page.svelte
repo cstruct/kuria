@@ -11,7 +11,10 @@
 	import { getClient, query } from '#lib/graphql/context.svelte.ts';
 	import type { AkterOfTypeQuery } from '#lib/graphql/generated/graphql.ts';
 	import { merged } from '#lib/akt/paging.ts';
-	import { AkterOfType } from '#lib/graphql/operations.ts';
+	import FilterBar from '#lib/akt/FilterBar.svelte';
+	import { conditionsOf, withCondition } from '#lib/akt/filters.ts';
+	import { peopleOf } from '#lib/akt/people.ts';
+	import { AkterOfType, Contacts, ListFilters, Users } from '#lib/graphql/operations.ts';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
@@ -22,8 +25,23 @@
 	const stateKey = $derived(page.url.searchParams.get('state') ?? '');
 	const sort = $derived<SortBy>(page.url.searchParams.get('sort') === 'rank' ? 'rank' : 'updated');
 	const client = getClient();
-	const list = query(AkterOfType, () => ({ type: key, state: stateKey || null }));
+	const filters = query(ListFilters, () => ({ type: key }));
+	const filterFields = $derived(filters.data?.aktType?.fields ?? []);
+	const conditions = $derived(conditionsOf(page.url.searchParams, filterFields));
+	// A string, so that what depends on the conditions changes only when they
+	// do, not whenever the cache hands back new objects.
+	const conditionsKey = $derived(JSON.stringify(conditions));
+	const list = query(AkterOfType, () => ({
+		type: key,
+		state: stateKey || null,
+		where: conditions.length > 0 ? conditions : null
+	}));
 	const type = $derived(list.data?.aktType ?? undefined);
+	const users = query(Users, () => ({}));
+	const contacts = query(Contacts, () => ({}));
+	const people = $derived(
+		peopleOf(filters.data?.viewer.subject, users.data?.users, contacts.data?.contacts)
+	);
 
 	// r[impl akt.page]: the pages after the first, loaded on asking.
 	type Node = AkterOfTypeQuery['akter']['nodes'][number];
@@ -32,7 +50,7 @@
 	let loading = $state(false);
 	$effect(() => {
 		// A new list starts again from its first page.
-		void [key, stateKey];
+		void [key, stateKey, conditionsKey];
 		more = [];
 		next = null;
 	});
@@ -47,7 +65,12 @@
 	async function loadMore() {
 		loading = true;
 		const result = await client
-			.query(AkterOfType, { type: key, state: stateKey || null, after: pageInfo.cursor })
+			.query(AkterOfType, {
+				type: key,
+				state: stateKey || null,
+				where: conditions.length > 0 ? conditions : null,
+				after: pageInfo.cursor
+			})
 			.toPromise();
 		loading = false;
 		if (result.data) {
@@ -69,6 +92,14 @@
 			if (value && !(name === 'sort' && value === 'updated')) params.set(name, value);
 			else params.delete(name);
 		}
+		go(params);
+	}
+
+	function filter(field: string, value: string) {
+		go(withCondition(page.url.searchParams, field, value));
+	}
+
+	function go(params: URLSearchParams) {
 		const search = params.toString();
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with a query
 		goto(`${resolve('/types/[key]', { key })}${search ? `?${search}` : ''}`, {
@@ -110,12 +141,22 @@
 					<option value="rank">Rank</option>
 				</select>
 			</label>
+			<FilterBar
+				fields={filterFields}
+				values={Object.fromEntries(conditions.map((c) => [c.field, c.equals]))}
+				{people}
+				onChange={filter}
+			/>
 		</div>
 
 		{#if akter.length === 0}
 			<EmptyState
-				title={stateKey ? `No ${type.name} in this state` : `No ${type.name} yet`}
-				description={stateKey ? 'Try another state.' : `Create the first ${type.name}.`}
+				title={stateKey || conditions.length > 0
+					? `No ${type.name} matches`
+					: `No ${type.name} yet`}
+				description={stateKey || conditions.length > 0
+					? 'Try other filters.'
+					: `Create the first ${type.name}.`}
 			/>
 		{:else}
 			<div class="scroll">

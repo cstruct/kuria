@@ -96,7 +96,9 @@ fn story() -> Value {
             { "key": "summary", "name": "Summary", "kind": "text", "required": true },
             { "key": "headline", "name": "Headline", "kind": "text" },
             { "key": "points", "name": "Points", "kind": "choice",
-              "options": [{ "key": "s", "name": "Small" }, { "key": "l", "name": "Large" }] }
+              "options": [{ "key": "s", "name": "Small" }, { "key": "l", "name": "Large" }] },
+            { "key": "due", "name": "Due", "kind": "date" },
+            { "key": "notes", "name": "Notes", "kind": "text", "multiline": true }
         ],
         "states": [
             { "key": "open", "name": "Open", "initial": true },
@@ -439,4 +441,105 @@ async fn akter_come_a_page_at_a_time() {
             "{other}: {refused}"
         );
     }
+}
+
+// r[verify akt.filter]
+#[tokio::test(flavor = "multi_thread")]
+async fn akter_are_filtered_by_field_values() {
+    let world = World::new().await;
+    let number = |v: Value| v["number"].as_str().unwrap().to_owned();
+    let small = number(
+        world
+            .create(
+                "story",
+                json!({ "summary": "Alpha", "points": "s", "due": "2026-12-01" }),
+            )
+            .await,
+    );
+    let large = number(
+        world
+            .create(
+                "story",
+                json!({ "summary": "Beta", "points": "l", "due": "2026-12-01" }),
+            )
+            .await,
+    );
+    let undated = number(
+        world
+            .create("story", json!({ "summary": "Alpha", "points": "s" }))
+            .await,
+    );
+    let listed = |conditions: Value| {
+        let world = &world;
+        async move {
+            world
+                .run(
+                    "tenant",
+                    "query($w: [FieldCondition!]) { akter(type: \"story\", where: $w) { nodes { number } } }",
+                    json!({ "w": conditions }),
+                )
+                .await
+        }
+    };
+    let numbers = |answer: Value| -> Vec<String> {
+        answer["data"]["akter"]["nodes"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{answer}"))
+            .iter()
+            .map(|a| a["number"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    assert_eq!(
+        numbers(listed(json!([{ "field": "points", "equals": "s" }])).await),
+        [undated.as_str(), small.as_str()]
+    );
+    assert_eq!(
+        numbers(listed(json!([{ "field": "due", "equals": "2026-12-01" }])).await),
+        [large.as_str(), small.as_str()]
+    );
+    assert_eq!(
+        numbers(listed(json!([{ "field": "summary", "equals": "Alpha" }])).await),
+        [undated.as_str(), small.as_str()]
+    );
+    // Every condition applies.
+    assert_eq!(
+        numbers(
+            listed(json!([
+                { "field": "summary", "equals": "Alpha" },
+                { "field": "due", "equals": "2026-12-01" }
+            ]))
+            .await
+        ),
+        [small.as_str()]
+    );
+    for (conditions, why) in [
+        (
+            json!([{ "field": "notes", "equals": "x" }]),
+            "a multiline field",
+        ),
+        (
+            json!([{ "field": "gone", "equals": "x" }]),
+            "a field the type lacks",
+        ),
+        (
+            json!([{ "field": "points", "equals": "huge" }]),
+            "an option the field lacks",
+        ),
+        (json!([{ "field": "due", "equals": "soon" }]), "not a date"),
+    ] {
+        let refused = listed(conditions).await;
+        assert_eq!(
+            refused["errors"][0]["extensions"]["code"], "BAD_REQUEST",
+            "{why}: {refused}"
+        );
+    }
+    // Without one akt type, there is nothing to filter by.
+    let refused = world
+        .run(
+            "tenant",
+            "{ akter(where: [{ field: \"points\", equals: \"s\" }]) { nodes { number } } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(refused["errors"][0]["extensions"]["code"], "BAD_REQUEST");
 }
