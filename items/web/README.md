@@ -36,7 +36,10 @@ server serves from its own origin, and Kuria's login page.
   (`/` or Cmd-K) over akter by number or title.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
   the akt page's parts (`FieldRow`, editing one field in place;
-  `TransitionDialog`; `HistoryList`, a timeline from `history.ts`), the
+  `TransitionDialog`; `HistoryList`, a timeline from `history.ts`;
+  `Members`, the board for the akt types its columns name and a list per
+  other akt type, from `members.ts`, reordered by dragging within a
+  column or list (`reorder.svelte.ts`) or from each member's menu), the
   header's title and actions (`header.ts`), sanitized Markdown
   (`markdown.ts`), pickers that search akter (`pickers.ts`), and
   each field kind's editor, input and text (`values.ts`), refusals
@@ -45,7 +48,9 @@ server serves from its own origin, and Kuria's login page.
   (`labels.ts`), uploads, and the field editor and display components.
 - [`src/lib/login`](src/lib/login): the login page's DPoP key, Konklav's
   subject-facing API and the flow for each login request.
-- [`src/routes`](src/routes): the pages: akt types, akter by type, an
+- [`src/routes`](src/routes): the pages: akt types, akter by type (a
+  table of the presentation's list fields, filtered by state with
+  `?state=` and sorted by rank with `?sort=rank`), an
   akt, creating one (in containers, with `?in=`), contacts, and `/login`.
 
 Tracey doesn't read `.svelte` files, so the rules the app implements are

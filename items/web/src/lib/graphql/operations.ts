@@ -27,18 +27,30 @@ export const Home = graphql(`
 `);
 
 export const AkterOfType = graphql(`
-	query AkterOfType($type: String!) {
+	query AkterOfType($type: String!, $state: String) {
 		aktType(key: $type) {
-			key
-			version
-			name
+			...ShownType
+			states {
+				key
+				name
+			}
 		}
-		akter(type: $type, first: 200) {
+		akter(type: $type, state: $state, first: 200) {
 			id
 			number
+			title
+			rank
+			updatedAt
 			state {
 				key
 				name
+				tone
+			}
+			type {
+				...ShownType
+			}
+			fields {
+				...FieldValues
 			}
 		}
 	}
@@ -137,6 +149,23 @@ export const SomeoneShown = graphql(`
 	}
 `);
 
+/** What cards and lists need of an akt type to show its akter. */
+export const ShownType = graphql(`
+	fragment ShownType on AktType {
+		key
+		version
+		name
+		fields {
+			key
+			name
+		}
+		presentation {
+			card
+			list
+		}
+	}
+`);
+
 export const TypeShape = graphql(`
 	fragment TypeShape on AktType {
 		key
@@ -223,9 +252,7 @@ export const AktPage = graphql(`
 							tone
 						}
 						type {
-							key
-							version
-							name
+							...ShownType
 						}
 						fields {
 							...FieldValues

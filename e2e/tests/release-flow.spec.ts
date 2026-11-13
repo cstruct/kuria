@@ -10,6 +10,7 @@ import {
 	addMembers,
 	addTo,
 	column,
+	memberAction,
 	create,
 	moved,
 	open,
@@ -96,9 +97,9 @@ test('a release from planning to closed', async ({ browser }) => {
 	// Reprioritising the backlog reorders the epic too.
 	await open(dev, backlog);
 	// Up twice: past the crash fix, then past passkeys.
-	await dev.getByRole('button', { name: `Move ${reset} up` }).click();
+	await memberAction(dev, reset, 'up');
 	await expect.poll(() => column(dev, 'To do')).toEqual([epic, passkeys, reset, crash, typo]);
-	await dev.getByRole('button', { name: `Move ${reset} up` }).click();
+	await memberAction(dev, reset, 'up');
 	await expect.poll(() => column(dev, 'To do')).toEqual([epic, reset, passkeys, crash, typo]);
 	await open(dev, epic);
 	expect(await column(dev, 'To do')).toEqual([reset, passkeys]);

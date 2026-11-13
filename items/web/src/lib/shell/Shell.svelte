@@ -161,9 +161,26 @@
 
 	.crumbs li {
 		display: flex;
+		flex-shrink: 1;
 		align-items: center;
 		gap: var(--space-1);
 		min-width: 0;
+		overflow: hidden;
+	}
+
+	.crumbs li :global(svg) {
+		flex-shrink: 0;
+	}
+
+	/* Earlier crumbs give way first. */
+	.crumbs li:not(:last-child) {
+		flex-shrink: 4;
+	}
+
+	.crumbs li a,
+	.crumbs li span {
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.crumbs li:last-child span {

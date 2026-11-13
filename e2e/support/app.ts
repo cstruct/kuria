@@ -69,8 +69,11 @@ export async function moved(page: Page, name: string, to: string, fields: Record
 /** Adds `members` to the open container. */
 export async function addMembers(page: Page, ...members: string[]) {
 	for (const member of members) {
-		await pick(page, 'Add a member', member);
-		await expect(page.getByRole('region', { name: 'Members' }).getByRole('link', { name: member })).toBeVisible();
+		await page.getByRole('button', { name: 'Add a member' }).click();
+		await page.getByRole('menuitem', { name: 'An existing akt…' }).click();
+		await pick(page, 'Member to add', member);
+		await expect(page.getByRole('dialog', { name: 'Add a member' })).toBeHidden();
+		await expect(membersOf(page).locator(`[data-number="${member}"]`)).toBeVisible();
 	}
 }
 
@@ -96,10 +99,31 @@ export async function rendered(page: Page, key: string): Promise<string[]> {
 	return (await field.locator('h1, h2, h3, li').allTextContents()).map((t) => t.trim());
 }
 
-/** The numbers in a column of the open container's board, in order. */
+/** The open container's members: its board and its lists by akt type. */
+function membersOf(page: Page) {
+	return page.getByRole('region', { name: 'Members', exact: true });
+}
+
+/** The numbers in a column of the open container's board, or in its list
+ * of an akt type's members, in order. */
 export async function column(page: Page, name: string): Promise<string[]> {
-	const links = page.getByRole('region', { name, exact: true }).getByRole('listitem').getByRole('link');
-	return (await links.allTextContents()).map((t) => t.trim());
+	const group = membersOf(page).getByRole('region', { name, exact: true });
+	return group.locator('[data-number]').evaluateAll((all) => all.map((e) => e.getAttribute('data-number') ?? ''));
+}
+
+/** Does `action` (`up`, `down` or `remove`) from a member's menu. */
+export async function memberAction(page: Page, number: string, action: 'up' | 'down' | 'remove') {
+	const name = { up: `Move ${number} up`, down: `Move ${number} down`, remove: `Remove ${number}` }[action];
+	await page.getByRole('button', { name: `Actions for ${number}` }).click();
+	await page.getByRole('menuitem', { name }).click();
+}
+
+/** Drags a member onto another in the same column or list. */
+export async function drag(page: Page, number: string, onto: string) {
+	const group = membersOf(page);
+	await group.locator(`[data-number="${number}"]`).dragTo(group.locator(`[data-number="${onto}"]`), {
+		targetPosition: { x: 8, y: 4 }
+	});
 }
 
 /** The text a field of the open akt shows. */

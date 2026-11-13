@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import ArrowDown from '@lucide/svelte/icons/arrow-down';
-	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import FieldRow from '#lib/akt/FieldRow.svelte';
 	import HistoryList from '#lib/akt/HistoryList.svelte';
+	import Members from '#lib/akt/Members.svelte';
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
 		availableTransitions,
@@ -18,10 +19,9 @@
 	import { oneField, settle } from '#lib/akt/editing.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
-	import { boardLabels } from '#lib/akt/labels.ts';
 	import type { Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
-	import { changes, draftOf, textOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
+	import { changes, draftOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
 	import {
@@ -47,7 +47,6 @@
 
 	type Akt = NonNullable<AktPageQuery['akt']>;
 	type Transition = Akt['type']['transitions'][number];
-	type Member = Akt['board']['columns'][number]['akter'][number];
 
 	const client = getClient();
 	const number = $derived(page.params.number ?? '');
@@ -100,6 +99,7 @@
 	let busy = $state(false);
 	let transferOpen = $state(false);
 	let transferFrom = $state('');
+	let addOpen = $state(false);
 
 	function snapshot(of: Akt): Record<string, Draft> {
 		return Object.fromEntries(
@@ -226,6 +226,7 @@
 	}
 
 	async function addMember(member: string) {
+		addOpen = false;
 		await run(() => mutate(client, AddToContainer, { input: { container: number, member } }));
 	}
 
@@ -235,12 +236,6 @@
 
 	async function move(member: string, place: { before?: string; after?: string }) {
 		await run(() => mutate(client, MoveAkt, { input: { number: member, ...place } }));
-	}
-
-	function summary(member: Member): string {
-		if (member.title) return member.title;
-		const text = member.fields.find((v) => v.__typename === 'TextValue');
-		return text ? textOf(text) : '';
 	}
 </script>
 
@@ -307,73 +302,37 @@
 							<h2 id="members-title">Members</h2>
 							{#if editable}
 								<Menu
-									label="New member"
-									text="New"
-									items={contained.map((key) => ({
-										label: `New ${typeNames[key] ?? key}`,
-										onSelect: () => {
-											location.assign(
-												`${resolve('/types/[key]/new', { key })}?in=${encodeURIComponent(akt.number)}`
-											);
+									label="Add a member"
+									text="Add"
+									items={[
+										...contained.map((key) => ({
+											label: `New ${typeNames[key] ?? key}`,
+											icon: Plus,
+											onSelect: () => {
+												location.assign(
+													`${resolve('/types/[key]/new', { key })}?in=${encodeURIComponent(akt.number)}`
+												);
+											}
+										})),
+										{
+											label: 'An existing akt…',
+											icon: Search,
+											separated: true,
+											onSelect: () => (addOpen = true)
 										}
-									}))}
+									]}
 								/>
 							{/if}
 						</header>
-						{#if editable}
-							<Combobox
-								label="Add a member"
-								placeholder="Add an existing akt by number or title…"
-								search={(text) => pickable(client, text, [akt.number], contained)}
-								onPick={(option) => addMember(option.value)}
-							/>
-						{/if}
-						<div class="board">
-							{#each akt.board.columns as column (column.key)}
-								<section class="column" aria-label={column.name}>
-									<h3>{column.name} <span class="count">{column.akter.length}</span></h3>
-									<ol>
-										{#each column.akter as member, i (member.id)}
-											{@const labels = boardLabels(member.number)}
-											<li class="card">
-												<a href={resolve('/akt/[number]', { number: member.number })}
-													>{member.number}</a
-												>
-												<span class="summary">{summary(member)}</span>
-												<span class="foot">
-													<Badge tone={member.state.tone}>{member.state.name}</Badge>
-													<span class="tools">
-														<IconButton
-															label={labels.up}
-															icon={ArrowUp}
-															size="sm"
-															disabled={busy || i === 0}
-															onclick={() =>
-																move(member.number, { before: column.akter[i - 1].number })}
-														/>
-														<IconButton
-															label={labels.down}
-															icon={ArrowDown}
-															size="sm"
-															disabled={busy || i === column.akter.length - 1}
-															onclick={() =>
-																move(member.number, { after: column.akter[i + 1].number })}
-														/>
-														<IconButton
-															label={labels.remove}
-															icon={X}
-															size="sm"
-															disabled={busy || !editable}
-															onclick={() => removeMember(member.number)}
-														/>
-													</span>
-												</span>
-											</li>
-										{/each}
-									</ol>
-								</section>
-							{/each}
-						</div>
+						<Members
+							columns={akt.board.columns}
+							document={akt.type.document}
+							{contained}
+							{editable}
+							{busy}
+							onMove={move}
+							onRemove={removeMember}
+						/>
 					</section>
 				{/if}
 			</div>
@@ -466,6 +425,25 @@
 				onPick={(option) => transfer(option.value)}
 			/>
 		</Dialog>
+
+		<Dialog
+			bind:open={addOpen}
+			title="Add a member"
+			description="An akt of a type this {akt.type.name} holds, found by number or title."
+		>
+			<Combobox
+				label="Member to add"
+				placeholder="Number or title…"
+				search={(text) =>
+					pickable(
+						client,
+						text,
+						[akt.number, ...akt.board.columns.flatMap((c) => c.akter.map((m) => m.number))],
+						contained
+					)}
+				onPick={(option) => addMember(option.value)}
+			/>
+		</Dialog>
 	{:else if view.data && !view.fetching}
 		<p role="alert">There is no akt {number}, or you can’t see it.</p>
 	{:else}
@@ -550,74 +528,6 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-	}
-
-	.board {
-		display: flex;
-		gap: var(--space-3);
-		overflow-x: auto;
-		padding-bottom: var(--space-2);
-	}
-
-	.column {
-		flex: 0 0 15rem;
-		padding: var(--space-3);
-		border-radius: var(--radius-lg);
-		background: var(--bg-subtle);
-	}
-
-	.column h3 {
-		display: flex;
-		align-items: center;
-		gap: var(--space-2);
-		margin-bottom: var(--space-3);
-		font-size: var(--text-sm);
-	}
-
-	.count {
-		color: var(--text-muted);
-		font-weight: 400;
-	}
-
-	.column ol {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
-		margin: 0;
-		padding: 0;
-		list-style: none;
-	}
-
-	.card {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
-		padding: var(--space-3);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--surface);
-		box-shadow: var(--shadow-sm);
-		font-size: var(--text-sm);
-	}
-
-	.card a {
-		font-family: var(--font-mono);
-		font-size: var(--text-xs);
-	}
-
-	.summary {
-		overflow-wrap: anywhere;
-	}
-
-	.foot {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: var(--space-2);
-	}
-
-	.tools {
-		display: flex;
 	}
 
 	.containers {

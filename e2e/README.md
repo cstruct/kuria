@@ -83,6 +83,10 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   login page, a wrong password, and single sign-on.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
+- [`tests/members.spec.ts`](tests/members.spec.ts): a container's
+  members on its board or listed by akt type, reordered by dragging and
+  from the menu (not across columns); an akt type's list filtered by state
+  and sorted.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, and signing out of
   Kuria and of the login page's Konklav session.

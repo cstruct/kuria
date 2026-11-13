@@ -9,9 +9,11 @@ export function legendOf(field: Pick<FieldDef, 'name' | 'required'>): string {
 	return field.required ? `${field.name} (required)` : field.name;
 }
 
-/** A board's buttons for one member, named by it, since they show arrows. */
+/** A member's menu and its items, named by the member, since the menu's
+ * trigger shows only an ellipsis. */
 export function boardLabels(number: string) {
 	return {
+		menu: `Actions for ${number}`,
 		up: `Move ${number} up`,
 		down: `Move ${number} down`,
 		remove: `Remove ${number}`

@@ -7,6 +7,7 @@ describe('accessible names', () => {
 		expect(legendOf({ name: 'Title', required: true })).toBe('Title (required)');
 		expect(legendOf({ name: 'Kind', required: false })).toBe('Kind');
 		expect(boardLabels('ITEM-0003')).toEqual({
+			menu: 'Actions for ITEM-0003',
 			up: 'Move ITEM-0003 up',
 			down: 'Move ITEM-0003 down',
 			remove: 'Remove ITEM-0003'
