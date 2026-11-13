@@ -30,5 +30,6 @@
   "transitions": [
     { "key": "approve", "name": "Approve", "from": ["draft"], "to": "approved",
       "requires": ["text"], "action": "release:approve" }
-  ]
+  ],
+  "presentation": { "tones": { "draft": "warning", "approved": "success" } }
 }

@@ -22,6 +22,23 @@ export const Home = graphql(`
 			key
 			version
 			name
+			akterCount
+		}
+		akter(first: 10) {
+			id
+			number
+			title
+			updatedAt
+			state {
+				key
+				name
+				tone
+			}
+			type {
+				key
+				version
+				name
+			}
 		}
 	}
 `);

@@ -275,8 +275,8 @@ pub async fn lock_akt_by_number(
         .optional()
 }
 
-/// Up to `limit` akter of the akt types `keys`, newest first, optionally only
-/// in `state`.
+/// Up to `limit` akter of the akt types `keys`, most recently changed first,
+/// optionally only in `state`.
 pub async fn list_akter(
     conn: &mut Connection,
     tenant: Uuid,
@@ -289,7 +289,7 @@ pub async fn list_akter(
         .filter(akt::tenant_id.eq(tenant))
         .filter(akt_type_version::key.eq_any(keys))
         .select(AktRow::as_select())
-        .order(akt::created_at.desc())
+        .order((akt::updated_at.desc(), akt::id))
         .limit(limit)
         .into_boxed();
     if let Some(state) = state {

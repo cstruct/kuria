@@ -155,6 +155,11 @@ r[akt.title]
 Every akt MUST be served with its title, as its type's presentation
 (`akt.type.presentation`) gives it, or none, beside its number.
 
+r[akt.list]
+Akter MUST be listable, of one akt type and in one state if asked, only
+those the subject may read (`authz.read`), at most a limit of them, the
+most recently changed first.
+
 r[akt.search]
 Akter MUST be searchable by text: an akt matches when its number starts
 with the text, ignoring case, or its title contains every word of the

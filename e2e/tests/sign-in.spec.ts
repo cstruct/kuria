@@ -13,7 +13,7 @@ test('the release manager signs in through the login page', async ({ browser }) 
 	const page = await signIn(browser, seeded().people.releaseManager);
 	await expect(page).toHaveURL(/localhost:18090\/$/);
 	// Signed in to the seeded tenant: the API answers.
-	await expect(page.getByRole('heading', { name: 'Kuria' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Recently changed' })).toBeVisible();
 	await expect(page.getByRole('alert')).toHaveCount(0);
 	// No token or key went to web storage: only SvelteKit's navigation state.
 	const stored = await page.evaluate(() =>

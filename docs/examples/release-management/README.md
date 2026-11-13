@@ -54,6 +54,15 @@ others.
   rebuilt still ships; a candidate that must not ship a component removes
   it.
 
+- A document's `presentation` says how its akter are shown (a backlog
+  keeps the defaults): the
+  fields on board cards (a backlog item's kind and assignee, a candidate's
+  build) and in lists (an artifact's change, version and image), and the
+  tone of each state (in progress is active, in review a warning, done,
+  accepted, deployed and approved a success, rejected a danger). Titles
+  come from each type's first required single-line text field; a
+  candidate, a hotfix and release notes have none, and show their number.
+
 ## Trying it in a browser
 
 ```sh

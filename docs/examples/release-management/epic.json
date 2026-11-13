@@ -21,5 +21,6 @@
     { "key": "doing", "name": "In progress", "states": { "backlog_item": ["in_progress"] } },
     { "key": "review", "name": "In review", "states": { "backlog_item": ["in_review"] } },
     { "key": "done", "name": "Done", "states": { "backlog_item": ["done"] } }
-  ] }
+  ] },
+  "presentation": { "tones": { "in_progress": "active", "done": "success" } }
 }

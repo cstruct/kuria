@@ -542,8 +542,8 @@ type Query {
 	"""
 	akt(number: String!): Akt
 	"""
-	Akter, newest first: of one akt type and in one state, if given, and
-	at most `first` of them (50 by default, 200 at most).
+	Akter, most recently changed first: of one akt type and in one state,
+	if given, and at most `first` of them (50 by default, 200 at most).
 	"""
 	akter(		type: String,		state: String,		first: Int,
 		"""

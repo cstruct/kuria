@@ -31,6 +31,11 @@ The app MUST build its forms, akt pages, boards and lists from the akt
 types the server serves, and MUST NOT name any akt type, field, state or
 transition of its own.
 
+r[app.home]
+The home page MUST show the akter the person can read that changed most
+recently (`akt.list`), and each akt type with how many akter it has and a
+way to create one.
+
 r[app.header]
 An akt's page MUST show first its akt type, number, title and state, the
 state in its tone (`akt.type.presentation`), and the transitions its state

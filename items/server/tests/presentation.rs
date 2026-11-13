@@ -62,6 +62,16 @@ impl World {
             .clone()
     }
 
+    /// The numbers of the akter `query` lists for the tenant, in order.
+    async fn listed(&self, query: &str) -> Vec<String> {
+        self.data("tenant", query, json!({})).await["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["number"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
     /// The numbers of the akter a search by `token` finds, in order.
     async fn search(&self, token: &str, text: &str) -> Vec<String> {
         self.data(
@@ -270,4 +280,57 @@ async fn akt_types_count_their_akter_for_those_who_read_them() {
     // A reader of stories sees only stories, and counts them.
     let stories = world.data(STORY_READER, query, json!({})).await;
     assert_eq!(counts(stories), [("story".to_owned(), json!(2))]);
+}
+
+// r[verify akt.list]
+#[tokio::test(flavor = "multi_thread")]
+async fn akter_are_listed_most_recently_changed_first() {
+    let world = World::new().await;
+    let mut numbers = Vec::new();
+    for summary in ["a", "b", "c"] {
+        numbers.push(
+            world.create("story", json!({ "summary": summary })).await["number"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
+    }
+    let bug = world.create("bug", json!({ "title": "b" })).await["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    // Changing the first story makes it the most recent.
+    world
+        .data(
+            "tenant",
+            "mutation($n: String!) { performTransition(input: { number: $n, revision: 1, transition: \"finish\" }) { number } }",
+            json!({ "n": numbers[0] }),
+        )
+        .await;
+    assert_eq!(
+        world.listed("{ akter { number } }").await,
+        [
+            numbers[0].as_str(),
+            bug.as_str(),
+            numbers[2].as_str(),
+            numbers[1].as_str()
+        ]
+    );
+    assert_eq!(
+        world
+            .listed("{ akter(type: \"story\", first: 2) { number } }")
+            .await,
+        [numbers[0].as_str(), numbers[2].as_str()]
+    );
+    assert_eq!(
+        world
+            .listed("{ akter(type: \"story\", state: \"open\") { number } }")
+            .await,
+        [numbers[2].as_str(), numbers[1].as_str()]
+    );
+    // Only what the subject may read.
+    let stories = world
+        .data(STORY_READER, "{ akter { number } }", json!({}))
+        .await;
+    assert_eq!(stories["akter"].as_array().unwrap().len(), 3);
 }

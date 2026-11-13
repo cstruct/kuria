@@ -46,6 +46,8 @@ server serves from its own origin, and Kuria's login page.
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
   (`labels.ts`), uploads, and the field editor and display components.
+- [`src/lib/home`](src/lib/home): Home's wording; the page shows the
+  akter changed most recently and a card per akt type.
 - [`src/lib/login`](src/lib/login): the login page's DPoP key, Konklav's
   subject-facing API and the flow for each login request.
 - [`src/routes`](src/routes): the pages: akt types, akter by type (a

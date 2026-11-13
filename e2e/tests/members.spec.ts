@@ -23,7 +23,7 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	const backlog = await create('backlog', { title: 'Autumn work' }, [release]);
 	const first = await create('backlog_item', { title: 'First' }, [backlog]);
 	const second = await create('backlog_item', { title: 'Second' }, [backlog]);
-	const third = await create('backlog_item', { title: 'Third' }, [backlog]);
+	const third = await create('backlog_item', { title: 'Third', kind: 'fix' }, [backlog]);
 	await admin.graphql(
 		'mutation($n: String!) { performTransition(input: { number: $n, revision: 1, transition: "start" }) { number } }',
 		{ n: second }
@@ -44,7 +44,12 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	await open(page, backlog);
 	expect(await column(page, 'To do')).toEqual([first, third]);
 	expect(await column(page, 'In progress')).toEqual([second]);
-	await expect(members.getByRole('link', { name: 'Third' })).toBeVisible();
+	// The card shows the fields the type's presentation picks for cards,
+	// and the state in its tone.
+	const card = members.locator(`[data-number="${third}"]`);
+	await expect(card.getByRole('link', { name: 'Third' })).toBeVisible();
+	await expect(card.locator('dl')).toHaveText(/Kind\s*Fix/);
+	await expect(members.locator(`[data-number="${second}"] .badge`)).toHaveClass(/active/);
 
 	// Dragged onto the first card, the third goes before it.
 	await drag(page, third, first);

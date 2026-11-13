@@ -25,5 +25,9 @@
       "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"] } },
     { "key": "done", "name": "Done",
       "states": { "backlog_item": ["done"], "epic": ["done"] } }
-  ] }
+  ] },
+  "presentation": {
+    "card": ["build"], "list": ["build", "test_record"],
+    "tones": { "testing": "active", "accepted": "success", "rejected": "danger" }
+  }
 }

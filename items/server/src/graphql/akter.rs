@@ -207,8 +207,9 @@ impl AkterQuery {
         }
     }
 
-    /// Akter, newest first: of one akt type and in one state, if given, and
-    /// at most `first` of them (50 by default, 200 at most).
+    /// Akter, most recently changed first: of one akt type and in one state,
+    /// if given, and at most `first` of them (50 by default, 200 at most).
+    // r[impl akt.list]
     async fn akter(
         &self,
         ctx: &Context<'_>,

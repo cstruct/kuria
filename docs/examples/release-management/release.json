@@ -34,5 +34,9 @@
     { "key": "accepted", "name": "Accepted",
       "states": { "release_candidate": ["accepted"], "hotfix": ["deployed"] } },
     { "key": "rejected", "name": "Rejected", "states": { "release_candidate": ["rejected"] } }
-  ] }
+  ] },
+  "presentation": {
+    "card": ["version"], "list": ["version", "released_on", "release_manager"],
+    "tones": { "testing": "active", "released": "success" }
+  }
 }
