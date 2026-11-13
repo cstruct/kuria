@@ -1,7 +1,8 @@
 // Runs the Kuria server for the end-to-end tests: against the seeded
 // Konklav (.state/kuria.env), a fresh database of its own on the
 // development Postgres, the development Valkey and S3 gateway, and serving
-// the built app. Playwright starts this and waits for /healthz.
+// the built app; and builds the `kuria` CLI. Playwright starts this and
+// waits for /healthz.
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -38,6 +39,9 @@ const psql = (sql: string) =>
 	);
 psql(`drop database if exists ${database} with (force)`);
 psql(`create database ${database}`);
+
+// The CLI, which tests/cli.spec.ts runs against this server.
+execFileSync('cargo', ['build', '-q', '-p', 'kuria-cli'], { cwd: root, stdio: 'inherit' });
 
 const port = process.env.KURIA_DEV_PG_PORT ?? '15442';
 const server = spawn('cargo', ['run', '-q', '-p', 'kuria-server'], {

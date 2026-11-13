@@ -44,17 +44,18 @@ async fn main() -> ExitCode {
 /// The CLI's login relay, holding codes in Valkey and limited by rate.
 fn cli_relay(
     valkey: redis::aio::ConnectionManager,
-    rate_limit_secret: &str,
+    config: &Config,
 ) -> Result<Arc<CliRelay>, Box<dyn std::error::Error>> {
     Ok(Arc::new(CliRelay {
         limit: session::sign_in_limit(
             "kuria.cli-relay",
             relay::RELAY_WINDOWS.to_vec(),
             valkey.clone(),
-            rate_limit_secret,
+            &config.rate_limit_secret,
         )?,
         valkey,
         hold: relay::HOLD,
+        discovery: relay::Discovery::new(&config.public_url, &config.issuer, config.default_tenant),
     }))
 }
 
@@ -156,7 +157,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 None
             },
-            cli_relay: Some(cli_relay(valkey.clone(), &config.rate_limit_secret)?),
+            cli_relay: Some(cli_relay(valkey.clone(), &config)?),
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

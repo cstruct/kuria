@@ -1,0 +1,36 @@
+[package]
+name = "kuria-cli"
+description = "kuria: Kuria's command-line client, for people and agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "kuria"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+clap = { version = "4", features = ["derive", "env"] }
+getrandom = "0.3"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+konklav-token = "=1.8.0"
+p256 = { version = "0.14.0", default-features = false, features = ["ecdsa"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "form", "rustls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.10"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
+toml = "0.9"
+url = "2"
+uuid = { version = "1", features = ["serde"] }
+webbrowser = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

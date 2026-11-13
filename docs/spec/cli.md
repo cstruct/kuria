@@ -17,7 +17,8 @@ r[cli.login]
 `kuria login` MUST sign in through the browser, by a link, as the public
 Konklav client `kuria-cli`:
 
-1. It makes an ES256 key for DPoP, a PKCE verifier and a random `state`,
+1. It asks Kuria where its Konklav is (`cli.discovery`), makes an ES256
+   key for DPoP, a PKCE verifier and a random `state`,
    and prints the authorization URL, with the code challenge, the key's
    thumbprint as `dpop_jkt`, and the tenant asked for. It MAY also open
    the URL in a browser.
@@ -38,14 +39,22 @@ the session at Konklav and forget the key and tokens.
 
 r[cli.secret-key]
 With `KURIA_KEY` set to a Konklav secret key, the client MUST sign in with
-it instead, as software does: a DPoP-bound secret-key login, then moving
-the session into the tenant. It MUST NOT save that session.
+it instead, as software does: a DPoP-bound secret-key login at the issuer
+`cli.discovery` names, then moving the session into the tenant. It MUST
+NOT save that session, and SHOULD sign it out when the command is done.
 
 r[cli.dpop]
 Every request the client sends to Kuria or Konklav with its token MUST
 carry a DPoP proof for that request.
 
-## The relay
+## Kuria's side
+
+r[cli.discovery]
+Kuria MUST answer `GET /cli/config`, without authentication, with
+`{"issuer", "client_id", "redirect_uri", "tenant"}`: its Konklav's issuer,
+`kuria-cli`, its relay's URL, and the tenant a sign-in that names none is
+for (`session.login.default-tenant`), or `null`. So `kuria login` needs
+only Kuria's URL.
 
 r[cli.relay]
 Kuria MUST serve `/cli/authorized` as `kuria-cli`'s redirect URI: it keeps

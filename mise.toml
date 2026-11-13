@@ -58,6 +58,14 @@ run = [
     "tracey query validate",
 ]
 
+[tasks.kuria]
+description = "Run the `kuria` CLI from source, such as `mise run kuria -- whoami` (see items/cli/README.md)"
+run = "cargo run -q -p kuria-cli --"
+
+[tasks."cli:install"]
+description = "Install the `kuria` CLI into Cargo's bin directory"
+run = "cargo install --locked --path items/cli"
+
 [tasks.serve]
 description = "Run the server, configured from the environment (see items/server/README.md)"
 depends = ["db:up"]

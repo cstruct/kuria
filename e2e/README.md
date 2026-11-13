@@ -73,10 +73,12 @@ server. A failed test keeps its trace and screenshots in
   `kuria-cli`, and the admin and the build pipeline
   as software with secret keys. It writes Kuria's configuration to
   `.state/kuria.env` and what the tests use to `.state/seeded.json`.
-- [`scripts/serve.ts`](scripts/serve.ts): the Kuria server for the tests.
+- [`scripts/serve.ts`](scripts/serve.ts): the Kuria server for the tests,
+  and the `kuria` CLI built for them.
 - [`support/`](support): signing people in, working in the app by roles
   and labels, the API as software uses it, and DPoP proofs
-  ([`support/dpop.ts`](support/dpop.ts)).
+  ([`support/dpop.ts`](support/dpop.ts)), and running the CLI with a
+  directory of its own ([`support/cli.ts`](support/cli.ts)).
 
 Each test's browser sends its own `X-Forwarded-For` address, which Kuria
 trusts from localhost here, so the sign-in rate limit counts each test as
@@ -95,6 +97,11 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   collected from the relay once and exchanged with a DPoP proof, GraphQL
   with the bound token (and refused as a bearer token), a refresh; and
   software's DPoP-bound secret-key sign-in, refused with another key.
+- [`tests/cli.spec.ts`](tests/cli.spec.ts): the `kuria` binary: `login`
+  by the link it prints, authorized in a browser; `whoami` from the
+  profile; a refresh rotating the tokens; `logout` revoking at Konklav;
+  and `KURIA_KEY` signing in as software, saving nothing, with its exit
+  codes.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
 - [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe

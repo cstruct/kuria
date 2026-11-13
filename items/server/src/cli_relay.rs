@@ -45,6 +45,37 @@ pub struct CliRelay {
     pub limit: RateLimit,
     /// How long a code waits: [`HOLD`], unless a test says otherwise.
     pub hold: Duration,
+    /// What `/cli/config` tells the CLI.
+    pub discovery: Discovery,
+}
+
+/// Where `kuria login` signs in, as `GET /cli/config` answers it.
+#[derive(Clone, Serialize)]
+pub struct Discovery {
+    /// Konklav's issuer, whose discovery document names its endpoints.
+    pub issuer: String,
+    /// `kuria-cli`.
+    pub client_id: String,
+    /// `<public URL>/cli/authorized`.
+    pub redirect_uri: String,
+    /// The tenant a sign-in that names none is for.
+    pub tenant: Option<uuid::Uuid>,
+}
+
+/// The CLI's OIDC client at Konklav.
+pub const CLIENT_ID: &str = "kuria-cli";
+
+impl Discovery {
+    /// The answer for a Kuria at `public_url` signing in at `issuer`.
+    #[must_use]
+    pub fn new(public_url: &str, issuer: &str, tenant: Option<uuid::Uuid>) -> Self {
+        Self {
+            issuer: issuer.to_owned(),
+            client_id: CLIENT_ID.to_owned(),
+            redirect_uri: format!("{public_url}/cli/authorized"),
+            tenant,
+        }
+    }
 }
 
 /// What Konklav redirected with, as kept and as collected.
@@ -85,12 +116,22 @@ pub(crate) fn router(relay: Arc<CliRelay>) -> Result<Router, crate::AppError> {
         )?)?)
     };
     Ok(Router::new()
+        .route(
+            "/cli/config",
+            get(discovery).route_layer(RoutePolicy::public()),
+        )
         .route("/cli/authorized", get(authorized).route_layer(limited()?))
         .route(
             "/cli/authorized/collect",
             post(collect).route_layer(limited()?),
         )
         .with_state(relay))
+}
+
+/// Where the CLI signs in.
+// r[impl cli.discovery]
+async fn discovery(State(relay): State<Arc<CliRelay>>) -> Json<Discovery> {
+    Json(relay.discovery.clone())
 }
 
 /// Valkey's key for `state`: its hash, so the key names no `state` a CLI

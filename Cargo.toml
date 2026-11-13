@@ -1,5 +1,5 @@
 [workspace]
-members = ["items/config", "items/engine", "items/server", "items/store", "items/test-support"]
+members = ["items/cli", "items/config", "items/engine", "items/server", "items/store", "items/test-support"]
 resolver = "3"
 
 [workspace.package]

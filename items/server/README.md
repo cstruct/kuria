@@ -33,7 +33,8 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   terminal; `POST /cli/authorized/collect` with `{"state"}` answers
   `{"code"}` or `{"error", "error_description"}` once, and 204 while
   nothing is kept. Both are limited per client address. Codes are never
-  exchanged or logged.
+  exchanged or logged. `GET /cli/config` tells the CLI where it signs in:
+  Konklav's issuer, `kuria-cli`, the relay's URL and the default tenant.
 - Deleting an erased subject's browser sessions, recorded name and email,
   the tenants they signed in to, and the names and emails of contacts linked to them when Konklav erases
   them,
@@ -239,7 +240,8 @@ mise run test
 - [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
   Valkey: the relay keeping a code or an error until it is collected once,
   the first redirect for a `state` winning, forgetting an uncollected code,
-  refusing malformed redirects and states, and its rate limit.
+  refusing malformed redirects and states, its rate limit, and
+  `/cli/config`.
 - [`tests/akter.rs`](tests/akter.rs) goes through GraphQL against a fresh
   database: akt type versions and their validation, tenant isolation,
   numbering (also ten concurrent creates), field kinds and refusals, edits

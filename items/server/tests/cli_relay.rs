@@ -9,7 +9,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use konklav_relying_client::rate_limit::RateLimitWindow;
-use kuria_server::cli_relay::{CliRelay, HOLD, RELAY_WINDOWS};
+use kuria_server::cli_relay::{CliRelay, Discovery, HOLD, RELAY_WINDOWS};
 use kuria_server::{Options, session};
 use kuria_test_support::{unique_name, valkey_url};
 use serde_json::{Value, json};
@@ -34,6 +34,7 @@ async fn router_with(windows: &[RateLimitWindow], hold: Duration) -> Router {
         .unwrap(),
         valkey,
         hold,
+        discovery: Discovery::new(PUBLIC_URL, "https://konklav.example", None),
     };
     kuria_server::app(
         FakeHost::new(),
@@ -211,5 +212,26 @@ async fn limits_the_relay_per_client_address() {
     assert_eq!(
         collect(&router, &state).await.status,
         StatusCode::TOO_MANY_REQUESTS
+    );
+}
+
+// r[verify cli.discovery]
+#[tokio::test(flavor = "multi_thread")]
+async fn tells_the_cli_where_to_sign_in() {
+    let router = router().await;
+    let answer = send(
+        &router,
+        Request::get("/cli/config").body(Body::empty()).unwrap(),
+    )
+    .await;
+    assert_eq!(answer.status, StatusCode::OK);
+    assert_eq!(
+        answer.json(),
+        json!({
+            "issuer": "https://konklav.example",
+            "client_id": "kuria-cli",
+            "redirect_uri": format!("{PUBLIC_URL}/cli/authorized"),
+            "tenant": null
+        })
     );
 }
