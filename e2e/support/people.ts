@@ -1,18 +1,21 @@
 /** People signing in to Kuria through its login page. */
-import { expect, type Browser, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContextOptions, type Page } from '@playwright/test';
 import type { Person } from './stack.ts';
 
 /** A browser of its own, from a client address of its own, so that the
  * server's sign-in rate limit counts each test apart. */
-export async function newPage(browser: Browser): Promise<Page> {
+export async function newPage(browser: Browser, options: BrowserContextOptions = {}): Promise<Page> {
 	const address = `198.51.100.${1 + Math.floor(Math.random() * 254)}`;
-	const context = await browser.newContext({ extraHTTPHeaders: { 'x-forwarded-for': address } });
+	const context = await browser.newContext({
+		...options,
+		extraHTTPHeaders: { 'x-forwarded-for': address }
+	});
 	return context.newPage();
 }
 
 /** Signs `person` in from Kuria's home page, in a browser of their own. */
-export async function signIn(browser: Browser, person: Person): Promise<Page> {
-	const page = await newPage(browser);
+export async function signIn(browser: Browser, person: Person, options: BrowserContextOptions = {}): Promise<Page> {
+	const page = await newPage(browser, options);
 	await page.goto('/');
 	// Not signed in: the app sends the browser through Konklav to the login page.
 	await expect(page.getByRole('heading', { name: /Sign in to continue to kuria/ })).toBeVisible();

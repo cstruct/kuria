@@ -128,3 +128,8 @@ description = "Run the release walkthrough against the server `mise run e2e:serv
 dir = "e2e"
 env = { KURIA_E2E_EXISTING = "1" }
 run = "npx playwright test tests/release-flow.spec.ts"
+
+[tasks."e2e:screenshots"]
+description = "Take items/web/README.md's screenshots from the server `mise run e2e:serve` runs, after `mise run e2e:walk`"
+dir = "e2e"
+run = "node scripts/screenshots.ts"

@@ -623,6 +623,8 @@ impl AktType {
             title: self.0.ty.title_field().map(|f| f.key.clone()),
             card: presentation.card.clone(),
             list: presentation.list.clone(),
+            icon: presentation.icon.map(Into::into),
+            colour: presentation.colour.unwrap_or_default().into(),
         }
     }
 
@@ -790,6 +792,37 @@ impl From<kuria_config::Tone> for Tone {
     }
 }
 
+/// Mirrors a config enum as a GraphQL enum of the same variants.
+macro_rules! mirrored {
+    ($(#[$meta:meta])* $name:ident from $config:path { $($variant:ident),+ $(,)? }) => {
+        $(#[$meta])*
+        #[derive(Enum, Clone, Copy, PartialEq, Eq)]
+        pub enum $name { $($variant),+ }
+
+        impl From<$config> for $name {
+            fn from(value: $config) -> Self {
+                match value { $(<$config>::$variant => Self::$variant),+ }
+            }
+        }
+    };
+}
+
+mirrored! {
+    /// An icon an akt type is shown with.
+    AktTypeIcon from kuria_config::Icon {
+        Archive, BookOpen, Box, Bug, Calendar, CircleCheck, ClipboardCheck, FileText,
+        Flag, FlaskConical, GitBranch, Layers, ListChecks, Milestone, NotebookPen,
+        Package, Rocket, ShieldCheck, Tag, Target, TriangleAlert, Users, Wrench, Zap,
+    }
+}
+
+mirrored! {
+    /// The colour an akt type is shown in.
+    AktTypeColour from kuria_config::Colour {
+        Neutral, Blue, Green, Amber, Red, Purple, Teal, Pink,
+    }
+}
+
 /// How an akt type's akter are shown.
 #[derive(SimpleObject)]
 pub struct Presentation {
@@ -799,6 +832,10 @@ pub struct Presentation {
     card: Vec<String>,
     /// The fields lists of this type's akter show as columns.
     list: Vec<String>,
+    /// The icon shown with the type's name, if it has one.
+    icon: Option<AktTypeIcon>,
+    /// The colour the type is shown in.
+    colour: AktTypeColour,
 }
 
 #[derive(SimpleObject)]
@@ -1008,7 +1045,10 @@ impl Akt {
             .await
             .map_err(internal)?
             .into_iter()
-            .map(AktRevision)
+            .map(|row| AktRevision {
+                row,
+                ty: self.ty.clone(),
+            })
             .collect())
     }
 }
@@ -1188,59 +1228,87 @@ pub struct ReferenceValue {
 }
 
 /// One recorded change to an akt.
-pub struct AktRevision(RevisionRow);
+/// One revision of an akt, with the akt type version its values are read by.
+pub struct AktRevision {
+    row: RevisionRow,
+    ty: StoredType,
+}
 
 #[Object]
 impl AktRevision {
     async fn revision(&self) -> i32 {
-        self.0.revision
+        self.row.revision
     }
 
     /// The subject who made the change.
     async fn author(&self) -> ID {
-        ID(self.0.author.to_string())
+        ID(self.row.author.to_string())
     }
 
     /// Who made the change, shown by name.
     async fn by(&self) -> User {
-        User(self.0.author)
+        User(self.row.author)
     }
 
     async fn transition(&self) -> Option<&str> {
-        self.0.transition.as_deref()
+        self.row.transition.as_deref()
     }
 
     async fn reason(&self) -> Option<&str> {
-        self.0.reason.as_deref()
+        self.row.reason.as_deref()
     }
 
     /// The field values the change set, with `null` for those it cleared.
     async fn changes(&self) -> Json<JsonValue> {
-        Json(self.0.changes.clone())
+        Json(self.row.changes.clone())
+    }
+
+    /// The users and contacts that the values the change set name: a user
+    /// field's, and a checkbox's checker and whom it was checked for, so
+    /// that the history can show them by name (`contact.show`).
+    // r[impl app.history]
+    async fn named(&self) -> Vec<Someone> {
+        let Some(changes) = self.row.changes.as_object() else {
+            return Vec::new();
+        };
+        let mut named = Vec::new();
+        for (key, json) in changes {
+            let Some(def) = self.ty.ty.document().fields.iter().find(|f| &f.key == key) else {
+                continue;
+            };
+            if let Ok(value) = Value::from_json(def, json) {
+                for someone in value.named() {
+                    if !named.contains(&someone) {
+                        named.push(someone);
+                    }
+                }
+            }
+        }
+        named.into_iter().map(Someone::from).collect()
     }
 
     /// The state the akt was left in.
     async fn state(&self) -> &str {
-        &self.0.state
+        &self.row.state
     }
 
     /// For a membership revision, what it added or removed: `added` or
     /// `removed` with the containers on a member, `added_member` or
     /// `removed_member` with the members on a container.
     async fn membership(&self) -> Option<Json<JsonValue>> {
-        self.0.membership.clone().map(Json)
+        self.row.membership.clone().map(Json)
     }
 
     /// SHA-256 of the resulting state and field values, in hex.
     async fn hash(&self) -> String {
         use std::fmt::Write;
-        self.0.hash.iter().fold(String::new(), |mut hex, b| {
+        self.row.hash.iter().fold(String::new(), |mut hex, b| {
             let _ = write!(hex, "{b:02x}");
             hex
         })
     }
 
     async fn created_at(&self) -> DateTime<Utc> {
-        self.0.created_at
+        self.row.created_at
     }
 }

@@ -3,6 +3,21 @@
 Kuria's app: a single-page app in SvelteKit (SPA mode, on Vite) that the
 server serves from its own origin, and Kuria's login page.
 
+![Home, light](screenshots/home-light.png)
+
+## Screenshots
+
+From the release `mise run e2e:walk` leaves behind, taken by `mise run
+e2e:screenshots` ([e2e](../../e2e/README.md)).
+
+|                                                                                      |                                                                                 |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| ![A release candidate: its board and its artifacts](screenshots/candidate-light.png) | ![The same, dark](screenshots/candidate-dark.png)                               |
+| ![A backlog's cards, with each item's kind](screenshots/backlog-light.png)           | ![Release notes, drafted and rendered as Markdown](screenshots/notes-light.png) |
+| ![Backlog items, by type](screenshots/list-light.png)                                | ![Home, dark](screenshots/home-dark.png)                                        |
+
+![A release candidate at a phone's width](screenshots/candidate-phone.png)
+
 ## Responsibilities
 
 - Building every view from the akt types the server serves; nothing here
@@ -39,10 +54,14 @@ server serves from its own origin, and Kuria's login page.
   `TransitionDialog`; `HistoryList`, a timeline from `history.ts`;
   `Members`, the board for the akt types its columns name and a list per
   other akt type, from `members.ts`, reordered by dragging within a
-  column or list (`reorder.svelte.ts`) or from each member's menu), the
+  column or list (`reorder.svelte.ts`) or from each member's menu, and
+  dropped on another column to take a transition that leads there;
+  `TypeMark`, a type's icon and colour from `identity.ts`), the
   header's title and actions (`header.ts`), sanitized Markdown
   (`markdown.ts`), pickers that search akter (`pickers.ts`), and
-  each field kind's editor, input and text (`values.ts`), refusals
+  whom pickers offer (`people.ts`: me, the tenant's users, contacts),
+  linking a contact to a user (`contacts.ts`), each field kind's editor,
+  input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
   (`labels.ts`), uploads, and the field editor and display components.

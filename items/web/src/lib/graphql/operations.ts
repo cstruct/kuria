@@ -19,9 +19,7 @@ export const Home = graphql(`
 			tenant
 		}
 		aktTypes {
-			key
-			version
-			name
+			...TypeMark
 			akterCount
 		}
 		akter(first: 10) {
@@ -35,9 +33,7 @@ export const Home = graphql(`
 				tone
 			}
 			type {
-				key
-				version
-				name
+				...TypeMark
 			}
 		}
 	}
@@ -166,12 +162,23 @@ export const SomeoneShown = graphql(`
 	}
 `);
 
-/** What cards and lists need of an akt type to show its akter. */
-export const ShownType = graphql(`
-	fragment ShownType on AktType {
+/** How an akt type is marked wherever it is named: its icon and colour. */
+export const TypeMark = graphql(`
+	fragment TypeMark on AktType {
 		key
 		version
 		name
+		presentation {
+			icon
+			colour
+		}
+	}
+`);
+
+/** What cards and lists need of an akt type to show its akter. */
+export const ShownType = graphql(`
+	fragment ShownType on AktType {
+		...TypeMark
 		fields {
 			key
 			name
@@ -180,14 +187,19 @@ export const ShownType = graphql(`
 			card
 			list
 		}
+		transitions {
+			key
+			name
+			from
+			to
+			requires
+		}
 	}
 `);
 
 export const TypeShape = graphql(`
 	fragment TypeShape on AktType {
-		key
-		version
-		name
+		...TypeMark
 		document
 		fields {
 			key
@@ -263,10 +275,12 @@ export const AktPage = graphql(`
 						id
 						number
 						title
+						revision
 						state {
 							key
 							name
 							tone
+							final
 						}
 						type {
 							...ShownType
@@ -287,6 +301,9 @@ export const AktPage = graphql(`
 				by {
 					id
 					name
+				}
+				named {
+					...SomeoneShown
 				}
 			}
 		}
@@ -311,6 +328,34 @@ export const Contacts = graphql(`
 			displayName
 			name
 			email
+			user {
+				id
+				name
+			}
+			linkedBy {
+				id
+				name
+			}
+		}
+	}
+`);
+
+/** The users who signed in to the tenant; refused to those who may not
+ * read contacts. */
+export const Users = graphql(`
+	query Users {
+		users {
+			id
+			name
+		}
+	}
+`);
+
+export const LinkContact = graphql(`
+	mutation LinkContact($input: LinkContactInput!) {
+		linkContact(input: $input) {
+			id
+			displayName
 			user {
 				id
 				name
@@ -429,9 +474,7 @@ export const Shell = graphql(`
 			}
 		}
 		aktTypes {
-			key
-			version
-			name
+			...TypeMark
 			akterCount
 		}
 	}

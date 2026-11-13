@@ -65,12 +65,16 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `card` | Up to four field keys, shown on board cards after the title. |
 | `list` | Field keys, shown as columns where the type's akter are listed. |
 | `tones` | Per state key, a tone: `neutral`, `active`, `success`, `warning` or `danger`. |
+| `icon` | An icon shown with the type's name: `archive`, `book-open`, `box`, `bug`, `calendar`, `circle-check`, `clipboard-check`, `file-text`, `flag`, `flask-conical`, `git-branch`, `layers`, `list-checks`, `milestone`, `notebook-pen`, `package`, `rocket`, `shield-check`, `tag`, `target`, `triangle-alert`, `users`, `wrench` or `zap`. |
+| `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
 
 Every key MUST name a field or state the type defines, each at most once
 in its list, and the title a single-line `text` field; otherwise the
 document MUST be refused. Without a `title`, an akt's title MUST be the
 value of the type's first required single-line `text` field, if it has
-one. A state without a tone MUST be shown as `neutral`.
+one. A state without a tone MUST be shown as `neutral`. An icon or colour
+not in its list MUST be refused; without one, a type MUST be shown without
+an icon, in `neutral`.
 
 ## Fields
 

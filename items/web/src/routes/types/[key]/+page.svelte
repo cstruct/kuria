@@ -1,5 +1,6 @@
 <script lang="ts">
 	// r[impl app.akt-types]
+	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -50,7 +51,7 @@
 		<p role="alert">{list.error.message}</p>
 	{:else if type}
 		<header>
-			<h1>{type.name}</h1>
+			<h1><TypeMark {type} size="md" named /></h1>
 			<Button variant="primary" href={resolve('/types/[key]/new', { key: type.key })}>
 				<Plus size={16} aria-hidden={true} /> New {type.name}
 			</Button>

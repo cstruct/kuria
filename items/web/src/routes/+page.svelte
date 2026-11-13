@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { ago } from '#lib/akt/history.ts';
@@ -35,6 +36,7 @@
 				<ul class="recent" aria-label="Recently changed">
 					{#each home.data.akter as akt (akt.id)}
 						<li>
+							<TypeMark type={akt.type} size="md" />
 							<a class="what" href={resolve('/akt/[number]', { number: akt.number })}>
 								<span class="title">{akt.title ?? akt.number}</span>
 								<span class="meta">
@@ -63,7 +65,9 @@
 				<ul class="types">
 					{#each home.data.aktTypes as type (type.key)}
 						<li>
-							<a class="name" href={resolve('/types/[key]', { key: type.key })}>{type.name}</a>
+							<a class="name" href={resolve('/types/[key]', { key: type.key })}
+								><TypeMark {type} size="md" named /></a
+							>
 							<span class="count">{counted(type.akterCount)}</span>
 							<Button
 								size="sm"

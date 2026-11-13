@@ -9,6 +9,7 @@ import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
 // r[verify app.members]
+// r[verify app.board-drop]
 test('members are on the board or listed by type, and reorder', async ({ browser }) => {
 	await defineExample();
 	const admin = await api(seeded().clients.admin);
@@ -24,10 +25,18 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	const first = await create('backlog_item', { title: 'First' }, [backlog]);
 	const second = await create('backlog_item', { title: 'Second' }, [backlog]);
 	const third = await create('backlog_item', { title: 'Third', kind: 'fix' }, [backlog]);
-	await admin.graphql(
-		'mutation($n: String!) { performTransition(input: { number: $n, revision: 1, transition: "start" }) { number } }',
-		{ n: second }
-	);
+	const done = await create('backlog_item', { title: 'Done already' }, [backlog]);
+	const transition = (n: string, revision: number, t: string, fields: Record<string, unknown> = {}) =>
+		admin.graphql(
+			'mutation($n: String!, $r: Int!, $t: String!, $f: JSON) { performTransition(input: { number: $n, revision: $r, transition: $t, fields: $f }) { number } }',
+			{ n, r: revision, t, f: fields }
+		);
+	await transition(second, 1, 'start');
+	await transition(done, 1, 'start');
+	await transition(done, 2, 'review', {
+		change: { url: 'https://git.example/pr/1' }
+	});
+	await transition(done, 3, 'finish');
 
 	const page = await signIn(browser, seeded().people.developer);
 
@@ -59,13 +68,20 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	await page.keyboard.press('Enter');
 	await page.getByRole('menuitem', { name: `Move ${third} down` }).press('Enter');
 	await expect.poll(() => column(page, 'To do')).toEqual([first, third]);
-	// Dropped on another column, it stays where it is: a transition moves it.
-	await drag(page, first, second);
+	// Dropped on a column no transition leads to, it stays where it is.
+	await drag(page, first, done);
 	await page.waitForTimeout(300);
 	expect(await column(page, 'To do')).toEqual([first, third]);
-	expect(await column(page, 'In progress')).toEqual([second]);
-	await memberAction(page, first, 'remove');
-	await expect.poll(() => column(page, 'To do')).toEqual([third]);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	// Dropped on one a transition leads to, it asks, and moves.
+	await drag(page, first, second);
+	const move = page.getByRole('dialog', { name: 'Move First to In progress' });
+	await move.getByRole('button', { name: 'Start' }).click();
+	await expect(move).toBeHidden();
+	await expect.poll(() => column(page, 'In progress')).toEqual([first, second]);
+	expect(await column(page, 'To do')).toEqual([third]);
+	await memberAction(page, third, 'remove');
+	await expect.poll(() => column(page, 'To do')).toEqual([]);
 });
 
 // r[verify app.akt-types]
@@ -90,9 +106,7 @@ test('an akt type’s akter are listed, filtered by state and sorted', async ({ 
 	await page.goto('/types/backlog_item');
 	const table = page.getByRole('table', { name: 'Backlog item' });
 	const numbers = () =>
-		table
-			.locator('tbody tr')
-			.evaluateAll((rows) => rows.map((r) => r.querySelector('a')?.textContent?.trim() ?? ''));
+		table.locator('tbody tr').evaluateAll((rows) => rows.map((r) => r.querySelector('a')?.textContent?.trim() ?? ''));
 	const mine = async () => (await numbers()).filter((n) => n === older || n === newer);
 
 	// Most recently changed first: the started one.

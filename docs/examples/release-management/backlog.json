@@ -16,5 +16,6 @@
       "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"] } },
     { "key": "done", "name": "Done",
       "states": { "backlog_item": ["done"], "epic": ["done"] } }
-  ] }
+  ] },
+  "presentation": { "icon": "layers", "colour": "blue" }
 }

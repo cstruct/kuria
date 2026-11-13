@@ -20,7 +20,8 @@
 		/** The trigger's accessible name, such as "More actions for ITEM-0003". */
 		label: string;
 		items: MenuItem[];
-		/** What the trigger shows; an ellipsis by default. */
+		/** What the trigger shows; an ellipsis by default. The label must
+		 * contain it, so that people who name what they see reach it. */
 		text?: string;
 	}
 

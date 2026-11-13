@@ -31,5 +31,5 @@
     { "key": "approve", "name": "Approve", "from": ["draft"], "to": "approved",
       "requires": ["text"], "action": "release:approve" }
   ],
-  "presentation": { "tones": { "draft": "warning", "approved": "success" } }
+  "presentation": { "icon": "notebook-pen", "colour": "pink", "tones": { "draft": "warning", "approved": "success" } }
 }

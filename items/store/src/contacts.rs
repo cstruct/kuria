@@ -22,6 +22,9 @@ pub struct Contact {
     pub linked_at: Option<DateTime<Utc>>,
     pub created_by: Uuid,
     pub created_at: DateTime<Utc>,
+    /// Who linked it by hand; `None` if it was linked by a verified email,
+    /// or isn't linked.
+    pub linked_by: Option<Uuid>,
 }
 
 /// Why a contact couldn't be written.
@@ -118,6 +121,32 @@ pub async fn link(
     .execute(conn)
     .await?;
     Ok(linked > 0)
+}
+
+/// Links the tenant's unlinked contact `id` to `subject`, by `by`. Answers
+/// whether it did: not if there is no such contact, or it is linked.
+pub async fn link_by_hand(
+    conn: &mut Connection,
+    tenant: Uuid,
+    id: Uuid,
+    subject: Uuid,
+    by: Uuid,
+    at: DateTime<Utc>,
+) -> QueryResult<bool> {
+    let linked = diesel::update(
+        contact::table
+            .filter(contact::tenant_id.eq(tenant))
+            .filter(contact::id.eq(id))
+            .filter(contact::linked_subject.is_null()),
+    )
+    .set((
+        contact::linked_subject.eq(Some(subject)),
+        contact::linked_at.eq(Some(at)),
+        contact::linked_by.eq(Some(by)),
+    ))
+    .execute(conn)
+    .await?;
+    Ok(linked == 1)
 }
 
 /// Deletes a contact's name and email. Answers whether there was one.

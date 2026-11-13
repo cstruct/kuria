@@ -9,13 +9,44 @@ import { textOf, type Value } from './values';
 const UNMAPPED = 'unmapped';
 
 interface Document {
-	board?: { columns?: { states?: Record<string, unknown> }[] };
+	board?: { columns?: { key?: string; states?: Record<string, unknown> }[] };
+}
+
+function documentOf(document: unknown): Document {
+	return typeof document === 'object' && document !== null ? (document as Document) : {};
 }
 
 /** The akt types, by key, that a column of the board names. */
 export function mappedTypes(document: unknown): Set<string> {
-	const doc = typeof document === 'object' && document !== null ? (document as Document) : {};
-	return new Set((doc.board?.columns ?? []).flatMap((c) => Object.keys(c.states ?? {})));
+	return new Set(
+		(documentOf(document).board?.columns ?? []).flatMap((c) => Object.keys(c.states ?? {}))
+	);
+}
+
+interface Movable {
+	state: { key: string; final?: boolean };
+	type: {
+		key: string;
+		transitions: readonly { key: string; from: readonly string[]; to: string }[];
+	};
+}
+
+/** The transitions that would move `member` into the board column `column`
+ * of a container whose akt type document is `document`: those its state
+ * allows that lead to a state the column names for its akt type. */
+// r[impl app.board-drop]
+export function transitionsInto<M extends Movable>(
+	document: unknown,
+	column: string,
+	member: M
+): M['type']['transitions'][number][] {
+	if (member.state.final) return [];
+	const def = (documentOf(document).board?.columns ?? []).find((c) => c.key === column);
+	const states = def?.states?.[member.type.key];
+	if (!Array.isArray(states)) return [];
+	return member.type.transitions.filter(
+		(t) => t.from.includes(member.state.key) && states.includes(t.to)
+	);
 }
 
 interface ColumnShape {

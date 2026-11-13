@@ -27,6 +27,7 @@
       "states": { "backlog_item": ["done"], "epic": ["done"] } }
   ] },
   "presentation": {
+    "icon": "flask-conical", "colour": "teal",
     "card": ["build"], "list": ["build", "test_record"],
     "tones": { "testing": "active", "accepted": "success", "rejected": "danger" }
   }

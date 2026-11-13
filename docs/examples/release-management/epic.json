@@ -22,5 +22,5 @@
     { "key": "review", "name": "In review", "states": { "backlog_item": ["in_review"] } },
     { "key": "done", "name": "Done", "states": { "backlog_item": ["done"] } }
   ] },
-  "presentation": { "tones": { "in_progress": "active", "done": "success" } }
+  "presentation": { "icon": "flag", "colour": "purple", "tones": { "in_progress": "active", "done": "success" } }
 }

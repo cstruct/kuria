@@ -41,6 +41,13 @@ explore; it can run again, numbering the next release. With
 `KURIA_E2E_EXISTING=1`, any Playwright run uses a server already
 listening instead of starting one.
 
+```sh
+mise run e2e:screenshots
+```
+
+then takes the screenshots in [the app's README](../items/web/README.md)
+from that release, into `items/web/screenshots`.
+
 The first run installs Chromium (`mise run e2e:install`) and compiles the
 server. A failed test keeps its trace and screenshots in
 `.state/results`; `npx playwright show-trace <trace.zip>` replays it.
@@ -83,10 +90,20 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   login page, a wrong password, and single sign-on.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
+- [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe
+  (`@axe-core/playwright`) against WCAG 2.2 A and AA on every main page,
+  in the light and the dark appearance: the login page, Home, akter by
+  type, a new akt, contacts, the design gallery, an akt with a board and
+  lists, a member's menu, a transition dialog, a field edited in place,
+  linking a contact, and an akt and the drawer at 390 pixels.
+- [`tests/contacts.spec.ts`](tests/contacts.spec.ts): a contact linked
+  by hand to a user who signed in with a password, and an akt's history
+  naming the user a value names.
 - [`tests/members.spec.ts`](tests/members.spec.ts): a container's
   members on its board or listed by akt type, reordered by dragging and
-  from the menu (not across columns); an akt type's list filtered by state
-  and sorted.
+  from the menu, and dropped on another column to take the transition
+  that leads there (or refused where none does); an akt type's list
+  filtered by state and sorted.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, and signing out of
   Kuria and of the login page's Konklav session.

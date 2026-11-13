@@ -556,3 +556,125 @@ async fn linking_a_contact_changes_how_values_show_not_what_they_hold() {
         )
     );
 }
+
+// r[verify app.history]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_revision_names_the_people_its_values_name() {
+    let world = world_with_documents().await;
+    let bob = world.added("Bob", None).await;
+    let colleague = Uuid::now_v7().to_string();
+    let created = world
+        .create_doc(
+            &[],
+            json!({ "owner": colleague, "approved": { "for": { "contact": bob["id"] } } }),
+        )
+        .await;
+    let number = created["data"]["createAkt"]["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let revisions = world
+        .run(
+            AKT_READER,
+            "query($n: String!) { akt(number: $n) { revisions { named { __typename ... on User { id } ... on Contact { id displayName } } } } }",
+            json!({ "n": number }),
+        )
+        .await;
+    // By field key: the checker (the caller) and whom it was checked for,
+    // then the owner.
+    assert_eq!(
+        revisions["data"]["akt"]["revisions"][0]["named"],
+        json!([
+            { "__typename": "User", "id": support::SUBJECT },
+            { "__typename": "Contact", "id": bob["id"], "displayName": "Bob" },
+            { "__typename": "User", "id": colleague }
+        ])
+    );
+}
+
+impl World {
+    /// Records that `subject` signed in to `tenant`, as a browser sign-in
+    /// does.
+    async fn signed_in(&self, tenant: &str, subject: Uuid) {
+        let mut conn = self.db.pool().get().await.unwrap();
+        kuria_store::people::signed_in_to(&mut conn, tenant.parse().unwrap(), subject, Utc::now())
+            .await
+            .unwrap();
+    }
+
+    async fn link_by_hand(&self, token: &str, contact: &Value, user: &str) -> Value {
+        self.run(
+            token,
+            "mutation($c: ID!, $u: ID!) { linkContact(input: { contact: $c, user: $u }) { id displayName user { id } linkedBy { id } } }",
+            json!({ "c": contact, "u": user }),
+        )
+        .await
+    }
+}
+
+// r[verify person.list]
+#[tokio::test(flavor = "multi_thread")]
+async fn readers_of_contacts_list_the_tenants_users() {
+    let world = World::new().await;
+    let alice = Uuid::now_v7();
+    let elsewhere = Uuid::now_v7();
+    world.signed_in(support::TENANT, alice).await;
+    world.signed_in(support::OTHER_TENANT, elsewhere).await;
+    for token in [MANAGER, READER] {
+        let users = world.run(token, "{ users { id name } }", json!({})).await;
+        assert_eq!(
+            users["data"]["users"],
+            json!([{ "id": alice.to_string(), "name": alice.to_string() }]),
+            "{token}"
+        );
+    }
+    let refused = world.run(NOBODY, "{ users { id } }", json!({})).await;
+    assert_eq!(code(&refused), "FORBIDDEN");
+}
+
+// r[verify contact.link-by-hand]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_manager_links_a_contact_to_a_user_by_hand() {
+    let world = World::new().await;
+    let bob = world.added("Bob", Some("bob@x.example")).await;
+    let user = Uuid::now_v7();
+    let stranger = Uuid::now_v7();
+    world.signed_in(support::TENANT, user).await;
+    world.signed_in(support::OTHER_TENANT, stranger).await;
+
+    // Only a manager links, and only to someone who signed in here.
+    let refused = world
+        .link_by_hand(READER, &bob["id"], &user.to_string())
+        .await;
+    assert_eq!(code(&refused), "FORBIDDEN");
+    for who in [stranger.to_string(), "not-a-subject".to_owned()] {
+        let refused = world.link_by_hand(MANAGER, &bob["id"], &who).await;
+        assert_eq!(code(&refused), "UNKNOWN_USER", "{who}");
+    }
+    let refused = world
+        .link_by_hand(
+            MANAGER,
+            &json!(Uuid::now_v7().to_string()),
+            &user.to_string(),
+        )
+        .await;
+    assert_eq!(code(&refused), "NOT_FOUND");
+
+    let linked = world
+        .link_by_hand(MANAGER, &bob["id"], &user.to_string())
+        .await;
+    assert!(linked.get("errors").is_none(), "{linked}");
+    assert_eq!(
+        linked["data"]["linkContact"]["user"]["id"],
+        user.to_string()
+    );
+    assert_eq!(
+        linked["data"]["linkContact"]["linkedBy"]["id"],
+        support::SUBJECT
+    );
+    // Once linked, it stays so.
+    let again = world
+        .link_by_hand(MANAGER, &bob["id"], &user.to_string())
+        .await;
+    assert_eq!(code(&again), "LINKED");
+}

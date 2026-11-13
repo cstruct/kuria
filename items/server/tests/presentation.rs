@@ -105,7 +105,7 @@ fn story() -> Value {
         "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done" }],
         "presentation": {
             "title": "headline", "card": ["points"], "list": ["points", "summary"],
-            "tones": { "done": "success" }
+            "tones": { "done": "success" }, "icon": "book-open", "colour": "teal"
         }
     })
 }
@@ -130,7 +130,7 @@ async fn akt_types_say_how_their_akter_are_shown() {
     let types = world
         .data(
             "tenant",
-            "{ aktTypes { key presentation { title card list } states { key tone } } }",
+            "{ aktTypes { key presentation { title card list icon colour } states { key tone } } }",
             json!({}),
         )
         .await;
@@ -145,7 +145,8 @@ async fn akt_types_say_how_their_akter_are_shown() {
     };
     assert_eq!(
         of("story")["presentation"],
-        json!({ "title": "headline", "card": ["points"], "list": ["points", "summary"] })
+        json!({ "title": "headline", "card": ["points"], "list": ["points", "summary"],
+                "icon": "BOOK_OPEN", "colour": "TEAL" })
     );
     assert_eq!(
         of("story")["states"],
@@ -153,8 +154,22 @@ async fn akt_types_say_how_their_akter_are_shown() {
     );
     assert_eq!(
         of("bug")["presentation"],
-        json!({ "title": "title", "card": [], "list": [] })
+        json!({ "title": "title", "card": [], "list": [], "icon": null, "colour": "NEUTRAL" })
     );
+
+    // An icon or colour not in its list is refused.
+    for presentation in [json!({ "icon": "unicorn" }), json!({ "colour": "plaid" })] {
+        let mut document = bug();
+        document["presentation"] = presentation.clone();
+        let refused = world
+            .run(
+                "tenant",
+                "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+                json!({ "d": document }),
+            )
+            .await;
+        assert!(refused.get("errors").is_some(), "{presentation}: {refused}");
+    }
 
     let story = world
         .create(

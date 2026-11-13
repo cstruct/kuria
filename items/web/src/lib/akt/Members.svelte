@@ -12,7 +12,7 @@
 	import Mono from '#lib/ui/Mono.svelte';
 	import { truncateMiddle } from '#lib/ui/text.ts';
 	import { boardLabels } from './labels';
-	import { groupMembers, mappedTypes, shownFields } from './members';
+	import { groupMembers, mappedTypes, shownFields, transitionsInto } from './members';
 	import { Reorder, type Place } from './reorder.svelte';
 
 	type Columns = NonNullable<AktPageQuery['akt']>['board']['columns'];
@@ -28,12 +28,31 @@
 		busy: boolean;
 		onMove: (number: string, place: Place) => void;
 		onRemove: (number: string) => void;
+		/** A member dropped on another column, with the transitions that
+		 * lead there and the column's name. */
+		onInto: (member: Member, transitions: Transition[], column: string) => void;
 	}
 
-	let { columns, document, contained, editable, busy, onMove, onRemove }: Props = $props();
+	type Transition = Member['type']['transitions'][number];
+
+	let { columns, document, contained, editable, busy, onMove, onRemove, onInto }: Props = $props();
 
 	const grouped = $derived(groupMembers(columns, mappedTypes(document), contained));
-	const reorder = new Reorder((number, place) => onMove(number, place));
+	const memberOf = (number: string) =>
+		columns.flatMap((c) => c.akter).find((m) => m.number === number);
+	const into = (number: string, column: string): Transition[] => {
+		const member = memberOf(number);
+		return member ? transitionsInto(document, column, member) : [];
+	};
+	const reorder = new Reorder(
+		(number, place) => onMove(number, place),
+		(number, column) => editable && into(number, column).length > 0,
+		(number, column) => {
+			const member = memberOf(number);
+			const name = columns.find((c) => c.key === column)?.name ?? column;
+			if (member) onInto(member, into(number, column), name);
+		}
+	);
 
 	function itemsFor(group: readonly Member[], i: number): MenuItem[] {
 		const member = group[i];
@@ -76,16 +95,19 @@
 {/if}
 
 {#if grouped.columns.length > 0}
-	<div class="board">
+	<!-- Focusable, so a keyboard can scroll it sideways when its columns
+	     hold nothing to focus. -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<div class="board" role="region" aria-label="Board" tabindex="0">
 		{#each grouped.columns as column (column.key)}
 			{@const numbers = column.akter.map((m) => m.number)}
 			<section
 				class="column"
 				class:refuses={reorder.refuses(column.key)}
+				class:takes={reorder.takes(column.key)}
+				class:over={reorder.into === column.key}
 				aria-label={column.name}
-				title={reorder.refuses(column.key)
-					? 'A transition moves an akt to another column'
-					: undefined}
+				title={reorder.refuses(column.key) ? 'No transition leads here from its state' : undefined}
 			>
 				<h3>{column.name} <span class="count">{column.akter.length}</span></h3>
 				<ol
@@ -200,6 +222,11 @@
 {/each}
 
 <style>
+	.board:focus-visible {
+		outline: 2px solid var(--focus);
+		outline-offset: 2px;
+	}
+
 	.board {
 		display: flex;
 		gap: var(--space-3);
@@ -222,6 +249,15 @@
 	.column.refuses {
 		border-color: var(--border-strong);
 		opacity: 0.6;
+	}
+
+	.column.takes {
+		border-color: var(--accent);
+	}
+
+	.column.over {
+		border-style: solid;
+		background: var(--accent-subtle);
 	}
 
 	h3 {

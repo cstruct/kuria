@@ -739,12 +739,33 @@ async fn records_the_signed_in_persons_name() {
 }
 
 // r[verify person.from-sign-in]
+// r[verify person.tenant]
 #[tokio::test(flavor = "multi_thread")]
 async fn a_sign_in_without_a_name_still_succeeds() {
     let world = World::new().await;
     world.konklav.set_userinfo_failing(true);
     world.sign_in().await;
     assert_eq!(person(&world).await, None);
+    // The tenant signed in to is recorded all the same.
+    let mut conn = world.db.pool().get().await.unwrap();
+    assert!(
+        kuria_store::people::is_in(
+            &mut conn,
+            TENANT.parse().unwrap(),
+            support::SUBJECT.parse().unwrap()
+        )
+        .await
+        .unwrap()
+    );
+    assert!(
+        !kuria_store::people::is_in(
+            &mut conn,
+            support::OTHER_TENANT.parse().unwrap(),
+            support::SUBJECT.parse().unwrap()
+        )
+        .await
+        .unwrap()
+    );
 }
 
 /// Adds a contact with `email` to `tenant`, linked to `linked` if given,
@@ -767,6 +788,7 @@ async fn add_contact(
             linked_subject: linked,
             linked_at: linked.map(|_| Utc::now()),
             created_by: uuid::Uuid::nil(),
+            linked_by: None,
             created_at: Utc::now(),
         },
     )

@@ -54,8 +54,9 @@ others.
   rebuilt still ships; a candidate that must not ship a component removes
   it.
 
-- A document's `presentation` says how its akter are shown (a backlog
-  keeps the defaults): the
+- A document's `presentation` says how its akter are shown: an icon and a
+  colour for the type (a rocket for a release, a flask for a candidate,
+  a wrench for a hotfix, a package for an artifact), the
   fields on board cards (a backlog item's kind and assignee, a candidate's
   build) and in lists (an artifact's change, version and image), and the
   tone of each state (in progress is active, in review a warning, done,

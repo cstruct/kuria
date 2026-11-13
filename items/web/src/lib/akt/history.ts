@@ -10,6 +10,18 @@ export interface RevisionData {
 	membership?: unknown;
 	createdAt: string;
 	by: { name: string };
+	/** The users and contacts its values name, with their names. */
+	named?: readonly Named[];
+}
+
+/** A user or contact as the server names it. */
+export type Named =
+	| { __typename: 'User'; id: string; name: string }
+	| { __typename: 'Contact'; id: string; displayName: string };
+
+/** Names by user or contact identifier. */
+export function namesOf(named: readonly Named[] = []): Map<string, string> {
+	return new Map(named.map((n) => [n.id, n.__typename === 'User' ? n.name : n.displayName]));
 }
 
 export interface Described {
@@ -36,21 +48,29 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The longest text a change shows before it is shortened. */
 const LONG = 140;
 
-/** A stored value as short text. Users are named as such, since revisions
- * hold their identifiers. */
-export function valueText(value: unknown): string | null {
+/** A stored value as short text. Revisions hold users' and contacts'
+ * identifiers; `names` shows them by name, else as "a user" or "a contact". */
+export function valueText(value: unknown, names: Map<string, string> = new Map()): string | null {
 	if (value === null || value === undefined) return null;
+	const someone = (who: unknown): string => {
+		if (typeof who === 'string') return names.get(who) ?? 'a user';
+		const contact = (who as { contact?: string } | null)?.contact;
+		return (contact && names.get(contact)) ?? 'a contact';
+	};
 	if (typeof value === 'string') {
-		if (UUID.test(value)) return 'a user';
+		if (UUID.test(value)) return someone(value);
 		const flat = value.replace(/\s+/g, ' ').trim();
 		return flat.length > LONG ? `${flat.slice(0, LONG - 1)}…` : flat;
 	}
 	if (typeof value === 'boolean' || typeof value === 'number') return String(value);
-	if (Array.isArray(value)) return value.map((v) => valueText(v) ?? '').join(', ');
+	if (Array.isArray(value)) return value.map((v) => valueText(v, names) ?? '').join(', ');
 	if (typeof value === 'object') {
 		const o = value as Record<string, unknown>;
-		if ('checked_by' in o) return o.for ? 'checked for someone' : 'checked';
-		if ('contact' in o) return 'a contact';
+		if ('checked_by' in o)
+			return o.for && o.for !== o.checked_by
+				? `checked for ${someone(o.for)} by ${someone(o.checked_by)}`
+				: `checked by ${someone(o.checked_by)}`;
+		if ('contact' in o) return someone(o);
 		if ('url' in o) return String(o.label ?? o.url);
 		if ('digest' in o) return `${o.repository}${o.tag ? `:${o.tag}` : ''}`;
 		if ('repository' in o) return `${o.repository}${o.tag ? `@${o.tag}` : ''}`;
@@ -64,10 +84,11 @@ export function describe(
 	fieldNames: Record<string, string>,
 	transitionNames: Record<string, string>
 ): Described {
+	const names = namesOf(r.named);
 	const changes = Object.entries((r.changes as Record<string, unknown>) ?? {}).map(
 		([key, value]) => ({
 			field: fieldNames[key] ?? key,
-			value: valueText(value)
+			value: valueText(value, names)
 		})
 	);
 	const memberships = Object.entries(

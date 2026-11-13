@@ -17,5 +17,8 @@
   "states": [
     { "key": "registered", "name": "Registered", "initial": true }
   ],
-  "presentation": { "card": ["change", "version"], "list": ["change", "version", "image"] }
+  "presentation": {
+    "icon": "package", "colour": "amber",
+    "card": ["change", "version"], "list": ["change", "version", "image"]
+  }
 }

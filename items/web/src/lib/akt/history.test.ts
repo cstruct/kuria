@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from 'vitest';
-import { ago, describe, valueText } from './history';
+import { ago, describe, namesOf, valueText } from './history';
 
 const by = { name: 'rm@shop.example' };
 
@@ -30,7 +30,7 @@ group('history', () => {
 			what: 'performed Release',
 			changes: [
 				{ field: 'Version', value: '4.2.0' },
-				{ field: 'Go for release', value: 'checked for someone' },
+				{ field: 'Go for release', value: 'checked for a contact by a user' },
 				{ field: 'gone', value: null }
 			]
 		});
@@ -74,5 +74,34 @@ group('history', () => {
 		expect(ago('2026-04-01T11:59:58Z', now)).toBe('just now');
 		expect(ago('2026-04-01T11:55:00Z', now)).toBe('5 minutes ago');
 		expect(ago('2026-03-31T12:00:00Z', now)).toBe('yesterday');
+	});
+
+	it('names users and contacts by the names the revision gives', () => {
+		const ann = '866b9e77-6aa2-4778-bb2f-77f6c8d0c816';
+		const bob = '01a1d402-87e4-77b0-bd6a-fc70a528df15';
+		const names = namesOf([
+			{ __typename: 'User', id: ann, name: 'Ann' },
+			{ __typename: 'Contact', id: bob, displayName: 'Bob' }
+		]);
+		expect(valueText(ann, names)).toBe('Ann');
+		expect(valueText({ contact: bob }, names)).toBe('Bob');
+		expect(valueText({ checked_by: ann, checked_at: 'x', for: { contact: bob } }, names)).toBe(
+			'checked for Bob by Ann'
+		);
+		expect(valueText({ checked_by: ann, checked_at: 'x', for: ann }, names)).toBe('checked by Ann');
+		// Unnamed, they are still said to be a user or a contact.
+		expect(valueText({ contact: 'other' }, names)).toBe('a contact');
+		const described = describe(
+			{
+				revision: 2,
+				changes: { owner: ann },
+				createdAt: '2026-04-01T10:00:00Z',
+				by: { name: 'Cy' },
+				named: [{ __typename: 'User', id: ann, name: 'Ann' }]
+			},
+			{ owner: 'Owner' },
+			{}
+		);
+		expect(described.changes).toEqual([{ field: 'Owner', value: 'Ann' }]);
 	});
 });

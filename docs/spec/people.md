@@ -8,6 +8,15 @@ A browser sign-in MUST ask Konklav for the `profile` and `email` scopes, and
 MUST record the subject's name and email from the claims it receives, or
 update them if they changed.
 
+r[person.tenant]
+A browser sign-in MUST record that the subject signed in to the tenant, so
+that a tenant's users can be listed.
+
+r[person.list]
+`users` MUST list the users who signed in to the caller's tenant, by
+`person.name`, to a subject with `kuria:contacts:read` or
+`kuria:contacts:manage`, and be refused as `FORBIDDEN` to anyone else.
+
 r[person.name]
 A user MUST be shown by the name Kuria recorded, else by the recorded email,
 else by the subject identifier, so that a subject who never signed in
@@ -15,5 +24,5 @@ through a browser, such as a service principal, is still shown.
 
 r[person.erasure]
 When Konklav erases a subject, Kuria MUST delete the name and email it
-recorded for them (`erasure.browser-sessions` deletes their sessions the same
-way).
+recorded for them and forget the tenants they signed in to
+(`erasure.browser-sessions` deletes their sessions the same way).

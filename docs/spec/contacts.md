@@ -4,7 +4,8 @@ A tenant often has to name people who aren't Kuria users yet: an approver
 from another department, a supplier's quality contact, a release manager
 who hasn't signed in. A contact names such a person by name and email.
 `user` fields and checkboxes can name a contact wherever they can name a
-user, and once the person signs in, the contact is linked to them and they
+user, and once the person signs in with a verified email, or someone who
+manages contacts links it by hand, the contact is linked to them and they
 are shown as the user they became.
 
 ## Keeping contacts
@@ -54,6 +55,15 @@ says it is verified, the tenant's contact with that email, if it isn't
 linked yet, MUST be linked to the subject signing in. An unverified email
 MUST NOT link a contact. A contact, once linked, MUST stay linked to that
 subject.
+
+r[contact.link-by-hand]
+`linkContact` MUST link a contact that isn't linked yet to a user who has
+signed in to the caller's tenant (`person.tenant`), recording who linked
+it and when. It MUST require `kuria:contacts:manage`, refuse a linked
+contact as `LINKED`, and a subject who hasn't signed in to the tenant as
+`UNKNOWN_USER`. A password's email, which Konklav never verifies, can't
+link a contact (`contact.link`); linking by hand is how such a person's
+contact becomes theirs.
 
 ## Erasure
 

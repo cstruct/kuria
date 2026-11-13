@@ -49,55 +49,61 @@
 <svelte:window onkeydown={(e) => editing && e.key === 'Escape' && onCancel()} />
 
 <!-- r[impl app.inline-edit]: each field opens its own editor, in place. -->
+<!-- A dt and dd pair, as its list requires, whether shown or edited. -->
 <div class="row" class:editing>
 	{#if editing}
-		<form
-			aria-label="Edit {field.name}"
-			onsubmit={(e) => {
-				e.preventDefault();
-				onSave();
-			}}
-		>
-			<FieldEditor {field} bind:draft {people} {error} />
-			<label class="reason">
-				Reason <span class="optional">(optional)</span>
-				<input bind:value={reason} />
-			</label>
-			<div class="actions">
-				<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
-				<Button variant="ghost" size="sm" onclick={onCancel}>Cancel</Button>
-			</div>
-		</form>
+		<dt class="visually-hidden">{field.name}</dt>
+		<dd>
+			<form
+				aria-label="Edit {field.name}"
+				onsubmit={(e) => {
+					e.preventDefault();
+					onSave();
+				}}
+			>
+				<FieldEditor {field} bind:draft {people} {error} />
+				<label class="reason">
+					Reason <span class="optional">(optional)</span>
+					<input bind:value={reason} />
+				</label>
+				<div class="actions">
+					<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
+					<Button variant="ghost" size="sm" onclick={onCancel}>Cancel</Button>
+				</div>
+			</form>
+		</dd>
 	{:else}
 		<dt>{field.name}</dt>
 		<dd data-field={field.key}>
-			{#if value}
-				<FieldShown {value} multiline={field.multiline} />
-			{:else}
-				<span class="empty">—</span>
+			<div class="value">
+				{#if value}
+					<FieldShown {value} multiline={field.multiline} />
+				{:else}
+					<span class="empty">—</span>
+				{/if}
+			</div>
+			{#if editable}
+				<div class="tools">
+					{#if drafted}
+						<IconButton
+							label="Draft {field.name}"
+							icon={Sparkles}
+							size="sm"
+							disabled={busy}
+							onclick={onDraft}
+						/>
+					{/if}
+					<IconButton label="Edit {field.name}" icon={Pencil} size="sm" onclick={onEdit} />
+				</div>
 			{/if}
 		</dd>
-		{#if editable}
-			<div class="tools">
-				{#if drafted}
-					<IconButton
-						label="Draft {field.name}"
-						icon={Sparkles}
-						size="sm"
-						disabled={busy}
-						onclick={onDraft}
-					/>
-				{/if}
-				<IconButton label="Edit {field.name}" icon={Pencil} size="sm" onclick={onEdit} />
-			</div>
-		{/if}
 	{/if}
 </div>
 
 <style>
 	.row {
 		display: grid;
-		grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr) auto;
+		grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
 		gap: var(--space-3);
 		align-items: start;
 		padding: var(--space-2) 0;
@@ -119,7 +125,19 @@
 	}
 
 	dd {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
 		margin: 0;
+		min-width: 0;
+	}
+
+	.editing dd {
+		display: block;
+	}
+
+	.value {
+		flex: 1;
 		min-width: 0;
 		overflow-wrap: anywhere;
 	}
@@ -130,6 +148,7 @@
 
 	.tools {
 		display: flex;
+		flex-shrink: 0;
 		gap: var(--space-1);
 		opacity: 0.6;
 	}
@@ -166,11 +185,7 @@
 
 	@media (max-width: 599px) {
 		.row {
-			grid-template-columns: minmax(0, 1fr) auto;
-		}
-
-		dt {
-			grid-column: 1 / -1;
+			grid-template-columns: minmax(0, 1fr);
 		}
 	}
 </style>

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { groupMembers, mappedTypes, placeFor, shownFields, sortAkter } from './members';
+import {
+	groupMembers,
+	mappedTypes,
+	placeFor,
+	shownFields,
+	sortAkter,
+	transitionsInto
+} from './members';
 import type { Value } from './values';
 
 const member = (number: string, type: string) => ({
@@ -126,5 +133,44 @@ describe('sortAkter', () => {
 	it('sorts by rank or by when they last changed', () => {
 		expect(sortAkter(akter, 'rank').map((a) => a.number)).toEqual(['B', 'A', 'C']);
 		expect(sortAkter(akter, 'updated').map((a) => a.number)).toEqual(['B', 'C', 'A']);
+	});
+});
+
+// r[verify app.board-drop]
+describe('transitionsInto', () => {
+	const story = (state: string, final = false) => ({
+		state: { key: state, final },
+		type: {
+			key: 'story',
+			transitions: [
+				{ key: 'start', from: ['open'], to: 'doing' },
+				{ key: 'finish', from: ['doing'], to: 'done' },
+				{ key: 'skip', from: ['open'], to: 'done' },
+				{ key: 'reopen', from: ['done'], to: 'open' }
+			]
+		}
+	});
+	const board = {
+		board: {
+			columns: [
+				{ key: 'todo', states: { story: ['open'] } },
+				{ key: 'done', states: { story: ['doing', 'done'] } }
+			]
+		}
+	};
+
+	it('offers the transitions that lead into the column', () => {
+		expect(transitionsInto(board, 'done', story('open')).map((t) => t.key)).toEqual([
+			'start',
+			'skip'
+		]);
+		expect(transitionsInto(board, 'todo', story('done')).map((t) => t.key)).toEqual(['reopen']);
+	});
+
+	it('offers none from a final state, to an unknown column or type', () => {
+		expect(transitionsInto(board, 'todo', story('done', true))).toEqual([]);
+		expect(transitionsInto(board, 'gone', story('open'))).toEqual([]);
+		expect(transitionsInto({}, 'done', story('open'))).toEqual([]);
+		expect(transitionsInto(board, 'todo', story('doing'))).toEqual([]);
 	});
 });

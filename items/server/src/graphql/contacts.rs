@@ -6,6 +6,7 @@ use std::sync::Arc;
 use async_graphql::{Context, ErrorExtensions, ID, InputObject, Object};
 use chrono::{DateTime, Utc};
 use kuria_store::contacts::{self, Contact as Row, ContactError};
+use kuria_store::people;
 use uuid::Uuid;
 
 use super::Principal;
@@ -147,6 +148,12 @@ impl Contact {
         Ok(self.row(ctx).await?.and_then(|r| r.linked_at))
     }
 
+    /// Who linked it by hand; `null` if a verified email at sign-in did, or
+    /// it isn't linked.
+    async fn linked_by(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<User>> {
+        Ok(self.row(ctx).await?.and_then(|r| r.linked_by).map(User))
+    }
+
     async fn created_by(&self, ctx: &Context<'_>) -> async_graphql::Result<User> {
         Ok(User(self.loaded(ctx).await?.created_by))
     }
@@ -180,6 +187,34 @@ impl ContactsQuery {
             .map(Contact::Loaded)
             .collect())
     }
+
+    /// The users who signed in to the tenant, most recently seen first.
+    // r[impl person.list]
+    async fn users(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<User>> {
+        if !authorizer(ctx)?
+            .reads_contacts()
+            .await
+            .map_err(|e| unavailable(&e))?
+        {
+            return Err(coded("not permitted", "FORBIDDEN"));
+        }
+        let tenant = tenant(ctx)?;
+        let mut conn = connection(ctx).await?;
+        Ok(people::in_tenant(&mut conn, tenant)
+            .await
+            .map_err(internal)?
+            .into_iter()
+            .map(|(subject, _)| User(subject))
+            .collect())
+    }
+}
+
+#[derive(InputObject)]
+pub struct LinkContactInput {
+    /// The contact to link.
+    contact: ID,
+    /// The user it is, who has signed in to the tenant.
+    user: ID,
 }
 
 #[derive(InputObject)]
@@ -220,6 +255,7 @@ impl ContactsMutation {
             linked_at: None,
             created_by: principal.subject.into(),
             created_at: Utc::now(),
+            linked_by: None,
         };
         let mut conn = connection(ctx).await?;
         contacts::insert(&mut conn, &row).await.map_err(refused)?;
@@ -256,6 +292,50 @@ impl ContactsMutation {
         Ok(Contact::Loaded(row))
     }
 
+    /// Links a contact to the user it is, by hand: for people whose email
+    /// Konklav never verified, such as those who sign in with a password.
+    // r[impl contact.link-by-hand]
+    async fn link_contact(
+        &self,
+        ctx: &Context<'_>,
+        input: LinkContactInput,
+    ) -> async_graphql::Result<Contact> {
+        require(ctx, &Permission::ManageContacts).await?;
+        let principal = ctx.data::<Principal>()?;
+        let tenant: Uuid = principal.tenant.into();
+        let id = contact_id(&input.contact)?;
+        let user = Uuid::parse_str(&input.user).map_err(|_| unknown_user(&input.user))?;
+        let mut conn = connection(ctx).await?;
+        let row = contacts::find(&mut conn, tenant, &[id])
+            .await
+            .map_err(internal)?
+            .pop()
+            .ok_or_else(|| coded(format!("there is no contact `{id}`"), "NOT_FOUND"))?;
+        if row.linked_subject.is_some() {
+            return Err(coded("the contact is already linked to a user", "LINKED"));
+        }
+        if !people::is_in(&mut conn, tenant, user)
+            .await
+            .map_err(internal)?
+        {
+            return Err(unknown_user(&input.user));
+        }
+        let by = principal.subject.into();
+        if !contacts::link_by_hand(&mut conn, tenant, id, user, by, Utc::now())
+            .await
+            .map_err(internal)?
+        {
+            // Linked by someone else in the meantime.
+            return Err(coded("the contact is already linked to a user", "LINKED"));
+        }
+        let row = contacts::find(&mut conn, tenant, &[id])
+            .await
+            .map_err(internal)?
+            .pop()
+            .ok_or_else(|| internal("a linked contact is gone"))?;
+        Ok(Contact::Loaded(row))
+    }
+
     /// Deletes a contact's name and email, keeping the contact so that the
     /// values naming it still read.
     // r[impl contact.erase]
@@ -277,6 +357,13 @@ impl ContactsMutation {
             .ok_or_else(|| internal("an erased contact is gone"))?;
         Ok(Contact::Loaded(row))
     }
+}
+
+fn unknown_user(id: &ID) -> async_graphql::Error {
+    coded(
+        format!("`{}` hasn't signed in to this tenant", id.0),
+        "UNKNOWN_USER",
+    )
 }
 
 fn contact_id(id: &ID) -> async_graphql::Result<Uuid> {

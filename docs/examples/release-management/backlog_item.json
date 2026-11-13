@@ -28,6 +28,7 @@
     { "key": "finish", "name": "Finish", "from": ["in_review"], "to": "done" }
   ],
   "presentation": {
+    "icon": "file-text", "colour": "neutral",
     "card": ["kind", "assignee"], "list": ["kind", "assignee"],
     "tones": { "in_progress": "active", "in_review": "warning", "done": "success" }
   }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import Users from '@lucide/svelte/icons/users';
@@ -47,7 +48,7 @@
 			{@const href = resolve('/types/[key]', { key: type.key })}
 			<li>
 				<a {href} aria-current={here(href) ? 'page' : undefined} onclick={onNavigate}>
-					<span class="name">{type.name}</span>
+					<span class="name"><TypeMark {type} named /></span>
 					{#if type.akterCount !== null}<span class="count">{type.akterCount}</span>{/if}
 				</a>
 			</li>

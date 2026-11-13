@@ -310,6 +310,7 @@ async fn an_erasure_deletes_the_names_of_contacts_linked_to_them() {
         linked_subject: linked,
         linked_at: linked.map(|_| Utc::now()),
         created_by: Uuid::nil(),
+        linked_by: None,
         created_at: Utc::now(),
     };
     let alices = contact(Some(ALICE), "alice@example.com");
@@ -317,6 +318,11 @@ async fn an_erasure_deletes_the_names_of_contacts_linked_to_them() {
     let unlinked = contact(None, "carl@example.com");
     for c in [&alices, &bobs, &unlinked] {
         contacts::insert(&mut conn, c).await.unwrap();
+    }
+    for subject in [ALICE, BOB] {
+        kuria_store::people::signed_in_to(&mut conn, Uuid::nil(), subject, Utc::now())
+            .await
+            .unwrap();
     }
     drop(conn);
     let erased = world.list.erase(ALICE, 1_000);
@@ -332,6 +338,17 @@ async fn an_erasure_deletes_the_names_of_contacts_linked_to_them() {
         })
         .await;
     let mut conn = world.pool().get().await.unwrap();
+    // r[verify person.erasure]: and the tenants she signed in to.
+    assert!(
+        !kuria_store::people::is_in(&mut conn, Uuid::nil(), ALICE)
+            .await
+            .unwrap()
+    );
+    assert!(
+        kuria_store::people::is_in(&mut conn, Uuid::nil(), BOB)
+            .await
+            .unwrap()
+    );
     let left = contacts::find(&mut conn, Uuid::nil(), &[alices.id, bobs.id, unlinked.id])
         .await
         .unwrap();

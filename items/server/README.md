@@ -27,7 +27,7 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Rate limiting sign-in starts per client address, shared between instances
   through Valkey.
 - Deleting an erased subject's browser sessions, recorded name and email,
-  and the names and emails of contacts linked to them when Konklav erases
+  the tenants they signed in to, and the names and emails of contacts linked to them when Konklav erases
   them,
   and catching up on erasures it may have missed from a time stored in the
   database.
@@ -66,7 +66,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   they are users, one per email, with `kuria:contacts:manage` and
   `kuria:contacts:read`. `user` values and checked boxes name a user or a
   contact (`Someone` in GraphQL); the write path takes only the tenant's
-  contacts, and drafts show them by name.
+  contacts, and drafts show them by name. A browser sign-in records the
+  tenant (`tenant_person`), so `users` lists a tenant's users, and
+  `linkContact` links a contact to one by hand, for people whose email
+  Konklav never verified.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
 
@@ -99,9 +102,10 @@ Not yet: links other than containment, and signatures.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
-  `eraseContact`; and the query `contacts`.
+  `linkContact`, `eraseContact`; and the queries `contacts` and `users`. A
+  revision's `named` lists the users and contacts its values name.
   An akt has its `title`, an akt type its `presentation` (title field,
-  card and list fields) and each state its `tone`; `akter(search:)` finds
+  card and list fields, icon and colour) and each state its `tone`; `akter(search:)` finds
   akter by a number's beginning or a title's words; `AktType.akterCount`
   counts a type's akter for those who may read them; `viewer.user` names
   the viewer.
@@ -257,9 +261,11 @@ mise run test
   tenant regardless of case, editing until linked, a linked contact shown
   as its user, and erasing; `user` fields and checkboxes naming contacts,
   only the tenant's, emails hidden from akt readers, and a linked contact
-  shown as its user in values and drafts while the stored values stay.
-- [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation
-  and tones, titles by the presentation or by default and kept through
+  shown as its user in values and drafts while the stored values stay;
+  listing the tenant's users, linking a contact by hand and its refusals,
+  and the people a revision's values name.
+- [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation,
+  tones, icons and colours (unknown ones refused), titles by the presentation or by default and kept through
   edits and transitions, and searching by number and title words, across
   types, only what the subject may read, with `%` and `_` taken literally.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,

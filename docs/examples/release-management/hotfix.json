@@ -16,5 +16,5 @@
       "requires": ["build"], "action": "release:approve" }
   ],
   "contains": [{ "type": "backlog_item" }, { "type": "artifact" }],
-  "presentation": { "card": ["build"], "list": ["build"], "tones": { "open": "warning", "deployed": "success" } }
+  "presentation": { "icon": "wrench", "colour": "red", "card": ["build"], "list": ["build"], "tones": { "open": "warning", "deployed": "success" } }
 }

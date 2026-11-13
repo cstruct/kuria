@@ -1,5 +1,7 @@
 <script lang="ts">
+	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -19,7 +21,7 @@
 	import { oneField, settle } from '#lib/akt/editing.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
-	import type { Person } from '#lib/akt/people.ts';
+	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
 	import { changes, draftOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
@@ -28,6 +30,7 @@
 		AddToContainer,
 		AktPage,
 		Contacts,
+		Users,
 		DraftField,
 		EditAkt,
 		MoveAkt,
@@ -47,11 +50,14 @@
 
 	type Akt = NonNullable<AktPageQuery['akt']>;
 	type Transition = Akt['type']['transitions'][number];
+	type Member = Akt['board']['columns'][number]['akter'][number];
+	type MemberTransition = Member['type']['transitions'][number];
 
 	const client = getClient();
 	const number = $derived(page.params.number ?? '');
 	const view = query(AktPage, () => ({ number }));
 	const contacts = query(Contacts, () => ({}));
+	const users = query(Users, () => ({}));
 
 	const akt = $derived(view.data?.akt ?? undefined);
 	setCrumbs(() =>
@@ -68,13 +74,9 @@
 	const transitionNames = $derived(
 		Object.fromEntries((akt?.type.transitions ?? []).map((t) => [t.key, t.name]))
 	);
-	const people = $derived<Person[]>([
-		...(view.data ? [{ who: { user: view.data.viewer.subject }, name: 'Me' }] : []),
-		...(contacts.data?.contacts ?? []).map((c) => ({
-			who: c.user ? { user: c.user.id } : { contact: c.id },
-			name: c.displayName
-		}))
-	]);
+	const people = $derived<Person[]>(
+		peopleOf(view.data?.viewer.subject, users.data?.users, contacts.data?.contacts)
+	);
 	const typeNames = $derived(
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))
 	);
@@ -100,6 +102,13 @@
 	let transferOpen = $state(false);
 	let transferFrom = $state('');
 	let addOpen = $state(false);
+	// A member dropped on another column, and the transitions that lead there.
+	let moving = $state<{ member: Member; transitions: MemberTransition[]; column: string } | null>(
+		null
+	);
+	let movingOpen = $state(false);
+	// The transition `?transition=` asked for, opened once per akt.
+	let askedFor = $state('');
 
 	function snapshot(of: Akt): Record<string, Draft> {
 		return Object.fromEntries(
@@ -120,6 +129,18 @@
 			loadedFor = akt.number;
 			editingField = null;
 		}
+	});
+
+	// r[impl app.board-drop]: a transition chosen on a container's board
+	// that needs fields opens here, asking for them.
+	$effect(() => {
+		const key = page.url.searchParams.get('transition');
+		if (!akt || !key || askedFor === akt.number) return;
+		askedFor = akt.number;
+		const transition = availableTransitions(akt.type.transitions, akt.state).find(
+			(t) => t.key === key
+		);
+		if (transition) begin(transition);
 	});
 
 	async function refetch(): Promise<Akt | undefined> {
@@ -200,6 +221,29 @@
 		}
 	}
 
+	function into(member: Member, transitions: MemberTransition[], column: string) {
+		moving = { member, transitions, column };
+		movingOpen = true;
+	}
+
+	/** Performs a transition on the member being moved, or, when it needs
+	 * fields, opens it on the member's page. */
+	async function moveInto(transition: MemberTransition) {
+		if (!moving) return;
+		const { member } = moving;
+		if (transition.requires.length > 0) {
+			const query = `?transition=${encodeURIComponent(transition.key)}`;
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with a query
+			await goto(`${resolve('/akt/[number]', { number: member.number })}${query}`);
+			return;
+		}
+		const input = { number: member.number, revision: member.revision, transition: transition.key };
+		if (await run(() => mutate(client, PerformTransition, { input }))) {
+			movingOpen = false;
+			toast(`${member.number}: ${transition.name}`, 'success');
+		}
+	}
+
 	async function draft(field: string) {
 		if (!akt) return;
 		const revision = akt.revision;
@@ -251,7 +295,9 @@
 		<header class="head">
 			<div class="identity">
 				<p class="eyebrow">
-					<a href={resolve('/types/[key]', { key: akt.type.key })}>{akt.type.name}</a>
+					<a href={resolve('/types/[key]', { key: akt.type.key })}
+						><TypeMark type={akt.type} named /></a
+					>
 					<span data-testid="number"><Mono value={akt.number} max={40} copy /></span>
 				</p>
 				<h1>{headingOf(akt)}</h1>
@@ -332,6 +378,7 @@
 							{busy}
 							onMove={move}
 							onRemove={removeMember}
+							onInto={into}
 						/>
 					</section>
 				{/if}
@@ -426,6 +473,27 @@
 			/>
 		</Dialog>
 
+		{#if moving}
+			{@const target = moving}
+			<Dialog
+				bind:open={movingOpen}
+				title="Move {target.member.title ?? target.member.number} to {target.column}"
+				description="Its state changes by a transition. One that needs fields opens on its page."
+			>
+				<div class="choices">
+					{#each target.transitions as transition (transition.key)}
+						<Button
+							variant={target.transitions.length === 1 ? 'primary' : 'secondary'}
+							{busy}
+							onclick={() => moveInto(transition)}
+						>
+							{transition.name}{transition.requires.length > 0 ? '…' : ''}
+						</Button>
+					{/each}
+				</div>
+			</Dialog>
+		{/if}
+
 		<Dialog
 			bind:open={addOpen}
 			title="Add a member"
@@ -452,6 +520,12 @@
 </main>
 
 <style>
+	.choices {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2);
+	}
+
 	.akt {
 		display: flex;
 		flex-direction: column;

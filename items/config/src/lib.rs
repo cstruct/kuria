@@ -11,8 +11,8 @@ mod references;
 mod validate;
 
 pub use document::{
-    AktTypeDocument, AttachmentFormat, BoardDef, ChoiceOption, ColumnDef, ContainsDef, FieldDef,
-    FieldKind, MAX_CARD_FIELDS, PresentationDef, StateDef, Tone, TransitionDef,
+    AktTypeDocument, AttachmentFormat, BoardDef, ChoiceOption, Colour, ColumnDef, ContainsDef,
+    FieldDef, FieldKind, Icon, MAX_CARD_FIELDS, PresentationDef, StateDef, Tone, TransitionDef,
 };
 pub use draft::{DraftDef, GroupBy, LineTemplate, LineValues, MAX_DEPTH};
 pub use number::{NumberContext, NumberPattern, PatternError};

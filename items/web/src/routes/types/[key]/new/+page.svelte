@@ -5,10 +5,10 @@
 	import { page } from '$app/state';
 	import FieldEditor from '#lib/akt/FieldEditor.svelte';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
-	import type { Person } from '#lib/akt/people.ts';
+	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { draftOf, inputOf, isEmpty, type Draft } from '#lib/akt/values.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
-	import { Contacts, CreateAkt, NewAkt } from '#lib/graphql/operations.ts';
+	import { Contacts, CreateAkt, NewAkt, Users } from '#lib/graphql/operations.ts';
 
 	const client = getClient();
 	const key = $derived(page.params.key ?? '');
@@ -16,18 +16,15 @@
 	const inside = $derived(page.url.searchParams.getAll('in'));
 	const view = query(NewAkt, () => ({ type: key }));
 	const contacts = query(Contacts, () => ({}));
+	const users = query(Users, () => ({}));
 	const type = $derived(view.data?.aktType ?? undefined);
 	setCrumbs(() => [
 		{ label: type?.name ?? key, href: resolve('/types/[key]', { key }) },
 		{ label: 'New' }
 	]);
-	const people = $derived<Person[]>([
-		...(view.data ? [{ who: { user: view.data.viewer.subject }, name: 'Me' }] : []),
-		...(contacts.data?.contacts ?? []).map((c) => ({
-			who: c.user ? { user: c.user.id } : { contact: c.id },
-			name: c.displayName
-		}))
-	]);
+	const people = $derived<Person[]>(
+		peopleOf(view.data?.viewer.subject, users.data?.users, contacts.data?.contacts)
+	);
 
 	let drafts = $state<Record<string, Draft>>({});
 	let preparedFor = $state('');

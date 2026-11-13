@@ -36,6 +36,7 @@
     { "key": "rejected", "name": "Rejected", "states": { "release_candidate": ["rejected"] } }
   ] },
   "presentation": {
+    "icon": "rocket", "colour": "green",
     "card": ["version"], "list": ["version", "released_on", "release_manager"],
     "tones": { "testing": "active", "released": "success" }
   }

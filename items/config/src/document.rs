@@ -75,6 +75,12 @@ pub struct PresentationDef {
     /// Per state key, how it is shown; `neutral` for states not named.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub tones: BTreeMap<String, Tone>,
+    /// The icon shown with the type's name; none if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<Icon>,
+    /// The colour the type is shown in; `neutral` if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<Colour>,
 }
 
 impl PresentationDef {
@@ -93,6 +99,52 @@ pub enum Tone {
     Success,
     Warning,
     Danger,
+}
+
+/// The icons an akt type may be shown with, by their names in documents.
+// r[impl akt.type.presentation]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Icon {
+    Archive,
+    BookOpen,
+    Box,
+    Bug,
+    Calendar,
+    CircleCheck,
+    ClipboardCheck,
+    FileText,
+    Flag,
+    FlaskConical,
+    GitBranch,
+    Layers,
+    ListChecks,
+    Milestone,
+    NotebookPen,
+    Package,
+    Rocket,
+    ShieldCheck,
+    Tag,
+    Target,
+    TriangleAlert,
+    Users,
+    Wrench,
+    Zap,
+}
+
+/// The colours an akt type may be shown in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Colour {
+    #[default]
+    Neutral,
+    Blue,
+    Green,
+    Amber,
+    Red,
+    Purple,
+    Teal,
+    Pink,
 }
 
 /// The most fields a board card shows after the title.

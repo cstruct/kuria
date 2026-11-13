@@ -272,8 +272,8 @@ async fn exchange(state: &SessionState, code: &str, verifier: &str) -> Result<Si
     })
 }
 
-/// Records the signed-in subject's name and email from Konklav's userinfo
-/// endpoint, and links the tenant's contact with that email if Konklav
+/// Records that the subject signed in to the tenant, their name and email
+/// from Konklav's userinfo endpoint, and links the tenant's contact with that email if Konklav
 /// verified it. Best effort: a sign-in doesn't fail for want of a name.
 // r[impl person.from-sign-in]
 async fn record_person(
@@ -281,6 +281,12 @@ async fn record_person(
     conn: &mut kuria_store::Connection,
     signed_in: &SignedIn,
 ) {
+    if let Err(e) =
+        kuria_store::people::signed_in_to(conn, signed_in.tenant, signed_in.subject, Utc::now())
+            .await
+    {
+        tracing::warn!("recording the tenant the subject signed in to: {e}");
+    }
     let info = match state
         .sessions
         .provider

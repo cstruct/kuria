@@ -129,7 +129,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A container shown as columns. The container's akt type configures the columns, naming which states of which member akt types fall in each.
 
 - `presentation`
-  - The part of an akt type that says how its akter are shown: which field is the title, which fields go on board cards and list columns, and the tone of each state. It changes how akter look, never what they hold.
+  - The part of an akt type that says how its akter are shown: which field is the title, which fields go on board cards and list columns, the tone of each state, and the type's icon and colour. It changes how akter look, never what they hold.
 
 - `title`
   - The name an akt is shown by beside its number, such as "Sign-in" for `EPIC-001`: the value of the field its akt type's presentation names.

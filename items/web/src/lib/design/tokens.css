@@ -45,6 +45,24 @@
 	--tone-warning-fg: #7d4a00;
 	--tone-danger-bg: #fde6e5;
 	--tone-danger-fg: #a8231c;
+	/* Akt types' colours (presentation.colour): a background and the
+	   icon or text on it. */
+	--type-neutral-bg: #eceff3;
+	--type-neutral-fg: #3d4651;
+	--type-blue-bg: #e3ecfd;
+	--type-blue-fg: #1d4ed8;
+	--type-green-bg: #def4e6;
+	--type-green-fg: #166534;
+	--type-amber-bg: #fdf0d5;
+	--type-amber-fg: #854d0e;
+	--type-red-bg: #fde4e2;
+	--type-red-fg: #b42318;
+	--type-purple-bg: #f0e7fd;
+	--type-purple-fg: #6b21a8;
+	--type-teal-bg: #d9f3f0;
+	--type-teal-fg: #0f6b63;
+	--type-pink-bg: #fce4f1;
+	--type-pink-fg: #9d174d;
 
 	--shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
 	--shadow-md: 0 4px 16px rgb(16 24 40 / 0.12), 0 1px 3px rgb(16 24 40 / 0.08);
@@ -112,6 +130,22 @@
 		--tone-warning-fg: #f3c27a;
 		--tone-danger-bg: #3d1716;
 		--tone-danger-fg: #ffa29c;
+		--type-neutral-bg: #2a2f36;
+		--type-neutral-fg: #cdd3db;
+		--type-blue-bg: #1b2a4d;
+		--type-blue-fg: #a9c3ff;
+		--type-green-bg: #133022;
+		--type-green-fg: #8fd6a9;
+		--type-amber-bg: #3a2a0e;
+		--type-amber-fg: #f3c27a;
+		--type-red-bg: #3d1716;
+		--type-red-fg: #ffa29c;
+		--type-purple-bg: #2c1d47;
+		--type-purple-fg: #d4b8ff;
+		--type-teal-bg: #0f2f2c;
+		--type-teal-fg: #7fdccf;
+		--type-pink-bg: #3a1428;
+		--type-pink-fg: #ffa8d2;
 		--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
 		--shadow-md: 0 6px 20px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
 	}
@@ -147,6 +181,22 @@
 	--tone-warning-fg: #f3c27a;
 	--tone-danger-bg: #3d1716;
 	--tone-danger-fg: #ffa29c;
+	--type-neutral-bg: #2a2f36;
+	--type-neutral-fg: #cdd3db;
+	--type-blue-bg: #1b2a4d;
+	--type-blue-fg: #a9c3ff;
+	--type-green-bg: #133022;
+	--type-green-fg: #8fd6a9;
+	--type-amber-bg: #3a2a0e;
+	--type-amber-fg: #f3c27a;
+	--type-red-bg: #3d1716;
+	--type-red-fg: #ffa29c;
+	--type-purple-bg: #2c1d47;
+	--type-purple-fg: #d4b8ff;
+	--type-teal-bg: #0f2f2c;
+	--type-teal-fg: #7fdccf;
+	--type-pink-bg: #3a1428;
+	--type-pink-fg: #ffa8d2;
 	--shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
 	--shadow-md: 0 6px 20px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
 }

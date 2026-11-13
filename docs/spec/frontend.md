@@ -69,6 +69,17 @@ type, not as one unmapped column. Cards and lists MUST show each member's
 number, title, state and the fields its type's presentation names for
 them.
 
+r[app.board-drop]
+Dropping a card on another column of a board MUST offer the transitions
+from the member's state to a state that column names for its akt type,
+and perform the one chosen as `app.transitions` does, asking for the fields
+it requires. A column no such transition leads to MUST refuse the drop.
+
+r[app.type-identity]
+Wherever the app names an akt type, in the sidebar, on Home, in an akt's
+header and on its type's list, it MUST show the type's icon and colour
+(`akt.type.presentation`), with its name.
+
 r[app.pickers]
 Wherever the app asks for an akt, such as a container to add an akt to, or
 a member to add, it MUST let the person find it by number or title
@@ -80,7 +91,8 @@ too, and open the akt chosen.
 
 r[app.history]
 An akt's history MUST say, for each revision, who made it and when, its
-transition, the fields it changed with their new values, and the
+transition, the fields it changed with their new values, the users and
+contacts those values name by their names (`contact.show`), and the
 containers or members it added or removed, by number.
 
 r[app.stale]

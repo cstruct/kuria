@@ -28,6 +28,9 @@ export const PAIRS: [fg: string, bg: string, least: number][] = [
 	['tone-success-fg', 'tone-success-bg', 4.5],
 	['tone-warning-fg', 'tone-warning-bg', 4.5],
 	['tone-danger-fg', 'tone-danger-bg', 4.5],
+	...(['neutral', 'blue', 'green', 'amber', 'red', 'purple', 'teal', 'pink'] as const).map(
+		(c): [string, string, number] => [`type-${c}-fg`, `type-${c}-bg`, 4.5]
+	),
 	// Inputs' borders and the focus ring, against what they sit on.
 	['border-strong', 'bg', 3],
 	['border-strong', 'surface', 3],

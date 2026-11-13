@@ -121,6 +121,7 @@ diesel::table! {
         email -> Nullable<Text>,
         linked_subject -> Nullable<Uuid>,
         linked_at -> Nullable<Timestamptz>,
+        linked_by -> Nullable<Uuid>,
         created_by -> Uuid,
         created_at -> Timestamptz,
     }
@@ -149,6 +150,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    tenant_person (tenant_id, subject_id) {
+        tenant_id -> Uuid,
+        subject_id -> Uuid,
+        first_seen_at -> Timestamptz,
+        last_seen_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     attachment (id) {
         id -> Uuid,
         tenant_id -> Uuid,
@@ -170,3 +180,5 @@ diesel::table! {
         attachment_id -> Uuid,
     }
 }
+
+diesel::allow_tables_to_appear_in_same_query!(person, tenant_person);

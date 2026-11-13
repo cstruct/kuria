@@ -69,6 +69,12 @@ type AktRevision {
 	"""
 	changes: JSON!
 	"""
+	The users and contacts that the values the change set name: a user
+	field's, and a checkbox's checker and whom it was checked for, so
+	that the history can show them by name (`contact.show`).
+	"""
+	named: [Someone!]!
+	"""
 	The state the akt was left in.
 	"""
 	state: String!
@@ -112,6 +118,50 @@ type AktType {
 	"""
 	akterCount: Int
 	createdBy: ID!
+}
+
+"""
+The colour an akt type is shown in.
+"""
+enum AktTypeColour {
+	NEUTRAL
+	BLUE
+	GREEN
+	AMBER
+	RED
+	PURPLE
+	TEAL
+	PINK
+}
+
+"""
+An icon an akt type is shown with.
+"""
+enum AktTypeIcon {
+	ARCHIVE
+	BOOK_OPEN
+	BOX
+	BUG
+	CALENDAR
+	CIRCLE_CHECK
+	CLIPBOARD_CHECK
+	FILE_TEXT
+	FLAG
+	FLASK_CONICAL
+	GIT_BRANCH
+	LAYERS
+	LIST_CHECKS
+	MILESTONE
+	NOTEBOOK_PEN
+	PACKAGE
+	ROCKET
+	SHIELD_CHECK
+	TAG
+	TARGET
+	TRIANGLE_ALERT
+	USERS
+	WRENCH
+	ZAP
 }
 
 type Attachment {
@@ -270,6 +320,11 @@ type Contact {
 	"""
 	user: User
 	linkedAt: DateTime
+	"""
+	Who linked it by hand; `null` if a verified email at sign-in did, or
+	it isn't linked.
+	"""
+	linkedBy: User
 	createdBy: User!
 	createdAt: DateTime!
 }
@@ -406,6 +461,17 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
+input LinkContactInput {
+	"""
+	The contact to link.
+	"""
+	contact: ID!
+	"""
+	The user it is, who has signed in to the tenant.
+	"""
+	user: ID!
+}
+
 """
 What adding to or removing from a container takes.
 """
@@ -483,6 +549,11 @@ type Mutation {
 	"""
 	editContact(input: EditContactInput!): Contact!
 	"""
+	Links a contact to the user it is, by hand: for people whose email
+	Konklav never verified, such as those who sign in with a password.
+	"""
+	linkContact(input: LinkContactInput!): Contact!
+	"""
 	Deletes a contact's name and email, keeping the contact so that the
 	values naming it still read.
 	"""
@@ -522,6 +593,14 @@ type Presentation {
 	The fields lists of this type's akter show as columns.
 	"""
 	list: [String!]!
+	"""
+	The icon shown with the type's name, if it has one.
+	"""
+	icon: AktTypeIcon
+	"""
+	The colour the type is shown in.
+	"""
+	colour: AktTypeColour!
 }
 
 type Query {
@@ -555,6 +634,10 @@ type Query {
 	The tenant's contacts, by name.
 	"""
 	contacts: [Contact!]!
+	"""
+	The users who signed in to the tenant, most recently seen first.
+	"""
+	users: [User!]!
 }
 
 type ReferenceValue {

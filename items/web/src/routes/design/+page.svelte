@@ -82,7 +82,7 @@
 				]}
 			/>
 			<Menu
-				label="New member"
+				label="Add a member"
 				text="Add"
 				items={[{ label: 'New backlog item', onSelect: () => {} }]}
 			/>
