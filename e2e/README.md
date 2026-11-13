@@ -103,7 +103,7 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   members on its board or listed by akt type, reordered by dragging and
   from the menu, and dropped on another column to take the transition
   that leads there (or refused where none does); an akt type's list
-  filtered by state and sorted.
+  filtered by state and sorted, and loading more a page at a time.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, and signing out of
   Kuria and of the login page's Konklav session.

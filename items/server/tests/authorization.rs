@@ -154,7 +154,7 @@ async fn akter_are_visible_only_where_their_type_may_be_read() {
     let data = world
         .ok(
             ALICE,
-            "{ capa: akt(number: \"CAPA-1\") { number revisions { revision } } bug: akt(number: \"BUG-1\") { number } akter { number } }",
+            "{ capa: akt(number: \"CAPA-1\") { number revisions { revision } } bug: akt(number: \"BUG-1\") { number } akter { nodes { number } } }",
             json!({}),
         )
         .await;
@@ -163,7 +163,7 @@ async fn akter_are_visible_only_where_their_type_may_be_read() {
         json!({
             "capa": { "number": "CAPA-1", "revisions": [{ "revision": 1 }] },
             "bug": null,
-            "akter": [{ "number": "CAPA-1" }],
+            "akter": { "nodes": [{ "number": "CAPA-1" }] },
         })
     );
 }
@@ -272,7 +272,9 @@ async fn refuses_when_konklav_cannot_decide() {
     world.decider.set_failing(true);
     let answer = world.run(ADMIN, EDIT_CAPA, json!({})).await;
     assert_eq!(code(&answer), "UNAVAILABLE");
-    let answer = world.run(ADMIN, "{ akter { number } }", json!({})).await;
+    let answer = world
+        .run(ADMIN, "{ akter { nodes { number } } }", json!({}))
+        .await;
     assert_eq!(code(&answer), "UNAVAILABLE");
     assert_eq!(world.revisions().await, before);
 }
@@ -304,7 +306,7 @@ async fn refuses_sender_constrained_tokens() {
     let world = World::new().await;
     let answer = send(
         &world.router,
-        graphql_with("tenant-dpop", "{ akter { number } }", &json!({})),
+        graphql_with("tenant-dpop", "{ akter { nodes { number } } }", &json!({})),
     )
     .await;
     assert_eq!(answer.status, StatusCode::FORBIDDEN);

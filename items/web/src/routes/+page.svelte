@@ -27,14 +27,14 @@
 		<p role="alert">{home.error.message}</p>
 	{:else if home.data}
 		<Card title="Recently changed" padded={false}>
-			{#if home.data.akter.length === 0}
+			{#if home.data.akter.nodes.length === 0}
 				<EmptyState
 					title="Nothing yet"
 					description="Akter you can read show here as they change."
 				/>
 			{:else}
 				<ul class="recent" aria-label="Recently changed">
-					{#each home.data.akter as akt (akt.id)}
+					{#each home.data.akter.nodes as akt (akt.id)}
 						<li>
 							<TypeMark type={akt.type} size="md" />
 							<a class="what" href={resolve('/akt/[number]', { number: akt.number })}>

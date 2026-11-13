@@ -64,7 +64,7 @@ impl World {
 
     /// The numbers of the akter `query` lists for the tenant, in order.
     async fn listed(&self, query: &str) -> Vec<String> {
-        self.data("tenant", query, json!({})).await["akter"]
+        self.data("tenant", query, json!({})).await["akter"]["nodes"]
             .as_array()
             .unwrap()
             .iter()
@@ -76,10 +76,10 @@ impl World {
     async fn search(&self, token: &str, text: &str) -> Vec<String> {
         self.data(
             token,
-            "query($s: String!) { akter(search: $s) { number } }",
+            "query($s: String!) { akter(search: $s) { nodes { number } } }",
             json!({ "s": text }),
         )
-        .await["akter"]
+        .await["akter"]["nodes"]
             .as_array()
             .unwrap()
             .iter()
@@ -323,7 +323,7 @@ async fn akter_are_listed_most_recently_changed_first() {
         )
         .await;
     assert_eq!(
-        world.listed("{ akter { number } }").await,
+        world.listed("{ akter { nodes { number } } }").await,
         [
             numbers[0].as_str(),
             bug.as_str(),
@@ -333,19 +333,110 @@ async fn akter_are_listed_most_recently_changed_first() {
     );
     assert_eq!(
         world
-            .listed("{ akter(type: \"story\", first: 2) { number } }")
+            .listed("{ akter(type: \"story\", first: 2) { nodes { number } } }")
             .await,
         [numbers[0].as_str(), numbers[2].as_str()]
     );
     assert_eq!(
         world
-            .listed("{ akter(type: \"story\", state: \"open\") { number } }")
+            .listed("{ akter(type: \"story\", state: \"open\") { nodes { number } } }")
             .await,
         [numbers[2].as_str(), numbers[1].as_str()]
     );
     // Only what the subject may read.
     let stories = world
-        .data(STORY_READER, "{ akter { number } }", json!({}))
+        .data(STORY_READER, "{ akter { nodes { number } } }", json!({}))
         .await;
-    assert_eq!(stories["akter"].as_array().unwrap().len(), 3);
+    assert_eq!(stories["akter"]["nodes"].as_array().unwrap().len(), 3);
+}
+
+impl World {
+    /// A page of `query`'s akter: their numbers, the end cursor and whether
+    /// more follow. `query` takes `$after`.
+    async fn page(&self, query: &str, after: Option<&str>) -> (Vec<String>, Value, bool) {
+        let akter = self.data("tenant", query, json!({ "after": after })).await["akter"].clone();
+        let numbers = akter["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["number"].as_str().unwrap().to_owned())
+            .collect();
+        (
+            numbers,
+            akter["pageInfo"]["endCursor"].clone(),
+            akter["pageInfo"]["hasNextPage"].as_bool().unwrap(),
+        )
+    }
+}
+
+// r[verify akt.page]
+#[tokio::test(flavor = "multi_thread")]
+async fn akter_come_a_page_at_a_time() {
+    let world = World::new().await;
+    let mut numbers = Vec::new();
+    for summary in ["a", "b", "c", "d", "e"] {
+        numbers.push(
+            world
+                .create(
+                    "story",
+                    json!({ "summary": summary, "headline": "Paged story" }),
+                )
+                .await["number"]
+                .as_str()
+                .unwrap()
+                .to_owned(),
+        );
+    }
+    // Newest first: e d | c b | a.
+    let query = "query($after: String) { akter(type: \"story\", first: 2, after: $after) { nodes { number } pageInfo { endCursor hasNextPage } } }";
+    let (first, cursor, more) = world.page(query, None).await;
+    assert_eq!(first, [numbers[4].as_str(), numbers[3].as_str()]);
+    assert!(more);
+    // `b` changes between pages, so it moves to the front: the next page
+    // goes on after `d` and neither repeats nor skips what kept its place.
+    world
+        .data(
+            "tenant",
+            "mutation($n: String!) { editAkt(input: { number: $n, revision: 1, fields: { headline: \"Moved\" } }) { number } }",
+            json!({ "n": numbers[1] }),
+        )
+        .await;
+    let (second, cursor, more) = world.page(query, cursor.as_str()).await;
+    assert_eq!(second, [numbers[2].as_str(), numbers[0].as_str()]);
+    assert!(!more);
+    let (empty, end, more) = world.page(query, cursor.as_str()).await;
+    assert!(empty.is_empty() && end.is_null() && !more);
+
+    // Search pages too, newest first.
+    let search = "query($after: String) { akter(search: \"paged\", first: 3, after: $after) { nodes { number } pageInfo { endCursor hasNextPage } } }";
+    let (found, cursor, more) = world.page(search, None).await;
+    assert_eq!(
+        found,
+        [
+            numbers[4].as_str(),
+            numbers[3].as_str(),
+            numbers[2].as_str()
+        ]
+    );
+    assert!(more);
+    let (rest, _, more) = world.page(search, cursor.as_str()).await;
+    assert_eq!(rest, [numbers[0].as_str()]);
+    assert!(!more);
+
+    // A cursor belongs to the list that gave it.
+    let (_, list_cursor, _) = world.page(query, None).await;
+    for (other, cursor) in [
+        (search, list_cursor.clone()),
+        (
+            "query($after: String) { akter(type: \"bug\", after: $after) { nodes { number } } }",
+            list_cursor.clone(),
+        ),
+        (query, json!("not-a-cursor")),
+    ] {
+        let refused = world.run("tenant", other, json!({ "after": cursor })).await;
+        assert_eq!(
+            refused["errors"][0]["extensions"]["code"], "BAD_REQUEST",
+            "{other}: {refused}"
+        );
+    }
 }

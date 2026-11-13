@@ -121,3 +121,24 @@ test('an akt type’s akter are listed, filtered by state and sorted', async ({ 
 	await expect.poll(mine).toEqual([older]);
 	await expect(table.getByRole('row', { name: /Older listed item/ })).toContainText('In progress');
 });
+
+// r[verify akt.page]
+// r[verify app.filters]
+test('an akt type’s list loads more a page at a time', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	for (let i = 0; i < 51; i++) {
+		await admin.graphql('mutation($f: JSON) { createAkt(input: { type: "epic", fields: $f }) { number } }', {
+			f: { title: `Paged epic ${i}` }
+		});
+	}
+	const page = await signIn(browser, seeded().people.developer);
+	await page.goto('/types/epic');
+	const rows = page.getByRole('table', { name: 'Epic' }).locator('tbody tr');
+	await expect(rows).toHaveCount(50);
+	await page.getByRole('button', { name: 'Load more' }).click();
+	await expect.poll(() => rows.count()).toBeGreaterThan(50);
+	// Each akt once, across pages.
+	const numbers = await rows.evaluateAll((all) => all.map((r) => r.querySelector('a')?.textContent?.trim()));
+	expect(new Set(numbers).size).toBe(numbers.length);
+});

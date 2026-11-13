@@ -99,6 +99,10 @@ Not yet: links other than containment, and signatures.
 - [`src/graphql.rs`](src/graphql.rs): the schema, with
   [`src/graphql/akter.rs`](src/graphql/akter.rs) for akt types, akter and
   revisions. Queries: `viewer`, `aktTypes`, `aktType`, `akt`, `akter`.
+  `akter`, search and an akt's `members` answer pages (`AktConnection`:
+  `nodes` and `pageInfo { endCursor hasNextPage }`), keyset-paged by
+  `first` and `after` (`src/graphql/page.rs`); a cursor names its list,
+  so another list refuses it.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
@@ -265,9 +269,12 @@ mise run test
   listing the tenant's users, linking a contact by hand and its refusals,
   and the people a revision's values name.
 - [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation,
-  tones, icons and colours (unknown ones refused), titles by the presentation or by default and kept through
-  edits and transitions, and searching by number and title words, across
-  types, only what the subject may read, with `%` and `_` taken literally.
+  tones, icons and colours (unknown ones refused), titles by the
+  presentation or by default and kept through edits and transitions,
+  searching by number and title words, across types, only what the
+  subject may read, with `%` and `_` taken literally, and lists and
+  searches a page at a time, following cursors while the list changes
+  and refusing another list's.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
   CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
   left out, cookies and redirects passed back); and discovering the

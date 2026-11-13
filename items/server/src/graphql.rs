@@ -12,6 +12,7 @@ mod akter;
 mod attachments;
 mod changes;
 mod contacts;
+mod page;
 mod people;
 
 pub(crate) use people::someone_name;

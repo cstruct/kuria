@@ -229,6 +229,34 @@ pub async fn members_of(
         .collect())
 }
 
+/// Up to `limit` members of `container` of the akt types `keys`, in rank
+/// order, after the member ranked `after`. Ranks are unique in a tenant, so
+/// a rank says where a page ends.
+// r[impl akt.page]
+pub async fn member_page(
+    conn: &mut Connection,
+    tenant: Uuid,
+    container: Uuid,
+    keys: &[String],
+    after: Option<&str>,
+    limit: i64,
+) -> QueryResult<Vec<AktRow>> {
+    let mut query = akt_membership::table
+        .inner_join(akt::table.on(akt::id.eq(akt_membership::member_id)))
+        .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
+        .filter(akt_membership::tenant_id.eq(tenant))
+        .filter(akt_membership::container_id.eq(container))
+        .filter(akt_type_version::key.eq_any(keys))
+        .order(akt::rank)
+        .limit(limit)
+        .select(AktRow::as_select())
+        .into_boxed();
+    if let Some(after) = after {
+        query = query.filter(akt::rank.gt(after.to_owned()));
+    }
+    query.load(conn).await
+}
+
 #[derive(QueryableByName)]
 struct Reachable {
     #[diesel(sql_type = Bool)]

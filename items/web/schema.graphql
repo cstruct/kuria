@@ -32,9 +32,10 @@ type Akt {
 	rank: String!
 	"""
 	Its members that the subject may read, in rank order: of one akt
-	type if given, and at most `first` (50 by default, 200 at most).
+	type if given, a page of at most `first` (50 by default, 200 at most)
+	after the cursor `after`.
 	"""
-	members(type: String, first: Int): [Akt!]!
+	members(type: String, first: Int, after: String): AktConnection!
 	"""
 	The akt as a board: its members that the subject may read, in the
 	columns its akt type configures and then `unmapped`, each in rank
@@ -50,6 +51,17 @@ type Akt {
 	Every revision, oldest first.
 	"""
 	revisions: [AktRevision!]!
+}
+
+"""
+A page of akter.
+"""
+type AktConnection {
+	"""
+	The page's akter, in the list's order.
+	"""
+	nodes: [Akt!]!
+	pageInfo: PageInfo!
 }
 
 type AktRevision {
@@ -561,6 +573,18 @@ type Mutation {
 }
 
 """
+Where a page ends, and whether more follow.
+"""
+type PageInfo {
+	"""
+	A cursor after the page's last akt, to ask for the next page with
+	`after`; `null` for an empty page.
+	"""
+	endCursor: String
+	hasNextPage: Boolean!
+}
+
+"""
 What performing a transition takes.
 """
 input PerformTransitionInput {
@@ -622,14 +646,15 @@ type Query {
 	akt(number: String!): Akt
 	"""
 	Akter, most recently changed first: of one akt type and in one state,
-	if given, and at most `first` of them (50 by default, 200 at most).
+	if given, a page of at most `first` (50 by default, 200 at most)
+	after the cursor `after`.
 	"""
-	akter(		type: String,		state: String,		first: Int,
+	akter(		type: String,		state: String,		first: Int,		after: String,
 		"""
 		Akter whose number starts with this, or whose title contains each of its words, ignoring case; the most recently changed first.
 		"""
 		search: String
-	): [Akt!]!
+	): AktConnection!
 	"""
 	The tenant's contacts, by name.
 	"""

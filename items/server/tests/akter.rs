@@ -178,14 +178,14 @@ async fn akt_types_and_akter_stay_in_their_tenant() {
         .run_as(
             "other-tenant",
             &format!(
-                "{{ aktTypes {{ key }} akt(number: \"{number}\") {{ number }} akter {{ number }} }}"
+                "{{ aktTypes {{ key }} akt(number: \"{number}\") {{ number }} akter {{ nodes {{ number }} }} }}"
             ),
             json!({}),
         )
         .await;
     assert_eq!(
         other["data"],
-        json!({ "aktTypes": [], "akt": null, "akter": [] })
+        json!({ "aktTypes": [], "akt": null, "akter": { "nodes": [] } })
     );
     let create = world
         .run_as(

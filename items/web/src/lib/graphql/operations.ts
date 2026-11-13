@@ -23,24 +23,26 @@ export const Home = graphql(`
 			akterCount
 		}
 		akter(first: 10) {
-			id
-			number
-			title
-			updatedAt
-			state {
-				key
-				name
-				tone
-			}
-			type {
-				...TypeMark
+			nodes {
+				id
+				number
+				title
+				updatedAt
+				state {
+					key
+					name
+					tone
+				}
+				type {
+					...TypeMark
+				}
 			}
 		}
 	}
 `);
 
 export const AkterOfType = graphql(`
-	query AkterOfType($type: String!, $state: String) {
+	query AkterOfType($type: String!, $state: String, $after: String) {
 		aktType(key: $type) {
 			...ShownType
 			states {
@@ -48,22 +50,28 @@ export const AkterOfType = graphql(`
 				name
 			}
 		}
-		akter(type: $type, state: $state, first: 200) {
-			id
-			number
-			title
-			rank
-			updatedAt
-			state {
-				key
-				name
-				tone
+		akter(type: $type, state: $state, first: 50, after: $after) {
+			nodes {
+				id
+				number
+				title
+				rank
+				updatedAt
+				state {
+					key
+					name
+					tone
+				}
+				type {
+					...ShownType
+				}
+				fields {
+					...FieldValues
+				}
 			}
-			type {
-				...ShownType
-			}
-			fields {
-				...FieldValues
+			pageInfo {
+				endCursor
+				hasNextPage
 			}
 		}
 	}
@@ -483,18 +491,20 @@ export const Shell = graphql(`
 export const SearchAkter = graphql(`
 	query SearchAkter($text: String!) {
 		akter(search: $text, first: 12) {
-			id
-			number
-			title
-			state {
-				key
-				name
-				tone
-			}
-			type {
-				key
-				version
-				name
+			nodes {
+				id
+				number
+				title
+				state {
+					key
+					name
+					tone
+				}
+				type {
+					key
+					version
+					name
+				}
 			}
 		}
 	}

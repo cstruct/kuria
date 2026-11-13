@@ -71,7 +71,8 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   subject-facing API and the flow for each login request.
 - [`src/routes`](src/routes): the pages: akt types, akter by type (a
   table of the presentation's list fields, filtered by state with
-  `?state=` and sorted by rank with `?sort=rank`), an
+  `?state=` and sorted by rank with `?sort=rank`, 50 at a time with
+  "Load more"; `paging.ts`), an
   akt, creating one (in containers, with `?in=`), contacts, and `/login`.
 
 Tracey doesn't read `.svelte` files, so the rules the app implements are

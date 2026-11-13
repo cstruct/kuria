@@ -8,7 +8,9 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import { ago } from '#lib/akt/history.ts';
 	import { shownFields, sortAkter, type SortBy } from '#lib/akt/members.ts';
-	import { query } from '#lib/graphql/context.svelte.ts';
+	import { getClient, query } from '#lib/graphql/context.svelte.ts';
+	import type { AkterOfTypeQuery } from '#lib/graphql/generated/graphql.ts';
+	import { merged } from '#lib/akt/paging.ts';
 	import { AkterOfType } from '#lib/graphql/operations.ts';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import Badge from '#lib/ui/Badge.svelte';
@@ -17,11 +19,45 @@
 	import Mono from '#lib/ui/Mono.svelte';
 
 	const key = $derived(page.params.key ?? '');
-	const state = $derived(page.url.searchParams.get('state') ?? '');
+	const stateKey = $derived(page.url.searchParams.get('state') ?? '');
 	const sort = $derived<SortBy>(page.url.searchParams.get('sort') === 'rank' ? 'rank' : 'updated');
-	const list = query(AkterOfType, () => ({ type: key, state: state || null }));
+	const client = getClient();
+	const list = query(AkterOfType, () => ({ type: key, state: stateKey || null }));
 	const type = $derived(list.data?.aktType ?? undefined);
-	const akter = $derived(sortAkter(list.data?.akter ?? [], sort));
+
+	// r[impl akt.page]: the pages after the first, loaded on asking.
+	type Node = AkterOfTypeQuery['akter']['nodes'][number];
+	let more = $state<Node[]>([]);
+	let next = $state<{ cursor: string | null; hasNext: boolean } | null>(null);
+	let loading = $state(false);
+	$effect(() => {
+		// A new list starts again from its first page.
+		void [key, stateKey];
+		more = [];
+		next = null;
+	});
+	const pageInfo = $derived(
+		next ?? {
+			cursor: list.data?.akter.pageInfo.endCursor ?? null,
+			hasNext: list.data?.akter.pageInfo.hasNextPage ?? false
+		}
+	);
+	const akter = $derived(sortAkter(merged(list.data?.akter.nodes ?? [], more), sort));
+
+	async function loadMore() {
+		loading = true;
+		const result = await client
+			.query(AkterOfType, { type: key, state: stateKey || null, after: pageInfo.cursor })
+			.toPromise();
+		loading = false;
+		if (result.data) {
+			more = [...more, ...result.data.akter.nodes];
+			next = {
+				cursor: result.data.akter.pageInfo.endCursor ?? null,
+				hasNext: result.data.akter.pageInfo.hasNextPage
+			};
+		}
+	}
 	const columns = $derived(
 		type ? shownFields({ fields: [], type }, 'list').map((f) => f.name) : []
 	);
@@ -60,7 +96,7 @@
 		<div class="filters">
 			<label>
 				State
-				<select value={state} onchange={(e) => show({ state: e.currentTarget.value })}>
+				<select value={stateKey} onchange={(e) => show({ state: e.currentTarget.value })}>
 					<option value="">Any state</option>
 					{#each type.states as option (option.key)}
 						<option value={option.key}>{option.name}</option>
@@ -78,8 +114,8 @@
 
 		{#if akter.length === 0}
 			<EmptyState
-				title={state ? `No ${type.name} in this state` : `No ${type.name} yet`}
-				description={state ? 'Try another state.' : `Create the first ${type.name}.`}
+				title={stateKey ? `No ${type.name} in this state` : `No ${type.name} yet`}
+				description={stateKey ? 'Try another state.' : `Create the first ${type.name}.`}
 			/>
 		{:else}
 			<div class="scroll">
@@ -116,6 +152,11 @@
 					</tbody>
 				</table>
 			</div>
+			{#if pageInfo.hasNext}
+				<div class="more">
+					<Button busy={loading} onclick={loadMore}>Load more</Button>
+				</div>
+			{/if}
 		{/if}
 	{:else if list.data}
 		<p role="alert">There is no akt type {key}.</p>
@@ -196,6 +237,11 @@
 
 	.title {
 		min-width: 12rem;
+	}
+
+	.more {
+		display: flex;
+		justify-content: center;
 	}
 
 	.when {

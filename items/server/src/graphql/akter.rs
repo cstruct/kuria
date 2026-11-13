@@ -16,19 +16,17 @@ use kuria_config::{
 };
 use kuria_engine::board::{UNMAPPED, column_of};
 use kuria_engine::{Value, fields_from_json};
-use kuria_store::akter::{self as store, AktRow, RevisionRow};
+use kuria_store::akter::{self as store, AktRow, ChangedAfter, RevisionRow};
 use kuria_store::containers;
 use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
 use super::Principal;
 use super::attachments::Attachment;
+use super::page::{After, AktConnection, List, page_size};
 use super::people::{Someone, User};
 use crate::akter::{AktError, Akter, Caller, Place, StoredType};
 use crate::authorize::{Authorizer, Permission};
-
-/// The most akter one query lists.
-const MAX_LIST: i32 = 200;
 
 /// The most members one board shows.
 const MAX_BOARD: i32 = 1_000;
@@ -208,25 +206,37 @@ impl AkterQuery {
     }
 
     /// Akter, most recently changed first: of one akt type and in one state,
-    /// if given, and at most `first` of them (50 by default, 200 at most).
+    /// if given, a page of at most `first` (50 by default, 200 at most)
+    /// after the cursor `after`.
     // r[impl akt.list]
+    // r[impl akt.page]
     async fn akter(
         &self,
         ctx: &Context<'_>,
         #[graphql(name = "type")] key: Option<String>,
         state: Option<String>,
         first: Option<i32>,
+        after: Option<String>,
         #[graphql(
             desc = "Akter whose number starts with this, or whose title contains each of its words, ignoring case; the most recently changed first."
         )]
         search: Option<String>,
-    ) -> async_graphql::Result<Vec<Akt>> {
+    ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
-        let limit = first.unwrap_or(50).clamp(1, MAX_LIST);
+        let size = page_size(first);
+        let list = List::new(
+            if search.is_some() { "search" } else { "akter" },
+            &[key.as_deref(), state.as_deref(), search.as_deref()],
+        );
+        let after = match list.after(after.as_deref())? {
+            Some(After::Changed(changed)) => Some(changed),
+            Some(After::Ranked(_)) => return Err(bad_cursor()),
+            None => None,
+        };
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
         // r[impl authz.read]
-        // Only the akt types the subject may read are asked for, so the
-        // limit counts akter they can see.
+        // Only the akt types the subject may read are asked for, so a page
+        // holds akter they can see.
         let mut readable = Vec::new();
         for ty in store::latest_type_versions(&mut conn, tenant)
             .await
@@ -238,24 +248,46 @@ impl AkterQuery {
         }
         // r[impl akt.search]
         let rows = match &search {
-            Some(text) => store::search_akter(&mut conn, tenant, &readable, text, i64::from(limit))
-                .await
-                .map_err(internal)?
-                .into_iter()
-                .filter(|row| state.as_ref().is_none_or(|s| *s == row.state))
-                .collect(),
+            Some(text) => store::search_akter(
+                &mut conn,
+                tenant,
+                &readable,
+                text,
+                state.as_deref(),
+                after,
+                size + 1,
+            )
+            .await
+            .map_err(internal)?,
             None => store::list_akter(
                 &mut conn,
                 tenant,
                 &readable,
                 state.as_deref(),
-                i64::from(limit),
+                after,
+                size + 1,
             )
             .await
             .map_err(internal)?,
         };
-        with_types(&mut conn, tenant, rows).await
+        let (rows, page_info) = list.page(
+            rows,
+            size,
+            |row| After::Changed(ChangedAfter::of(row)),
+            |row| row.id,
+        );
+        Ok(AktConnection {
+            nodes: with_types(&mut conn, tenant, rows).await?,
+            page_info,
+        })
     }
+}
+
+fn bad_cursor() -> async_graphql::Error {
+    coded(
+        "that cursor isn't one of this list's".to_owned(),
+        "BAD_REQUEST",
+    )
 }
 
 /// Pairs each akt with its akt type version, read in one query.
@@ -973,16 +1005,53 @@ impl Akt {
     }
 
     /// Its members that the subject may read, in rank order: of one akt
-    /// type if given, and at most `first` (50 by default, 200 at most).
+    /// type if given, a page of at most `first` (50 by default, 200 at most)
+    /// after the cursor `after`.
     // r[impl authz.members]
+    // r[impl akt.page]
     async fn members(
         &self,
         ctx: &Context<'_>,
         #[graphql(name = "type")] key: Option<String>,
         first: Option<i32>,
-    ) -> async_graphql::Result<Vec<Akt>> {
-        let limit = first.unwrap_or(50).clamp(1, MAX_LIST);
-        self.readable_members(ctx, key.as_deref(), limit).await
+        after: Option<String>,
+    ) -> async_graphql::Result<AktConnection> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let size = page_size(first);
+        let container = self.row.id.to_string();
+        let list = List::new("members", &[Some(&container), key.as_deref()]);
+        let after = match list.after(after.as_deref())? {
+            Some(After::Ranked(rank)) => Some(rank),
+            Some(After::Changed(_)) => return Err(bad_cursor()),
+            None => None,
+        };
+        let mut readable = Vec::new();
+        for contained in self.ty.ty.document().contains.iter().map(|c| &c.akt_type) {
+            if key.as_deref().is_none_or(|k| k == contained) && reads(ctx, contained).await? {
+                readable.push(contained.clone());
+            }
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let rows = containers::member_page(
+            &mut conn,
+            tenant,
+            self.row.id,
+            &readable,
+            after.as_deref(),
+            size + 1,
+        )
+        .await
+        .map_err(internal)?;
+        let (rows, page_info) = list.page(
+            rows,
+            size,
+            |row| After::Ranked(row.rank.clone()),
+            |row| row.id,
+        );
+        Ok(AktConnection {
+            nodes: with_types(&mut conn, tenant, rows).await?,
+            page_info,
+        })
     }
 
     /// The akt as a board: its members that the subject may read, in the

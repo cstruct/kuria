@@ -275,13 +275,34 @@ pub async fn lock_akt_by_number(
         .optional()
 }
 
-/// Up to `limit` akter of the akt types `keys`, most recently changed first,
-/// optionally only in `state`.
+/// Where a page of akter, most recently changed first, ends: the last akt's
+/// change time and id. The next page starts after it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ChangedAfter {
+    pub updated_at: DateTime<Utc>,
+    pub id: Uuid,
+}
+
+impl ChangedAfter {
+    /// Where a page ending with `row` ends.
+    #[must_use]
+    pub fn of(row: &AktRow) -> Self {
+        Self {
+            updated_at: row.updated_at,
+            id: row.id,
+        }
+    }
+}
+
+/// Up to `limit` akter of the akt types `keys`, most recently changed first
+/// (ties by id, descending), optionally only in `state`, and after `after`.
+// r[impl akt.page]
 pub async fn list_akter(
     conn: &mut Connection,
     tenant: Uuid,
     keys: &[String],
     state: Option<&str>,
+    after: Option<ChangedAfter>,
     limit: i64,
 ) -> QueryResult<Vec<AktRow>> {
     let mut query = akt::table
@@ -289,11 +310,18 @@ pub async fn list_akter(
         .filter(akt::tenant_id.eq(tenant))
         .filter(akt_type_version::key.eq_any(keys))
         .select(AktRow::as_select())
-        .order((akt::updated_at.desc(), akt::id))
+        .order((akt::updated_at.desc(), akt::id.desc()))
         .limit(limit)
         .into_boxed();
     if let Some(state) = state {
         query = query.filter(akt::state.eq(state.to_owned()));
+    }
+    if let Some(after) = after {
+        query = query.filter(
+            akt::updated_at.lt(after.updated_at).or(akt::updated_at
+                .eq(after.updated_at)
+                .and(akt::id.lt(after.id))),
+        );
     }
     query.load(conn).await
 }
@@ -318,13 +346,17 @@ fn like_escaped(text: &str) -> String {
 
 /// The tenant's akter of the akt types `keys` that match `text`: whose
 /// number starts with it, or whose title contains each of its words,
-/// ignoring case; the most recently changed first, at most `limit`.
+/// ignoring case, and in `state` if given; the most recently changed first
+/// (ties by id, descending), after `after`, at most `limit`.
 // r[impl akt.search]
+// r[impl akt.page]
 pub async fn search_akter(
     conn: &mut Connection,
     tenant: Uuid,
     keys: &[String],
     text: &str,
+    state: Option<&str>,
+    after: Option<ChangedAfter>,
     limit: i64,
 ) -> QueryResult<Vec<AktRow>> {
     use diesel::dsl::sql;
@@ -342,7 +374,7 @@ pub async fn search_akter(
     for word in text.split_whitespace() {
         title = Box::new(title.and(lower(akt::title).like(format!("%{}%", like_escaped(word)))));
     }
-    let matching = akt::table
+    let mut matching = akt::table
         .filter(akt::tenant_id.eq(tenant))
         .filter(number.or(title))
         .filter(
@@ -354,8 +386,19 @@ pub async fn search_akter(
             ),
         )
         .select(AktRow::as_select())
-        .order(akt::updated_at.desc())
-        .limit(limit);
+        .order((akt::updated_at.desc(), akt::id.desc()))
+        .limit(limit)
+        .into_boxed();
+    if let Some(state) = state {
+        matching = matching.filter(akt::state.eq(state.to_owned()));
+    }
+    if let Some(after) = after {
+        matching = matching.filter(
+            akt::updated_at.lt(after.updated_at).or(akt::updated_at
+                .eq(after.updated_at)
+                .and(akt::id.lt(after.id))),
+        );
+    }
     matching.load(conn).await
 }
 

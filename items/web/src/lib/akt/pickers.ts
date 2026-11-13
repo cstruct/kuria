@@ -37,5 +37,5 @@ export async function pickable(
 	const result = await client
 		.query(SearchAkter, { text }, { requestPolicy: 'network-only' })
 		.toPromise();
-	return optionsOf(result.data?.akter ?? [], except, types);
+	return optionsOf(result.data?.akter.nodes ?? [], except, types);
 }

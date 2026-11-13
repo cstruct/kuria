@@ -15,11 +15,11 @@ mkdirSync(OUT, { recursive: true });
 const admin = await api(seeded().clients.admin);
 /** The numbers of up to five akter of `type`, oldest first. */
 async function numbers(type: string): Promise<string[]> {
-	const data = await admin.graphql<{ akter: { number: string }[] }>(
-		'query($t: String!) { akter(type: $t, first: 5) { number } }',
+	const data = await admin.graphql<{ akter: { nodes: { number: string }[] } }>(
+		'query($t: String!) { akter(type: $t, first: 5) { nodes { number } } }',
 		{ t: type }
 	);
-	return data.akter.map((a) => a.number).sort();
+	return data.akter.nodes.map((a) => a.number).sort();
 }
 const [candidates, backlogs, notes] = await Promise.all([
 	numbers('release_candidate'),

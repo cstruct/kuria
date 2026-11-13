@@ -13,7 +13,7 @@
 
 	const client = getClient();
 	let text = $state('');
-	let found = $state<SearchAkterQuery['akter']>([]);
+	let found = $state<SearchAkterQuery['akter']['nodes']>([]);
 	let searching = $state(false);
 	let asked = 0;
 
@@ -31,7 +31,7 @@
 				.query(SearchAkter, { text: typed }, { requestPolicy: 'network-only' })
 				.toPromise();
 			if (mine === asked) {
-				found = result.data?.akter ?? [];
+				found = result.data?.akter.nodes ?? [];
 				searching = false;
 			}
 		}, 150);

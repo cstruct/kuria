@@ -148,11 +148,11 @@ impl World {
     async fn members(&self, container: &str) -> Vec<String> {
         let data = self
             .ok(
-                "query($n: String!) { akt(number: $n) { members { number } } }",
+                "query($n: String!) { akt(number: $n) { members { nodes { number } } } }",
                 json!({ "n": container }),
             )
             .await;
-        numbers(&data["akt"]["members"])
+        numbers(&data["akt"]["members"]["nodes"])
     }
 
     async fn containers(&self, number: &str) -> Vec<String> {
@@ -625,11 +625,14 @@ async fn lists_leave_out_what_the_subject_cant_read() {
     let data = world
         .run_as(
             ALICE,
-            "query($b: String!, $i: String!) { b: akt(number: $b) { members { number } } i: akt(number: $i) { containers { number } } }",
+            "query($b: String!, $i: String!) { b: akt(number: $b) { members { nodes { number } } } i: akt(number: $i) { containers { number } } }",
             json!({ "b": backlog, "i": item }),
         )
         .await;
-    assert_eq!(data["data"]["b"]["members"], json!([{ "number": item }]));
+    assert_eq!(
+        data["data"]["b"]["members"]["nodes"],
+        json!([{ "number": item }])
+    );
     assert_eq!(
         data["data"]["i"]["containers"],
         json!([{ "number": backlog }])
@@ -778,4 +781,47 @@ async fn transferring_needs_edit_at_both_containers() {
         "NOT_FOUND",
         "can't see the item"
     );
+}
+
+// r[verify akt.page]
+#[tokio::test(flavor = "multi_thread")]
+async fn members_come_a_page_at_a_time_in_rank_order() {
+    let world = World::new().await;
+    let backlog = world.create("backlog", &[]).await;
+    let mut items = Vec::new();
+    for _ in 0..3 {
+        items.push(world.create("item", &[&backlog]).await);
+    }
+    let page = |after: Value| {
+        let world = &world;
+        let backlog = backlog.clone();
+        async move {
+            world
+                .ok(
+                    "query($n: String!, $a: String) { akt(number: $n) { members(first: 2, after: $a) { nodes { number } pageInfo { endCursor hasNextPage } } } }",
+                    json!({ "n": backlog, "a": after }),
+                )
+                .await["akt"]["members"]
+                .clone()
+        }
+    };
+    let first = page(Value::Null).await;
+    assert_eq!(
+        numbers(&first["nodes"]),
+        [items[0].clone(), items[1].clone()]
+    );
+    assert_eq!(first["pageInfo"]["hasNextPage"], true);
+    let second = page(first["pageInfo"]["endCursor"].clone()).await;
+    assert_eq!(numbers(&second["nodes"]), [items[2].clone()]);
+    assert_eq!(second["pageInfo"]["hasNextPage"], false);
+
+    // Another container's cursor isn't this one's.
+    let other = world.create("backlog", &[]).await;
+    let refused = world
+        .run(
+            "query($n: String!, $a: String) { akt(number: $n) { members(after: $a) { nodes { number } } } }",
+            json!({ "n": other, "a": first["pageInfo"]["endCursor"] }),
+        )
+        .await;
+    assert_eq!(refused["errors"][0]["extensions"]["code"], "BAD_REQUEST");
 }
