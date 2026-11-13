@@ -47,10 +47,12 @@ pub fn text_of(value: &Value) -> String {
             by, checked_for, ..
         } => {
             let for_name = name_of(checked_for);
-            if for_name == by.name {
-                format!("Yes, {}", by.name)
-            } else {
-                format!("Yes, for {for_name} (checked by {})", by.name)
+            // In local mode a box records whom it is for, not who checked it.
+            match (for_name == by.name, by.name.is_empty()) {
+                (true, true) => "Yes".to_owned(),
+                (true, false) => format!("Yes, {}", by.name),
+                (false, true) => format!("Yes, for {for_name}"),
+                (false, false) => format!("Yes, for {for_name} (checked by {})", by.name),
             }
         }
         Value::ReferenceValue { url, label, .. } => label.clone().unwrap_or_else(|| url.clone()),

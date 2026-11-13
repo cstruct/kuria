@@ -27,6 +27,10 @@ pub struct Cli {
     /// The profile to sign in with; else the default one.
     #[arg(long, global = true)]
     pub profile: Option<String>,
+    /// An akt directory to work on instead of a server (local mode); else
+    /// `KURIA_DIR`.
+    #[arg(long, global = true, value_name = "DIR")]
+    pub dir: Option<PathBuf>,
     #[command(subcommand)]
     pub command: Command,
 }
@@ -219,6 +223,8 @@ pub enum Command {
     },
     /// A guide for agents: the commands, the akt file and the exit codes.
     Guide,
+    /// Make an akt directory for local mode: `kuria init --dir <path>`.
+    Init,
     /// Export a bundle: selected akt types, with or without their akter,
     /// or the whole tenant, into a new directory.
     #[command(group(clap::ArgGroup::new("what").required(true).args(["types", "whole_tenant"])))]
@@ -239,8 +245,10 @@ pub enum Command {
     /// Import a bundle into the tenant, keeping its akter's numbers and
     /// history.
     Import {
-        /// The bundle's directory, as `export` wrote it.
-        dir: PathBuf,
+        /// The bundle's directory, as `export` wrote it. (Not `dir`, which
+        /// names the global `--dir` of local mode.)
+        #[arg(value_name = "DIR")]
+        bundle: PathBuf,
         /// A JSON object mapping the bundle's subjects to this tenant's.
         #[arg(long, value_name = "FILE")]
         map_subjects: Option<PathBuf>,
@@ -298,5 +306,14 @@ mod tests {
                 "exit code {code}"
             );
         }
+    }
+
+    #[test]
+    fn import_s_directory_isn_t_local_mode_s() {
+        let cli = Cli::try_parse_from(["kuria", "import", "bundle"]).unwrap();
+        assert!(cli.dir.is_none());
+        assert!(
+            matches!(cli.command, Command::Import { bundle, .. } if bundle == std::path::Path::new("bundle"))
+        );
     }
 }

@@ -12,11 +12,33 @@ use crate::session::Session;
 /// `kuria types export [<key>…] [-o <dir>]`: the documents the akt types'
 /// latest versions were defined by, all of them unless keys are named.
 // r[impl cli.write]
+// r[impl cli.local.types]
 pub async fn export(
-    session: &Session,
+    source: crate::reads::Source<'_>,
     keys: &[String],
     output: Option<&Path>,
 ) -> Result<Answer, CliError> {
+    let session = match source {
+        crate::reads::Source::Server(session) => session,
+        crate::reads::Source::Local(l) => {
+            let mut documents = Vec::new();
+            for key in keys {
+                if !l.dir.types.contains_key(key) {
+                    return Err(CliError::from_server(
+                        "UNKNOWN_AKT_TYPE",
+                        format!("No akt type `{key}`; see `kuria types`"),
+                        None,
+                    ));
+                }
+            }
+            for (key, t) in &l.dir.types {
+                if keys.is_empty() || keys.contains(key) {
+                    documents.push(t.document.clone());
+                }
+            }
+            return answer(&documents, output);
+        }
+    };
     let documents: Vec<Json> = if keys.is_empty() {
         let data = session
             .graphql("{ aktTypes { document } }", json!({}))
@@ -47,12 +69,17 @@ pub async fn export(
         }
         documents
     };
+    answer(&documents, output)
+}
+
+/// The documents, written to `output` or answered.
+fn answer(documents: &[Json], output: Option<&Path>) -> Result<Answer, CliError> {
     let pretty = |d: &Json| serde_json::to_string_pretty(d).expect("serializable");
     let key = |d: &Json| d["key"].as_str().unwrap_or("type").to_owned();
     if let Some(dir) = output {
         std::fs::create_dir_all(dir).map_err(|e| io_error(dir, &e))?;
         let mut written = Vec::new();
-        for document in &documents {
+        for document in documents {
             let path = dir.join(format!("{}.json", key(document)));
             std::fs::write(&path, pretty(document) + "\n").map_err(|e| io_error(&path, &e))?;
             written.push(path.display().to_string());

@@ -2,22 +2,31 @@
 
 use serde_json::{Value as Json, json};
 
+use super::Source;
 use crate::error::CliError;
+use crate::local;
 use crate::md;
 use crate::model::{FieldDef, Shape};
 use crate::output::Answer;
-use crate::session::Session;
 
 /// `kuria types`: the akt types, with how many akter each has.
 // r[impl cli.read]
-pub async fn types(session: &Session) -> Result<Answer, CliError> {
-    let data = session
-        .graphql(
-            "{ aktTypes { key name version numberPattern akterCount } }",
-            json!({}),
-        )
-        .await?;
-    let types = data["aktTypes"].as_array().cloned().unwrap_or_default();
+pub async fn types(source: Source<'_>) -> Result<Answer, CliError> {
+    let types = match source {
+        Source::Server(session) => {
+            let data = session
+                .graphql(
+                    "{ aktTypes { key name version numberPattern akterCount } }",
+                    json!({}),
+                )
+                .await?;
+            data["aktTypes"].as_array().cloned().unwrap_or_default()
+        }
+        Source::Local(l) => local::answers::types(&l.dir)
+            .as_array()
+            .cloned()
+            .unwrap_or_default(),
+    };
     let count = |t: &Json| {
         t["akterCount"]
             .as_i64()
@@ -60,8 +69,8 @@ fn kind(field: &FieldDef) -> String {
 
 /// `kuria schema <type>`: everything a type says about its akter.
 // r[impl cli.read]
-pub async fn schema(session: &Session, key: &str) -> Result<Answer, CliError> {
-    let shape = super::shape(session, key).await?;
+pub async fn schema(source: Source<'_>, key: &str) -> Result<Answer, CliError> {
+    let shape = super::shape(source, key).await?;
     Ok(Answer {
         markdown: schema_markdown(&shape),
         json: json!({ "type": schema_json(&shape) }),
@@ -261,7 +270,13 @@ fn document_markdown(document: &Json) -> String {
 
 /// `kuria users`: whom user fields can name.
 // r[impl cli.read]
-pub async fn users(session: &Session) -> Result<Answer, CliError> {
+pub async fn users(source: Source<'_>) -> Result<Answer, CliError> {
+    let Source::Server(session) = source else {
+        return Err(local::unsupported(
+            "`users`",
+            "an akt directory names people as text",
+        ));
+    };
     let data = session
         .graphql("{ users { id name email } }", json!({}))
         .await?;
@@ -285,7 +300,13 @@ pub async fn users(session: &Session) -> Result<Answer, CliError> {
 
 /// `kuria contacts`: the people values can name who haven't signed in.
 // r[impl cli.read]
-pub async fn contacts(session: &Session) -> Result<Answer, CliError> {
+pub async fn contacts(source: Source<'_>) -> Result<Answer, CliError> {
+    let Source::Server(session) = source else {
+        return Err(local::unsupported(
+            "`contacts`",
+            "an akt directory names people as text",
+        ));
+    };
     let data = session
         .graphql(
             "{ contacts { id displayName name email user { id name email } } }",

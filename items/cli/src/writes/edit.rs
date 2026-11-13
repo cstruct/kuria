@@ -36,7 +36,7 @@ fn read_file(path: &Path) -> Result<Parsed, CliError> {
 // r[impl cli.write]
 // r[impl cli.apply]
 pub async fn create(session: &Session, asked: &Created<'_>) -> Result<Answer, CliError> {
-    let shape = crate::reads::shape(session, asked.akt_type).await?;
+    let shape = crate::reads::shape(crate::reads::Source::Server(session), asked.akt_type).await?;
     let mut given = Map::new();
     let mut inside: Vec<String> = Vec::new();
     if let Some(path) = asked.file {

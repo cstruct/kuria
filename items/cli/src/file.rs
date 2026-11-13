@@ -25,7 +25,7 @@ use crate::model::{Shape, State, StateName, TypeName, Value};
 use crate::values::file_value;
 
 /// The keys every file has before its fields, which `apply` doesn't edit.
-pub const READ_ONLY: [&str; 6] = ["number", "type", "revision", "state", "in", "links"];
+pub const READ_ONLY: [&str; 7] = ["number", "type", "revision", "state", "in", "links", "rank"];
 
 /// An akt with everything its file and `show` say.
 #[derive(Clone, Debug, Deserialize)]

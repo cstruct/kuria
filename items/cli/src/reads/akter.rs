@@ -6,19 +6,26 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
+use super::{Local, Source};
 use crate::error::CliError;
 use crate::file::{self, AKT, Akt, Other};
 use crate::history::{Described, REVISIONS, Revision, describe};
+use crate::local::{self, answers};
 use crate::model::{SHAPE, SOMEONE, VALUES, read};
 use crate::output::Answer;
 use crate::profile::io_error;
-use crate::session::Session;
 use crate::values::text_of;
 
 /// How many members `show` lists.
 const MEMBERS: u32 = 200;
 
-async fn akt_data(session: &Session, number: &str, extra: &str) -> Result<Json, CliError> {
+async fn akt_data(source: Source<'_>, number: &str, extra: &str) -> Result<Json, CliError> {
+    let session = match source {
+        Source::Server(session) => session,
+        Source::Local(l) => {
+            return answers::akt(&l.dir, &l.times, number)?.ok_or_else(|| not_found(number));
+        }
+    };
     let data = session
         .graphql(
             &format!("query($n: String!) {{ akt(number: $n) {{ {AKT} {extra} }} }} {SHAPE} {VALUES} {SOMEONE}"),
@@ -26,13 +33,13 @@ async fn akt_data(session: &Session, number: &str, extra: &str) -> Result<Json, 
         )
         .await?;
     if data["akt"].is_null() {
-        return Err(CliError::from_server(
-            "NOT_FOUND",
-            format!("No akt `{number}`"),
-            None,
-        ));
+        return Err(not_found(number));
     }
     Ok(data["akt"].clone())
+}
+
+fn not_found(number: &str) -> CliError {
+    CliError::from_server("NOT_FOUND", format!("No akt `{number}`"), None)
 }
 
 /// `kuria cat <number>…`: each akt as its file, or written to `output` as
@@ -40,13 +47,13 @@ async fn akt_data(session: &Session, number: &str, extra: &str) -> Result<Json, 
 // r[impl cli.read]
 // r[impl cli.file]
 pub async fn cat(
-    session: &Session,
+    source: Source<'_>,
     numbers: &[String],
     output: Option<&Path>,
 ) -> Result<Answer, CliError> {
     let mut akter = Vec::new();
     for number in numbers {
-        let akt: Akt = read(akt_data(session, number, "").await?, "the akt")?;
+        let akt: Akt = read(akt_data(source, number, "").await?, "the akt")?;
         akter.push(akt);
     }
     let files: Vec<String> = akter.iter().map(file::write).collect();
@@ -126,14 +133,18 @@ fn other_json(o: &Other) -> Json {
 /// `kuria show <number>`: its fields, containers, members, links and the
 /// transitions its state allows, and with `history` its revisions.
 // r[impl cli.read]
-pub async fn show(session: &Session, number: &str, with_history: bool) -> Result<Answer, CliError> {
+pub async fn show(
+    source: Source<'_>,
+    number: &str,
+    with_history: bool,
+) -> Result<Answer, CliError> {
     let extra = format!(
         "board(first: {MEMBERS}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} }} }} }}
          members(first: {MEMBERS}) {{ nodes {{ number title type {{ key name }} state {{ key name }} }} pageInfo {{ hasNextPage }} }}
          {}",
         if with_history { REVISIONS } else { "" }
     );
-    let data = akt_data(session, number, &extra).await?;
+    let data = akt_data(source, number, &extra).await?;
     let akt: Akt = read(data.clone(), "the akt")?;
     let around: Around = read(data, "the akt")?;
     let shape = &akt.shape;
@@ -164,7 +175,10 @@ pub async fn show(session: &Session, number: &str, with_history: bool) -> Result
         .iter()
         .filter(|t| t.from.contains(&akt.state.key))
         .collect();
-    let described = described(&around.revisions, shape);
+    let described = match source {
+        Source::Local(l) if with_history => local_history(l, number)?.0,
+        _ => described(&around.revisions, shape),
+    };
     let parts = Shown {
         akt: &akt,
         around: &around,
@@ -393,9 +407,61 @@ fn described(revisions: &[Revision], shape: &crate::model::Shape) -> Vec<Describ
         .collect()
 }
 
-/// `kuria history <number>`: its revisions, as the app's history says them.
+/// The commits that changed an akt's file, as revisions are said, and
+/// whether it has changes not committed yet; `None` outside git.
+// r[impl cli.local.history]
+fn local_history(local: &Local, number: &str) -> Result<(Vec<Described>, Option<bool>), CliError> {
+    let akt = local.dir.akt(number).ok_or_else(|| not_found(number))?;
+    let Some((commits, dirty)) = local::git::history(&local.dir.root, &akt.path) else {
+        return Ok((Vec::new(), None));
+    };
+    let described = commits
+        .into_iter()
+        .enumerate()
+        .map(|(i, c)| Described {
+            revision: i64::try_from(i + 1).unwrap_or(i64::MAX),
+            who: c.author,
+            at: c.at,
+            what: if i == 0 { "created it" } else { "changed it" }.to_owned(),
+            reason: Some(c.subject),
+            changes: Vec::new(),
+            memberships: Vec::new(),
+        })
+        .collect();
+    Ok((described, Some(dirty)))
+}
+
+/// `kuria history <number>`: its revisions, as the app's history says them;
+/// in local mode, the commits that changed its file.
 // r[impl cli.read]
-pub async fn history(session: &Session, number: &str) -> Result<Answer, CliError> {
+pub async fn history(source: Source<'_>, number: &str) -> Result<Answer, CliError> {
+    let session = match source {
+        Source::Server(session) => session,
+        Source::Local(l) => {
+            let (described, dirty) = local_history(l, number)?;
+            let mut markdown = format!("# {number} · History\n\n");
+            for d in &described {
+                markdown.push_str(&d.markdown());
+            }
+            match dirty {
+                None => {
+                    markdown.push_str("No history: the akt directory isn't in a git repository.\n");
+                }
+                Some(true) => markdown.push_str("\nIt has changes not committed yet.\n"),
+                Some(false) if described.is_empty() => markdown.push_str("No commits yet.\n"),
+                Some(false) => {}
+            }
+            return Ok(Answer {
+                markdown,
+                json: json!({
+                    "number": number,
+                    "revisions": described.iter().map(Described::json).collect::<Vec<_>>(),
+                    "tracked": dirty.is_some(),
+                    "uncommitted": dirty.unwrap_or(false),
+                }),
+            });
+        }
+    };
     let data = session
         .graphql(
             &format!("query($n: String!) {{ akt(number: $n) {{ number type {{ ...Shape }} {REVISIONS} }} }} {SHAPE}"),

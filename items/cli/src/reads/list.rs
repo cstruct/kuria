@@ -2,11 +2,12 @@
 
 use serde_json::{Map, Value as Json, json};
 
+use super::{Local, Source};
 use crate::error::CliError;
+use crate::local::answers;
 use crate::md;
 use crate::model::{Page, ROW, Row, SOMEONE, Shape, VALUES, read};
 use crate::output::Answer;
-use crate::session::Session;
 use crate::values::{People, condition_value, file_value, text_of};
 
 /// The most akter one page may hold.
@@ -33,9 +34,9 @@ pub struct Listing {
 
 /// `kuria ls`.
 // r[impl cli.read]
-pub async fn ls(session: &Session, listing: &Listing) -> Result<Answer, CliError> {
+pub async fn ls(source: Source<'_>, listing: &Listing) -> Result<Answer, CliError> {
     let shape = match &listing.akt_type {
-        Some(key) => Some(super::shape(session, key).await?),
+        Some(key) => Some(super::shape(source, key).await?),
         None => None,
     };
     let state = match (&listing.state, &shape) {
@@ -43,7 +44,7 @@ pub async fn ls(session: &Session, listing: &Listing) -> Result<Answer, CliError
         (Some(state), None) => Some(state.clone()),
         _ => None,
     };
-    let conditions = conditions(session, shape.as_ref(), &listing.conditions).await?;
+    let conditions = conditions(source, shape.as_ref(), &listing.conditions).await?;
     let mut rows = Vec::new();
     let mut after = listing.after.clone();
     let first = if listing.all {
@@ -53,7 +54,7 @@ pub async fn ls(session: &Session, listing: &Listing) -> Result<Answer, CliError
     };
     let page_info = loop {
         let page = page(
-            session,
+            source,
             listing,
             state.as_deref(),
             &conditions,
@@ -78,9 +79,9 @@ pub async fn ls(session: &Session, listing: &Listing) -> Result<Answer, CliError
 
 /// `kuria find <text>`: akter by a number's beginning or a title's words.
 // r[impl cli.read]
-pub async fn find(session: &Session, text: &str, limit: u32) -> Result<Answer, CliError> {
+pub async fn find(source: Source<'_>, text: &str, limit: u32) -> Result<Answer, CliError> {
     ls(
-        session,
+        source,
         &Listing {
             search: Some(text.to_owned()),
             limit,
@@ -121,7 +122,7 @@ fn state_key(shape: &Shape, state: &str) -> Result<String, CliError> {
 
 /// `--where` as `FieldCondition`s.
 async fn conditions(
-    session: &Session,
+    source: Source<'_>,
     shape: Option<&Shape>,
     given: &[String],
 ) -> Result<Vec<Json>, CliError> {
@@ -151,23 +152,41 @@ async fn conditions(
                 format!("{} has no field `{key}`", shape.name),
             )
         })?;
-        if matches!(field.kind.as_str(), "USER" | "CHECKBOX") && people.is_none() {
-            people = Some(super::people(session).await?);
-        }
-        let equals = condition_value(field, value, people.as_ref().unwrap_or(&People::default()))?;
+        let person = matches!(field.kind.as_str(), "USER" | "CHECKBOX");
+        let equals = match source {
+            // r[impl cli.local.people]
+            Source::Local(local) if person => {
+                let who = value.trim().strip_prefix("for:").unwrap_or(value.trim());
+                if who == "@me" {
+                    local.me()?.to_owned()
+                } else {
+                    who.to_owned()
+                }
+            }
+            _ => {
+                if person && people.is_none() {
+                    people = Some(super::people(source).await?);
+                }
+                condition_value(field, value, people.as_ref().unwrap_or(&People::default()))?
+            }
+        };
         conditions.push(json!({ "field": key, "equals": equals }));
     }
     Ok(conditions)
 }
 
 async fn page(
-    session: &Session,
+    source: Source<'_>,
     listing: &Listing,
     state: Option<&str>,
     conditions: &[Json],
     first: u32,
     after: Option<&str>,
 ) -> Result<Page, CliError> {
+    let session = match source {
+        Source::Server(session) => session,
+        Source::Local(local) => return local_page(local, listing, state, conditions, first, after),
+    };
     let fragments = format!("{ROW} {VALUES} {SOMEONE}");
     let wheres = (!conditions.is_empty()).then(|| conditions.to_vec());
     if let Some(container) = &listing.inside {
@@ -204,6 +223,112 @@ async fn page(
         )
         .await?;
     read(data["akter"].clone(), "the akter")
+}
+
+/// Whether the akt file value `value` meets `equals` for a field of `kind`.
+fn meets(kind: &str, value: &Json, equals: &str) -> bool {
+    match kind {
+        "CHOICES" => value
+            .as_array()
+            .is_some_and(|keys| keys.iter().any(|k| k == equals)),
+        "USER" => value
+            .as_str()
+            .is_some_and(|v| v.eq_ignore_ascii_case(equals)),
+        "CHECKBOX" => value
+            .as_str()
+            .and_then(|v| v.strip_prefix("for:"))
+            .is_some_and(|who| who.eq_ignore_ascii_case(equals)),
+        _ => value.as_str() == Some(equals),
+    }
+}
+
+/// Whether `akt` is what `search` asks: a number starting with it, or a
+/// title holding each of its words, ignoring case.
+fn found(number: &str, title: Option<&str>, search: &str) -> bool {
+    let search = search.to_lowercase();
+    let title = title.unwrap_or_default().to_lowercase();
+    number.to_lowercase().starts_with(&search)
+        || search.split_whitespace().all(|word| title.contains(word))
+}
+
+/// A page of the directory's akter: a container's members in its order,
+/// else every akt, most recently changed first.
+// r[impl cli.local.layout]
+fn local_page(
+    local: &Local,
+    listing: &Listing,
+    state: Option<&str>,
+    conditions: &[Json],
+    first: u32,
+    after: Option<&str>,
+) -> Result<Page, CliError> {
+    let dir = &local.dir;
+    let mut akter: Vec<_> = match &listing.inside {
+        Some(container) => {
+            if dir.akt(container).is_none() {
+                return Err(CliError::from_server(
+                    "NOT_FOUND",
+                    format!("No akt `{container}`"),
+                    None,
+                ));
+            }
+            dir.members_of(container).collect()
+        }
+        None => {
+            let mut all: Vec<_> = dir.akter.iter().collect();
+            let updated =
+                |a: &&crate::local::dir::LocalAkt| local.times.of_file(&dir.root, &a.path).1;
+            all.sort_by(|a, b| {
+                updated(b)
+                    .cmp(&updated(a))
+                    .then_with(|| b.number.cmp(&a.number))
+            });
+            all
+        }
+    };
+    akter.retain(|a| {
+        let ty = &dir.type_of(a).ty;
+        listing.akt_type.as_ref().is_none_or(|t| *t == a.type_key)
+            && state.is_none_or(|s| s == a.state)
+            && listing
+                .search
+                .as_ref()
+                .is_none_or(|s| found(&a.number, answers::title(dir, a).as_deref(), s))
+            && conditions.iter().all(|c| {
+                let key = c["field"].as_str().unwrap_or_default();
+                let kind = ty
+                    .field(key)
+                    .map(crate::local::answers::kind_of)
+                    .unwrap_or_default();
+                a.values
+                    .get(key)
+                    .is_some_and(|v| meets(&kind, v, c["equals"].as_str().unwrap_or_default()))
+            })
+    });
+    let start = match after {
+        None => 0,
+        Some(cursor) => cursor
+            .strip_prefix("local:")
+            .and_then(|n| n.parse::<usize>().ok())
+            .ok_or_else(|| {
+                CliError::refused("BAD_REQUEST", "that cursor isn't one of this list's")
+            })?,
+    };
+    let end = (start + first as usize).min(akter.len());
+    let nodes = akter
+        .get(start..end)
+        .unwrap_or_default()
+        .iter()
+        .map(|a| answers::row(dir, &local.times, a))
+        .collect::<Result<Vec<_>, _>>()?;
+    let has_next = end < akter.len();
+    read(
+        json!({
+            "nodes": nodes,
+            "pageInfo": { "endCursor": (end > start).then(|| format!("local:{end}")), "hasNextPage": has_next },
+        }),
+        "the akter",
+    )
 }
 
 fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, all: bool) -> Answer {

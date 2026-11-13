@@ -11,6 +11,15 @@ has, then work with what it answers.
 - As a person: `kuria login --url <Kuria>` prints a link to open in any
   browser. `kuria whoami` says who you are; `kuria logout` ends it.
 
+## Local mode
+
+With `--dir <path>`, or `KURIA_DIR`, every command works on an akt
+directory instead of a server: `kuria.toml`, the akt types in `types/`,
+and each akt as an akt file in `akter/<number>.md`, with git as their
+history. `kuria init --dir <path>` makes one. People are written by email
+or name; `@me` is `KURIA_ME`, else git's `user.email`. Signing in, users,
+contacts, drafts and bundles aren't there (`LOCAL_UNSUPPORTED`, exit 1).
+
 ## Finding your way
 
 ```sh

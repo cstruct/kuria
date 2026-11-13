@@ -2174,11 +2174,13 @@ name = "kuria-cli"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "chrono",
  "clap",
  "getrandom 0.3.4",
  "keyring",
  "konklav-token",
  "kuria-config",
+ "kuria-engine",
  "p256",
  "reqwest",
  "serde",

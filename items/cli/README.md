@@ -118,17 +118,43 @@ type.
   codes, and how to work a plan in the planning example. A unit test fails
   if a command is missing from it.
 
+### Local mode
+
+With `--dir <path>`, or `KURIA_DIR`, the reads work on an akt directory
+instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
+
+- **The directory** ([`src/local/dir.rs`](src/local/dir.rs)): `kuria init
+  --dir <path>` makes `kuria.toml` (format 1), `types/` and `akter/`. Each
+  `types/<key>.json` is validated as `defineAktType` validates it and kept
+  as a server stores it; each `akter/<number>.md` is an akt file plus
+  `rank`, read and checked against its type, with any problem naming the
+  file (`BAD_FILE`).
+- **The same answers** ([`src/local/answers.rs`](src/local/answers.rs)): the
+  directory answers what Kuria's GraphQL would for each of the CLI's
+  queries, so every read renders through the same code: `types`, `schema`,
+  `types export`, `ls` (by state, container, `--where`, search; pages with
+  `local:<offset>` cursors), `find`, `cat` (the file, without `rank`),
+  `show` (board columns through `kuria-engine`, links read back by name)
+  and `whoami` (the directory and who `@me` is).
+- **Git** ([`src/local/git.rs`](src/local/git.rs)): one `git log` gives
+  when each file was created and last changed (an uncommitted one, when it
+  was written); `history` answers the commits that changed the file, and
+  whether it has changes not committed yet.
+- **People** are text: `@me` is `KURIA_ME`, else git's `user.email`.
+- **Refused** as `LOCAL_UNSUPPORTED`: signing in, `users`, `contacts`,
+  `draft`, bundles and, until PLAN-008-T04, writes.
+
 ### JSON answers
 
 | Command | Object |
 |---|---|
-| `whoami` | `{url, tenant, subject, name, email, signedInWith, profile}` |
+| `whoami` | `{url, tenant, subject, name, email, signedInWith, profile}`; in local mode `{dir, me, signedInWith: "local"}` |
 | `types` | `{types: [{key, name, version, numberPattern, akterCount}]}` |
 | `schema` | `{type: {key, name, version, numberPattern, fields: [{key, name, kind, required, multiline, description, options, format, draft}], states: [{key, name, initial, final, tone}], transitions: [{key, name, from, to, requires, action}], contains, createdIn, links, board, presentation}}` |
 | `ls`, `find` | `{akter: [{number, type, title, state, updatedAt, fields}], endCursor, hasNextPage}` |
 | `cat` | `{akter: [{number, type, revision, state, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o` |
 | `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns?, akter, more}, transitions, history?}}` |
-| `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}` |
+| `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}`; in local mode also `tracked` and `uncommitted` |
 | `users`, `contacts` | `{users: [{id, name, email}]}`, `{contacts: [{id, displayName, name, email, user}]}` |
 
 | `new` | `{number, revision}` |
@@ -190,6 +216,12 @@ cargo test -p kuria-cli
   codes, the command line, values as text and in files, `--where` and
   `--set` values by kind, the akt file written and read back, YAML
   quoting, refused files, and the history's wording.
+- Local mode ([`tests/local.rs`](tests/local.rs)), on temporary akt
+  directories in git repositories with the planning example's types:
+  `init` and the manifest, types and schemas, lists filtered, ordered and
+  paged, `cat` as the file without `rank`, `show` with its board and links,
+  history from commits, refusals of what local mode doesn't do, and files
+  that don't fit, named.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
   built binary against the e2e stack. Playwright authorizes the link
   `kuria login` prints; then `whoami` from the profile, a refresh, `logout`

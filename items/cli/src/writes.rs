@@ -51,7 +51,7 @@ pub(crate) async fn people_for<'a>(
         .filter_map(|k| shape.field(k))
         .any(|f| matches!(f.kind.as_str(), "USER" | "CHECKBOX"));
     if needs {
-        crate::reads::people(session).await
+        crate::reads::people(crate::reads::Source::Server(session)).await
     } else {
         Ok(People::default())
     }

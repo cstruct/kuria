@@ -18,6 +18,7 @@ pub enum Format {
 }
 
 /// What a command answers: the same thing in both formats.
+#[derive(Debug)]
 pub struct Answer {
     pub markdown: String,
     pub json: Value,
