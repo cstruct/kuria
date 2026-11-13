@@ -20,6 +20,8 @@ catalog, and for no others except those akt types name:
 | `kuria:akter:transition` | at the akt type, to perform its transitions |
 | `kuria:contacts:read` | tenant-wide, to list contacts with their emails |
 | `kuria:contacts:manage` | tenant-wide, to add, edit, erase and list contacts |
+| `kuria:tenant:export` | tenant-wide, to export a bundle (`bundle.export`) |
+| `kuria:tenant:import` | tenant-wide, to import a bundle (`bundle.import`) |
 
 An action required at an akt type MUST be required at the scope of kind
 `kuria_akt_type` whose id is the akt type's key, so that either a
@@ -40,9 +42,14 @@ MAY. When the relying SDK cannot decide, the operation MUST be refused with
 the code `UNAVAILABLE`, never allowed.
 
 r[authz.sender-constrained]
-Since a sender-constrained token's proof is answered once, Kuria cannot
-decide more than once for it. The GraphQL endpoint MUST refuse requests with
-sender-constrained (DPoP) tokens with 403 and the code
+A request with a sender-constrained (DPoP) token MUST be accepted once:
+its token, session and proof verified, and its proof remembered against
+replay. Every decision the request needs MUST then be made with that
+accepted presentation, without checking the proof again, and each MUST
+still check the token and its session. This relies on Konklav's relying
+SDK letting one accepted presentation answer every decision of its request
+(Konklav 1.8); until Kuria runs against one that does, the GraphQL
+endpoint MUST refuse such requests with 403 and the code
 `sender_constrained_unsupported`.
 
 ## Operations
@@ -96,6 +103,17 @@ r[authz.move]
 Moving an akt MUST require `kuria:akter:edit` at its akt type, and
 `kuria:akter:read` at the akt type of the akt it is moved next to; either
 akt the subject can't read MUST be refused as `NOT_FOUND`.
+
+r[authz.link]
+Adding or removing a link MUST require `kuria:akter:edit` at the source's
+akt type and `kuria:akter:read` at the target's. Either akt the subject
+can't read MUST be refused as `NOT_FOUND`.
+
+r[authz.bundles]
+Exporting a bundle MUST require `kuria:tenant:export`, and importing one
+`kuria:tenant:import`, both tenant-wide. An export MUST hold whatever the
+tenant has in its scope, whatever else the subject may read: the action is
+the permission to see it all.
 
 r[authz.members]
 Lists of an akt's members and of its containers MUST leave out the akter the

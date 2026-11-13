@@ -8,6 +8,7 @@ This is a starting point. Decisions marked *open* are not settled yet.
 
 ```
  browser ──── Svelte app (Vite)
+ terminal ─── kuria CLI (Rust)
                  │  GraphQL queries and mutations over HTTP
                  │  GraphQL subscriptions over WebSocket
                  ▼
@@ -28,6 +29,7 @@ This is a starting point. Decisions marked *open* are not settled yet.
 
 - **Kuria server**: one Rust binary serving GraphQL, a few plain HTTP endpoints, and WebSocket subscriptions. It can run as several instances behind a load balancer. Instances share nothing except Postgres and Valkey.
 - **Svelte app**: a single-page app written in Svelte and built with Vite, talking to the server only through GraphQL, plus the HTTP endpoints for files.
+- **`kuria` CLI**: a command-line client for people and agents, in this workspace (`items/cli`), talking to the same GraphQL and HTTP endpoints with a DPoP-bound Konklav session ([spec](spec/cli.md)).
 - **Postgres**: the record. It holds every akt, its full history, its links, the runtime configuration, and every change event.
 - **Valkey**: state the instances share that is not a record: live change events, a short window of recent ones, and rate limits. Losing it loses nothing that cannot be rebuilt from Postgres, so it is run without persistence.
 - **Object storage**: any S3-compatible store, holding attachments' bytes under their SHA-256 per tenant. Locally, versitygw.
@@ -85,7 +87,8 @@ type Akt {
   revision: Int!
   rank: String!
   fields: [FieldValue!]!
-  members(type: String, first: Int): [Akt!]!
+  members(type: String, where: [Condition!], first: Int, after: String): AktConnection!
+  links: [Link!]!
   containers: [Akt!]!
   board(first: Int): Board!
   revisions: [AktRevision!]!
@@ -106,7 +109,7 @@ A schema generated per configuration would give each akt type its own GraphQL ty
 
 ### Mutations
 
-Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`; and for contacts `addContact`, `editContact`, `linkContact` and `eraseContact`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Later: `addLink` and `sign`.
+Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`; and for contacts `addContact`, `editContact`, `linkContact` and `eraseContact`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Links: `addLink` and `removeLink` ([spec](spec/links.md)). Later: `sign`.
 
 Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDDEN`, `NOT_FOUND`, `CYCLE`, `FROZEN` or `DUPLICATE_EMAIL`; the server README lists them all.
 
@@ -135,7 +138,7 @@ Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDD
 | `login_attempt` | Browser sign-ins started at Konklav and not completed: the `state`, the PKCE verifier and where to return. Kept for ten minutes. |
 | `browser_session` | Browser sessions: the SHA-256 of the session cookie, the subject and tenant, and the Konklav tokens, encrypted. |
 
-Planned: `akt_link` (typed links besides containment), `signature` and `obligation`.
+Planned: `akt_link` (typed links besides containment, [spec](spec/links.md)), `subject_alias` (from imports), `signature` and `obligation`.
 
 - `akt_revision` is the record of truth. `akt` is a projection of it that is kept in the same transaction, so it is always consistent and can be rebuilt.
 - Fields are JSONB in `akt` so that queries can filter on any field with GIN indexes. Each value is validated against its field kind before it is written, so the JSON has a known shape.
@@ -203,7 +206,8 @@ Some things are simpler outside GraphQL:
 
 - **Webhooks** from code hosts, pipelines, monitoring and scanners. Each source has its own endpoint and verifies its own signatures. Events are deduplicated by their source identifier before they open or change an akt.
 - **Attachments**: `POST /attachments` takes the file as its body, named by a percent-encoded `X-Attachment-Name`, up to a configured size, and answers its identifier; GraphQL fields then hold that identifier. `GET /attachments/{id}` streams it back from object storage, always as a download (`Content-Disposition: attachment`, `nosniff`, a sandboxing CSP), so an uploaded page never runs on Kuria's origin.
-- **Exports**: a complete export of akter with their revisions, signatures, links and attachments, for audits and backups that do not depend on Kuria being available.
+- **Bundles**: `GET /export` and `POST /import` move selected akt types, with or without their akter, or a whole tenant, as a tar archive ([spec](spec/bundles.md)). Akter keep their numbers and every revision, hashes checked on import; subjects of another Konklav map to this tenant's users by alias, so revisions never change. They serve backups, audits that don't depend on Kuria running, and moving a tenant between instances.
+- **The CLI's relay**: `/cli/authorized` is the `kuria-cli` client's redirect URI. Konklav requires exact redirect URIs and has no device grant, so `kuria login` prints a link that can be opened anywhere and collects the code from the relay; the code is bound to the CLI's PKCE verifier and DPoP key, so the relay can't use it ([spec](spec/cli.md)).
 
 ## Frontend
 
@@ -235,6 +239,6 @@ Some things are simpler outside GraphQL:
 
 - Signing: re-authentication and the proof stored with a signature.
 - Row-level security in Postgres alongside tenant filtering in queries.
-- How exports include attachments, and what erasure does to attachments a subject uploaded.
+- What erasure does to attachments a subject uploaded, and to the names a bundle carries for them. (Bundles hold attachments' bytes by content hash, [spec](spec/bundles.md).)
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
-- DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. A Konklav change could lift that, such as letting one accepted presentation answer several decisions within its request.
+- DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. Decided: Konklav 1.8 will let one accepted presentation answer every decision of its request, still checking the token and session each time, and Kuria then accepts them (`authz.sender-constrained`); the CLI needs it.

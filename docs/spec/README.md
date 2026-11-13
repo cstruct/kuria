@@ -28,6 +28,7 @@ Specs:
   their history, and creating an akt inside a container
 - [ordering](ordering.md): one rank per akt, and moves
 - [boards](boards.md): a container's members in configured columns
+- [links](links.md): typed links between akter, declared by akt types
 - [drafts](drafts.md): drafting a field, such as release notes, from the
   akter around it
 - [changes](changes.md): publishing change events through Valkey, the
@@ -41,3 +42,7 @@ Specs:
   application, and the proxy to Konklav it needs
 - [frontend](frontend.md): serving the app, signing in from it, and views
   built from akt types
+- [bundles](bundles.md): exporting and importing selected akt types, with
+  or without akter, or a whole tenant, keeping numbers and history
+- [command-line client](cli.md): `kuria`, signing in by a link, reading
+  and editing akter as files, and the relay its sign-in uses

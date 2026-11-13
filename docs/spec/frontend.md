@@ -80,6 +80,21 @@ Wherever the app names an akt type, in the sidebar, on Home, in an akt's
 header and on its type's list, it MUST show the type's icon and colour
 (`akt.type.presentation`), with its name.
 
+r[app.links]
+An akt's page MUST show its links (`link.read`), from it by kind and to it
+by inverse name, each with the other akt's number, title and state, and
+let a person add a link of a kind its type declares, to an akt found by
+number or title (`app.pickers`), and remove one.
+
+r[app.filters]
+A type's list MUST let a person filter it by the values of its filterable
+fields (`akt.filter`), keeping the filters in the page's address, and load
+more akter a page at a time (`akt.page`).
+
+r[app.my-work]
+Home MUST show the akter whose `user` fields or checkboxes name the
+viewer, by akt type, for the types that have such fields.
+
 r[app.pickers]
 Wherever the app asks for an akt, such as a container to add an akt to, or
 a member to add, it MUST let the person find it by number or title

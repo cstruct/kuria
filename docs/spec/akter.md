@@ -161,15 +161,36 @@ Every akt MUST be served with its title, as its type's presentation
 
 r[akt.list]
 Akter MUST be listable, of one akt type and in one state if asked, only
-those the subject may read (`authz.read`), at most a limit of them, the
-most recently changed first.
+those the subject may read (`authz.read`), the most recently changed
+first, a page at a time (`akt.page`).
 
 r[akt.search]
 Akter MUST be searchable by text: an akt matches when its number starts
 with the text, ignoring case, or its title contains every word of the
 text, ignoring case. A search MUST only answer akter the subject may read
-(`authz.read`), and at most a limit of them, the most recently changed
-first.
+(`authz.read`), the most recently changed first, a page at a time
+(`akt.page`).
+
+r[akt.page]
+A list of akter, a search, and a container's members MUST be answered a
+page at a time: at most `first` akter (50 by default, 200 at most), with a
+cursor after the last of them and whether more follow. Asked again with
+that cursor as `after`, it MUST answer the akter that follow the last one
+in the list's order, so that an akt that keeps its place while the list
+changes between pages is answered once. A cursor MUST be refused as
+`BAD_REQUEST` by any other list, search or container than the one that
+gave it.
+
+r[akt.filter]
+A list of akter of one akt type, and a container's members of one akt
+type, MAY be filtered by field values: each condition names a field of
+that type and a value, and an akt MUST match every condition. A field
+holding a choice matches by option key; a `user` field, by the user or
+contact it names, or `me` for the subject asking; a checkbox, by whom it
+was checked for, or `me`; a date, by the date; a single-line `text` field,
+by the whole text. A condition on a field of any other kind, on a field
+the type lacks, or without one akt type to filter, MUST be refused as
+`BAD_REQUEST`.
 
 ## Akt revisions
 

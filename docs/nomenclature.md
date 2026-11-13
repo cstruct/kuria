@@ -99,7 +99,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A link can pin a specific akt revision of its target instead of following the latest.
 
 - `link kind`
-  - A runtime definition of one kind of link, such as `verifies` or `originated from`.
+  - A runtime definition of one kind of link, such as `verifies` or `originated from`, declared by the akt type of the link's source in `links`, with a name as the source reads it ("Blocks"), an inverse name as the target reads it ("Blocked by"), and the akt types its targets may have.
   - Containment is the one link kind Kuria builds in, because boards, ranks and numbering depend on it. Prefer `container` and `member` over `parent` and `child` for it.
 
 ## Containment
@@ -142,3 +142,36 @@ Terms are introduced in dependency order: each definition only uses terms define
 
 - `parent` (in a number pattern)
   - The container an akt was created in, whose akt number `{parent}` renders, as in `RELEASE-2026-0001-RC-0001`.
+
+## Lists
+
+- `page`
+  - The part of a list of akter answered at once, at most a limit of them, with a `cursor` after its last akt and whether more follow.
+
+- `cursor`
+  - An opaque mark after the last akt of a page, which asks the same list for the akter that follow. A cursor belongs to the list that gave it.
+
+- `filter`
+  - A condition on a field's value that a list's akter must meet, such as an assignee being the viewer.
+
+## Moving records
+
+- `bundle`
+  - What an export writes and an import reads: selected akt types, with or without their akter, or a whole tenant, as a directory (a tar archive on the wire). Akter in a bundle keep their numbers and whole history.
+
+- `subject alias`
+  - A record, made by an import, that a subject a bundle names is shown as, and filters as, a user of the importing tenant. Revisions keep naming the subject they recorded.
+
+## Command-line client
+
+- `kuria`
+  - Kuria's command-line client, for people and agents. Not to be confused with `kuria-server`, the server binary.
+
+- `profile`
+  - A saved Kuria URL and tenant that `kuria login` signed in to, which commands use when not told otherwise.
+
+- `akt file`
+  - An akt as `kuria cat` writes it and `kuria apply` reads it: Markdown with the akt's single-line fields in YAML front matter and each multiline field as its own section.
+
+- `relay`
+  - Kuria's `/cli/authorized` page, which holds the authorization code Konklav redirects to it until the client that asked for it collects it.
