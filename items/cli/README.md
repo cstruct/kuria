@@ -47,8 +47,45 @@ type.
   0 done, 1 refused, 2 not found, 3 stale, 4 not signed in or not
   permitted, 5 unavailable.
 
-Commands so far: `login [--no-browser]`, `logout`, `whoami`. The reads and
-writes the spec lists come next.
+- **Reads** (`cli.read`):
+  - `types`; `schema <type>` (fields with kinds, required and options,
+    states and tones, transitions with what they require, and from the
+    type's document what it contains and links to, its board and
+    presentation);
+  - `ls [<type>]` with `--state` (key or name), `--in <container>` (its
+    members; a state is then filtered here, since members have no state
+    to ask for), `--where <field>=<value>` (`cli.values`: options by key
+    or name, people by email, name or `@me`, dates as `YYYY-MM-DD`,
+    single-line text whole), `--search`, `--limit` and `--after`, or
+    `--all` pages. With a type, its list fields are the columns;
+  - `find <text>`; `cat <number>… [-o <dir>]` (`cli.file`); `show <number>
+    [--history]` (fields, containers, members by board column or by type,
+    links with pins, the transitions its state allows); `history
+    <number>`, said as the app says it (`app.history`); `users`,
+    `contacts`.
+- **The akt file** (`cli.file`, [`src/file.rs`](src/file.rs)): `number`,
+  `type`, `revision`, `state`, `in` and `links` (read-only), then each
+  single-line field by key; each multiline text in a section after
+  `<!-- field: <key> -->`. Values are written as the file reads them back:
+  options by key, users and contacts by email else name, a checkbox as
+  `true` or `for:<someone>`, references, Git, Docker values and
+  attachments as flow-style objects. Strings are quoted only where YAML
+  would read them as something else.
+
+### JSON answers
+
+| Command | Object |
+|---|---|
+| `whoami` | `{url, tenant, subject, name, email, signedInWith, profile}` |
+| `types` | `{types: [{key, name, version, numberPattern, akterCount}]}` |
+| `schema` | `{type: {key, name, version, numberPattern, fields: [{key, name, kind, required, multiline, description, options, format, draft}], states: [{key, name, initial, final, tone}], transitions: [{key, name, from, to, requires, action}], contains, createdIn, links, board, presentation}}` |
+| `ls`, `find` | `{akter: [{number, type, title, state, updatedAt, fields}], endCursor, hasNextPage}` |
+| `cat` | `{akter: [{number, type, revision, state, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o` |
+| `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns \| akter, more}, transitions, history?}}` |
+| `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}` |
+| `users`, `contacts` | `{users: [{id, name, email}]}`, `{contacts: [{id, displayName, name, email, user}]}` |
+
+`fields` maps field keys to values in the akt file's form.
 
 ## Entry points
 
@@ -65,6 +102,11 @@ writes the spec lists come next.
   token grants, revocation and the secret-key login.
 - [`src/dpop.rs`](src/dpop.rs) and [`src/http.rs`](src/http.rs): the key,
   its proofs, and requests carrying them.
+- [`src/reads.rs`](src/reads.rs): the reads, in `reads/catalog.rs`,
+  `reads/list.rs` and `reads/akter.rs`; [`src/model.rs`](src/model.rs):
+  Kuria's answers and the GraphQL fragments asking for them;
+  [`src/values.rs`](src/values.rs), [`src/file.rs`](src/file.rs),
+  [`src/history.rs`](src/history.rs), [`src/md.rs`](src/md.rs).
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),
   [`src/output.rs`](src/output.rs), [`src/error.rs`](src/error.rs).
 
@@ -88,17 +130,21 @@ cargo test -p kuria-cli
 
 - Unit tests: profile resolution, the secret file's permissions, DPoP
   proofs checked with Konklav's own `verify_proof`, error codes and exit
-  codes, and the command line.
+  codes, the command line, values as text and in files, `--where` values
+  by kind, the akt file and YAML quoting, and the history's wording.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
   built binary against the e2e stack. Playwright authorizes the link
   `kuria login` prints; then `whoami` from the profile, a refresh, `logout`
   revoking at Konklav, and `KURIA_KEY` saving nothing, with exit codes 4
-  and 5.
+  and 5; and every read against the release-management example: schema,
+  filtered and paged lists, search, the akt file, `show` with a board and
+  history, and refusals with exit codes 1 and 2.
 
 ## Traceability
 
 - Spec: [`docs/spec/cli.md`](../../docs/spec/cli.md) (`cli.profile`,
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
-  `errors`).
+  `errors`, `read`, `file`, `values`); `app.history` for the history's
+  wording.
 - Annotations: `r[impl cli.*]` in `src/`, `r[verify cli.*]` in the unit
   tests and `e2e/tests/cli.spec.ts`.

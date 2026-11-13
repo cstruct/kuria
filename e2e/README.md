@@ -101,7 +101,7 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   by the link it prints, authorized in a browser; `whoami` from the
   profile; a refresh rotating the tokens; `logout` revoking at Konklav;
   and `KURIA_KEY` signing in as software, saving nothing, with its exit
-  codes.
+  codes; and every read command against the release-management example.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
 - [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe
