@@ -35,6 +35,10 @@ server serves from its own origin, and Kuria's login page.
   bar with breadcrumbs (`setCrumbs`), the viewer and Sign out, and search
   (`/` or Cmd-K) over akter by number or title.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
+  the akt page's parts (`FieldRow`, editing one field in place;
+  `TransitionDialog`; `HistoryList`, a timeline from `history.ts`), the
+  header's title and actions (`header.ts`), sanitized Markdown
+  (`markdown.ts`), pickers that search akter (`pickers.ts`), and
   each field kind's editor, input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names

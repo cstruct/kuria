@@ -81,6 +81,8 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
 
 - [`tests/sign-in.spec.ts`](tests/sign-in.spec.ts): signing in through the
   login page, a wrong password, and single sign-on.
+- [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
+  field edited in place, and the history saying what changed.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, and signing out of
   Kuria and of the login page's Konklav session.

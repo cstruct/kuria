@@ -1,7 +1,7 @@
 import { CombinedError } from '@urql/core';
 import { GraphQLError } from 'graphql';
 import { describe, expect, it } from 'vitest';
-import { settle } from './editing';
+import { oneField, settle } from './editing';
 import type { Draft } from './values';
 
 const fresh: Record<string, Draft> = { title: { kind: 'TEXT', text: 'Changed elsewhere' } };
@@ -22,5 +22,13 @@ describe('after a change', () => {
 		const forbidden = settle(refused('FORBIDDEN'), fresh, {});
 		expect(forbidden.base).toBeUndefined();
 		expect(forbidden.drafts).toBeUndefined();
+	});
+
+	// r[verify app.inline-edit]
+	it('edits one field at a time, sending only it', () => {
+		const before: Draft = { kind: 'TEXT', text: 'Old' };
+		expect(oneField('title', before, { kind: 'TEXT', text: 'New' })).toEqual({ title: 'New' });
+		expect(oneField('title', before, before)).toEqual({});
+		expect(oneField('title', before, { kind: 'TEXT', text: '' })).toEqual({ title: null });
 	});
 });

@@ -6,7 +6,18 @@
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
 import { defineExample } from '../support/example.ts';
-import { addMembers, addTo, column, create, moved, open, shown, transition } from '../support/app.ts';
+import {
+	addMembers,
+	addTo,
+	column,
+	create,
+	moved,
+	open,
+	rendered,
+	shown,
+	transfer,
+	transition
+} from '../support/app.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
@@ -173,40 +184,33 @@ test('a release from planning to closed', async ({ browser }) => {
 	// The experiment is replanned into the next backlog in one step.
 	const nextBacklog = await create(dev, 'backlog', { Title: 'Summer backlog' });
 	await open(dev, experiment);
-	await dev.getByRole('form', { name: 'Transfer to another container' }).getByLabel('From').selectOption(backlog);
-	await dev.getByLabel('To container number').fill(nextBacklog);
-	await dev.getByRole('button', { name: 'Transfer' }).click();
-	await expect(dev.getByRole('list', { name: 'Containers' }).getByRole('link', { name: nextBacklog })).toBeVisible();
+	await transfer(dev, backlog, nextBacklog);
 
 	// Release notes, drafted from the candidates and the hotfix, then approved.
 	const notes = await create(rm, 'release_notes', {}, release);
 	await rm.getByRole('button', { name: 'Draft Text' }).click();
+	// Shown as the Markdown it is: headings and lists.
 	await expect
-		.poll(() => shown(rm, 'text'))
-		.toBe(
-			[
-				'## Epic',
-				`- ${epic} Sign-in ()`,
-				'',
-				'## Backlog item',
-				`- ${reset} Password reset (Feature)`,
-				`- ${passkeys} Passkeys (Feature)`,
-				`- ${crash} Crash on save (Fix)`,
-				`- ${typo} Typo in the menu (Fix)`,
-				`- ${sessions} Lost sessions (Fix)`
-			].join('\n')
-		);
+		.poll(() => rendered(rm, 'text'))
+		.toEqual([
+			'Epic',
+			`${epic} Sign-in ()`,
+			'Backlog item',
+			`${reset} Password reset (Feature)`,
+			`${passkeys} Passkeys (Feature)`,
+			`${crash} Crash on save (Fix)`,
+			`${typo} Typo in the menu (Fix)`,
+			`${sessions} Lost sessions (Fix)`
+		]);
 	// The artifacts that ship: each component's newest, without the removed
 	// search; the first candidate's frontend still ships.
 	await rm.getByRole('button', { name: 'Draft Artifacts' }).click();
 	await expect
-		.poll(() => shown(rm, 'artifacts'))
-		.toBe(
-			[
-				`- frontend 4.2.0-rc.1: registry.example/shop/frontend:4.2.0-rc.1@${digest('b')}`,
-				`- backend 4.2.1: registry.example/shop/backend:4.2.1@${digest('e')}`
-			].join('\n')
-		);
+		.poll(() => rendered(rm, 'artifacts'))
+		.toEqual([
+			`frontend 4.2.0-rc.1: registry.example/shop/frontend:4.2.0-rc.1@${digest('b')}`,
+			`backend 4.2.1: registry.example/shop/backend:4.2.1@${digest('e')}`
+		]);
 	await moved(rm, 'Approve', 'Approved');
 	expect(notes).toBe(`${release}-NOTES-1`);
 

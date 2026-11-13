@@ -185,11 +185,13 @@ export const AktPage = graphql(`
 		akt(number: $number) {
 			id
 			number
+			title
 			revision
 			state {
 				key
 				name
 				final
+				tone
 			}
 			type {
 				...TypeShape
@@ -200,6 +202,7 @@ export const AktPage = graphql(`
 			containers {
 				id
 				number
+				title
 				type {
 					key
 					version
@@ -213,9 +216,11 @@ export const AktPage = graphql(`
 					akter {
 						id
 						number
+						title
 						state {
 							key
 							name
+							tone
 						}
 						type {
 							key

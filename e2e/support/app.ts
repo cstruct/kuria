@@ -4,7 +4,13 @@ import { expect, type Page } from '@playwright/test';
 /** Opens the akt `number`. */
 export async function open(page: Page, number: string) {
 	await page.goto(`/akt/${encodeURIComponent(number)}`);
-	await expect(page.getByRole('heading', { level: 1, name: number })).toBeVisible();
+	await expect(page.getByTestId('number')).toHaveText(number);
+}
+
+/** Picks the akt `number` in the picker labelled `label`. */
+async function pick(page: Page, label: string, number: string) {
+	await page.getByRole('combobox', { name: label, exact: true }).fill(number);
+	await page.getByRole('option', { name: new RegExp(`\\b${escape(number)} ·`) }).click();
 }
 
 /** Fills a text, date or URL field by its name, in `scope`. */
@@ -43,15 +49,15 @@ export async function create(
 	await fill(page, fields);
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(page).toHaveURL(/\/akt\//);
-	return (await page.getByRole('heading', { level: 1 }).textContent())!.trim();
+	return (await page.getByTestId('number').textContent())!.trim();
 }
 
 /** Performs a transition of the open akt, filling the fields it asks for. */
 export async function transition(page: Page, name: string, fields: Record<string, Fill> = {}) {
-	await page.getByRole('button', { name: `${name}…`, exact: true }).click();
-	const form = page.getByRole('form', { name });
+	await page.getByRole('main').getByRole('button', { name, exact: true }).click();
+	const dialog = page.getByRole('dialog', { name });
 	await fill(page, fields);
-	await form.getByRole('button', { name, exact: true }).click();
+	await dialog.getByRole('button', { name, exact: true }).click();
 }
 
 /** Performs a transition and waits for the state it leads to. */
@@ -63,17 +69,31 @@ export async function moved(page: Page, name: string, to: string, fields: Record
 /** Adds `members` to the open container. */
 export async function addMembers(page: Page, ...members: string[]) {
 	for (const member of members) {
-		await page.getByLabel('Member number', { exact: true }).fill(member);
-		await page.getByRole('button', { name: 'Add member' }).click();
+		await pick(page, 'Add a member', member);
 		await expect(page.getByRole('region', { name: 'Members' }).getByRole('link', { name: member })).toBeVisible();
 	}
 }
 
 /** Adds the open akt to `container`. */
 export async function addTo(page: Page, container: string) {
-	await page.getByLabel('Container number', { exact: true }).fill(container);
-	await page.getByRole('button', { name: 'Add to container' }).click();
+	await pick(page, 'Add to a container', container);
 	await expect(page.getByRole('list', { name: 'Containers' }).getByRole('link', { name: container })).toBeVisible();
+}
+
+/** Moves the open akt from `from` to `to`. */
+export async function transfer(page: Page, from: string, to: string) {
+	await page.getByRole('button', { name: 'Move to another container' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Move to another container' });
+	await dialog.getByLabel('From').selectOption(from);
+	await pick(page, 'To', to);
+	await expect(dialog).toBeHidden();
+	await expect(page.getByRole('list', { name: 'Containers' }).getByRole('link', { name: to })).toBeVisible();
+}
+
+/** The text of the headings and list items a field's Markdown renders to. */
+export async function rendered(page: Page, key: string): Promise<string[]> {
+	const field = page.locator(`dd[data-field="${key}"]`);
+	return (await field.locator('h1, h2, h3, li').allTextContents()).map((t) => t.trim());
 }
 
 /** The numbers in a column of the open container's board, in order. */

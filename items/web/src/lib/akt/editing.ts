@@ -1,7 +1,7 @@
 /** What a refused change leaves the akt page with. */
 import type { CombinedError } from '@urql/core';
 import { refusalOf, type Refusal } from './errors';
-import type { Draft } from './values';
+import { inputOf, type Draft } from './values';
 
 export interface Settled {
 	refusal: Refusal | null;
@@ -30,4 +30,16 @@ export function settle(
 	const refusal = refusalOf(error, fieldNames);
 	if (refusal.code === 'STALE' && fresh) return { refusal, base: fresh };
 	return { refusal };
+}
+
+/** The input that edits one field: its new value, if the editor changed
+ * it, and nothing else. */
+// r[impl app.inline-edit]
+export function oneField(
+	key: string,
+	before: Draft | undefined,
+	after: Draft | undefined
+): Record<string, unknown> {
+	if (!after || JSON.stringify(before) === JSON.stringify(after)) return {};
+	return { [key]: inputOf(after) };
 }
