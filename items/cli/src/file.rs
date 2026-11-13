@@ -120,25 +120,45 @@ pub fn write(akt: &Akt) -> String {
     if !akt.links.is_empty() {
         front.push(("links", akt.links.iter().map(Link::said).collect()));
     }
+    let single = akt
+        .fields
+        .iter()
+        .filter(|v| !sectioned(&akt.shape, v))
+        .map(|v| (v.field().to_owned(), file_value(v)))
+        .collect::<Vec<_>>();
+    let sections = akt
+        .fields
+        .iter()
+        .filter(|v| sectioned(&akt.shape, v))
+        .filter_map(|v| match v {
+            Value::TextValue { field, text } => Some((field.clone(), text.clone())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    write_parts(&front, &single, &sections)
+}
+
+/// An akt file from its parts: the read-only front matter, then each
+/// single-line field by key, then each multiline field's section.
+#[must_use]
+pub fn write_parts(
+    front: &[(&str, Json)],
+    single: &[(String, Json)],
+    sections: &[(String, String)],
+) -> String {
     let mut text = String::from("---\n");
     for (key, value) in front {
-        text.push_str(&format!("{key}: {}\n", yaml(&value)));
+        text.push_str(&format!("{key}: {}\n", yaml(value)));
     }
-    for value in akt.fields.iter().filter(|v| !sectioned(&akt.shape, v)) {
-        text.push_str(&format!(
-            "{}: {}\n",
-            value.field(),
-            yaml(&file_value(value))
-        ));
+    for (key, value) in single {
+        text.push_str(&format!("{key}: {}\n", yaml(value)));
     }
     text.push_str("---\n");
-    for value in akt.fields.iter().filter(|v| sectioned(&akt.shape, v)) {
-        if let Value::TextValue { field, text: body } = value {
-            text.push_str(&format!(
-                "\n<!-- field: {field} -->\n{}\n",
-                body.trim_end_matches('\n')
-            ));
-        }
+    for (field, body) in sections {
+        text.push_str(&format!(
+            "\n<!-- field: {field} -->\n{}\n",
+            body.trim_end_matches('\n')
+        ));
     }
     text
 }

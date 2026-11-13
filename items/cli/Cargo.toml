@@ -31,7 +31,7 @@ thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
 toml = "0.9"
 url = "2"
-uuid = { version = "1", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v5"] }
 webbrowser = "1"
 
 [dev-dependencies]

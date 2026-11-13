@@ -104,7 +104,7 @@ fn answer(documents: &[Json], output: Option<&Path>) -> Result<Answer, CliError>
 }
 
 /// The documents in `path`: one, or a list of them.
-fn documents(path: &Path) -> Result<Vec<Json>, CliError> {
+pub(crate) fn documents(path: &Path) -> Result<Vec<Json>, CliError> {
     let text = std::fs::read_to_string(path).map_err(|e| io_error(path, &e))?;
     match serde_json::from_str(&text) {
         Ok(Json::Array(documents)) => Ok(documents),

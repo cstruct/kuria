@@ -226,16 +226,125 @@ async fn local(root: &Path, command: Command) -> Result<Answer, CliError> {
     if reads_only(&command) {
         return read(Source::Local(&local), command).await;
     }
-    Err(match command {
-        Command::Draft { .. } => {
-            local::unsupported("`draft`", "drafting looks through a server's akter")
-        }
-        Command::Export { .. } | Command::Import { .. } => local::unsupported(
+    match command {
+        Command::Draft { .. } => Err(local::unsupported(
+            "`draft`",
+            "drafting looks through a server's akter",
+        )),
+        Command::Export { .. } | Command::Import { .. } => Err(local::unsupported(
             "Bundles",
             "a directory converts from a server with `export --to-dir` (PLAN-008-T06)",
+        )),
+        command => {
+            let me = local.me.clone();
+            drop(local);
+            local_write(root, me, command)
+        }
+    }
+}
+
+/// A command that writes, on the akt directory at `root`, under its lock.
+// r[impl cli.local.rules]
+// r[impl cli.local.lock]
+fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answer, CliError> {
+    use local::{arrange, edits};
+    let mut w = local::write::Writer::open(root, me)?;
+    let mut save = true;
+    let answer = match command {
+        Command::New {
+            akt_type,
+            inside,
+            sets,
+            file,
+            reason,
+        } => edits::create(
+            &mut w,
+            &akt_type,
+            &inside,
+            &sets,
+            file.as_deref(),
+            reason.as_deref(),
         ),
-        _ => local::unsupported("Writing", "local writes come with PLAN-008-T04"),
-    })
+        Command::Apply {
+            files,
+            dry_run,
+            reason,
+        } => {
+            save = !dry_run;
+            edits::apply(&mut w, &files, dry_run, reason.as_deref())
+        }
+        Command::Set {
+            number,
+            sets,
+            reason,
+        } => edits::set(&mut w, &number, &sets, reason.as_deref()),
+        Command::Do {
+            number,
+            transition,
+            sets,
+            reason,
+        } => edits::perform(&mut w, &number, &transition, &sets, reason.as_deref()),
+        Command::Add {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            &mut w,
+            writes::Membership::Add,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
+        Command::Remove {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            &mut w,
+            writes::Membership::Remove,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
+        Command::Transfer {
+            member,
+            from,
+            to,
+            reason,
+        } => arrange::transfer(&mut w, &member, &from, &to, reason.as_deref()),
+        Command::Move {
+            number,
+            before,
+            after,
+        } => arrange::move_akt(&mut w, &number, before.as_deref(), after.as_deref()),
+        Command::Link {
+            source,
+            kind,
+            target,
+            pin,
+            reason,
+        } => arrange::link(&mut w, &source, &kind, &target, pin, reason.as_deref()),
+        Command::Unlink {
+            source,
+            kind,
+            target,
+            reason,
+        } => arrange::unlink(&mut w, &source, &kind, &target, reason.as_deref()),
+        Command::Types {
+            action: Some(TypesCommand::Define { files, .. }),
+        } => {
+            let mut documents = Vec::new();
+            for file in &files {
+                documents.extend(writes::documents(file)?);
+            }
+            edits::define(&mut w, documents)
+        }
+        _ => unreachable!("reads and refusals are answered before"),
+    }?;
+    if save {
+        w.save()?;
+    }
+    Ok(answer)
 }
 
 /// `kuria whoami` in local mode: the directory, and who `@me` is.

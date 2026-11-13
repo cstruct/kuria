@@ -379,7 +379,7 @@ fn refuses_what_local_mode_doesn_t_do() {
         &["login"],
         &["logout"],
         &["draft", "PLAN-001", "goal"],
-        &["new", "task", "--in", "PLAN-001"],
+        &["export", "--whole-tenant", "-o", "x"],
     ] {
         let refused = dir.refused(args);
         assert_eq!(
@@ -438,4 +438,387 @@ fn refuses_a_file_that_doesn_t_fit_naming_it() {
     assert!(dir.run(&["ls"]).is_ok(), "an empty value is no value");
     let value: Value = dir.ok(&["cat", "PLAN-001", "--format", "json"]).json;
     assert_eq!(value["akter"][0]["fields"], json!({}));
+}
+
+fn file(dir: &Dir, number: &str) -> String {
+    std::fs::read_to_string(dir.root.join(format!("akter/{number}.md"))).unwrap()
+}
+
+fn revision_of(dir: &Dir, number: &str) -> i64 {
+    dir.ok(&["cat", number, "--format", "json"]).json["akter"][0]["revision"]
+        .as_i64()
+        .unwrap()
+}
+
+/// A plan, activated, with two tasks in it.
+fn worked(dir: &Dir) {
+    dir.ok(&["new", "plan", "--set", "title=Local writes"]);
+    dir.ok(&["set", "PLAN-001", "goal=Writes in files"]);
+    dir.ok(&["do", "PLAN-001", "activate"]);
+    dir.ok(&[
+        "new",
+        "task",
+        "--in",
+        "PLAN-001",
+        "--set",
+        "title=First",
+        "--set",
+        "assignee=@me",
+    ]);
+    dir.ok(&["new", "task", "--in", "PLAN-001", "--set", "title=Second"]);
+}
+
+// r[verify cli.local.rules]
+// r[verify cli.local.numbers]
+// r[verify cli.local.revision]
+// r[verify cli.local.reason]
+#[test]
+fn writes_akter_by_the_server_s_rules() {
+    let dir = Dir::new();
+    let created = dir
+        .ok(&[
+            "new",
+            "plan",
+            "--set",
+            "title=Local writes",
+            "--reason",
+            "Planning",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(
+        created,
+        json!({ "number": "PLAN-001", "revision": 1, "reason": "Planning" })
+    );
+    assert!(
+        dir.ok(&["new", "plan", "--set", "title=Other", "--reason", "Why"])
+            .markdown
+            .ends_with("Commit with: Why")
+    );
+    // Activating needs the goal.
+    let refused = dir.refused(&["do", "PLAN-001", "activate"]);
+    assert_eq!(
+        (refused.code.as_str(), refused.kind.exit_code()),
+        ("REFUSED", 1)
+    );
+    dir.ok(&["set", "PLAN-001", "goal=Writes in files"]);
+    assert_eq!(
+        dir.ok(&["do", "PLAN-001", "Activate", "--format", "json"])
+            .json["state"],
+        "active"
+    );
+    let task = dir
+        .ok(&[
+            "new",
+            "task",
+            "--in",
+            "PLAN-001",
+            "--set",
+            "title=First",
+            "--set",
+            "assignee=@me",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(task["number"], "PLAN-001-T01");
+    assert_eq!(
+        dir.ok(&[
+            "new",
+            "task",
+            "--in",
+            "PLAN-002",
+            "--set",
+            "title=Elsewhere",
+            "--format",
+            "json"
+        ])
+        .json["number"],
+        "PLAN-002-T01"
+    );
+    assert_eq!(
+        dir.ok(&[
+            "new",
+            "task",
+            "--in",
+            "PLAN-001",
+            "--set",
+            "title=Second",
+            "--format",
+            "json"
+        ])
+        .json["number"],
+        "PLAN-001-T02"
+    );
+    // Each task created in it is a change to the plan, as on a server.
+    assert_eq!(revision_of(&dir, "PLAN-001"), 5);
+    let written = file(&dir, "PLAN-001-T01");
+    assert!(
+        written.contains("in: [PLAN-001]") && written.contains("assignee: me@kuria.example"),
+        "{written}"
+    );
+    let without_rank = written
+        .lines()
+        .filter(|l| !l.starts_with("rank:"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(
+        dir.ok(&["cat", "PLAN-001-T01"]).markdown.trim_end(),
+        without_rank.trim_end()
+    );
+}
+
+// r[verify cli.local.revision]
+// r[verify cli.apply]
+#[test]
+fn applies_files_and_refuses_stale_ones() {
+    let dir = Dir::new();
+    worked(&dir);
+    let out = tempfile::tempdir().unwrap();
+    dir.ok(&["cat", "PLAN-001-T01", "-o", out.path().to_str().unwrap()]);
+    let path = out.path().join("PLAN-001-T01.md");
+    let p = path.to_str().unwrap();
+    assert_eq!(
+        dir.ok(&["apply", p, "--format", "json"]).json["applied"][0]["changed"],
+        json!([])
+    );
+    let read = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        &path,
+        format!(
+            "{}\n<!-- field: description -->\nWhat it takes.\n",
+            read.replace("assignee: me@kuria.example\n", "")
+        ),
+    )
+    .unwrap();
+    let dry = dir.ok(&["apply", p, "--dry-run", "--format", "json"]).json;
+    assert_eq!(dry["applied"][0]["dryRun"], true);
+    assert!(
+        !file(&dir, "PLAN-001-T01").contains("What it takes"),
+        "a dry run writes nothing"
+    );
+    let applied = dir
+        .ok(&["apply", p, "--reason", "Described", "--format", "json"])
+        .json;
+    assert_eq!(
+        applied["applied"][0]["changed"],
+        json!(["assignee", "description"])
+    );
+    assert_eq!(applied["reason"], "Described");
+    let now = file(&dir, "PLAN-001-T01");
+    assert!(
+        now.contains("<!-- field: description -->\nWhat it takes.") && !now.contains("assignee:"),
+        "{now}"
+    );
+    // The file is now stale.
+    let stale = dir.refused(&["apply", p]);
+    assert_eq!((stale.code.as_str(), stale.kind.exit_code()), ("STALE", 3));
+    dir.ok(&["cat", "PLAN-001-T01", "-o", out.path().to_str().unwrap()]);
+    let fresh = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(&path, fresh.replace("state: todo", "state: done")).unwrap();
+    assert_eq!(dir.refused(&["apply", p]).field.as_deref(), Some("state"));
+    std::fs::write(&path, fresh.replace("---\n\n", "colour: red\n---\n\n")).unwrap();
+    assert_eq!(dir.refused(&["apply", p]).code, "UNKNOWN_FIELD");
+}
+
+// r[verify cli.local.rules]
+// r[verify cli.local.revision]
+#[test]
+fn arranges_members_order_and_links() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "plan", "--set", "title=Later"]);
+    // Linking writes both files.
+    let linked = dir
+        .ok(&[
+            "link",
+            "PLAN-001-T01",
+            "Blocks",
+            "PLAN-001-T02",
+            "--pin",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(linked["pinnedRevision"], 1);
+    assert!(file(&dir, "PLAN-001-T01").contains("links: [Blocks PLAN-001-T02@1]"));
+    assert!(file(&dir, "PLAN-001-T02").contains("links: [Blocked by PLAN-001-T01@1]"));
+    let shown = dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json;
+    assert_eq!(shown["akt"]["links"][0]["name"], "Blocked by");
+    assert_eq!(
+        dir.refused(&["link", "PLAN-001-T01", "blocks", "PLAN-001-T02"])
+            .code,
+        "INVALID_LINK"
+    );
+    assert_eq!(
+        dir.refused(&["link", "PLAN-001-T01", "blocks", "PLAN-001-T01"])
+            .code,
+        "INVALID_LINK"
+    );
+    dir.ok(&["unlink", "PLAN-001-T01", "blocks", "PLAN-001-T02"]);
+    assert!(!file(&dir, "PLAN-001-T02").contains("links:"));
+    assert_eq!(
+        dir.refused(&["unlink", "PLAN-001-T01", "blocks", "PLAN-001-T02"])
+            .kind
+            .exit_code(),
+        2
+    );
+    // Order.
+    dir.ok(&["move", "PLAN-001-T02", "--before", "PLAN-001-T01"]);
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "task", "--in", "PLAN-001", "--format", "json"])),
+        ["PLAN-001-T02", "PLAN-001-T01"]
+    );
+    assert_eq!(
+        dir.refused(&["move", "PLAN-001-T02", "--after", "PLAN-001-T02"])
+            .code,
+        "BAD_REQUEST"
+    );
+    // Membership: a transfer is one change of all three.
+    let before = revision_of(&dir, "PLAN-002");
+    dir.ok(&["transfer", "PLAN-001-T02", "PLAN-001", "PLAN-002"]);
+    assert_eq!(
+        dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json["akt"]["in"],
+        json!(["PLAN-002"])
+    );
+    assert_eq!(revision_of(&dir, "PLAN-002"), before + 1);
+    assert_eq!(
+        dir.refused(&["add", "PLAN-002", "PLAN-001-T02"]).code,
+        "ALREADY_MEMBER"
+    );
+    assert_eq!(
+        dir.refused(&["add", "PLAN-001", "PLAN-002"]).code,
+        "NOT_CONTAINABLE"
+    );
+    assert_eq!(
+        dir.refused(&["remove", "PLAN-001", "PLAN-001-T02"]).code,
+        "NOT_MEMBER"
+    );
+    dir.ok(&["remove", "PLAN-002", "PLAN-001-T02"]);
+    dir.ok(&["add", "PLAN-001", "PLAN-001-T02"]);
+    assert_eq!(
+        dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json["akt"]["in"],
+        json!(["PLAN-001"])
+    );
+}
+
+// r[verify cli.local.types]
+#[test]
+fn redefines_types_only_where_their_akter_fit() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["do", "PLAN-001-T01", "start"]);
+    let example =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/planning/task.json");
+    let mut task: Value = serde_json::from_str(&std::fs::read_to_string(example).unwrap()).unwrap();
+    task["name"] = json!("Job");
+    let renamed = dir.root.join("../job.json");
+    std::fs::write(&renamed, task.to_string()).unwrap();
+    assert_eq!(
+        dir.ok(&[
+            "types",
+            "define",
+            renamed.to_str().unwrap(),
+            "--format",
+            "json"
+        ])
+        .json["defined"][0]["key"],
+        "task"
+    );
+    assert_eq!(
+        dir.ok(&["schema", "task", "--format", "json"]).json["type"]["name"],
+        "Job"
+    );
+    // Without `assignee`, PLAN-001-T01, which has one, wouldn't fit.
+    let fields: Vec<Value> = task["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["key"] != "assignee")
+        .cloned()
+        .collect();
+    task["fields"] = json!(fields);
+    task["presentation"]["card"] = json!([]);
+    task["presentation"]["list"] = json!([]);
+    std::fs::write(&renamed, task.to_string()).unwrap();
+    let refused = dir.refused(&["types", "define", renamed.to_str().unwrap()]);
+    assert!(
+        refused.message.contains("PLAN-001-T01"),
+        "{}",
+        refused.message
+    );
+}
+
+// r[verify cli.local.lock]
+#[test]
+fn writes_at_once_lose_nothing() {
+    let dir = Dir::new();
+    dir.ok(&["new", "plan", "--set", "title=Busy"]);
+    let root = dir.root.to_str().unwrap().to_owned();
+    let threads: Vec<_> = (0..8)
+        .map(|i| {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                let title = format!("title=Task {i}");
+                let cli = Cli::try_parse_from([
+                    "kuria", "--dir", &root, "new", "task", "--in", "PLAN-001", "--set", &title,
+                ])
+                .unwrap();
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(kuria_cli::answer(cli))
+                    .map(|a| a.json["number"].as_str().unwrap().to_owned())
+            })
+        })
+        .collect();
+    let mut created: Vec<String> = threads
+        .into_iter()
+        .map(|t| t.join().unwrap().unwrap())
+        .collect();
+    created.sort();
+    let expected: Vec<String> = (1..=8).map(|n| format!("PLAN-001-T{n:02}")).collect();
+    assert_eq!(created, expected);
+    assert_eq!(
+        revision_of(&dir, "PLAN-001"),
+        9,
+        "every member's creation counted"
+    );
+    assert!(!dir.root.join(".kuria.lock").exists());
+}
+
+// r[verify cli.local.rules]
+#[test]
+fn refuses_writes_as_the_server_does() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "plan", "--set", "title=Other"]);
+    // A task must be created in a plan, and refused as the server would.
+    assert_eq!(
+        dir.refused(&["new", "task", "--set", "title=Loose"]).code,
+        "CREATED_IN"
+    );
+    assert_eq!(
+        dir.refused(&["new", "task", "--in", "PLAN-001"]).code,
+        "REFUSED"
+    );
+    assert_eq!(
+        dir.refused(&["do", "PLAN-001-T01", "nope"]).code,
+        "UNKNOWN_TRANSITION"
+    );
+    assert_eq!(
+        dir.refused(&["set", "PLAN-001-T01", "colour=red"]).code,
+        "UNKNOWN_FIELD"
+    );
+    let ls = dir.ok(&["ls", "task", "--where", "assignee=@me", "--format", "json"]);
+    assert_eq!(numbers(&ls), ["PLAN-001-T01"]);
+    // A finished plan takes no new members.
+    dir.ok(&["do", "PLAN-002", "drop"]);
+    assert_eq!(
+        dir.refused(&["new", "task", "--in", "PLAN-002", "--set", "title=Late"])
+            .code,
+        "FROZEN"
+    );
 }

@@ -10,6 +10,7 @@ mod types;
 pub use arrange::{Membership, link, membership, move_akt, transfer, unlink};
 pub use bundles::{Exported, export as export_bundle, import as import_bundle};
 pub use edit::{Created, apply, create, draft, perform, set};
+pub(crate) use types::documents;
 pub use types::{define, export};
 
 use serde_json::{Map, Value as Json, json};

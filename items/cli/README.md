@@ -140,9 +140,28 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   when each file was created and last changed (an uncommitted one, when it
   was written); `history` answers the commits that changed the file, and
   whether it has changes not committed yet.
-- **People** are text: `@me` is `KURIA_ME`, else git's `user.email`.
+- **Writes** ([`src/local/write.rs`](src/local/write.rs),
+  [`edits.rs`](src/local/edits.rs), [`arrange.rs`](src/local/arrange.rs)):
+  every write the server takes, through `kuria-engine` (`create`, `edit`,
+  `transition` and its `rules`), refused with the server's codes. A write
+  loads the directory under `.kuria.lock` (waiting up to 10 seconds, then
+  `LOCKED`, exit 5), changes it in memory, and writes the files it touched
+  whole, through a file renamed over each. It raises revisions as a server
+  does: a member's and its container's on a membership change, both
+  akter's on a link. Numbers come from the files present
+  (`numbering::next_from`); containment lives in each member's `in`, a
+  link in both akter's `links`. `apply` gives the engine every field of the
+  file, so it decides what changed as a server would. `--reason` is
+  answered back to commit with (`reason` in JSON, "Commit with:" in
+  Markdown). `types define` replaces a document, refusing one the
+  directory's akter wouldn't fit.
+- **People** are text: `@me` is `KURIA_ME`, else git's `user.email`. On
+  their way through the engine, each name or email stands in as a subject
+  derived from its text ([`src/local/values.rs`](src/local/values.rs)); a
+  checkbox records whom it is for (`true`, or `for:<someone>`), not who
+  checked it, which git keeps.
 - **Refused** as `LOCAL_UNSUPPORTED`: signing in, `users`, `contacts`,
-  `draft`, bundles and, until PLAN-008-T04, writes.
+  `draft`, attachments and bundles.
 
 ### JSON answers
 
@@ -221,7 +240,10 @@ cargo test -p kuria-cli
   `init` and the manifest, types and schemas, lists filtered, ordered and
   paged, `cat` as the file without `rank`, `show` with its board and links,
   history from commits, refusals of what local mode doesn't do, and files
-  that don't fit, named.
+  that don't fit, named; and every write: numbering in and across plans,
+  revisions of containers, the server's refusals, `apply` with dry runs,
+  stale files and read-only keys, links with pins on both files, order,
+  transfers, redefining types, and eight writers at once.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
   built binary against the e2e stack. Playwright authorizes the link
   `kuria login` prints; then `whoami` from the profile, a refresh, `logout`

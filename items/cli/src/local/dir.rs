@@ -75,7 +75,10 @@ pub fn init(root: &Path) -> Result<(), CliError> {
         std::fs::create_dir_all(&dir).map_err(|e| io_error(&dir, &e))?;
     }
     let text = toml::to_string(&Manifest { format: FORMAT }).expect("serializable");
-    std::fs::write(&manifest, text).map_err(|e| io_error(&manifest, &e))
+    std::fs::write(&manifest, text).map_err(|e| io_error(&manifest, &e))?;
+    // What a write leaves only while it runs.
+    let ignore = root.join(".gitignore");
+    std::fs::write(&ignore, ".kuria.lock\n.*.partial\n").map_err(|e| io_error(&ignore, &e))
 }
 
 impl AktDir {
