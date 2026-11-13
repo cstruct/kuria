@@ -23,16 +23,17 @@ pub use ordering::Place;
 
 use std::sync::Arc;
 
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Utc};
 use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
 use kuria_config::{
-    AktType, AktTypeDocument, AttachmentFormat, FieldKind, NumberContext, Problem,
-    check_field_references, check_state_references, validate,
+    AktType, AktTypeDocument, AttachmentFormat, FieldKind, Problem, check_field_references,
+    check_state_references, validate,
 };
 use tokio::sync::Notify;
 
 use crate::authorize::{Authorizer, Permission, Unavailable};
+use kuria_engine::rules::{AktRef, Broken, numbering, records};
 use kuria_engine::{Current, Outcome, Refusal, fields_from_json, fields_to_json, rank_between};
 use kuria_store::Pool;
 use kuria_store::akter::{self as store, AktRow, AktTypeVersion, RevisionRow};
@@ -114,6 +115,64 @@ pub enum AktError {
     Unavailable(#[from] Unavailable),
     #[error("internal error")]
     Internal(String),
+}
+
+impl From<Broken> for AktError {
+    /// The engine's containment, link and ordering refusals, as the codes
+    /// the server has always answered.
+    fn from(broken: Broken) -> Self {
+        match broken {
+            Broken::NotContainable { container, member } => {
+                Self::NotContainable { container, member }
+            }
+            Broken::AlreadyMember { container, member } => {
+                Self::AlreadyMember { container, member }
+            }
+            Broken::NotMember { container, member } => Self::NotMember { container, member },
+            Broken::Exclusive {
+                member,
+                other,
+                akt_type,
+            } => Self::Exclusive {
+                member,
+                other,
+                akt_type,
+            },
+            Broken::Cycle { container, member } => Self::Cycle { container, member },
+            Broken::Frozen(number) => Self::Frozen(number),
+            Broken::NotAccepting {
+                container,
+                member_type,
+                state,
+            } => Self::NotAccepting {
+                container,
+                member_type,
+                state,
+            },
+            Broken::CreatedIn { akt_type, allowed } => Self::CreatedIn { akt_type, allowed },
+            Broken::InvalidLink(reason) => Self::InvalidLink(reason),
+            Broken::NotLinked {
+                source_number,
+                kind,
+                target,
+            } => Self::NotLinked {
+                source_number,
+                kind,
+                target,
+            },
+            Broken::SelfMove => Self::SelfMove,
+        }
+    }
+}
+
+/// `akt` as the engine's rules see it.
+pub(crate) fn akt_ref<'a>(ty: &'a StoredType, akt: &'a AktRow) -> AktRef<'a> {
+    AktRef {
+        number: &akt.number,
+        state: &akt.state,
+        ty: &ty.ty,
+        revision: akt.revision,
+    }
 }
 
 impl From<diesel::result::Error> for AktError {
@@ -371,15 +430,9 @@ async fn next_number(
     parent: Option<&str>,
     now: DateTime<Utc>,
 ) -> Result<String, AktError> {
-    let context = NumberContext {
-        year: now.year(),
-        month: now.month(),
-        parent,
-    };
-    let scope = ty.number().scope(&context);
-    let sequence = store::next_counter(conn, tenant, &format!("number:{scope}")).await?;
+    let sequence = store::next_counter(conn, tenant, &numbering::counter(ty, now, parent)).await?;
     let sequence = u64::try_from(sequence).map_err(|e| AktError::Internal(e.to_string()))?;
-    Ok(ty.number().render(&context, sequence))
+    Ok(numbering::render(ty, now, parent, sequence))
 }
 
 /// The revision recording `outcome` on `akt`.
@@ -604,14 +657,9 @@ fn current_hash(ty: &StoredType, akt: &AktRow) -> Result<[u8; 32], AktError> {
     Ok(kuria_engine::state_hash(&akt.state, &fields))
 }
 
-/// Whether `akt` is in a final state of its akt type.
-fn is_final(ty: &StoredType, akt: &AktRow) -> bool {
-    ty.ty.state(&akt.state).is_some_and(|s| s.is_final)
-}
-
 /// One side of a membership, as a membership revision records it.
 fn membership_entry(akt: &AktRow) -> Json {
-    serde_json::json!({ "akt": akt.id.to_string(), "number": akt.number })
+    records::membership_entry(&akt.id.to_string(), &akt.number)
 }
 
 /// Appends a membership revision to `akt`, which changes neither its state

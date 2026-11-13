@@ -3,14 +3,15 @@
 use chrono::{DateTime, Utc};
 use diesel_async::AsyncConnection;
 use kuria_config::LinkDef;
+use kuria_engine::rules::{links, records};
 use kuria_store::akter::AktRow;
 use kuria_store::containers;
-use kuria_store::links::{self, LinkRow};
+use kuria_store::links::{self as stored, LinkRow};
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
 use super::{
-    AktError, Akter, Caller, StoredType, record_membership, require, require_read, type_of,
+    AktError, Akter, Caller, StoredType, akt_ref, record_membership, require, require_read, type_of,
 };
 use crate::authorize::Permission;
 
@@ -41,28 +42,11 @@ impl Akter {
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
                 let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
-                let def = kind_of(&s, kind)?.clone();
-                if !def.to.iter().any(|key| key == t.ty.ty.key()) {
-                    return Err(AktError::InvalidLink(format!(
-                        "a `{kind}` link of `{}` goes to {}, not to `{}`",
-                        s.ty.ty.key(),
-                        def.to
-                            .iter()
-                            .map(|k| format!("`{k}`"))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        t.ty.ty.key()
-                    )));
-                }
-                if let Some(pin) = pin
-                    && !(1..=t.akt.revision).contains(&pin)
-                {
-                    return Err(AktError::InvalidLink(format!(
-                        "`{target}` has no revision {pin}"
-                    )));
-                }
+                let def =
+                    links::to_add(&akt_ref(&s.ty, &s.akt), kind, &akt_ref(&t.ty, &t.akt), pin)?
+                        .clone();
                 let now = Utc::now();
-                let new = links::insert(
+                let new = stored::insert(
                     conn,
                     &LinkRow {
                         tenant_id: tenant,
@@ -75,11 +59,7 @@ impl Akter {
                     },
                 )
                 .await?;
-                if !new {
-                    return Err(AktError::InvalidLink(format!(
-                        "`{source}` already has a `{kind}` link to `{target}`"
-                    )));
-                }
+                links::check_new(new, source, kind, target)?;
                 record(
                     conn,
                     caller,
@@ -122,20 +102,9 @@ impl Akter {
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
                 let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
-                // A kind a newer version dropped can still be unlinked.
-                let def = s.ty.ty.link(kind).cloned().unwrap_or_else(|| LinkDef {
-                    key: kind.to_owned(),
-                    name: kind.to_owned(),
-                    inverse: kind.to_owned(),
-                    to: Vec::new(),
-                });
-                if !links::delete(conn, tenant, s.akt.id, kind, t.akt.id).await? {
-                    return Err(AktError::NotLinked {
-                        source_number: source.to_owned(),
-                        kind: kind.to_owned(),
-                        target: target.to_owned(),
-                    });
-                }
+                let def = links::to_remove(&akt_ref(&s.ty, &s.akt), kind);
+                let existed = stored::delete(conn, tenant, s.akt.id, kind, t.akt.id).await?;
+                links::check_existed(existed, source, kind, target)?;
                 let now = Utc::now();
                 record(
                     conn,
@@ -172,11 +141,7 @@ async fn lock(
     source: &str,
     target: &str,
 ) -> Result<(Locked, Locked), AktError> {
-    if source == target {
-        return Err(AktError::InvalidLink(format!(
-            "`{source}` can't link to itself"
-        )));
-    }
+    links::check_not_itself(source, target)?;
     let mut rows = containers::lock_akter(conn, tenant, &[source, target]).await?;
     let mut take = async |number: &str| -> Result<Locked, AktError> {
         let akt = rows
@@ -200,26 +165,9 @@ async fn lock(
     Ok((s, t))
 }
 
-/// The kind `kind` the source's akt type version declares.
-fn kind_of<'a>(s: &'a Locked, kind: &str) -> Result<&'a LinkDef, AktError> {
-    s.ty.ty.link(kind).ok_or_else(|| {
-        AktError::InvalidLink(format!("`{}` has no kind of link `{kind}`", s.ty.ty.key()))
-    })
-}
-
-/// One side of a link, as a link revision records it: the other akt, the
-/// kind, and its name as this akt reads it.
+/// One side of a link, as a link revision records it.
 fn entry(other: &AktRow, def: &LinkDef, name: &str, pin: Option<i32>) -> Json {
-    let mut entry = json!({
-        "akt": other.id.to_string(),
-        "number": other.number,
-        "kind": def.key,
-        "name": name,
-    });
-    if let Some(pin) = pin {
-        entry["revision"] = json!(pin);
-    }
-    entry
+    records::link_entry(&other.id.to_string(), &other.number, def, name, pin)
 }
 
 async fn record(

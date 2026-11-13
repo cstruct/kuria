@@ -8,10 +8,12 @@ use kuria_store::containers::{self, MembershipRow};
 use serde_json::{Map, Value as Json, json};
 use uuid::Uuid;
 
+use kuria_engine::rules::containment;
+
 use super::{
-    AktError, Akter, Caller, StoredType, check_contacts, hold_attachments, membership_entry,
-    next_number, rank_after_last, record_membership, require, require_read, revision, title_of,
-    type_of,
+    AktError, Akter, Caller, StoredType, akt_ref, check_contacts, hold_attachments,
+    membership_entry, next_number, rank_after_last, record_membership, require, require_read,
+    revision, title_of, type_of,
 };
 use crate::authorize::Permission;
 
@@ -69,8 +71,7 @@ impl Akter {
                     .await?;
                     parent_types.push(ty);
                 }
-                check_created_in(&stored, &parent_types)?;
-                check_containers(&stored, &parents, &parent_types)?;
+                check_parents(&stored, &parents, &parent_types)?;
 
                 let now = Utc::now();
                 let outcome = kuria_engine::create(
@@ -143,14 +144,8 @@ async fn lock_containers(
     tenant: Uuid,
     numbers: &[String],
 ) -> Result<Vec<AktRow>, AktError> {
-    let mut seen = std::collections::BTreeSet::new();
-    if let Some(twice) = numbers.iter().find(|n| !seen.insert(n.as_str())) {
-        return Err(AktError::AlreadyMember {
-            container: twice.clone(),
-            member: "the new akt".to_owned(),
-        });
-    }
     let refs: Vec<&str> = numbers.iter().map(String::as_str).collect();
+    containment::check_distinct(&refs)?;
     let mut locked = containers::lock_akter(conn, tenant, &refs).await?;
     numbers
         .iter()
@@ -164,62 +159,18 @@ async fn lock_containers(
         .collect()
 }
 
-/// Refuses an akt type with `created_in` created anywhere else.
-// r[impl container.created-in]
-fn check_created_in(ty: &StoredType, parents: &[StoredType]) -> Result<(), AktError> {
-    let allowed = ty.ty.created_in();
-    if allowed.is_empty() {
-        return Ok(());
-    }
-    match parents.first() {
-        Some(parent) if allowed.iter().any(|a| a == parent.ty.key()) => Ok(()),
-        _ => Err(AktError::CreatedIn {
-            akt_type: ty.ty.key().to_owned(),
-            allowed: allowed.to_vec(),
-        }),
-    }
-}
-
-/// Refuses containers that can't take an akt of `ty`: of a type that doesn't
-/// contain it, frozen, or two of one exclusive type.
-fn check_containers(
+/// Refuses containers an akt of `ty` can't be created in.
+fn check_parents(
     ty: &StoredType,
     parents: &[AktRow],
-    parent_types: &[StoredType],
+    types: &[StoredType],
 ) -> Result<(), AktError> {
-    let mut exclusive: Vec<(&str, &str)> = Vec::new();
-    for (parent, parent_type) in parents.iter().zip(parent_types) {
-        // r[impl container.contains]
-        let Some(contains) = parent_type.ty.contains(ty.ty.key()) else {
-            return Err(AktError::NotContainable {
-                container: parent.number.clone(),
-                member: ty.ty.key().to_owned(),
-            });
-        };
-        // r[impl container.frozen]
-        if super::is_final(parent_type, parent) {
-            return Err(AktError::Frozen(parent.number.clone()));
-        }
-        // r[impl container.while]
-        if !contains.accepts_in(&parent.state) {
-            return Err(AktError::NotAccepting {
-                container: parent.number.clone(),
-                member_type: ty.ty.key().to_owned(),
-                state: parent.state.clone(),
-            });
-        }
-        // r[impl container.exclusive]
-        if contains.exclusive {
-            let key = parent_type.ty.key();
-            if let Some((_, other)) = exclusive.iter().find(|(k, _)| *k == key) {
-                return Err(AktError::Exclusive {
-                    member: "the new akt".to_owned(),
-                    other: (*other).to_owned(),
-                    akt_type: key.to_owned(),
-                });
-            }
-            exclusive.push((key, &parent.number));
-        }
-    }
-    Ok(())
+    let kinds: Vec<&kuria_config::AktType> = types.iter().map(|t| &t.ty).collect();
+    containment::check_created_in(&ty.ty, &kinds)?;
+    let refs: Vec<_> = parents
+        .iter()
+        .zip(types)
+        .map(|(p, t)| akt_ref(t, p))
+        .collect();
+    Ok(containment::check_create_inside(&ty.ty, &refs)?)
 }

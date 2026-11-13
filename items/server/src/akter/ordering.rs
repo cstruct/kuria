@@ -2,7 +2,7 @@
 
 use chrono::Utc;
 use diesel_async::AsyncConnection;
-use kuria_engine::rank_between;
+use kuria_engine::placement;
 use kuria_store::akter::{self as store, AktRow};
 use kuria_store::containers;
 use uuid::Uuid;
@@ -74,13 +74,11 @@ impl Akter {
                         containers::rank_after(conn, tenant, &neighbour.rank).await?,
                     ),
                 };
-                if before.as_deref() == Some(akt.rank.as_str())
-                    || after.as_deref() == Some(akt.rank.as_str())
-                {
+                let Some(rank) = placement(&akt.rank, before.as_deref(), after.as_deref())
+                    .map_err(|e| AktError::Internal(e.to_string()))?
+                else {
                     return Ok(akt);
-                }
-                let rank = rank_between(before.as_deref(), after.as_deref())
-                    .map_err(|e| AktError::Internal(e.to_string()))?;
+                };
                 containers::set_rank(conn, tenant, akt.id, &rank).await?;
                 containers::append_rank_event(conn, tenant, akt.id, Utc::now()).await?;
                 akt.rank = rank;

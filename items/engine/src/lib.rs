@@ -8,6 +8,7 @@ pub mod board;
 pub mod draft;
 mod hash;
 mod rank;
+pub mod rules;
 pub mod sbom;
 mod value;
 
@@ -17,7 +18,7 @@ use kuria_config::AktType;
 use serde_json::{Map, Value as Json};
 
 pub use hash::state_hash;
-pub use rank::{RankError, nth_appended, rank_between};
+pub use rank::{RankError, nth_appended, placement, rank_between};
 pub use value::{Change, Input, Someone, Value, fields_from_json, fields_to_json};
 
 /// An akt's state and field values.

@@ -8,8 +8,10 @@ use kuria_store::containers::{self, MembershipRow};
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
 
+use kuria_engine::rules::containment;
+
 use super::{
-    AktError, Akter, Caller, StoredType, is_final, membership_entry, record_membership, require,
+    AktError, Akter, Caller, StoredType, akt_ref, membership_entry, record_membership, require,
     require_read, type_of,
 };
 use crate::authorize::Permission;
@@ -191,14 +193,7 @@ async fn lock<const N: usize>(
     tenant: Uuid,
     numbers: [&str; N],
 ) -> Result<[Locked; N], AktError> {
-    let member = numbers[N - 1];
-    if let Some(container) = numbers[..N - 1].iter().find(|n| **n == member) {
-        // r[impl container.acyclic]
-        return Err(AktError::Cycle {
-            container: (*container).to_owned(),
-            member: member.to_owned(),
-        });
-    }
+    containment::check_not_itself(&numbers[..N - 1], numbers[N - 1])?;
     let mut rows = containers::lock_akter(conn, tenant, &numbers).await?;
     let mut locked = Vec::with_capacity(N);
     for number in numbers {
@@ -228,17 +223,12 @@ async fn require_edit(caller: Caller<'_>, c: &Locked) -> Result<(), AktError> {
 }
 
 /// Refuses a container in a final state.
-// r[impl container.frozen]
 fn check_unfrozen(c: &Locked) -> Result<(), AktError> {
-    if is_final(&c.ty, &c.akt) {
-        return Err(AktError::Frozen(c.akt.number.clone()));
-    }
-    Ok(())
+    Ok(containment::check_unfrozen(&akt_ref(&c.ty, &c.akt))?)
 }
 
-/// Refuses what would stop `c` from gaining `m` as a member: a type it
-/// doesn't contain, a membership `m` already has, a state it doesn't
-/// accept that type in, exclusivity (not counting `ending`), and cycles.
+/// Refuses what would stop `c` from gaining `m` as a member (not counting
+/// the membership `ending`), from what the store knows of the two.
 async fn check_accepts(
     conn: &mut kuria_store::Connection,
     tenant: Uuid,
@@ -246,48 +236,21 @@ async fn check_accepts(
     m: &Locked,
     ending: Option<Uuid>,
 ) -> Result<(), AktError> {
-    // r[impl container.contains]
-    let Some(contains) = c.ty.ty.contains(m.ty.ty.key()) else {
-        return Err(AktError::NotContainable {
-            container: c.akt.number.clone(),
-            member: m.ty.ty.key().to_owned(),
-        });
+    let other = containers::containers_of(conn, tenant, m.akt.id)
+        .await?
+        .into_iter()
+        .find(|(row, key)| key == c.ty.ty.key() && row.id != c.akt.id && Some(row.id) != ending)
+        .map(|(row, _)| row.number);
+    let known = containment::Joining {
+        already: containers::is_member(conn, tenant, c.akt.id, m.akt.id).await?,
+        other_of_type: other.as_deref(),
+        contains_container: containers::contains(conn, tenant, m.akt.id, c.akt.id).await?,
     };
-    if containers::is_member(conn, tenant, c.akt.id, m.akt.id).await? {
-        return Err(AktError::AlreadyMember {
-            container: c.akt.number.clone(),
-            member: m.akt.number.clone(),
-        });
-    }
-    // r[impl container.while]
-    if !contains.accepts_in(&c.akt.state) {
-        return Err(AktError::NotAccepting {
-            container: c.akt.number.clone(),
-            member_type: m.ty.ty.key().to_owned(),
-            state: c.akt.state.clone(),
-        });
-    }
-    // r[impl container.exclusive]
-    if contains.exclusive
-        && let Some((other, _)) = containers::containers_of(conn, tenant, m.akt.id)
-            .await?
-            .into_iter()
-            .find(|(row, key)| key == c.ty.ty.key() && Some(row.id) != ending)
-    {
-        return Err(AktError::Exclusive {
-            member: m.akt.number.clone(),
-            other: other.number,
-            akt_type: c.ty.ty.key().to_owned(),
-        });
-    }
-    // r[impl container.acyclic]
-    if containers::contains(conn, tenant, m.akt.id, c.akt.id).await? {
-        return Err(AktError::Cycle {
-            container: c.akt.number.clone(),
-            member: m.akt.number.clone(),
-        });
-    }
-    Ok(())
+    Ok(containment::check_joining(
+        &akt_ref(&c.ty, &c.akt),
+        &akt_ref(&m.ty, &m.akt),
+        known,
+    )?)
 }
 
 async fn insert(

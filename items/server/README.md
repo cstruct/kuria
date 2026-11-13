@@ -183,7 +183,11 @@ Not yet: signatures.
   [`ordering`](src/akter/ordering.rs) and [`draft`](src/akter/draft.rs).
   Every path takes its locks in one
   order: the tenant's order lock, akt rows by id, number counters, then the
-  change-event counter.
+  change-event counter. The rules themselves (numbering, containment, link
+  kinds and pins, ordering, what revisions record) are `kuria-engine`'s
+  `rules`, shared with the CLI's local mode; the write path finds what they
+  need in Postgres (memberships, containers, cycles, counters) and maps
+  their refusals to its codes.
 - [`src/main.rs`](src/main.rs) reads [`Config`](src/config.rs), migrates the
   database, discovers Konklav's OpenID provider, starts the relying client,
   waits up to 30 seconds for its caches to be trusted, and serves.

@@ -177,6 +177,25 @@ fn decrement(integer: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
+/// The rank an akt at `own` gets to sit between the ranks `before` and
+/// `after`, the neighbours of where it moves, or `None` if it already sits
+/// right there and nothing moves.
+///
+/// # Errors
+///
+/// When `before` and `after` aren't ranks in order.
+// r[impl order.move]
+pub fn placement(
+    own: &str,
+    before: Option<&str>,
+    after: Option<&str>,
+) -> Result<Option<String>, RankError> {
+    if before == Some(own) || after == Some(own) {
+        return Ok(None);
+    }
+    rank_between(before, after).map(Some)
+}
+
 /// A key strictly between `before` and `after`, where `None` means the start
 /// or the end of the order.
 ///
