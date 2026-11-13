@@ -11,10 +11,27 @@ use crate::akter::Akter;
 pub struct User(pub Uuid);
 
 impl User {
+    /// What Kuria recorded of the user, or of whom an import aliased them
+    /// to in the request's tenant.
     async fn person(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Person>> {
         let mut conn = ctx.data::<Akter>()?.pool().get().await?;
-        Ok(people::find(&mut conn, &[self.0]).await?.pop())
+        let shown = match ctx.data_opt::<super::Principal>() {
+            Some(principal) => shown_as(&mut conn, principal.tenant.into(), self.0).await?,
+            None => self.0,
+        };
+        Ok(people::find(&mut conn, &[shown]).await?.pop())
     }
+}
+
+/// Whom `subject` is shown as in `tenant`: the user an import aliased them
+/// to, else themselves.
+// r[impl bundle.import.subjects]
+async fn shown_as(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    subject: Uuid,
+) -> diesel::QueryResult<Uuid> {
+    kuria_store::bundles::shown_as(conn, tenant, subject).await
 }
 
 #[Object]
@@ -28,7 +45,11 @@ impl User {
     /// else their identifier.
     // r[impl person.name]
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
-        Ok(display_name(self.0, self.person(ctx).await?.as_ref()))
+        let person = self.person(ctx).await?;
+        Ok(display_name(
+            person.as_ref().map_or(self.0, |p| p.subject_id),
+            person.as_ref(),
+        ))
     }
 
     /// The email recorded at their last browser sign-in.
@@ -90,8 +111,9 @@ pub async fn someone_name(
 ) -> diesel::QueryResult<String> {
     match someone {
         Named::User(subject) => {
-            let person = people::find(conn, &[subject]).await?.pop();
-            Ok(display_name(subject, person.as_ref()))
+            let shown = shown_as(conn, tenant, subject).await?;
+            let person = people::find(conn, &[shown]).await?.pop();
+            Ok(display_name(shown, person.as_ref()))
         }
         Named::Contact(id) => {
             match kuria_store::contacts::find(conn, tenant, &[id])

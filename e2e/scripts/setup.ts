@@ -1,5 +1,5 @@
 // Seeds the end-to-end Konklav over its control plane, with the bootstrap
-// token: the catalog with Kuria's actions, the tenant `shop`, the roles of
+// token: the catalog with Kuria's actions, the tenants `shop` and `lab`, the roles of
 // the release-management example, people, Kuria's OIDC clients (the app's
 // and the CLI's) and service principal, and service clients for the admin
 // and the build pipeline.
@@ -54,6 +54,8 @@ const ACTIONS = {
 	'kuria:akter:transition': "Perform an akt type's transitions",
 	'kuria:contacts:read': 'List contacts',
 	'kuria:contacts:manage': 'Add, edit and erase contacts',
+	'kuria:tenant:export': "Export the tenant's akt types and akter as bundles",
+	'kuria:tenant:import': 'Import bundles into the tenant',
 	'release:approve': 'Release, deploy hotfixes and approve release notes'
 };
 
@@ -113,9 +115,10 @@ async function servicePrincipal(): Promise<{ subject: string; key: string }> {
 /** Software calling Kuria: a service principal with a secret key and
  * `grants` in the tenant. It signs in to Konklav directly, so its tokens
  * carry Konklav's own audience, which Kuria accepts beside its client's. */
-async function software(tenant: string, grants: Grant[]) {
+async function software(tenant: string, grants: Grant[], also: { tenant: string; grants: Grant[] }[] = []) {
 	const principal = await servicePrincipal();
 	await member(tenant, principal.subject, grants);
+	for (const other of also) await member(other.tenant, principal.subject, other.grants);
 	return { key: principal.key };
 }
 
@@ -126,8 +129,14 @@ await control('PUT', '/catalog', {
 });
 const tenant = randomUUID();
 await control('PUT', `/tenants/${tenant}`, { metadata: { name: 'shop' } });
-for (const [key, policies] of Object.entries(ROLES)) {
-	await control('PUT', `/tenants/${tenant}/roles/${key}`, { policies });
+// A second tenant, `lab`, where the admin may also work: bundles move
+// between the two.
+const lab = randomUUID();
+await control('PUT', `/tenants/${lab}`, { metadata: { name: 'lab' } });
+for (const t of [tenant, lab]) {
+	for (const [key, policies] of Object.entries(ROLES)) {
+		await control('PUT', `/tenants/${t}/roles/${key}`, { policies });
+	}
 }
 
 const people = {
@@ -169,7 +178,7 @@ await control('PUT', '/oidc/clients/kuria-cli', {
 const kuria = await servicePrincipal();
 
 const clients = {
-	admin: await software(tenant, ['admin']),
+	admin: await software(tenant, ['admin'], [{ tenant: lab, grants: ['admin'] }]),
 	pipeline: await software(tenant, [{ role: 'pipeline-work', at: ['artifact'] }])
 };
 
@@ -200,6 +209,6 @@ writeFileSync(
 		.join('\n') + '\n',
 	{ mode: 0o600 }
 );
-const result: Seeded = { tenant, people, clients };
+const result: Seeded = { tenant, lab, people, clients };
 writeFileSync(join(STATE, 'seeded.json'), JSON.stringify(result, null, 2), { mode: 0o600 });
 console.log(`seeded tenant ${tenant}; wrote ${STATE}/kuria.env and seeded.json`);

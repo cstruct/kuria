@@ -83,6 +83,35 @@ impl Storage {
     fn location(tenant: Uuid, sha256: &[u8]) -> object_store::path::Path {
         object_store::path::Path::from(format!("{tenant}/{}", hex(sha256)))
     }
+
+    /// The bytes `tenant` stored under `sha256`.
+    pub(crate) async fn get(
+        &self,
+        tenant: Uuid,
+        sha256: &[u8],
+    ) -> Result<Vec<u8>, object_store::Error> {
+        let got = self.store.get(&Self::location(tenant, sha256)).await?;
+        Ok(got.bytes().await?.to_vec())
+    }
+
+    /// Stores `bytes` for `tenant` under their SHA-256, unless it has them.
+    pub(crate) async fn put(
+        &self,
+        tenant: Uuid,
+        sha256: &[u8],
+        bytes: Vec<u8>,
+    ) -> Result<(), object_store::Error> {
+        let location = Self::location(tenant, sha256);
+        match self.store.head(&location).await {
+            Ok(_) => Ok(()),
+            Err(object_store::Error::NotFound { .. }) => self
+                .store
+                .put(&location, PutPayload::from_bytes(bytes.into()))
+                .await
+                .map(drop),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 /// What the attachment routes need.

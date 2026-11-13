@@ -194,41 +194,12 @@ impl Akter {
         if !auth.allows(&Permission::DefineTypes).await? {
             return Err(AktError::Forbidden);
         }
-        let parsed: AktTypeDocument = serde_json::from_value(document)
-            .map_err(|e| AktError::UnreadableType(e.to_string()))?;
-        let ty = validate(parsed).map_err(AktError::InvalidType)?;
-        // Stored as it validated, so what is kept is exactly what was checked.
-        let definition =
-            serde_json::to_value(ty.document()).map_err(|e| AktError::Internal(e.to_string()))?;
+        let (ty, definition) = read_document(document)?;
         let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         conn.transaction::<_, AktError, _>(async |conn| {
-            // r[impl akt.type.state-references]
-            // One definition at a time per tenant, so two can't each pass
-            // against the other's old version.
-            store::next_counter(conn, tenant, "types").await?;
-            let others = store::latest_type_versions(conn, tenant)
-                .await?
-                .into_iter()
-                .filter(|row| row.key != ty.key())
-                .map(|row| StoredType::read(row).map(|stored| stored.ty))
-                .collect::<Result<Vec<_>, _>>()?;
-            let mut problems = check_state_references(&ty, &others);
-            problems.extend(check_field_references(&ty, &others));
-            if !problems.is_empty() {
-                return Err(AktError::InvalidType(problems));
-            }
-            let row = store::insert_type_version(
-                conn,
-                tenant,
-                ty.key(),
-                &definition,
-                actor.subject.into(),
-                Utc::now(),
-            )
-            .await?;
-            Ok(StoredType { row, ty })
+            define_in(conn, tenant, actor.subject.into(), ty, &definition).await
         })
         .await
     }
@@ -575,6 +546,46 @@ async fn require_read(auth: &Authorizer, ty: &StoredType, number: &str) -> Resul
     } else {
         Err(AktError::NotFound(number.to_owned()))
     }
+}
+
+/// An akt type document, validated, and as it is stored: exactly what was
+/// checked.
+pub(crate) fn read_document(document: Json) -> Result<(AktType, Json), AktError> {
+    let parsed: AktTypeDocument =
+        serde_json::from_value(document).map_err(|e| AktError::UnreadableType(e.to_string()))?;
+    let ty = validate(parsed).map_err(AktError::InvalidType)?;
+    let definition =
+        serde_json::to_value(ty.document()).map_err(|e| AktError::Internal(e.to_string()))?;
+    Ok((ty, definition))
+}
+
+/// Stores `ty` as the next version of its key in `tenant`, in the caller's
+/// transaction, once what it names of the tenant's other akt types checks.
+pub(crate) async fn define_in(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    by: Uuid,
+    ty: AktType,
+    definition: &Json,
+) -> Result<StoredType, AktError> {
+    // r[impl akt.type.state-references]
+    // One definition at a time per tenant, so two can't each pass against
+    // the other's old version.
+    store::next_counter(conn, tenant, "types").await?;
+    let others = store::latest_type_versions(conn, tenant)
+        .await?
+        .into_iter()
+        .filter(|row| row.key != ty.key())
+        .map(|row| StoredType::read(row).map(|stored| stored.ty))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut problems = check_state_references(&ty, &others);
+    problems.extend(check_field_references(&ty, &others));
+    if !problems.is_empty() {
+        return Err(AktError::InvalidType(problems));
+    }
+    let row =
+        store::insert_type_version(conn, tenant, ty.key(), definition, by, Utc::now()).await?;
+    Ok(StoredType { row, ty })
 }
 
 /// Refuses a permission the caller lacks.

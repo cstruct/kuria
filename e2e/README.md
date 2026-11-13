@@ -67,7 +67,8 @@ server. A failed test keeps its trace and screenshots in
   into `.state/keys`.
 - [`scripts/setup.ts`](scripts/setup.ts): seeds Konklav over the control
   plane with the catalog (Kuria's actions and the `kuria_akt_type` scope
-  kind), the tenant, the release-management example's roles, a developer, a
+  kind), the tenants `shop` and `lab` (where the admin is a member too, for
+  bundles), the release-management example's roles, a developer, a
   release manager and a head of product with test-only passwords, Kuria's
   OIDC client and service principal, the CLI's public DPoP client
   `kuria-cli`, and the admin and the build pipeline
@@ -102,7 +103,8 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   profile; a refresh rotating the tokens; `logout` revoking at Konklav;
   and `KURIA_KEY` signing in as software, saving nothing, with its exit
   codes; every read command against the release-management example; and
-  every write, on akt types the test defines with the CLI.
+  every write, on akt types the test defines with the CLI; and a bundle
+  moved from `shop` to `lab`.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
 - [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe

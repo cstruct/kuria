@@ -70,6 +70,27 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   while none does. The write path takes into `attachment` fields only the
   tenant's attachments the caller may read, only SBOMs into `sbom` fields,
   and records which akter hold which attachments.
+- Bundles ([`src/bundles.rs`](src/bundles.rs)): `GET /export?types=<key>,…
+  [&akter=true]` or `?tenant=true` answers a tar archive of `bundle.json`
+  and `attachments/<sha256>`, read in one repeatable-read, read-only
+  transaction, with `kuria:tenant:export`; a selection whose akter name an
+  akt outside it (as member, container or link) is refused as
+  `INCOMPLETE_SELECTION`, listing the missing types. `POST /import` takes
+  such an archive, and `subjects.json` mapping subjects, with
+  `kuria:tenant:import`, up to 1 GiB. It checks the format, every type
+  version, each akt's revisions replayed against their hashes, and the
+  attachments' bytes, before writing anything (`INVALID_BUNDLE`); stores
+  the bytes; then, in one transaction, refuses clashes (`CONFLICT`: a key,
+  number or contact email the tenant has, a contact or attachment this
+  Kuria has, or any data at all for a whole tenant), writes types, akter
+  (new identifiers; types' akter after the tenant's own in its order),
+  revisions as they were, memberships, links, contacts, attachments,
+  people and who signed in, raises counters past the imported numbers
+  (read back through their patterns), records subject aliases (by the
+  mapping, else by email to a user who signed in) and the import, and
+  appends a change event per akt. A bundle without akter defines each type
+  as `defineAktType` does. Aliased subjects are shown as, and filter as,
+  the users they map to.
 - Contacts ([`src/graphql/contacts.rs`](src/graphql/contacts.rs)):
   adding, editing, erasing and listing the people a tenant names before
   they are users, one per email, with `kuria:contacts:manage` and
@@ -171,8 +192,9 @@ Not yet: signatures.
 
 Konklav's catalog must declare Kuria's actions, `kuria:akt_types:define`,
 `kuria:akter:read`, `kuria:akter:create`, `kuria:akter:edit`,
-`kuria:akter:transition`, `kuria:contacts:read` and
-`kuria:contacts:manage`, the scope kind `kuria_akt_type`, and any action an
+`kuria:akter:transition`, `kuria:contacts:read`,
+`kuria:contacts:manage`, `kuria:tenant:export` and `kuria:tenant:import`,
+the scope kind `kuria_akt_type`, and any action an
 akt type's transitions name. Roles grant them tenant-wide or at one akt type
 (the scope id is the akt type's key).
 
@@ -237,6 +259,14 @@ mise run test
   recording the person, and linking a contact by a verified email only, in
   the tenant signed in to only, and never relinking one.
   They need the development Postgres and Valkey (`mise run db:up`).
+- [`tests/bundles.rs`](tests/bundles.rs), between two fresh databases and
+  two tenants of one: a whole tenant moved, reading the same through
+  GraphQL (history, hashes, links, contacts, attachments' bytes) and
+  numbering on; an incomplete selection; types moving between tenants,
+  after the tenant's own akter, then clashing; types without akter as new
+  versions; refused bundles (format, hashes, changes, bytes, not tar)
+  writing nothing; and subjects mapped by email and by `subjects.json`,
+  shown and filtering as the users they map to.
 - [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
   Valkey: the relay keeping a code or an error until it is collected once,
   the first redirect for a `state` winning, forgetting an uncollected code,

@@ -3,10 +3,12 @@
 //! containers, order and links; and akt type documents.
 
 mod arrange;
+mod bundles;
 mod edit;
 mod types;
 
 pub use arrange::{Membership, link, membership, move_akt, transfer, unlink};
+pub use bundles::{Exported, export as export_bundle, import as import_bundle};
 pub use edit::{Created, apply, create, draft, perform, set};
 pub use types::{define, export};
 

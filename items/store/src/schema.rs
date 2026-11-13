@@ -195,3 +195,24 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(person, tenant_person);
+
+diesel::table! {
+    subject_alias (tenant_id, subject_id) {
+        tenant_id -> Uuid,
+        subject_id -> Uuid,
+        alias_of -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    bundle_import (id) {
+        id -> Uuid,
+        tenant_id -> Uuid,
+        imported_by -> Uuid,
+        imported_at -> Timestamptz,
+        scope -> Text,
+        akt_types -> Int4,
+        akter -> Int4,
+    }
+}

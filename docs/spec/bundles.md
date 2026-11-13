@@ -82,6 +82,22 @@ An import of a whole tenant MUST only go into a tenant that holds no akt
 type, akt or contact yet, and MUST otherwise be refused as `CONFLICT`. It
 MUST restore everything `bundle.export.tenant` exports.
 
+r[bundle.import.request]
+`POST /import` MUST take the bundle as a tar archive, which MAY also hold
+`subjects.json`: an object mapping a subject the bundle names to one of the
+importing tenant (`bundle.import.subjects`).
+
+r[bundle.import.ids]
+Imported akter and akt type versions MUST get identifiers of their own.
+Contacts and attachments MUST keep theirs, since the values and revisions
+that name them are kept as they are, so an import MUST refuse, as
+`CONFLICT`, a contact or attachment this Kuria already holds.
+
+r[bundle.import.order]
+Akter imported with selected akt types MUST come after the tenant's own in
+its order, in the order the bundle gave them. A whole tenant's akter MUST
+keep their places.
+
 r[bundle.import.history]
 Imported akter MUST keep their numbers, their akt type versions, and their
 revisions exactly as the bundle records them, authors and times included;
@@ -93,9 +109,9 @@ number, so that the next akt of a pattern is numbered after the imported
 ones.
 
 r[bundle.import.subjects]
-Subjects in a bundle MAY be mapped to the importing tenant's: by a mapping
-the import is given, else by email to a user who has signed in to the
-tenant, else not at all. Revisions and values MUST keep naming the subject
+Subjects in a bundle MAY be mapped to the importing tenant's: by the
+mapping the import is given (`bundle.import.request`), else by email to a
+user who has signed in to the tenant, else not at all. Revisions and values MUST keep naming the subject
 they recorded, so that they and their hashes stay as they were; the tenant
 MUST instead record each mapping as an alias, and an aliased subject MUST
 be shown as the user it maps to (`person.name`), and match `me` for that

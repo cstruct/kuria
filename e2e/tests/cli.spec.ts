@@ -367,3 +367,71 @@ test('kuria writes akter: from files and flags, with refusals', async () => {
 	const copied = (await ok(['show', copy])).akt;
 	expect(copied).toMatchObject({ state: 'todo', in: [p], fields: { size: 'large', title: `Copy ${word}` } });
 });
+
+// r[verify cli.write]
+// r[verify bundle.import.history]
+test('kuria exports a bundle and imports it into another tenant', async () => {
+	test.setTimeout(240_000);
+	const { lab, clients } = seeded();
+	const cli = new Cli({ KURIA_KEY: clients.admin.key });
+	const ok = async (args: string[], env: Record<string, string> = {}) => {
+		const ran = await cli.run([...args, '--format', 'json'], env);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return JSON.parse(ran.stdout);
+	};
+	const inLab = { KURIA_TENANT: lab };
+	const word = `b${Date.now()}`;
+	const key = `bundle_note_${Date.now()}`;
+	writeFileSync(
+		join(cli.dir, 'note.json'),
+		JSON.stringify({
+			key,
+			name: 'Bundle note',
+			number: `BN${Date.now()}-{seq}`,
+			fields: [{ key: 'title', name: 'Title', kind: 'text', required: true }],
+			states: [
+				{ key: 'open', name: 'Open', initial: true },
+				{ key: 'closed', name: 'Closed', final: true }
+			],
+			transitions: [{ key: 'close', name: 'Close', from: ['open'], to: 'closed' }]
+		})
+	);
+	await ok(['types', 'define', join(cli.dir, 'note.json')]);
+	const first = (await ok(['new', key, '--set', `title=First ${word}`, '--reason', 'Noted'])).number;
+	await ok(['new', key, '--set', `title=Second ${word}`]);
+	await ok(['do', first, 'close', '--reason', 'Done with it']);
+
+	const dir = join(cli.dir, 'bundle');
+	const exported = await ok(['export', '--types', key, '--akter', '-o', dir]);
+	expect(exported).toMatchObject({ scope: 'types', aktTypes: 1, akter: 2 });
+	expect(existsSync(join(dir, 'bundle.json'))).toBe(true);
+	const refusedDir = await cli.run(['export', '--types', key, '-o', dir, '--format', 'json']);
+	expect(refusedDir.code).toBe(1);
+
+	// Into the lab, with numbers and history as they were.
+	expect(await ok(['import', dir], inLab)).toMatchObject({ scope: 'types', aktTypes: 1, akter: 2 });
+	const there = (await ok(['history', first], inLab)).revisions;
+	const here = (await ok(['history', first])).revisions;
+	expect(there).toEqual(here);
+	expect(there.map((r: { what: string }) => r.what)).toEqual(['created it', 'performed Close']);
+	const next = (await ok(['new', key, '--set', 'title=Third'], inLab)).number;
+	expect(next.endsWith('-3')).toBe(true);
+
+	// Again, it clashes.
+	const again = await cli.run(['import', dir, '--format', 'json'], inLab);
+	expect(again.code).toBe(1);
+	expect(JSON.parse(again.stderr).error.code).toBe('CONFLICT');
+
+	// The type alone defines a new version.
+	const typeOnly = join(cli.dir, 'type-only');
+	await ok(['export', '--types', key, '-o', typeOnly]);
+	await ok(['import', typeOnly], inLab);
+	expect((await ok(['schema', key], inLab)).type.version).toBe(2);
+
+	// The whole tenant exports, but goes only into an empty tenant.
+	const whole = join(cli.dir, 'whole');
+	expect((await ok(['export', '--whole-tenant', '-o', whole])).scope).toBe('tenant');
+	const full = await cli.run(['import', whole, '--format', 'json'], inLab);
+	expect(full.code).toBe(1);
+	expect(JSON.parse(full.stderr).error.code).toBe('CONFLICT');
+});

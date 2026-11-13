@@ -217,6 +217,32 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
+    /// Export a bundle: selected akt types, with or without their akter,
+    /// or the whole tenant, into a new directory.
+    #[command(group(clap::ArgGroup::new("what").required(true).args(["types", "whole_tenant"])))]
+    Export {
+        /// The akt types, comma-separated.
+        #[arg(long, value_delimiter = ',', value_name = "KEY,…")]
+        types: Vec<String>,
+        /// With the selected types' akter, their history and what they name.
+        #[arg(long, requires = "types")]
+        akter: bool,
+        /// Everything Kuria holds for the tenant.
+        #[arg(long)]
+        whole_tenant: bool,
+        /// The directory to write the bundle to.
+        #[arg(long, short, value_name = "DIR")]
+        output: PathBuf,
+    },
+    /// Import a bundle into the tenant, keeping its akter's numbers and
+    /// history.
+    Import {
+        /// The bundle's directory, as `export` wrote it.
+        dir: PathBuf,
+        /// A JSON object mapping the bundle's subjects to this tenant's.
+        #[arg(long, value_name = "FILE")]
+        map_subjects: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

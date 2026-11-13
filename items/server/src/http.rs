@@ -104,6 +104,25 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     // r[impl auth.unavailable]
     let api = RouterPolicy::new(Policy::new().token_kinds([TokenKind::Tenant]));
 
+    // r[impl bundle.export.snapshot]
+    // r[impl bundle.import.request]
+    let bundle_routes = Router::new()
+        .route(
+            "/export",
+            get(crate::bundles::export_route).route_layer(api.route(&Policy::new())?),
+        )
+        .route(
+            "/import",
+            post(crate::bundles::import_route)
+                .layer(DefaultBodyLimit::max(crate::bundles::IMPORT_LIMIT))
+                .route_layer(api.route(&Policy::new())?),
+        )
+        .with_state(crate::bundles::BundleState {
+            pool: pool.clone(),
+            storage: storage.clone(),
+            decider: decider.clone(),
+        });
+
     let attachment_routes = Router::new()
         .route(
             "/attachments",
@@ -143,7 +162,8 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             ),
             decider,
         })
-        .merge(attachment_routes);
+        .merge(attachment_routes)
+        .merge(bundle_routes);
     if let Some(relay) = cli_relay {
         router = router.merge(crate::cli_relay::router(relay)?);
     }

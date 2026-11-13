@@ -234,6 +234,9 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-2);
+		/* A grid item is no narrower than its content unless told: a long
+		   type name is shortened instead of widening the page. */
+		min-width: 0;
 		padding: var(--space-4);
 		border: 1px solid var(--border);
 		border-radius: var(--radius-lg);
@@ -242,6 +245,8 @@
 	}
 
 	.name {
+		display: flex;
+		max-width: 100%;
 		color: var(--text);
 		font-weight: 600;
 		text-decoration: none;

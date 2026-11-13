@@ -31,7 +31,7 @@ pub async fn next_counter(conn: &mut Connection, tenant: Uuid, name: &str) -> Qu
 }
 
 /// An akt type version, as stored.
-#[derive(Clone, Debug, Queryable, Selectable)]
+#[derive(Clone, Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = akt_type_version)]
 pub struct AktTypeVersion {
     pub id: Uuid,

@@ -20,6 +20,8 @@ export interface Person {
 /** What setup seeded. */
 export interface Seeded {
 	tenant: string;
+	/** A second tenant, where the admin is a member too. */
+	lab: string;
 	people: { developer: Person; releaseManager: Person; headOfProduct: Person };
 	/** Software with secret keys: the admin, who defines akt types, and the
 	 * build pipeline. */

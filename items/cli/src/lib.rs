@@ -12,7 +12,8 @@
 //!   (field values as text and in files), [`file`] (the akt file),
 //!   [`history`] (revisions as the app says them) and [`md`].
 //! - [`writes`]: `new`, `apply`, `set`, `do`, `draft`, `add`, `remove`,
-//!   `transfer`, `move`, `link`, `unlink`, and `types export` and `define`.
+//!   `transfer`, `move`, `link`, `unlink`, `types export` and `define`, and
+//!   bundles' `export` and `import`.
 //! - [`output`] and [`error`]: answers, refusals and exit codes.
 #![expect(
     clippy::missing_panics_doc,
@@ -146,6 +147,25 @@ async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliErro
         Command::History { number } => reads::history(session, &number).await,
         Command::Users => reads::users(session).await,
         Command::Contacts => reads::contacts(session).await,
+        Command::Export {
+            types,
+            akter,
+            whole_tenant,
+            output,
+        } => {
+            let what = if whole_tenant {
+                writes::Exported::Tenant
+            } else {
+                writes::Exported::Types {
+                    keys: &types,
+                    akter,
+                }
+            };
+            writes::export_bundle(session, &what, &output).await
+        }
+        Command::Import { dir, map_subjects } => {
+            writes::import_bundle(session, &dir, map_subjects.as_deref()).await
+        }
         command => write(session, command).await,
     }
 }

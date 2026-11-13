@@ -29,6 +29,10 @@ pub const READ_CONTACTS: &str = "kuria:contacts:read";
 /// Adding, editing, erasing and listing contacts, tenant-wide.
 pub const MANAGE_CONTACTS: &str = "kuria:contacts:manage";
 /// The scope kind of an akt type, whose ids are akt type keys.
+/// Exporting a bundle of the tenant (`authz.bundles`).
+pub const EXPORT: &str = "kuria:tenant:export";
+/// Importing a bundle into the tenant (`authz.bundles`).
+pub const IMPORT: &str = "kuria:tenant:import";
 pub const SCOPE_KIND: &str = "kuria_akt_type";
 
 type DecisionFuture<'a> = Pin<Box<dyn Future<Output = Result<Decision, String>> + Send + 'a>>;
@@ -59,6 +63,8 @@ pub enum Permission {
     Transition { key: String, action: Option<String> },
     ReadContacts,
     ManageContacts,
+    Export,
+    Import,
 }
 
 impl Permission {
@@ -82,6 +88,9 @@ impl Permission {
             Self::DefineTypes => tenant_wide(DEFINE_TYPES),
             Self::ReadContacts => tenant_wide(READ_CONTACTS),
             Self::ManageContacts => tenant_wide(MANAGE_CONTACTS),
+            // r[impl authz.bundles]
+            Self::Export => tenant_wide(EXPORT),
+            Self::Import => tenant_wide(IMPORT),
             Self::Read { key } => at_type(key, &[READ]),
             Self::Create { key } => at_type(key, &[CREATE]),
             Self::Edit { key } => at_type(key, &[EDIT]),

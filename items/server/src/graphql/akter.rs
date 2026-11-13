@@ -337,6 +337,13 @@ async fn matching(
                 contacts: contact.into_iter().collect(),
             };
             if let Some(user) = user {
+                // r[impl bundle.import.subjects]
+                // Subjects an import aliased to the user filter as them.
+                named.users.extend(
+                    kuria_store::bundles::aliases_of(conn, tenant, user)
+                        .await
+                        .map_err(internal)?,
+                );
                 named.contacts.extend(
                     kuria_store::contacts::linked_to(conn, tenant, user)
                         .await

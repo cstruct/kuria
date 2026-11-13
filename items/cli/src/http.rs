@@ -15,6 +15,8 @@ pub enum Body<'a> {
     Empty,
     Json(&'a Value),
     Form(&'a [(&'a str, &'a str)]),
+    /// Bytes of a media type, such as a bundle's tar archive.
+    Bytes(&'a [u8], &'a str),
 }
 
 /// An HTTP client that proves possession of its DPoP key on every request.
@@ -71,6 +73,9 @@ impl Http {
                 Body::Empty => request,
                 Body::Json(value) => request.json(value),
                 Body::Form(fields) => request.form(fields),
+                Body::Bytes(bytes, media_type) => request
+                    .header("content-type", *media_type)
+                    .body(bytes.to_vec()),
             };
             let response = request.send().await?;
             let asked = response

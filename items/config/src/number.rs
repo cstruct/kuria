@@ -147,6 +147,67 @@ impl NumberPattern {
         }
         out
     }
+
+    /// Reads `number` back as this pattern rendered it: the counter scope
+    /// it was numbered in, as [`NumberPattern::scope`] gives it, and its
+    /// sequence. `None` if the pattern can't have rendered it.
+    // r[impl bundle.import.counters]
+    #[must_use]
+    pub fn read(&self, number: &str) -> Option<(String, u64)> {
+        let mut scope = String::new();
+        let mut sequence = None;
+        self.read_from(0, number, &mut scope, &mut sequence)
+            .then(|| sequence.map(|s| (scope, s)))
+            .flatten()
+    }
+
+    /// Whether `rest` matches the parts from `index` on, writing the scope
+    /// and sequence of the first way it does.
+    fn read_from(
+        &self,
+        index: usize,
+        rest: &str,
+        scope: &mut String,
+        sequence: &mut Option<u64>,
+    ) -> bool {
+        let Some(part) = self.parts.get(index) else {
+            return rest.is_empty();
+        };
+        let digits =
+            |n: usize| rest.len() >= n && rest.as_bytes()[..n].iter().all(u8::is_ascii_digit);
+        let mut attempt = |taken: usize, written: &str, seq: Option<u64>| {
+            let (kept_scope, kept_seq) = (scope.len(), *sequence);
+            scope.push_str(written);
+            if seq.is_some() {
+                *sequence = seq;
+            }
+            if self.read_from(index + 1, &rest[taken..], scope, sequence) {
+                return true;
+            }
+            scope.truncate(kept_scope);
+            *sequence = kept_seq;
+            false
+        };
+        match part {
+            Part::Literal(text) => {
+                rest.starts_with(text.as_str()) && attempt(text.len(), text, None)
+            }
+            Part::Year => digits(4) && attempt(4, &rest[..4], None),
+            Part::Month => digits(2) && attempt(2, &rest[..2], None),
+            // A parent's number is any text, as short as the rest allows.
+            Part::Parent => (1..=rest.len())
+                .filter(|&n| rest.is_char_boundary(n))
+                .any(|n| attempt(n, &rest[..n], None)),
+            Part::Sequence { width } => {
+                let run = rest.bytes().take_while(u8::is_ascii_digit).count();
+                // Rendered at least `width` wide; wider once it outgrows it.
+                (*width..=run).rev().any(|n| {
+                    let value = rest[..n].parse().ok();
+                    value.is_some() && attempt(n, &format!("{{seq:{width}}}"), value)
+                })
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -227,5 +288,38 @@ mod tests {
         };
         assert_ne!(pattern.scope(&first), pattern.scope(&second));
         assert_eq!(pattern.scope(&first), "RELEASE-2026-0001-HOTFIX-{seq:4}");
+    }
+
+    // r[verify bundle.import.counters]
+    #[test]
+    fn reads_a_number_back_into_its_scope_and_sequence() {
+        let read =
+            |pattern: &str, number: &str| NumberPattern::parse(pattern).unwrap().read(number);
+        let scope_of = |pattern: &str, context: &NumberContext<'_>| {
+            NumberPattern::parse(pattern).unwrap().scope(context)
+        };
+        assert_eq!(
+            read("CAPA-{year}-{seq:4}", "CAPA-2026-0042"),
+            Some((scope_of("CAPA-{year}-{seq:4}", &at(2026, 1)), 42))
+        );
+        assert_eq!(
+            read("CAPA-{year}-{seq:4}", "CAPA-2026-123456").map(|r| r.1),
+            Some(123_456)
+        );
+        let parent = NumberContext {
+            parent: Some("REL-0001"),
+            ..at(2026, 11)
+        };
+        assert_eq!(
+            read("{parent}-RC-{seq:2}", "REL-0001-RC-07"),
+            Some((scope_of("{parent}-RC-{seq:2}", &parent), 7))
+        );
+        assert_eq!(
+            read("{year}{month}/{seq}", "202603/7").map(|r| r.1),
+            Some(7)
+        );
+        assert_eq!(read("CAPA-{year}-{seq:4}", "CAPA-2026-042"), None);
+        assert_eq!(read("CAPA-{seq}", "TASK-1"), None);
+        assert_eq!(read("CAPA-{seq}", "CAPA-1x"), None);
     }
 }

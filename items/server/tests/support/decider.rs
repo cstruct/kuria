@@ -37,6 +37,16 @@ impl FakeDecider {
         decider
     }
 
+    /// Allows `token` everything, as `allowing_tenant` does `tenant`.
+    pub fn allow_everything(&self, token: &str) {
+        self.grants
+            .lock()
+            .unwrap()
+            .entry(token.to_owned())
+            .or_default()
+            .everything = true;
+    }
+
     /// Grants `token` the `actions` tenant-wide.
     pub fn grant(&self, token: &str, actions: &[&str]) {
         let mut grants = self.grants.lock().unwrap();

@@ -94,6 +94,13 @@ type.
     (a file holds a document or a list of them; `--check` validates each
     with `kuria-config`, offline, without signing in).
 
+- **Bundles** ([`src/writes/bundles.rs`](src/writes/bundles.rs)):
+  `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` writes the
+  bundle Kuria answers into a new directory (`bundle.json`,
+  `attachments/<sha256>`); `import <dir> [--map-subjects <file>]` sends it
+  back as a tar archive, with the mapping, a JSON object of the bundle's
+  subjects to this tenant's, as `subjects.json`.
+
   Every one that makes revisions takes `--reason`. `move` makes none: it
   changes the tenant's order only.
 - **Values** (`cli.values`, [`src/values.rs`](src/values.rs)): `--set`
@@ -121,6 +128,7 @@ type.
 | `apply` | `{applied: [{file, number, revision, changed, dryRun?}]}` |
 | `set`, `do`, `draft` | `{number, revision, changed \| state, transition \| field}` |
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
+| `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
 `fields` maps field keys to values in the akt file's form.
@@ -184,7 +192,9 @@ cargo test -p kuria-cli
   types it defines: offline checks, the file round trip (unchanged,
   edited, cleared, stale, read-only and unknown keys), `set`, `do`,
   links with pins, order, membership, transfers, a draft, and `new
-  --file`.
+  --file`; and a bundle exported and imported into the second tenant
+  `lab`, with the same history and numbering on, then clashing, a type
+  alone as a new version, and a whole tenant refused there.
 
 ## Traceability
 
