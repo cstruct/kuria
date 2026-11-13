@@ -99,6 +99,9 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
 - [`tests/contacts.spec.ts`](tests/contacts.spec.ts): a contact linked
   by hand to a user who signed in with a password, and an akt's history
   naming the user a value names.
+- [`tests/links.spec.ts`](tests/links.spec.ts): a backlog item linked to
+  the one it blocks from its page, read both ways, in the history, and
+  unlinked.
 - [`tests/members.spec.ts`](tests/members.spec.ts): a container's
   members on its board or listed by akt type, reordered by dragging and
   from the menu, and dropped on another column to take the transition

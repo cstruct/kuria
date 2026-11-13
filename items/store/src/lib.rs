@@ -10,6 +10,7 @@ pub mod attachments;
 pub mod contacts;
 pub mod containers;
 pub mod erasure;
+pub mod links;
 mod migrate;
 pub mod people;
 mod pool;

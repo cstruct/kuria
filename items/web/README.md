@@ -59,7 +59,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   other akt type, from `members.ts`, reordered by dragging within a
   column or list (`reorder.svelte.ts`) or from each member's menu, and
   dropped on another column to take a transition that leads there;
-  `TypeMark`, a type's icon and colour from `identity.ts`), the
+  `TypeMark`, a type's icon and colour from `identity.ts`; `LinksCard`, an
+  akt's links both ways, added by a kind its type declares and removed),
+  the
   header's title and actions (`header.ts`), sanitized Markdown
   (`markdown.ts`), pickers that search akter (`pickers.ts`), and
   whom pickers offer (`people.ts`: me, the tenant's users, contacts),

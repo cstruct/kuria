@@ -15,6 +15,7 @@
 
 mod create;
 mod draft;
+mod links;
 mod membership;
 mod ordering;
 
@@ -99,6 +100,14 @@ pub enum AktError {
     },
     #[error("an akt can't be moved next to itself")]
     SelfMove,
+    #[error("{0}")]
+    InvalidLink(String),
+    #[error("`{source_number}` has no `{kind}` link to `{target}`")]
+    NotLinked {
+        source_number: String,
+        kind: String,
+        target: String,
+    },
     #[error("the field `{0}` has no draft recipe")]
     NotDraftable(String),
     #[error("{0}")]
@@ -456,7 +465,7 @@ async fn type_of(
 /// The title the fields give an akt of `ty`, if its type has a title field
 /// and it holds text.
 // r[impl akt.title]
-fn title_of(
+pub(crate) fn title_of(
     ty: &AktType,
     fields: &std::collections::BTreeMap<String, kuria_engine::Value>,
 ) -> Option<String> {

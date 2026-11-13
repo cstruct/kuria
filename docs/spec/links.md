@@ -13,10 +13,11 @@ An akt type document MAY declare, in `links`, the kinds of link its akter
 may have to other akter. Each has a key, a name for the link as its
 source reads it ("Blocks"), an `inverse` name as its target reads it
 ("Blocked by"), and, in `to`, the akt types its targets may have, by key.
-Keys MUST follow `akt.type.validation`, be unique within the document, and
-not be `contains`. Every type `to` names MUST be one the tenant defines,
-checked whenever either is defined, as `akt.type.state-references` checks
-states; otherwise the document MUST be refused.
+Keys MUST follow `akt.type.validation` and be unique within the document,
+names and inverse names MUST NOT be empty, and `to` MUST name at least one
+akt type, each by a key that follows `akt.type.validation`, once;
+otherwise the document MUST be refused. As with `contains`, the types `to`
+names need not be defined yet, so akt types can be defined in any order.
 
 ## Linking
 

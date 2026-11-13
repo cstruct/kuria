@@ -303,6 +303,36 @@ export const AktPage = graphql(`
 					}
 				}
 			}
+			links {
+				kind
+				name
+				outgoing
+				pinnedRevision
+				pinned {
+					revision
+					title
+					state {
+						key
+						name
+						tone
+					}
+				}
+				akt {
+					id
+					number
+					title
+					state {
+						key
+						name
+						tone
+					}
+					type {
+						key
+						version
+						name
+					}
+				}
+			}
 			revisions {
 				revision
 				transition
@@ -456,6 +486,24 @@ export const PerformTransition = graphql(`
 export const DraftField = graphql(`
 	mutation DraftField($input: DraftFieldInput!) {
 		draftField(input: $input) {
+			id
+			revision
+		}
+	}
+`);
+
+export const AddLink = graphql(`
+	mutation AddLink($input: LinkInput!) {
+		addLink(input: $input) {
+			id
+			revision
+		}
+	}
+`);
+
+export const RemoveLink = graphql(`
+	mutation RemoveLink($input: UnlinkInput!) {
+		removeLink(input: $input) {
 			id
 			revision
 		}

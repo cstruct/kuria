@@ -53,6 +53,12 @@ type Akt {
 	"""
 	containers: [Akt!]!
 	"""
+	Its links: those from it, as its akt type names them, and those to
+	it, by the inverse names their sources' types give them, leaving out
+	those whose other akt the subject may not read.
+	"""
+	links: [Link!]!
+	"""
 	Every revision, oldest first.
 	"""
 	revisions: [AktRevision!]!
@@ -494,6 +500,34 @@ A scalar that can represent any JSON value.
 """
 scalar JSON
 
+type Link {
+	"""
+	The kind's key, as the source's akt type declares it.
+	"""
+	kind: String!
+	"""
+	The link as this akt reads it: the kind's name from the source, its
+	inverse name from the target.
+	"""
+	name: String!
+	"""
+	Whether the link goes from this akt to the other.
+	"""
+	outgoing: Boolean!
+	"""
+	The other akt.
+	"""
+	akt: Akt!
+	"""
+	The other akt's revision the link pins, if it pins one.
+	"""
+	pinnedRevision: Int
+	"""
+	The other akt as it was at the pinned revision.
+	"""
+	pinned: Pinned
+}
+
 input LinkContactInput {
 	"""
 	The contact to link.
@@ -503,6 +537,29 @@ input LinkContactInput {
 	The user it is, who has signed in to the tenant.
 	"""
 	user: ID!
+}
+
+"""
+What linking an akt to another takes.
+"""
+input LinkInput {
+	"""
+	The source's number.
+	"""
+	source: String!
+	"""
+	The kind of link, as the source's akt type declares it.
+	"""
+	kind: String!
+	"""
+	The target's number.
+	"""
+	target: String!
+	"""
+	A revision of the target to pin, if any.
+	"""
+	pinRevision: Int
+	reason: String
 }
 
 """
@@ -556,6 +613,15 @@ type Mutation {
 	Adds an akt to a container, and returns the container.
 	"""
 	addToContainer(input: MembershipInput!): Akt!
+	"""
+	Links an akt to another by a kind its akt type declares, and returns
+	the source.
+	"""
+	addLink(input: LinkInput!): Akt!
+	"""
+	Ends a link between two akter, and returns the source.
+	"""
+	removeLink(input: UnlinkInput!): Akt!
 	"""
 	Removes an akt from a container, and returns the container.
 	"""
@@ -620,6 +686,15 @@ input PerformTransitionInput {
 	"""
 	fields: JSON
 	reason: String
+}
+
+"""
+An akt as it was at a revision.
+"""
+type Pinned {
+	revision: Int!
+	title: String
+	state: State!
 }
 
 """
@@ -771,6 +846,16 @@ type Transition {
 	from: [String!]!
 	to: String!
 	requires: [String!]!
+}
+
+"""
+What unlinking an akt from another takes.
+"""
+input UnlinkInput {
+	source: String!
+	kind: String!
+	target: String!
+	reason: String
 }
 
 type User {

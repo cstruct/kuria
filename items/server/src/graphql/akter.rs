@@ -92,7 +92,7 @@ fn error(error: AktError) -> async_graphql::Error {
         }
         AktError::UnreadableType(_) => coded(message, "INVALID_AKT_TYPE"),
         AktError::UnknownType(_) => coded(message, "UNKNOWN_AKT_TYPE"),
-        AktError::NotFound(_) => coded(message, "NOT_FOUND"),
+        AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
@@ -104,6 +104,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotAccepting { .. } => coded(message, "NOT_ACCEPTING"),
         AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
         AktError::SelfMove => coded(message, "BAD_REQUEST"),
+        AktError::InvalidLink(_) => coded(message, "INVALID_LINK"),
         AktError::Unavailable(detail) => {
             tracing::warn!("akter: {detail}");
             coded(
@@ -518,6 +519,29 @@ pub struct MembershipInput {
     reason: Option<String>,
 }
 
+/// What linking an akt to another takes.
+#[derive(InputObject)]
+pub struct LinkInput {
+    /// The source's number.
+    source: String,
+    /// The kind of link, as the source's akt type declares it.
+    kind: String,
+    /// The target's number.
+    target: String,
+    /// A revision of the target to pin, if any.
+    pin_revision: Option<i32>,
+    reason: Option<String>,
+}
+
+/// What unlinking an akt from another takes.
+#[derive(InputObject)]
+pub struct UnlinkInput {
+    source: String,
+    kind: String,
+    target: String,
+    reason: Option<String>,
+}
+
 /// What transferring an akt between containers takes.
 #[derive(InputObject)]
 pub struct TransferInput {
@@ -566,6 +590,52 @@ impl ContainmentMutation {
         let akter = akter(ctx)?;
         let row = akter
             .add_member(caller, &input.container, &input.member, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Links an akt to another by a kind its akt type declares, and returns
+    /// the source.
+    async fn add_link(&self, ctx: &Context<'_>, input: LinkInput) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .add_link(
+                caller,
+                &input.source,
+                &input.kind,
+                &input.target,
+                input.pin_revision,
+                input.reason,
+            )
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Ends a link between two akter, and returns the source.
+    async fn remove_link(
+        &self,
+        ctx: &Context<'_>,
+        input: UnlinkInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .remove_link(
+                caller,
+                &input.source,
+                &input.kind,
+                &input.target,
+                input.reason,
+            )
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -947,6 +1017,101 @@ pub struct Transition {
     requires: Vec<String>,
 }
 
+/// A link between this akt and another, as this akt reads it.
+pub struct Link {
+    kind: String,
+    name: String,
+    outgoing: bool,
+    pinned_revision: Option<i32>,
+    akt: Akt,
+}
+
+#[Object]
+impl Link {
+    /// The kind's key, as the source's akt type declares it.
+    async fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    /// The link as this akt reads it: the kind's name from the source, its
+    /// inverse name from the target.
+    async fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Whether the link goes from this akt to the other.
+    async fn outgoing(&self) -> bool {
+        self.outgoing
+    }
+
+    /// The other akt.
+    async fn akt(&self) -> &Akt {
+        &self.akt
+    }
+
+    /// The other akt's revision the link pins, if it pins one.
+    async fn pinned_revision(&self) -> Option<i32> {
+        self.pinned_revision
+    }
+
+    /// The other akt as it was at the pinned revision.
+    // r[impl link.pin]
+    async fn pinned(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Pinned>> {
+        let Some(pinned) = self.pinned_revision else {
+            return Ok(None);
+        };
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let revisions = store::revisions(&mut conn, tenant, self.akt.row.id)
+            .await
+            .map_err(internal)?;
+        let mut fields = Map::new();
+        let mut state = None;
+        for revision in revisions.iter().filter(|r| r.revision <= pinned) {
+            if let Some(changes) = revision.changes.as_object() {
+                for (key, value) in changes {
+                    if value.is_null() {
+                        fields.remove(key);
+                    } else {
+                        fields.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+            state = Some(revision.state.clone());
+        }
+        let Some(state) = state else {
+            return Ok(None);
+        };
+        let ty = &self.akt.ty.ty;
+        let values = fields_from_json(ty, &fields).map_err(internal)?;
+        let def = ty.state(&state).ok_or_else(|| {
+            internal(format!(
+                "a revision of {} is in an unknown state",
+                self.akt.row.number
+            ))
+        })?;
+        Ok(Some(Pinned {
+            revision: pinned,
+            title: crate::akter::title_of(ty, &values),
+            state: State {
+                key: def.key.clone(),
+                name: def.name.clone(),
+                initial: def.initial,
+                is_final: def.is_final,
+                tone: ty.tone(&def.key).into(),
+            },
+        }))
+    }
+}
+
+/// An akt as it was at a revision.
+#[derive(SimpleObject)]
+pub struct Pinned {
+    revision: i32,
+    title: Option<String>,
+    state: State,
+}
+
 /// A container's members in columns.
 #[derive(SimpleObject)]
 pub struct Board {
@@ -1193,6 +1358,46 @@ impl Akt {
             }
         }
         with_types(&mut conn, tenant, rows).await
+    }
+
+    /// Its links: those from it, as its akt type names them, and those to
+    /// it, by the inverse names their sources' types give them, leaving out
+    /// those whose other akt the subject may not read.
+    // r[impl link.read]
+    async fn links(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Link>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let from = kuria_store::links::from(&mut conn, tenant, self.row.id)
+            .await
+            .map_err(internal)?;
+        let to = kuria_store::links::to(&mut conn, tenant, self.row.id)
+            .await
+            .map_err(internal)?;
+        let mut links = Vec::new();
+        for (outgoing, rows) in [(true, from), (false, to)] {
+            let (rows, others): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
+            let others = with_types(&mut conn, tenant, others).await?;
+            for (row, other) in rows.into_iter().zip(others) {
+                if !reads(ctx, other.ty.ty.key()).await? {
+                    continue;
+                }
+                let source_ty = if outgoing { &self.ty } else { &other.ty };
+                let def = source_ty.ty.link(&row.kind);
+                let name = match (def, outgoing) {
+                    (Some(def), true) => def.name.clone(),
+                    (Some(def), false) => def.inverse.clone(),
+                    (None, _) => row.kind.clone(),
+                };
+                links.push(Link {
+                    kind: row.kind,
+                    name,
+                    outgoing,
+                    pinned_revision: row.pinned_revision,
+                    akt: other,
+                });
+            }
+        }
+        Ok(links)
     }
 
     /// Every revision, oldest first.

@@ -52,6 +52,26 @@ pub struct AktTypeDocument {
     /// How this type's akter are shown: title, cards, lists and tones.
     #[serde(default, skip_serializing_if = "PresentationDef::is_empty")]
     pub presentation: PresentationDef,
+    /// The kinds of link this type's akter may have to other akter.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<LinkDef>,
+}
+
+/// A kind of link an akt type's akter may have:
+///
+/// ```json
+/// { "key": "blocks", "name": "Blocks", "inverse": "Blocked by", "to": ["task"] }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LinkDef {
+    pub key: String,
+    /// The link as its source reads it.
+    pub name: String,
+    /// The link as its target reads it.
+    pub inverse: String,
+    /// The akt types its targets may have, by key.
+    pub to: Vec<String>,
 }
 
 /// How an akt type's akter are shown:

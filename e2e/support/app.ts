@@ -8,7 +8,8 @@ export async function open(page: Page, number: string) {
 }
 
 /** Picks the akt `number` in the picker labelled `label`. */
-async function pick(page: Page, label: string, number: string) {
+/** Picks the akt `number` in the picker named `label`. */
+export async function pick(page: Page, label: string, number: string) {
 	await page.getByRole('combobox', { name: label, exact: true }).fill(number);
 	await page.getByRole('option', { name: new RegExp(`\\b${escape(number)} ·`) }).click();
 }

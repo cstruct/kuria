@@ -7,6 +7,15 @@
 interface Document {
 	contains?: { type: string }[];
 	fields?: { key: string; draft?: unknown }[];
+	links?: LinkKind[];
+}
+
+/** A kind of link an akt type declares (`link.kinds`). */
+export interface LinkKind {
+	key: string;
+	name: string;
+	inverse: string;
+	to: string[];
 }
 
 function documentOf(document: unknown): Document {
@@ -16,6 +25,12 @@ function documentOf(document: unknown): Document {
 /** The akt types an akt of this type contains, by key. */
 export function containedTypes(document: unknown): string[] {
 	return (documentOf(document).contains ?? []).map((c) => c.type);
+}
+
+/** The kinds of link an akt of this type may have to others. */
+// r[impl app.links]
+export function linkKinds(document: unknown): LinkKind[] {
+	return documentOf(document).links ?? [];
 }
 
 /** The keys of the fields that have a draft recipe. */

@@ -114,6 +114,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    akt_link (source_id, kind, target_id) {
+        tenant_id -> Uuid,
+        source_id -> Uuid,
+        kind -> Text,
+        target_id -> Uuid,
+        pinned_revision -> Nullable<Int4>,
+        added_at -> Timestamptz,
+        added_by -> Uuid,
+    }
+}
+
+diesel::table! {
     contact (id) {
         id -> Uuid,
         tenant_id -> Uuid,
@@ -135,6 +147,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     akt_type_version,
     akt_revision,
     akt_membership,
+    akt_link,
     change_event,
     akt_attachment,
     attachment

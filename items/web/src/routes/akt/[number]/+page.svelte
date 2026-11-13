@@ -11,10 +11,12 @@
 	import FieldRow from '#lib/akt/FieldRow.svelte';
 	import HistoryList from '#lib/akt/HistoryList.svelte';
 	import Members from '#lib/akt/Members.svelte';
+	import LinksCard, { type ShownLink } from '#lib/akt/LinksCard.svelte';
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
 		availableTransitions,
 		containedTypes,
+		linkKinds,
 		draftedFields,
 		requiredFields
 	} from '#lib/akt/document.ts';
@@ -27,7 +29,9 @@
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
 	import {
+		AddLink,
 		AddToContainer,
+		RemoveLink,
 		AktPage,
 		Contacts,
 		Users,
@@ -252,6 +256,15 @@
 		}
 	}
 
+	async function addLink(kind: string, target: string) {
+		await run(() => mutate(client, AddLink, { input: { source: number, kind, target } }));
+	}
+
+	async function removeLink(link: ShownLink) {
+		const [source, target] = link.outgoing ? [number, link.akt.number] : [link.akt.number, number];
+		await run(() => mutate(client, RemoveLink, { input: { source, kind: link.kind, target } }));
+	}
+
 	async function join(container: string) {
 		await run(() => mutate(client, AddToContainer, { input: { container, member: number } }));
 	}
@@ -431,6 +444,26 @@
 					</div>
 				</Card>
 
+				<LinksCard
+					links={akt.links}
+					kinds={linkKinds(akt.type.document)}
+					{editable}
+					{busy}
+					search={(text, kind) =>
+						pickable(
+							client,
+							text,
+							[
+								akt.number,
+								...akt.links
+									.filter((l) => l.outgoing && l.kind === kind.key)
+									.map((l) => l.akt.number)
+							],
+							kind.to
+						)}
+					onAdd={addLink}
+					onRemove={removeLink}
+				/>
 				<Card title="History">
 					<HistoryList revisions={akt.revisions} {fieldNames} {transitionNames} />
 				</Card>

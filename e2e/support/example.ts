@@ -28,3 +28,8 @@ export async function defineExample(): Promise<void> {
 		});
 	}
 }
+
+/** The example's document for `key`, as its file holds it. */
+export function exampleDocument(key: string): Record<string, unknown> {
+	return JSON.parse(readFileSync(join(EXAMPLE, `${key}.json`), 'utf8'));
+}

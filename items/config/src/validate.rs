@@ -89,6 +89,12 @@ impl AktType {
         self.document.transitions.iter().find(|t| t.key == key)
     }
 
+    /// The kind of link `key` this type declares, if it does.
+    #[must_use]
+    pub fn link(&self, key: &str) -> Option<&crate::LinkDef> {
+        self.document.links.iter().find(|l| l.key == key)
+    }
+
     /// How this type contains akter of the type `key`, if it does.
     #[must_use]
     pub fn contains(&self, key: &str) -> Option<&ContainsDef> {
@@ -156,6 +162,7 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     presentation(&mut problems, &document);
 
     let contained = containment(&mut problems, &document);
+    links(&mut problems, &document);
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
     }
@@ -397,6 +404,28 @@ fn containment<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BT
         "",
     );
     contained
+}
+
+/// Checks the kinds of link the type declares.
+// r[impl link.kinds]
+fn links(problems: &mut Problems, document: &AktTypeDocument) {
+    problems.unique_keys(
+        "links",
+        document.links.iter().map(|l| l.key.as_str()),
+        "key",
+    );
+    for (i, link) in document.links.iter().enumerate() {
+        problems.name(&format!("links[{i}].name"), &link.name);
+        problems.name(&format!("links[{i}].inverse"), &link.inverse);
+        if link.to.is_empty() {
+            problems.add(&format!("links[{i}].to"), "name at least one akt type");
+        }
+        problems.unique_keys(
+            &format!("links[{i}].to"),
+            link.to.iter().map(String::as_str),
+            "",
+        );
+    }
 }
 
 /// Checks a board's columns against the akt types the type contains.
@@ -711,6 +740,39 @@ mod tests {
             ]
         );
         document["contains"] = json!([{ "type": "story", "max": 1 }]);
+        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+    }
+
+    // r[verify link.kinds]
+    #[test]
+    fn checks_the_kinds_of_link_a_type_declares() {
+        let mut document = release_candidate();
+        document["links"] = json!([
+            { "key": "blocks", "name": "Blocks", "inverse": "Blocked by", "to": ["release_candidate"] },
+            { "key": "relates", "name": "Relates to", "inverse": "Related to", "to": ["epic", "hotfix"] }
+        ]);
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert_eq!(ty.link("relates").unwrap().to, ["epic", "hotfix"]);
+        assert!(ty.link("contains").is_none());
+        document["links"] = json!([
+            { "key": "Blocks", "name": " ", "inverse": "", "to": [] },
+            { "key": "relates", "name": "R", "inverse": "R", "to": ["epic", "epic", "Bad"] },
+            { "key": "relates", "name": "R", "inverse": "R", "to": ["epic"] }
+        ]);
+        assert_eq!(
+            problems(document.clone()),
+            vec![
+                "links[0].key: `Blocks` must be up to 64 lowercase letters, digits and `_`, starting with a letter",
+                "links[2].key: `relates` is used twice",
+                "links[0].name: a name can't be empty",
+                "links[0].inverse: a name can't be empty",
+                "links[0].to: name at least one akt type",
+                "links[1].to[1]: `epic` is used twice",
+                "links[1].to[2]: `Bad` must be up to 64 lowercase letters, digits and `_`, starting with a letter",
+            ]
+        );
+        document["links"] =
+            json!([{ "key": "x", "name": "X", "inverse": "Y", "to": ["a"], "max": 1 }]);
         assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
     }
 

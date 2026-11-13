@@ -104,4 +104,34 @@ group('history', () => {
 		);
 		expect(described.changes).toEqual([{ field: 'Owner', value: 'Ann' }]);
 	});
+
+	// r[verify app.links]
+	it('says link changes with the name this akt reads them by', () => {
+		const linked = describe(
+			{
+				revision: 3,
+				changes: {},
+				membership: { linked_from: [{ number: 'TASK-1', name: 'Blocked by', kind: 'blocks' }] },
+				createdAt: '2026-04-01T10:00:00Z',
+				by: { name: 'Ann' }
+			},
+			{},
+			{}
+		);
+		expect(linked.what).toBe('changed its links');
+		expect(linked.memberships).toEqual(['Linked: Blocked by TASK-1']);
+		expect(
+			describe(
+				{
+					revision: 4,
+					changes: {},
+					membership: { unlinked: [{ number: 'TASK-2', name: 'Blocks' }] },
+					createdAt: '2026-04-01T10:00:00Z',
+					by: { name: 'Ann' }
+				},
+				{},
+				{}
+			).memberships
+		).toEqual(['Unlinked: Blocks TASK-2']);
+	});
 });

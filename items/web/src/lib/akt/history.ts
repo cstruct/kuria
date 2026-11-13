@@ -43,6 +43,15 @@ const MEMBERSHIP: Record<string, string> = {
 	removed_member: 'Removed'
 };
 
+/** Link changes (`link.revisions`), each said with the link's name as this
+ * akt reads it, such as "Linked: Blocked by TASK-1". */
+const LINKS: Record<string, string> = {
+	linked: 'Linked:',
+	linked_from: 'Linked:',
+	unlinked: 'Unlinked:',
+	unlinked_from: 'Unlinked:'
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The longest text a change shows before it is shortened. */
@@ -91,12 +100,21 @@ export function describe(
 			value: valueText(value, names)
 		})
 	);
-	const memberships = Object.entries(
-		(r.membership as Record<string, { number: string }[]>) ?? {}
-	).flatMap(([kind, entries]) => entries.map((e) => `${MEMBERSHIP[kind] ?? kind} ${e.number}`));
+	const membership = Object.entries(
+		(r.membership as Record<string, { number: string; name?: string }[]>) ?? {}
+	);
+	const memberships = membership.flatMap(([kind, entries]) =>
+		entries.map((e) =>
+			kind in LINKS
+				? `${LINKS[kind]} ${e.name ?? ''} ${e.number}`.replace(/\s+/g, ' ')
+				: `${MEMBERSHIP[kind] ?? kind} ${e.number}`
+		)
+	);
+	const onlyLinks = membership.length > 0 && membership.every(([kind]) => kind in LINKS);
 	let what: string;
 	if (r.transition) what = `performed ${transitionNames[r.transition] ?? r.transition}`;
 	else if (r.revision === 1) what = 'created it';
+	else if (onlyLinks && changes.length === 0) what = 'changed its links';
 	else if (memberships.length > 0 && changes.length === 0)
 		what = 'changed its containers or members';
 	else what = 'edited it';

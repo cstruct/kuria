@@ -110,7 +110,11 @@ Not yet: links other than containment, and signatures.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
-  `linkContact`, `eraseContact`; and the queries `contacts` and `users`. A
+  `linkContact`, `eraseContact`, `addLink`, `removeLink`; and the queries
+  `contacts` and `users`. An akt's `links` lists its links both ways, as
+  it reads them (`src/akter/links.rs`; link kinds are declared in a type's
+  `links`, stored in `akt_link`, and recorded as a revision of both akter,
+  like membership); a pinned link answers its target as it was. A
   revision's `named` lists the users and contacts its values name.
   An akt has its `title`, an akt type its `presentation` (title field,
   card and list fields, icon and colour) and each state its `tone`; `akter(search:)` finds
@@ -272,6 +276,9 @@ mise run test
   shown as its user in values and drafts while the stored values stay;
   listing the tenant's users, linking a contact by hand and its refusals,
   and the people a revision's values name.
+- [`tests/links.rs`](tests/links.rs): links both ways with revisions on
+  both akter, the kinds and targets they allow, pinned targets as they
+  were, and linking needing edit at the source and read at the target.
 - [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation,
   tones, icons and colours (unknown ones refused), titles by the
   presentation or by default and kept through edits and transitions,
