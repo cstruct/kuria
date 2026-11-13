@@ -173,5 +173,11 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `akt file`
   - An akt as `kuria cat` writes it and `kuria apply` reads it: Markdown with the akt's single-line fields in YAML front matter and each multiline field as its own section.
 
+- `akt directory`
+  - A directory of Markdown files that local mode reads and writes instead of a Kuria server: `kuria.toml`, akt type documents in `types/`, and akt files in `akter/`, with git as their history.
+
+- `local mode`
+  - The client working on an akt directory (`--dir`, `KURIA_DIR`) instead of a server, with the same commands, answers and rules.
+
 - `relay`
   - Kuria's `/cli/authorized` page, which holds the authorization code Konklav redirects to it until the client that asked for it collects it.

@@ -4,7 +4,8 @@
 reads akter like files and answers in Markdown or JSON, edits an akt as a
 Markdown file, and changes state, membership, order and links through
 explicit commands, since none of those is an edit. Like the app, it knows
-no akt type.
+no akt type. In local mode (`cli.local.dir`) it works the same way on a
+directory of Markdown files instead of a Kuria server.
 
 ## Signing in
 
@@ -167,3 +168,90 @@ key or name, a user or contact by email, name or `@me`, a date as
 `YYYY-MM-DD`, a checkbox as `true`, `false` or `for:<someone>`, and a
 reference, Git or Docker value as JSON. A multiline value MAY be given as
 `@<file>` or `@-` for standard input.
+
+## Local mode
+
+In local mode the client reads and writes an akt directory instead of a
+Kuria server: akt type documents and akt files on disk, with git keeping
+their history. The commands, answers, refusals and exit codes are those
+above.
+
+r[cli.local.dir]
+With `--dir <path>`, else `KURIA_DIR`, the client MUST work on the akt
+directory at `path` instead of a server, whatever `--url`, `KURIA_URL` or
+a profile say. `kuria init --dir <path>` MUST make one: `kuria.toml`
+naming its format version, `types/` and `akter/`. Any other command MUST
+refuse a directory without a `kuria.toml` whose format it reads, as
+`NOT_AN_AKT_DIRECTORY`.
+
+r[cli.local.layout]
+An akt directory MUST hold each akt type's document as
+`types/<key>.json`, one version per key, and each akt as
+`akter/<number>.md`: an akt file (`cli.file`) whose `number` is its name,
+with one more front-matter key, `rank`, its place in the directory's
+order. Files MUST be written whole, so that a reader never sees half a
+write.
+
+r[cli.local.types]
+`types define` in local mode MUST replace the type's document, refusing a
+document that the directory's akter of that type wouldn't fit (a state,
+field or option they use that it lacks), naming them. `types export` MUST
+answer the documents as they are.
+
+r[cli.local.rules]
+Writes in local mode MUST be checked by the same rules a server checks,
+through the same code (`kuria-engine`): field values, transitions and what
+they require, numbering, containment (`contains`, exclusive, `while`,
+`created_in`, cycles, frozen containers), link kinds and pins, and
+ordering. A refusal MUST carry the code a server would answer.
+
+r[cli.local.revision]
+Each write to an akt MUST raise its file's `revision` by one, and add or
+remove it from the containers and links of the other akter it names, on
+their files too. `apply` of a file read at an older `revision` MUST be
+refused as `STALE` (`cli.apply`).
+
+r[cli.local.numbers]
+A new akt's number MUST be one past the highest sequence of its number's
+scope among the directory's akt files, read through their type's number
+pattern; the directory keeps no counter.
+
+r[cli.local.people]
+Users and contacts MUST be written and read as text: an email, else a
+name. `@me` MUST be `KURIA_ME`, else the email `git config user.email`
+gives in the directory, and MUST otherwise be refused as `BAD_REQUEST`.
+
+r[cli.local.history]
+`history` in local mode MUST answer the commits that changed the akt's
+file, newest last, each with its author, time and message, from git, and
+say when the file has changes not yet committed. In a directory git
+doesn't track, it MUST say there is no history.
+
+r[cli.local.reason]
+`--reason` in local mode MUST be accepted and kept nowhere: the answer
+MUST give it back, as `reason` in JSON and as the message to commit with
+in Markdown, since git is the history.
+
+r[cli.local.lock]
+A write in local mode MUST hold an exclusive lock on the directory for the
+whole change, so that two clients writing at once neither lose a change
+nor read one half made.
+
+r[cli.local.unsupported]
+In local mode `login`, `logout`, `users`, `contacts`, `draft`, attachments,
+`export` and `import` of bundles MUST be refused as `LOCAL_UNSUPPORTED`,
+saying why. `whoami` MUST answer the directory and who `@me` is.
+
+r[cli.local.check]
+`kuria check --dir <path>` MUST check the whole directory as a server
+would: every document valid and each akt fitting its type, numbers
+unique, every `in` and `links` entry naming an akt the directory has by a
+kind its type declares, containment rules held, and orders unique. It
+MUST name each problem's file, and exit with 1 if there is any, 0 if
+none.
+
+r[cli.local.convert]
+`kuria export --to-dir <path>`, signed in to a server, MUST write the
+selected akt types and their akter as a new akt directory, in the server's
+order, refusing an akt that doesn't fit its type's latest document, which
+is the one an akt directory keeps.
