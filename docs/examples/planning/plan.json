@@ -1,0 +1,40 @@
+{
+  "key": "plan",
+  "name": "Plan",
+  "number": "PLAN-{seq:3}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "goal", "name": "Goal", "kind": "text", "multiline": true,
+      "description": "What becomes possible, and how anyone will know." },
+    { "key": "design", "name": "Design", "kind": "text", "multiline": true,
+      "description": "How it will be built." },
+    { "key": "verification", "name": "Verification", "kind": "text", "multiline": true,
+      "description": "How it is checked." },
+    { "key": "owner", "name": "Owner", "kind": "user" }
+  ],
+  "states": [
+    { "key": "draft", "name": "Draft", "initial": true },
+    { "key": "active", "name": "Active" },
+    { "key": "done", "name": "Done", "final": true },
+    { "key": "dropped", "name": "Dropped", "final": true }
+  ],
+  "transitions": [
+    { "key": "activate", "name": "Activate", "from": ["draft"], "to": "active", "requires": ["goal"] },
+    { "key": "finish", "name": "Finish", "from": ["active"], "to": "done" },
+    { "key": "drop", "name": "Drop", "from": ["draft", "active"], "to": "dropped" }
+  ],
+  "contains": [{ "type": "task" }, { "type": "gap" }, { "type": "decision" }],
+  "board": {
+    "columns": [
+      { "key": "todo", "name": "To do", "states": { "task": ["todo"] } },
+      { "key": "doing", "name": "Doing", "states": { "task": ["doing"] } },
+      { "key": "review", "name": "In review", "states": { "task": ["review"] } },
+      { "key": "done", "name": "Done", "states": { "task": ["done", "dropped"] } }
+    ]
+  },
+  "presentation": {
+    "icon": "target", "colour": "blue",
+    "card": ["owner"], "list": ["owner"],
+    "tones": { "active": "active", "done": "success", "dropped": "neutral" }
+  }
+}

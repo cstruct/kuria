@@ -217,6 +217,8 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
+    /// A guide for agents: the commands, the akt file and the exit codes.
+    Guide,
     /// Export a bundle: selected akt types, with or without their akter,
     /// or the whole tenant, into a new directory.
     #[command(group(clap::ArgGroup::new("what").required(true).args(["types", "whole_tenant"])))]
@@ -278,5 +280,23 @@ mod tests {
         let cli = Cli::try_parse_from(["kuria", "whoami", "--format", "json"]).unwrap();
         assert_eq!(cli.format, Format::Json);
         assert!(Cli::try_parse_from(["kuria", "whoami", "--tenant", "shop"]).is_err());
+    }
+
+    // r[verify cli.guide]
+    #[test]
+    fn the_guide_names_every_command() {
+        for command in Cli::command().get_subcommands() {
+            let name = command.get_name();
+            assert!(
+                crate::GUIDE.contains(&format!("kuria {name}")),
+                "the guide doesn't mention `kuria {name}`"
+            );
+        }
+        for code in 0..=5 {
+            assert!(
+                crate::GUIDE.contains(&format!("| {code} |")),
+                "exit code {code}"
+            );
+        }
     }
 }

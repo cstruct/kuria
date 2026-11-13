@@ -104,7 +104,8 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   and `KURIA_KEY` signing in as software, saving nothing, with its exit
   codes; every read command against the release-management example; and
   every write, on akt types the test defines with the CLI; and a bundle
-  moved from `shop` to `lab`.
+  moved from `shop` to `lab`; and the planning example, defined from
+  `docs/examples/planning` and worked as `kuria guide` says.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
 - [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe

@@ -1,0 +1,33 @@
+{
+  "key": "decision",
+  "name": "Decision",
+  "number": "{parent}-D{seq:2}",
+  "created_in": ["plan"],
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "context", "name": "Context", "kind": "text", "multiline": true,
+      "description": "What made a decision necessary." },
+    { "key": "decision", "name": "Decision", "kind": "text", "multiline": true },
+    { "key": "why", "name": "Why", "kind": "text", "multiline": true,
+      "description": "Why this, and not the alternatives." },
+    { "key": "decided_by", "name": "Decided by", "kind": "user" }
+  ],
+  "states": [
+    { "key": "proposed", "name": "Proposed", "initial": true },
+    { "key": "decided", "name": "Decided" },
+    { "key": "superseded", "name": "Superseded", "final": true }
+  ],
+  "transitions": [
+    { "key": "decide", "name": "Decide", "from": ["proposed"], "to": "decided",
+      "requires": ["context", "decision", "why"] },
+    { "key": "supersede", "name": "Supersede", "from": ["decided"], "to": "superseded" }
+  ],
+  "links": [
+    { "key": "supersedes", "name": "Supersedes", "inverse": "Superseded by", "to": ["decision"] }
+  ],
+  "presentation": {
+    "icon": "milestone", "colour": "purple",
+    "list": ["decided_by"],
+    "tones": { "decided": "success", "superseded": "neutral" }
+  }
+}

@@ -111,6 +111,12 @@ type.
   a multiline text as `@<file>` or `@-`, and an empty value to clear. The
   file's values are read the same way.
 
+- **The guide** (`cli.guide`, [`src/guide.md`](src/guide.md)): `kuria
+  guide` prints, for agents, signing in, finding an akt type's fields,
+  states and transitions, the akt file, the verbs and values, the exit
+  codes, and how to work a plan in the planning example. A unit test fails
+  if a command is missing from it.
+
 ### JSON answers
 
 | Command | Object |
@@ -128,6 +134,7 @@ type.
 | `apply` | `{applied: [{file, number, revision, changed, dryRun?}]}` |
 | `set`, `do`, `draft` | `{number, revision, changed \| state, transition \| field}` |
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
+| `guide` | `{guide}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
@@ -194,13 +201,15 @@ cargo test -p kuria-cli
   links with pins, order, membership, transfers, a draft, and `new
   --file`; and a bundle exported and imported into the second tenant
   `lab`, with the same history and numbering on, then clashing, a type
-  alone as a new version, and a whole tenant refused there.
+  alone as a new version, and a whole tenant refused there; and the
+  planning example defined from `docs/examples/planning` and a plan
+  worked as the guide says.
 
 ## Traceability
 
 - Spec: [`docs/spec/cli.md`](../../docs/spec/cli.md) (`cli.profile`,
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
-  `errors`, `read`, `file`, `apply`, `write`, `values`); `app.history`
+  `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`); `app.history`
   for the history's wording.
 - Annotations: `r[impl cli.*]` in `src/`, `r[verify cli.*]` in the unit
   tests and `e2e/tests/cli.spec.ts`.

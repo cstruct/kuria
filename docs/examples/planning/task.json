@@ -1,0 +1,37 @@
+{
+  "key": "task",
+  "name": "Task",
+  "number": "{parent}-T{seq:2}",
+  "created_in": ["plan"],
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "description", "name": "Description", "kind": "text", "multiline": true },
+    { "key": "acceptance", "name": "Acceptance", "kind": "text", "multiline": true,
+      "description": "What must be true for it to be done." },
+    { "key": "assignee", "name": "Assignee", "kind": "user" },
+    { "key": "change", "name": "Change", "kind": "reference",
+      "description": "The pull request or commit that does it." }
+  ],
+  "states": [
+    { "key": "todo", "name": "To do", "initial": true },
+    { "key": "doing", "name": "Doing" },
+    { "key": "review", "name": "In review" },
+    { "key": "done", "name": "Done", "final": true },
+    { "key": "dropped", "name": "Dropped", "final": true }
+  ],
+  "transitions": [
+    { "key": "start", "name": "Start", "from": ["todo"], "to": "doing" },
+    { "key": "review", "name": "Send to review", "from": ["doing"], "to": "review" },
+    { "key": "rework", "name": "Rework", "from": ["review"], "to": "doing" },
+    { "key": "finish", "name": "Finish", "from": ["doing", "review"], "to": "done" },
+    { "key": "drop", "name": "Drop", "from": ["todo", "doing", "review"], "to": "dropped" }
+  ],
+  "links": [
+    { "key": "blocks", "name": "Blocks", "inverse": "Blocked by", "to": ["task"] }
+  ],
+  "presentation": {
+    "icon": "list-checks", "colour": "teal",
+    "card": ["assignee"], "list": ["assignee"],
+    "tones": { "doing": "active", "review": "warning", "done": "success", "dropped": "neutral" }
+  }
+}

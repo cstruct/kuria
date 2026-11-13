@@ -435,3 +435,87 @@ test('kuria exports a bundle and imports it into another tenant', async () => {
 	expect(full.code).toBe(1);
 	expect(JSON.parse(full.stderr).error.code).toBe('CONFLICT');
 });
+
+// r[verify cli.guide]
+test('an agent works a plan as the guide says, on the planning example', async () => {
+	test.setTimeout(300_000);
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const ok = async (args: string[]) => {
+		const ran = await cli.run([...args, '--format', 'json']);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return JSON.parse(ran.stdout);
+	};
+	const refused = async (args: string[]) => {
+		const ran = await cli.run([...args, '--format', 'json']);
+		expect(ran.code, `${args.join(' ')}: ${ran.stdout}`).toBe(1);
+		return JSON.parse(ran.stderr).error;
+	};
+	expect((await ok(['guide'])).guide).toContain('## Exit codes');
+
+	// The example's documents, as they are in docs/examples/planning.
+	const example = join(import.meta.dirname, '..', '..', 'docs', 'examples', 'planning');
+	const files = ['task', 'gap', 'decision', 'plan'].map((key) => join(example, `${key}.json`));
+	await ok(['types', 'define', '--check', ...files]);
+	expect((await ok(['types', 'define', ...files])).defined.map((d: { key: string }) => d.key)).toEqual([
+		'task',
+		'gap',
+		'decision',
+		'plan'
+	]);
+
+	const word = `p${Date.now()}`;
+	writeFileSync(join(cli.dir, 'goal.md'), 'Plan in Kuria instead of Markdown.\n');
+	const plan = (
+		await ok(['new', 'plan', '--set', `title=Dogfood ${word}`, '--set', `goal=@${join(cli.dir, 'goal.md')}`])
+	).number;
+	await ok(['do', plan, 'activate']);
+	const first = (await ok(['new', 'task', '--in', plan, '--set', 'title=Build the CLI'])).number;
+	const second = (await ok(['new', 'task', '--in', plan, '--set', 'title=Migrate the plans'])).number;
+	expect([first, second]).toEqual([`${plan}-T01`, `${plan}-T02`]);
+	await ok(['link', first, 'blocks', second]);
+	const gap = (await ok(['new', 'gap', '--in', plan, '--set', 'title=Where to deploy'])).number;
+	const decision = (await ok(['new', 'decision', '--in', plan, '--set', 'title=Fly.io'])).number;
+	expect(gap).toBe(`${plan}-G01`);
+	expect(decision).toBe(`${plan}-D01`);
+
+	// The plan's board, and what blocks what.
+	const shown = (await ok(['show', plan])).akt;
+	const todo = shown.members.columns.find((c: { key: string }) => c.key === 'todo');
+	expect(todo.akter.map((a: { number: string }) => a.number)).toEqual([first, second]);
+	expect((await ok(['show', second])).akt.links).toMatchObject([{ name: 'Blocked by', akt: { number: first } }]);
+
+	// Work a task through to done, recording progress in its file.
+	await ok(['do', first, 'start', '--reason', 'Picked up']);
+	await ok(['cat', first, '-o', cli.dir]);
+	const path = join(cli.dir, `${first}.md`);
+	writeFileSync(path, readFileSync(path, 'utf8') + '\n<!-- field: description -->\nLogin, reads and writes.\n');
+	expect((await ok(['apply', path, '--reason', 'Progress'])).applied[0].changed).toEqual(['description']);
+	await ok(['do', first, 'Send to review', '--set', 'change=https://git.example/pr/1']);
+	expect((await ok(['do', first, 'finish'])).state).toBe('done');
+
+	// A gap closes only with its resolution; a decision needs its reasons.
+	expect((await refused(['do', gap, 'close'])).code).toBe('REFUSED');
+	await ok(['do', gap, 'close', '--set', 'resolution=Decided: Fly.io, postponed']);
+	await ok(['link', gap, 'resolved_by', decision]);
+	await refused(['do', decision, 'decide']);
+	await ok([
+		'do',
+		decision,
+		'decide',
+		'--set',
+		'context=Kuria needs a home',
+		'--set',
+		'decision=Fly.io',
+		'--set',
+		'why=Postgres, Valkey and storage nearby'
+	]);
+	const history = (await ok(['history', first])).revisions.map((r: { what: string }) => r.what);
+	expect(history).toEqual([
+		'created it',
+		'changed its links',
+		'performed Start',
+		'edited it',
+		'performed Send to review',
+		'performed Finish'
+	]);
+});

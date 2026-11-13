@@ -95,6 +95,7 @@ async fn answer(cli: Cli) -> Result<Answer, CliError> {
         Command::Login { no_browser } => account::login(&context, !no_browser).await,
         Command::Logout => account::logout(&context).await,
         Command::Whoami => account::whoami(&context).await,
+        Command::Guide => Ok(guide()),
         // Checked offline: no session.
         Command::Types {
             action: Some(TypesCommand::Define { files, check: true }),
@@ -107,6 +108,18 @@ async fn answer(cli: Cli) -> Result<Answer, CliError> {
         }
     }
 }
+
+/// The guide for agents, which needs no session.
+// r[impl cli.guide]
+fn guide() -> Answer {
+    Answer {
+        markdown: GUIDE.to_owned(),
+        json: serde_json::json!({ "guide": GUIDE }),
+    }
+}
+
+/// `kuria guide`'s text.
+pub const GUIDE: &str = include_str!("guide.md");
 
 /// A command that reads or writes, through `session`.
 async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliError> {
