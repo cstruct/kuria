@@ -1735,9 +1735,9 @@ dependencies = [
 
 [[package]]
 name = "konklav-authz"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f484178e435e70e1115d1f571c6a76c88fd098588272754a7be50e0fdb3f180"
+checksum = "569e0e12accb3bf44ffc3e5cb16a8cda4706d6f63d76a8252145f32d3bb41c0c"
 dependencies = [
  "konklav-core",
  "konklav-token",
@@ -1747,9 +1747,9 @@ dependencies = [
 
 [[package]]
 name = "konklav-axum"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1abe36d5934a7c3452b035b5f1d45880d8c1b699d4478925d6448a573a67306"
+checksum = "4a6601c26f4e20200d04ab483a140811fa0129468bdf4e23755269e31d9ad6b9"
 dependencies = [
  "axum",
  "getrandom 0.4.3",
@@ -1765,9 +1765,9 @@ dependencies = [
 
 [[package]]
 name = "konklav-core"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "453c4db5bf5e6eae946206af37dbac7f5dafa1a0ee95e5ba229e064eb986ccec"
+checksum = "5cce24153df4388725e522b10ebca12e02eed22c7b972cb0090ff4a5b34b115a"
 dependencies = [
  "serde",
  "serde_json",
@@ -1776,9 +1776,9 @@ dependencies = [
 
 [[package]]
 name = "konklav-relying"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94909dad605fb0af79fa47120aa4138ec2895fdb567bdea225398f3a21f66b15"
+checksum = "87596fbab509471831bfed286997dea6d6036fd1985e556cfb52a6eecacc31d4"
 dependencies = [
  "hmac",
  "konklav-authz",
@@ -1791,9 +1791,9 @@ dependencies = [
 
 [[package]]
 name = "konklav-relying-client"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c07b3457c1b996111bcee813269562afd365622e3cf11ff34a388b477aaf4bbb"
+checksum = "9af808d687fdea8c7037d3c043b36a713d0117af94c4abe3106ca7404653390f"
 dependencies = [
  "futures-util",
  "getrandom 0.4.3",
@@ -1814,9 +1814,9 @@ dependencies = [
 
 [[package]]
 name = "konklav-token"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de3630cd0d0af23fc44dad7518e3d06d4f390ec76b287e38093730b305e4dc7c"
+checksum = "1d1cf9e02350c7b5172049311889263df8738896c302372886247ba5020b627e"
 dependencies = [
  "base64 0.23.1",
  "ed25519-dalek",

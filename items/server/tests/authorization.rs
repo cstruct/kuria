@@ -25,6 +25,7 @@ const ALICE: &str = "tenant-alice";
 struct World {
     db: TestDatabase,
     decider: Arc<FakeDecider>,
+    host: Arc<FakeHost>,
     router: Router,
 }
 
@@ -34,10 +35,12 @@ impl World {
     async fn new() -> Self {
         let db = TestDatabase::new().await;
         let decider = FakeDecider::allowing_tenant();
-        let router = router_with(&FakeHost::new(), db.pool().clone(), decider.clone());
+        let host = FakeHost::new();
+        let router = router_with(&host, db.pool().clone(), decider.clone());
         let world = Self {
             db,
             decider,
+            host,
             router,
         };
         for (key, prefix) in [("capa", "CAPA"), ("bug", "BUG")] {
@@ -302,16 +305,25 @@ async fn decisions_last_for_one_request_only() {
 
 // r[verify authz.sender-constrained]
 #[tokio::test(flavor = "multi_thread")]
-async fn refuses_sender_constrained_tokens() {
+async fn decides_a_sender_constrained_request_with_its_accepted_presentation() {
     let world = World::new().await;
+    world.decider.grant_at("tenant-dpop", "capa", &[READ]);
+    let before = world.host.released();
     let answer = send(
         &world.router,
-        graphql_with("tenant-dpop", "{ akter { nodes { number } } }", &json!({})),
+        graphql_with(
+            "tenant-dpop",
+            "{ capa: akt(number: \"CAPA-1\") { number } bug: akt(number: \"BUG-1\") { number } akter { nodes { number } } }",
+            &json!({}),
+        ),
     )
     .await;
-    assert_eq!(answer.status, StatusCode::FORBIDDEN);
+    assert_eq!(answer.status, StatusCode::OK, "{}", answer.body);
+    // Decided per akt type, by the token's grants, with one presentation.
     assert_eq!(
-        answer.json()["error"]["code"],
-        "sender_constrained_unsupported"
+        answer.json()["data"],
+        json!({ "capa": { "number": "CAPA-1" }, "bug": null, "akter": { "nodes": [{ "number": "CAPA-1" }] } })
     );
+    // Released once the request was answered.
+    assert_eq!(world.host.released(), before + 1);
 }

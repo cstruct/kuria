@@ -15,8 +15,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use konklav_axum::rate_limit::TemplateError;
 use konklav_axum::{
-    InvalidProxy, Konklav, Policy, RelyingHost, RoutePolicy, RoutePolicyError, RouterPolicy,
-    TenantToken,
+    InvalidProxy, Konklav, Policy, RelyingHost, RequestDecider, RoutePolicy, RoutePolicyError,
+    RouterPolicy, TenantToken,
 };
 use konklav_token::TokenKind;
 
@@ -176,6 +176,7 @@ pub(crate) fn caller(
     token: &TenantToken,
     headers: &HeaderMap,
     decider: &Arc<dyn Decider>,
+    request: Option<RequestDecider>,
 ) -> Result<(Principal, Arc<Authorizer>), Box<Response>> {
     let refused = || {
         Box::new(
@@ -189,17 +190,22 @@ pub(crate) fn caller(
         )
     };
     // r[impl authz.sender-constrained]
-    if token.cnf.is_some() {
-        return Err(refused());
-    }
-    // Verified by Konklav's layer; a bearer token, since it has no `cnf`.
-    let bearer = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split_once(' '))
-        .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
-        .map(|(_, token)| token.trim().to_owned())
-        .ok_or_else(refused)?;
+    // A sender-constrained token is decided with the presentation its route
+    // policy accepted, which only lasts the request: a WebSocket's later
+    // decisions can't use it.
+    let authorizer = if token.cnf.is_some() {
+        Authorizer::for_request(request.ok_or_else(refused)?)
+    } else {
+        // Verified by Konklav's layer; a bearer token, since it has no `cnf`.
+        let bearer = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split_once(' '))
+            .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
+            .map(|(_, token)| token.trim().to_owned())
+            .ok_or_else(refused)?;
+        Authorizer::new(decider.clone(), bearer)
+    };
     // The route admits only tenant tokens, and every tenant token names its
     // tenant.
     let Some(tenant) = token.tid else {
@@ -211,10 +217,7 @@ pub(crate) fn caller(
         tenant,
         expires_at: token.exp,
     };
-    Ok((
-        principal,
-        Arc::new(Authorizer::new(decider.clone(), bearer)),
-    ))
+    Ok((principal, Arc::new(authorizer)))
 }
 
 /// Executes a GraphQL request as the subject and in the tenant of its
@@ -222,6 +225,7 @@ pub(crate) fn caller(
 async fn graphql(
     State(state): State<GraphqlState>,
     token: TenantToken,
+    decider: RequestDecider,
     headers: HeaderMap,
     request: GraphQLRequest,
 ) -> Response {
@@ -231,7 +235,7 @@ async fn graphql(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.split(';').next())
         .is_some_and(|v| v.trim().eq_ignore_ascii_case("application/json"));
-    let (principal, authorizer) = match caller(&token, &headers, &state.decider) {
+    let (principal, authorizer) = match caller(&token, &headers, &state.decider, Some(decider)) {
         Ok(caller) => caller,
         Err(refused) => return *refused,
     };
@@ -257,7 +261,8 @@ async fn graphql_ws(
     protocol: GraphQLProtocol,
     upgrade: WebSocketUpgrade,
 ) -> Response {
-    let (principal, authorizer) = match caller(&token, &headers, &state.decider) {
+    // Subscriptions decide long after the upgrade request is answered.
+    let (principal, authorizer) = match caller(&token, &headers, &state.decider, None) {
         Ok(caller) => caller,
         Err(refused) => return *refused,
     };

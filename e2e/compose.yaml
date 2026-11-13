@@ -1,12 +1,12 @@
 # Konklav for Kuria's end-to-end tests: its Postgres, its migrations and
-# the server, at the Konklav release Kuria pins (=1.7.0).
+# the server, at the Konklav release Kuria pins (=1.8.0).
 #
 # `mise run e2e` brings this up, seeds it (scripts/setup.ts), runs Kuria
 # against it and tears it down. Nothing is kept between runs.
 name: kuria-e2e
 
 x-konklav: &konklav
-  image: cstruct/konklav:1.7.0
+  image: cstruct/konklav:1.8.0
   volumes:
     - ./konklav/config.styx:/etc/konklav/config.styx:ro
     - ./konklav/secrets.styx:/etc/konklav/secrets.styx:ro

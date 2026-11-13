@@ -12,7 +12,7 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use chrono::Utc;
-use konklav_axum::TenantToken;
+use konklav_axum::{RequestDecider, TenantToken};
 use kuria_engine::sbom;
 use kuria_store::Pool;
 use kuria_store::attachments::{self, AttachmentRow};
@@ -100,10 +100,11 @@ pub(crate) struct AttachmentState {
 pub(crate) async fn upload(
     State(state): State<AttachmentState>,
     token: TenantToken,
+    decider: RequestDecider,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    let (principal, _) = match caller(&token, &headers, &state.decider) {
+    let (principal, _) = match caller(&token, &headers, &state.decider, Some(decider)) {
         Ok(caller) => caller,
         Err(refused) => return *refused,
     };
@@ -166,10 +167,11 @@ pub(crate) async fn upload(
 pub(crate) async fn download(
     State(state): State<AttachmentState>,
     token: TenantToken,
+    decider: RequestDecider,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Response {
-    let (principal, authorizer) = match caller(&token, &headers, &state.decider) {
+    let (principal, authorizer) = match caller(&token, &headers, &state.decider, Some(decider)) {
         Ok(caller) => caller,
         Err(refused) => return *refused,
     };

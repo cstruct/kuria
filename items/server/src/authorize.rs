@@ -1,8 +1,9 @@
 //! Asking Konklav what a request's subject may do with akt types and akter.
 //!
 //! Each permission becomes a set of Konklav requirements, decided by the
-//! relying SDK for the request's bearer token. Decisions are remembered for
-//! the rest of the request only.
+//! relying SDK for the request's bearer token, or, for a sender-constrained
+//! (DPoP) token, with the presentation the route policy accepted. Decisions
+//! are remembered for the rest of the request only.
 
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
@@ -10,6 +11,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use konklav_authz::{Decision, Requirements, ScopeRequirement};
+use konklav_axum::RequestDecider;
 use konklav_relying_client::RelyingClient;
 
 /// Defining akt types, tenant-wide.
@@ -100,19 +102,40 @@ impl Permission {
 #[error("authorization is unavailable: {0}")]
 pub struct Unavailable(pub String);
 
+/// What decides a request's permissions.
+enum Source {
+    /// A bearer token, decided as often as asked.
+    Bearer {
+        decider: Arc<dyn Decider>,
+        token: String,
+    },
+    /// The presentation the route policy accepted, whose DPoP proof isn't
+    /// checked again (`authz.sender-constrained`).
+    Request(RequestDecider),
+}
+
 /// Decides permissions for one request's token.
 pub struct Authorizer {
-    decider: Arc<dyn Decider>,
-    token: String,
+    source: Source,
     decided: Mutex<HashMap<Permission, bool>>,
 }
 
 impl Authorizer {
+    /// Decides for a bearer `token`.
     #[must_use]
     pub fn new(decider: Arc<dyn Decider>, token: String) -> Self {
         Self {
-            decider,
-            token,
+            source: Source::Bearer { decider, token },
+            decided: Mutex::default(),
+        }
+    }
+
+    /// Decides with the presentation a request's route policy accepted.
+    // r[impl authz.sender-constrained]
+    #[must_use]
+    pub fn for_request(decider: RequestDecider) -> Self {
+        Self {
+            source: Source::Request(decider),
             decided: Mutex::default(),
         }
     }
@@ -128,11 +151,17 @@ impl Authorizer {
         {
             return Ok(*allowed);
         }
-        let decision = self
-            .decider
-            .decide(&self.token, &permission.requirements())
-            .await
-            .map_err(Unavailable)?;
+        let requirements = permission.requirements();
+        let decision = match &self.source {
+            Source::Bearer { decider, token } => decider
+                .decide(token, &requirements)
+                .await
+                .map_err(Unavailable)?,
+            Source::Request(decider) => decider
+                .decide(&requirements)
+                .await
+                .map_err(|e| Unavailable(e.to_string()))?,
+        };
         // A step-up is a refusal here: nothing Kuria asks for requires one.
         let allowed = matches!(decision, Decision::Allow { .. });
         self.decided

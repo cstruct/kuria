@@ -241,4 +241,4 @@ Some things are simpler outside GraphQL:
 - Row-level security in Postgres alongside tenant filtering in queries.
 - What erasure does to attachments a subject uploaded, and to the names a bundle carries for them. (Bundles hold attachments' bytes by content hash, [spec](spec/bundles.md).)
 - Upgrading akter to a newer akt type version. An akt stays on the version it was created with, so changing an akt type only affects new akter.
-- DPoP-bound tokens on `/graphql`. Kuria decides once per permission an operation needs, and a DPoP proof is answered once, so such tokens are refused for now. Decided: Konklav 1.8 will let one accepted presentation answer every decision of its request, still checking the token and session each time, and Kuria then accepts them (`authz.sender-constrained`); the CLI needs it.
+- DPoP-bound tokens on the GraphQL WebSocket. Subscriptions decide long after the upgrade request, when its accepted presentation is gone, so they refuse DPoP-bound tokens; `/graphql` and the attachment endpoints take them (`authz.sender-constrained`, Konklav 1.8's request decider).

@@ -77,10 +77,13 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   through the relying client, for Kuria's actions tenant-wide or at the akt
   type ([`src/authorize.rs`](src/authorize.rs)). Decisions are remembered for
   one request. Akter a subject may not read are invisible to them.
-- Refusing DPoP-bound tokens on `/graphql`: their proof is answered once, so
-  Kuria can't decide more than once for them.
+- DPoP-bound tokens on `/graphql` and the attachment endpoints: decided
+  with the presentation the route policy accepted (konklav-axum's
+  `RequestDecider`), whose proof isn't checked again, and which is released
+  once the request is answered. The GraphQL WebSocket refuses them, since
+  subscriptions decide after the request.
 
-Not yet: links other than containment, and signatures.
+Not yet: signatures.
 
 ## Entry points
 
@@ -229,7 +232,8 @@ mise run test
   ([`tests/support/decider.rs`](tests/support/decider.rs)): defining, which
   akt types and akter are visible, creating, editing, transitions and their
   own actions, tenant-wide grants, Konklav failing, decisions lasting one
-  request, and DPoP-bound tokens.
+  request, and a DPoP-bound request decided by its grants with one
+  presentation, released afterwards.
 - [`tests/containers.rs`](tests/containers.rs): many containers per akt,
   removing, exclusivity, cycles, frozen containers, membership revisions on
   both akter, release candidates and hotfixes numbered inside their release,

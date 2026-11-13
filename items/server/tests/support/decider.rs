@@ -66,7 +66,7 @@ impl FakeDecider {
         *self.decisions.lock().unwrap()
     }
 
-    fn decide_now(&self, token: &str, requirements: &Requirements) -> Result<Decision, String> {
+    pub fn decide_now(&self, token: &str, requirements: &Requirements) -> Result<Decision, String> {
         *self.decisions.lock().unwrap() += 1;
         if *self.failing.lock().unwrap() {
             return Err("Konklav is unreachable".to_owned());

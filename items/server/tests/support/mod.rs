@@ -64,6 +64,11 @@ pub fn claims_in(kind: &str, tenant: &str) -> AccessClaims {
 #[derive(Default)]
 pub struct FakeHost {
     pub accepted: Mutex<Vec<Presented>>,
+    /// Decides what handlers ask of a request's presentation, by its token,
+    /// once the router is built.
+    decider: Mutex<Option<Arc<decider::FakeDecider>>>,
+    /// How many presentations were released.
+    released: Mutex<usize>,
 }
 
 impl FakeHost {
@@ -73,6 +78,10 @@ impl FakeHost {
 
     pub fn accepted(&self) -> Vec<Presented> {
         self.accepted.lock().unwrap().clone()
+    }
+
+    pub fn released(&self) -> usize {
+        *self.released.lock().unwrap()
     }
 
     fn token(presented: &Presented) -> Result<Verified<AccessClaims>, Error> {
@@ -111,8 +120,9 @@ impl RelyingHost for FakeHost {
     ) -> BoxFuture<'a, Result<Verified<Accepted>, Error>> {
         Box::pin(async move {
             self.accepted.lock().unwrap().push(presented.clone());
+            let token = presented.access_token().unwrap_or_default().to_owned();
             Ok(match Self::token(presented)? {
-                Verified::Valid(claims) => Verified::Valid(Accepted::new(claims, ())),
+                Verified::Valid(claims) => Verified::Valid(Accepted::new(claims, token)),
                 Verified::Invalid => Verified::Invalid,
                 Verified::InvalidProof => Verified::InvalidProof,
             })
@@ -131,13 +141,23 @@ impl RelyingHost for FakeHost {
                 .token_kinds
                 .as_ref()
                 .is_none_or(|kinds| kinds.contains(&accepted.claims().knd));
-            Ok(if kind_admitted {
-                Decision::allow()
-            } else {
-                Decision::Deny {
+            if !kind_admitted {
+                return Ok(Decision::Deny {
                     reason: DenyReason::TokenKind,
+                });
+            }
+            // A handler's own decisions, by the token's grants.
+            let decider = self.decider.lock().unwrap().clone();
+            match (decider, accepted.handle::<String>()) {
+                (Some(decider), Some(token))
+                    if !requirements.tenant.is_empty() || !requirements.scopes.is_empty() =>
+                {
+                    decider
+                        .decide_now(token, requirements)
+                        .map_err(|_| Error::Exhausted)
                 }
-            })
+                _ => Ok(Decision::allow()),
+            }
         })
     }
 
@@ -146,6 +166,10 @@ impl RelyingHost for FakeHost {
         presented: &'a Presented,
     ) -> BoxFuture<'a, Result<Verified<AccessClaims>, Error>> {
         Box::pin(async move { Self::token(presented) })
+    }
+
+    fn release_accepted(&self, _: &Accepted) {
+        *self.released.lock().unwrap() += 1;
     }
 }
 
@@ -176,6 +200,7 @@ pub fn router_storing(
     decider: Arc<decider::FakeDecider>,
     storage: kuria_server::attachments::Storage,
 ) -> Router {
+    *host.decider.lock().unwrap() = Some(decider.clone());
     kuria_server::app(
         host.clone(),
         kuria_server::Options {

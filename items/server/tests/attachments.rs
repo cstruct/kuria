@@ -189,10 +189,13 @@ async fn an_upload_is_answered_and_downloaded_by_its_uploader() {
 }
 
 // r[verify attachment.upload]
+// r[verify authz.sender-constrained]
 #[tokio::test(flavor = "multi_thread")]
 async fn an_upload_is_authenticated_and_named() {
     let world = World::new().await;
-    for (token, status) in [("invalid", 401), ("identity", 403), ("tenant-dpop", 403)] {
+    // A DPoP-bound token is decided with its accepted presentation
+    // (`authz.sender-constrained`).
+    for (token, status) in [("invalid", 401), ("identity", 403), ("tenant-dpop", 201)] {
         let answer = world.upload(token, "a.txt", "text/plain", b"a").await;
         assert_eq!(answer.status, status, "{token}: {}", answer.body);
     }
@@ -208,7 +211,8 @@ async fn an_upload_is_authenticated_and_named() {
             .status,
         400
     );
-    assert_eq!(world.stored_objects().await, 0);
+    // Only the DPoP-bound upload was stored.
+    assert_eq!(world.stored_objects().await, 1);
 }
 
 // r[verify attachment.limit]

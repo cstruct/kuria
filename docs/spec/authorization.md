@@ -46,10 +46,10 @@ A request with a sender-constrained (DPoP) token MUST be accepted once:
 its token, session and proof verified, and its proof remembered against
 replay. Every decision the request needs MUST then be made with that
 accepted presentation, without checking the proof again, and each MUST
-still check the token and its session. This relies on Konklav's relying
-SDK letting one accepted presentation answer every decision of its request
-(Konklav 1.8); until Kuria runs against one that does, the GraphQL
-endpoint MUST refuse such requests with 403 and the code
+still check the token and its session (Konklav's
+`relying.verify.accepted-presentation`, as of 1.8). A presentation lasts
+only its request, so a GraphQL WebSocket, whose subscriptions decide later,
+MUST refuse a sender-constrained token with 403 and the code
 `sender_constrained_unsupported`.
 
 ## Operations
