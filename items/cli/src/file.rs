@@ -20,6 +20,7 @@
 use serde::Deserialize;
 use serde_json::{Map, Value as Json, json};
 
+use crate::error::CliError;
 use crate::model::{Shape, State, StateName, TypeName, Value};
 use crate::values::file_value;
 
@@ -168,6 +169,103 @@ pub fn json(akt: &Akt) -> Json {
     })
 }
 
+/// An akt file as read: its front matter, and its sections by field key.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Parsed {
+    pub front: Map<String, Json>,
+    pub sections: Vec<(String, String)>,
+}
+
+impl Parsed {
+    /// A front-matter key as text.
+    #[must_use]
+    pub fn text(&self, key: &str) -> Option<String> {
+        match self.front.get(key)? {
+            Json::String(s) => Some(s.clone()),
+            Json::Number(n) => Some(n.to_string()),
+            _ => None,
+        }
+    }
+
+    /// The field values the file gives, by key: the front matter's other
+    /// keys, and the sections. A field given twice is refused.
+    pub fn values(&self) -> Result<Map<String, Json>, CliError> {
+        let mut values: Map<String, Json> = self
+            .front
+            .iter()
+            .filter(|(k, _)| !READ_ONLY.contains(&k.as_str()))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        for (key, text) in &self.sections {
+            if values.insert(key.clone(), text.clone().into()).is_some() {
+                return Err(CliError {
+                    field: Some(key.clone()),
+                    ..CliError::refused("BAD_FILE", format!("`{key}` is given twice"))
+                });
+            }
+        }
+        Ok(values)
+    }
+}
+
+/// Reads an akt file.
+// r[impl cli.file]
+pub fn parse(text: &str) -> Result<Parsed, CliError> {
+    let bad = |message: String| CliError::refused("BAD_FILE", message);
+    let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
+    let rest = text
+        .strip_prefix("---\n")
+        .ok_or_else(|| bad("An akt file starts with `---` and its front matter".to_owned()))?;
+    let (front, body) = match rest.find("\n---\n") {
+        Some(end) => (&rest[..end], &rest[end + 5..]),
+        None => match rest.strip_suffix("\n---") {
+            Some(front) => (front, ""),
+            None => return Err(bad("The front matter doesn't end with `---`".to_owned())),
+        },
+    };
+    let front: Json = if front.trim().is_empty() {
+        Json::Object(Map::new())
+    } else {
+        // As YAML's own value first, which refuses a key given twice.
+        let yaml: serde_yaml_ng::Value = serde_yaml_ng::from_str(front)
+            .map_err(|e| bad(format!("The front matter isn't YAML: {e}")))?;
+        serde_json::to_value(yaml)
+            .map_err(|e| bad(format!("The front matter isn't plain values: {e}")))?
+    };
+    let Json::Object(front) = front else {
+        return Err(bad("The front matter is `key: value` lines".to_owned()));
+    };
+    let mut sections: Vec<(String, String)> = Vec::new();
+    let mut current: Option<(String, Vec<&str>)> = None;
+    for (i, line) in body.lines().enumerate() {
+        if let Some(key) = line
+            .trim()
+            .strip_prefix("<!-- field:")
+            .and_then(|l| l.strip_suffix("-->"))
+            .map(str::trim)
+        {
+            if let Some((key, lines)) = current.take() {
+                sections.push((key, lines.join("\n").trim_matches('\n').to_owned()));
+            }
+            if sections.iter().any(|(k, _)| k == key) {
+                return Err(bad(format!("The section for `{key}` is there twice")));
+            }
+            current = Some((key.to_owned(), Vec::new()));
+        } else if let Some((_, lines)) = current.as_mut() {
+            lines.push(line);
+        } else if !line.trim().is_empty() {
+            return Err(bad(format!(
+                "Line {} is outside a section: each multiline field starts with `<!-- field: <key> -->`",
+                i + 1
+            )));
+        }
+    }
+    if let Some((key, lines)) = current {
+        sections.push((key, lines.join("\n").trim_matches('\n').to_owned()));
+    }
+    Ok(Parsed { front, sections })
+}
+
 /// `value` as YAML: plain scalars where they read the same, JSON's quoting
 /// where they wouldn't, and flow style for lists and objects.
 #[must_use]
@@ -284,5 +382,50 @@ Line two
         ] {
             assert_eq!(yaml(&Json::from(text)), written, "{text}");
         }
+    }
+
+    // r[verify cli.file]
+    #[test]
+    fn reads_back_what_it_writes() {
+        let akt = akt();
+        let parsed = parse(&write(&akt)).unwrap();
+        assert_eq!(parsed.text("number").as_deref(), Some("ITEM-0001"));
+        assert_eq!(parsed.front["revision"], json!(3));
+        assert_eq!(parsed.front["in"], json!(["BACKLOG-1"]));
+        let values = parsed.values().unwrap();
+        assert_eq!(values["title"], json!("Export: and import"));
+        assert_eq!(values["kind"], json!("fix"));
+        assert_eq!(
+            values["change"],
+            json!({ "url": "https://git.example/pr/1" })
+        );
+        assert_eq!(values["description"], json!("Line one\n\nLine two"));
+    }
+
+    #[test]
+    fn refuses_what_isn_t_an_akt_file() {
+        for (text, why) in [
+            ("number: X\n", "no front matter"),
+            ("---\nnumber: X\n", "unended front matter"),
+            ("---\n- a\n---\n", "not a mapping"),
+            (
+                "---\nnumber: X\n---\nloose text\n",
+                "text outside a section",
+            ),
+            (
+                "---\n---\n<!-- field: a -->\nx\n<!-- field: a -->\ny\n",
+                "a section twice",
+            ),
+            ("---\na: 1\na: 2\n---\n", "a key twice"),
+        ] {
+            assert_eq!(
+                parse(text).map(|_| ()).unwrap_err().code,
+                "BAD_FILE",
+                "{why}"
+            );
+        }
+        let twice = parse("---\na: x\n---\n<!-- field: a -->\ny\n").unwrap();
+        assert_eq!(twice.values().unwrap_err().field.as_deref(), Some("a"));
+        assert!(parse("---\r\nnumber: X\r\n---\r\n").is_ok());
     }
 }

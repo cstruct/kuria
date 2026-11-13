@@ -62,8 +62,10 @@ pub async fn people(session: &Session) -> Result<People, CliError> {
         Err(error) if error.code == "FORBIDDEN" => Vec::new(),
         Err(error) => return Err(error),
     };
+    let viewer = session.graphql("{ viewer { subject } }", json!({})).await?;
     Ok(People {
         users: read(users["users"].clone(), "users")?,
         contacts,
+        me: viewer["viewer"]["subject"].as_str().map(str::to_owned),
     })
 }

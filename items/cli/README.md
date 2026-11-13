@@ -72,6 +72,38 @@ type.
   attachments as flow-style objects. Strings are quoted only where YAML
   would read them as something else.
 
+- **Writes** (`cli.write`, `cli.apply`):
+  - `new <type> [--in <container>]… [--set <field>=<value>]… [--file
+    <file>]`: from flags, a file, or a file and flags (flags win). A file's
+    `number`, `revision`, `state` and `links` are another akt's, so they're
+    ignored; its `in` is added to `--in`;
+  - `apply <file>… [--dry-run]`: compares each field of the file with the
+    akt as it is, as the inputs the server takes (so a user written by
+    name or by email is the same user), and edits only those that differ.
+    A field the file leaves out is cleared. A file read at an older
+    revision is refused as `STALE` (exit 3), naming what changed since; a
+    changed `type`, `state`, `in` or `links`, and a key the type lacks, are
+    refused with the key as the field;
+  - `set <number> <field>=<value>…`; `do <number> <transition>` (by key or
+    name) `[--set …]`; `draft <number> <field>`;
+  - `add <container> <member>…`, `remove …`, `transfer <member> <from>
+    <to>`, `move <number> --before|--after <number>`;
+  - `link <source> <kind> <target> [--pin]` (the kind by key or name;
+    `--pin` pins the target's current revision), `unlink …`;
+  - `types export [<key>…] [-o <dir>]`, `types define <file>… [--check]`
+    (a file holds a document or a list of them; `--check` validates each
+    with `kuria-config`, offline, without signing in).
+
+  Every one that makes revisions takes `--reason`. `move` makes none: it
+  changes the tenant's order only.
+- **Values** (`cli.values`, [`src/values.rs`](src/values.rs)): `--set`
+  takes options by key or name (several comma-separated), users and
+  contacts by email, name, `@me` or identifier, dates as `YYYY-MM-DD`,
+  checkboxes as `true`, `false` or `for:<someone>`, references, Git and
+  Docker values as JSON (a reference also as its URL), attachments by id,
+  a multiline text as `@<file>` or `@-`, and an empty value to clear. The
+  file's values are read the same way.
+
 ### JSON answers
 
 | Command | Object |
@@ -84,6 +116,12 @@ type.
 | `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns \| akter, more}, transitions, history?}}` |
 | `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}` |
 | `users`, `contacts` | `{users: [{id, name, email}]}`, `{contacts: [{id, displayName, name, email, user}]}` |
+
+| `new` | `{number, revision}` |
+| `apply` | `{applied: [{file, number, revision, changed, dryRun?}]}` |
+| `set`, `do`, `draft` | `{number, revision, changed \| state, transition \| field}` |
+| `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
+| `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
 `fields` maps field keys to values in the akt file's form.
 
@@ -107,6 +145,9 @@ type.
   Kuria's answers and the GraphQL fragments asking for them;
   [`src/values.rs`](src/values.rs), [`src/file.rs`](src/file.rs),
   [`src/history.rs`](src/history.rs), [`src/md.rs`](src/md.rs).
+- [`src/writes.rs`](src/writes.rs): the writes, in `writes/edit.rs` (`new`,
+  `apply`, `set`, `do`, `draft`), `writes/arrange.rs` (membership, order,
+  links) and `writes/types.rs` (documents).
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),
   [`src/output.rs`](src/output.rs), [`src/error.rs`](src/error.rs).
 
@@ -130,21 +171,26 @@ cargo test -p kuria-cli
 
 - Unit tests: profile resolution, the secret file's permissions, DPoP
   proofs checked with Konklav's own `verify_proof`, error codes and exit
-  codes, the command line, values as text and in files, `--where` values
-  by kind, the akt file and YAML quoting, and the history's wording.
+  codes, the command line, values as text and in files, `--where` and
+  `--set` values by kind, the akt file written and read back, YAML
+  quoting, refused files, and the history's wording.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
   built binary against the e2e stack. Playwright authorizes the link
   `kuria login` prints; then `whoami` from the profile, a refresh, `logout`
   revoking at Konklav, and `KURIA_KEY` saving nothing, with exit codes 4
   and 5; and every read against the release-management example: schema,
   filtered and paged lists, search, the akt file, `show` with a board and
-  history, and refusals with exit codes 1 and 2.
+  history, and refusals with exit codes 1 and 2; and every write, on akt
+  types it defines: offline checks, the file round trip (unchanged,
+  edited, cleared, stale, read-only and unknown keys), `set`, `do`,
+  links with pins, order, membership, transfers, a draft, and `new
+  --file`.
 
 ## Traceability
 
 - Spec: [`docs/spec/cli.md`](../../docs/spec/cli.md) (`cli.profile`,
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
-  `errors`, `read`, `file`, `values`); `app.history` for the history's
-  wording.
+  `errors`, `read`, `file`, `apply`, `write`, `values`); `app.history`
+  for the history's wording.
 - Annotations: `r[impl cli.*]` in `src/`, `r[verify cli.*]` in the unit
   tests and `e2e/tests/cli.spec.ts`.

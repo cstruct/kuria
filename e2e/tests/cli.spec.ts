@@ -193,3 +193,177 @@ test('kuria reads akt types and akter like files', async () => {
 	expect(JSON.parse(option.stderr).error).toMatchObject({ code: 'BAD_REQUEST', field: 'kind' });
 	expect((await cli.run(['schema', 'nope'])).code).toBe(2);
 });
+
+// r[verify cli.write]
+// r[verify cli.apply]
+// r[verify cli.values]
+// r[verify cli.file]
+test('kuria writes akter: from files and flags, with refusals', async () => {
+	// Some forty commands, each signing in with the key.
+	test.setTimeout(300_000);
+	const admin = await api(seeded().clients.admin);
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const word = `w${Date.now()}`;
+	const dir = cli.dir;
+	const ok = async (args: string[]) => {
+		const ran = await cli.run([...args, '--format', 'json']);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return JSON.parse(ran.stdout);
+	};
+	const refused = async (args: string[], code: number) => {
+		const ran = await cli.run([...args, '--format', 'json']);
+		expect(ran.code, `${args.join(' ')}: ${ran.stdout}`).toBe(code);
+		return JSON.parse(ran.stderr).error;
+	};
+
+	// Akt types, checked offline and then defined.
+	const task = {
+		key: 'cli_task',
+		name: 'CLI task',
+		number: 'CT-{seq}',
+		fields: [
+			{ key: 'title', name: 'Title', kind: 'text', required: true },
+			{ key: 'notes', name: 'Notes', kind: 'text', multiline: true },
+			{
+				key: 'size',
+				name: 'Size',
+				kind: 'choice',
+				options: [
+					{ key: 'small', name: 'Small' },
+					{ key: 'large', name: 'Large' }
+				]
+			},
+			{ key: 'owner', name: 'Owner', kind: 'user' },
+			{ key: 'due', name: 'Due', kind: 'date' },
+			{ key: 'checked', name: 'Checked', kind: 'checkbox' },
+			{
+				key: 'siblings',
+				name: 'Siblings',
+				kind: 'text',
+				multiline: true,
+				draft: { types: ['cli_task'], line: '- {number} {field:title}' }
+			}
+		],
+		states: [
+			{ key: 'todo', name: 'To do', initial: true },
+			{ key: 'doing', name: 'Doing' },
+			{ key: 'done', name: 'Done', final: true }
+		],
+		transitions: [
+			{ key: 'start', name: 'Start', from: ['todo'], to: 'doing' },
+			{ key: 'finish', name: 'Finish', from: ['doing'], to: 'done', requires: ['checked'] }
+		],
+		links: [{ key: 'blocks', name: 'Blocks', inverse: 'Blocked by', to: ['cli_task'] }]
+	};
+	const plan = {
+		key: 'cli_plan',
+		name: 'CLI plan',
+		number: 'CP-{seq}',
+		fields: [{ key: 'title', name: 'Title', kind: 'text', required: true }],
+		states: [{ key: 'open', name: 'Open', initial: true }],
+		contains: [{ type: 'cli_task' }]
+	};
+	writeFileSync(join(dir, 'types.json'), JSON.stringify([plan, task]));
+	writeFileSync(join(dir, 'bad.json'), JSON.stringify({ ...task, key: 'Bad Key', number: 'X-{nope}' }));
+	expect((await ok(['types', 'define', '--check', join(dir, 'types.json')])).valid).toEqual(['cli_plan', 'cli_task']);
+	const invalid = await refused(['types', 'define', '--check', join(dir, 'bad.json')], 1);
+	expect(invalid.code).toBe('INVALID_AKT_TYPE');
+	expect(invalid.message).toContain('number');
+	const defined = await ok(['types', 'define', join(dir, 'types.json')]);
+	expect(defined.defined.map((d: { key: string }) => d.key)).toEqual(['cli_plan', 'cli_task']);
+	expect((await ok(['types', 'export', 'cli_task'])).types[0].links[0].key).toBe('blocks');
+
+	const auditor = `auditor-${word}@x.example`;
+	await admin.graphql('mutation($e: String!) { addContact(input: { name: "Auditor", email: $e }) { id } }', {
+		e: auditor
+	});
+
+	// Created from flags, a multiline text from a file.
+	writeFileSync(join(dir, 'notes.md'), 'Why it matters.\n\nWhat done is.\n');
+	const p = (await ok(['new', 'cli_plan', '--set', `title=Plan ${word}`, '--reason', 'Planning'])).number;
+	const a = (
+		await ok([
+			'new',
+			'cli_task',
+			'--in',
+			p,
+			'--set',
+			`title=A ${word}`,
+			'--set',
+			'size=Small',
+			'--set',
+			`owner=${auditor}`,
+			'--set',
+			`notes=@${join(dir, 'notes.md')}`
+		])
+	).number;
+	const b = (await ok(['new', 'cli_task', '--in', p, '--set', `title=B ${word}`])).number;
+
+	// The file round trip: unchanged changes nothing; an edit changes what
+	// it edits, a field left out is cleared.
+	await ok(['cat', a, '-o', dir]);
+	const path = join(dir, `${a}.md`);
+	const read = readFileSync(path, 'utf8');
+	expect(read).toContain(`owner: ${auditor}`);
+	expect(read).toContain('<!-- field: notes -->\nWhy it matters.\n\nWhat done is.\n');
+	expect((await ok(['apply', path])).applied[0].changed).toEqual([]);
+	const edited = read
+		.replace(`title: A ${word}`, `title: A ${word} again\ndue: 2026-12-01\nchecked: true`)
+		.replace('size: small\n', '')
+		.replace('What done is.', 'What done is, now.');
+	writeFileSync(path, edited);
+	expect((await ok(['apply', path, '--dry-run'])).applied[0]).toMatchObject({ dryRun: true, revision: 1 });
+	const applied = await ok(['apply', path, '--reason', 'Clarified']);
+	expect(applied.applied[0].changed.sort()).toEqual(['checked', 'due', 'notes', 'size', 'title']);
+	const shown = (await ok(['show', a, '--history'])).akt;
+	expect(shown.fields).toMatchObject({ title: `A ${word} again`, due: '2026-12-01', checked: true, owner: auditor });
+	expect(shown.fields.size).toBeUndefined();
+	expect(shown.history[1]).toMatchObject({ what: 'edited it', reason: 'Clarified' });
+
+	// A stale file is refused, saying what changed since.
+	const stale = await refused(['apply', path], 3);
+	expect(stale.code).toBe('STALE');
+	expect(stale.message).toContain('Title');
+	// Read-only keys and unknown fields are refused, saying which.
+	await ok(['cat', a, '-o', dir]);
+	writeFileSync(path, readFileSync(path, 'utf8').replace('state: todo', 'state: done'));
+	expect((await refused(['apply', path], 1)).field).toBe('state');
+	await ok(['cat', a, '-o', dir]);
+	writeFileSync(path, readFileSync(path, 'utf8').replace('---\n\n', 'colour: red\n---\n\n'));
+	expect(await refused(['apply', path], 1)).toMatchObject({ code: 'UNKNOWN_FIELD', field: 'colour' });
+
+	// Edits, transitions, links, order and membership by verbs.
+	expect((await ok(['set', b, 'size=large', `owner=${auditor}`])).changed.sort()).toEqual(['owner', 'size']);
+	expect((await ok(['do', a, 'Start'])).state).toBe('doing');
+	expect((await refused(['do', a, 'nope'], 1)).code).toBe('UNKNOWN_TRANSITION');
+	expect((await ok(['do', a, 'finish', '--reason', 'Shipped'])).state).toBe('done');
+	expect((await ok(['link', b, 'blocks', a, '--pin'])).pinnedRevision).toBeGreaterThan(1);
+	const blocked = (await ok(['show', a])).akt.links;
+	expect(blocked).toMatchObject([{ name: 'Blocked by', outgoing: false, akt: { number: b } }]);
+	await ok(['unlink', b, 'Blocks', a]);
+	expect((await ok(['show', a])).akt.links).toEqual([]);
+	expect((await refused(['link', b, 'relates', a], 1)).code).toBe('INVALID_LINK');
+	await ok(['move', b, '--before', a]);
+	const order = (await ok(['ls', 'cli_task', '--in', p])).akter.map((x: { number: string }) => x.number);
+	expect(order).toEqual([b, a]);
+	const q = (await ok(['new', 'cli_plan', '--set', `title=Next ${word}`])).number;
+	await ok(['transfer', b, p, q, '--reason', 'Later']);
+	expect((await ok(['show', b])).akt.in).toEqual([q]);
+	await ok(['remove', q, b]);
+	await ok(['add', p, b]);
+	expect((await ok(['show', b])).akt.in).toEqual([p]);
+
+	// A field drafted from its recipe: the other tasks in its plan.
+	await ok(['draft', b, 'siblings']);
+	const siblings = (await ok(['show', b])).akt.fields.siblings;
+	expect(siblings).toContain(`${a} A ${word} again`);
+	expect(siblings).not.toContain(`${b} B`);
+	// A final akt can't be edited, even by a draft.
+	expect((await refused(['draft', a, 'siblings'], 1)).code).toBe('REFUSED');
+
+	// A new akt from a file, as another akt's file is a template.
+	await ok(['cat', b, '-o', dir]);
+	const copy = (await ok(['new', 'cli_task', '--file', join(dir, `${b}.md`), '--set', `title=Copy ${word}`])).number;
+	const copied = (await ok(['show', copy])).akt;
+	expect(copied).toMatchObject({ state: 'todo', in: [p], fields: { size: 'large', title: `Copy ${word}` } });
+});

@@ -54,7 +54,17 @@ fn answered(mut answer: Value) -> Result<Value, CliError> {
         let code = error["extensions"]["code"]
             .as_str()
             .unwrap_or("BAD_REQUEST");
-        let message = error["message"].as_str().unwrap_or(code);
+        let mut message = error["message"].as_str().unwrap_or(code).to_owned();
+        // A refused akt type document lists each problem with its path.
+        if let Some(problems) = error["extensions"]["problems"].as_array() {
+            for problem in problems {
+                message.push_str(&format!(
+                    "\n- {}: {}",
+                    problem["path"].as_str().unwrap_or_default(),
+                    problem["message"].as_str().unwrap_or_default()
+                ));
+            }
+        }
         let field = error["extensions"]["field"].as_str().map(str::to_owned);
         return Err(CliError::from_server(code, message, field));
     }
