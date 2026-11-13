@@ -59,7 +59,8 @@ type.
     single-line text whole), `--search`, `--limit` and `--after`, or
     `--all` pages. With a type, its list fields are the columns;
   - `find <text>`; `cat <number>… [-o <dir>]` (`cli.file`); `show <number>
-    [--history]` (fields, containers, members by board column or by type,
+    [--history]` (fields, containers, members by board column, and those
+    no column holds by type, as the app shows them,
     links with pins, the transitions its state allows); `history
     <number>`, said as the app says it (`app.history`); `users`,
     `contacts`.
@@ -126,7 +127,7 @@ type.
 | `schema` | `{type: {key, name, version, numberPattern, fields: [{key, name, kind, required, multiline, description, options, format, draft}], states: [{key, name, initial, final, tone}], transitions: [{key, name, from, to, requires, action}], contains, createdIn, links, board, presentation}}` |
 | `ls`, `find` | `{akter: [{number, type, title, state, updatedAt, fields}], endCursor, hasNextPage}` |
 | `cat` | `{akter: [{number, type, revision, state, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o` |
-| `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns \| akter, more}, transitions, history?}}` |
+| `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns?, akter, more}, transitions, history?}}` |
 | `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}` |
 | `users`, `contacts` | `{users: [{id, name, email}]}`, `{contacts: [{id, displayName, name, email, user}]}` |
 

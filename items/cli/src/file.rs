@@ -237,13 +237,34 @@ pub fn parse(text: &str) -> Result<Parsed, CliError> {
     };
     let mut sections: Vec<(String, String)> = Vec::new();
     let mut current: Option<(String, Vec<&str>)> = None;
+    // A marker inside a fenced code block is a field's text, such as an
+    // akt file shown in a plan's design.
+    let mut fence: Option<&str> = None;
     for (i, line) in body.lines().enumerate() {
-        if let Some(key) = line
-            .trim()
-            .strip_prefix("<!-- field:")
-            .and_then(|l| l.strip_suffix("-->"))
-            .map(str::trim)
-        {
+        let trimmed = line.trim_start();
+        let opens = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f));
+        match (fence, opens) {
+            (None, Some(f)) if current.is_some() => fence = Some(f),
+            (Some(open), Some(f))
+                if f == open
+                    && trimmed
+                        .trim_end()
+                        .chars()
+                        .all(|c| c == open.chars().next().unwrap_or('`')) =>
+            {
+                fence = None;
+            }
+            _ => {}
+        }
+        let marker = if fence.is_none() && opens.is_none() {
+            line.trim()
+                .strip_prefix("<!-- field:")
+                .and_then(|l| l.strip_suffix("-->"))
+                .map(str::trim)
+        } else {
+            None
+        };
+        if let Some(key) = marker {
             if let Some((key, lines)) = current.take() {
                 sections.push((key, lines.join("\n").trim_matches('\n').to_owned()));
             }
@@ -427,5 +448,16 @@ Line two
         let twice = parse("---\na: x\n---\n<!-- field: a -->\ny\n").unwrap();
         assert_eq!(twice.values().unwrap_err().field.as_deref(), Some("a"));
         assert!(parse("---\r\nnumber: X\r\n---\r\n").is_ok());
+    }
+
+    // r[verify cli.file]
+    #[test]
+    fn a_marker_in_a_code_block_is_text() {
+        let text = "---\nnumber: X\n---\n\n<!-- field: design -->\nLike this:\n\n```markdown\n<!-- field: acceptance -->\n- a\n```\n\nAfter.\n\n<!-- field: goal -->\nG\n";
+        let parsed = parse(text).unwrap();
+        assert_eq!(parsed.sections.len(), 2, "{:?}", parsed.sections);
+        assert!(parsed.sections[0].1.contains("<!-- field: acceptance -->"));
+        assert!(parsed.sections[0].1.ends_with("After."));
+        assert_eq!(parsed.sections[1], ("goal".to_owned(), "G".to_owned()));
     }
 }

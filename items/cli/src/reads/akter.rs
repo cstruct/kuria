@@ -139,12 +139,26 @@ pub async fn show(session: &Session, number: &str, with_history: bool) -> Result
     let shape = &akt.shape;
     let has_board = shape.document["board"].is_object();
 
+    // r[impl app.members]
+    // The board's columns, and the members it doesn't map, listed by type,
+    // as the app shows them.
     let columns: Vec<&Column> = around
         .board
         .columns
         .iter()
-        .filter(|c| has_board && !(c.key == "unmapped" && c.akter.is_empty()))
+        .filter(|c| has_board && c.key != "unmapped")
         .collect();
+    let listed: Vec<&Other> = if has_board {
+        around
+            .board
+            .columns
+            .iter()
+            .filter(|c| c.key == "unmapped")
+            .flat_map(|c| c.akter.iter())
+            .collect()
+    } else {
+        around.members.nodes.iter().collect()
+    };
     let allowed: Vec<_> = shape
         .transitions
         .iter()
@@ -155,6 +169,7 @@ pub async fn show(session: &Session, number: &str, with_history: bool) -> Result
         akt: &akt,
         around: &around,
         columns: &columns,
+        listed: &listed,
         allowed: &allowed,
         described: &described,
         with_history,
@@ -170,6 +185,8 @@ struct Shown<'a> {
     akt: &'a Akt,
     around: &'a Around,
     columns: &'a [&'a Column],
+    /// The members no column holds, listed by type.
+    listed: &'a [&'a Other],
     allowed: &'a [&'a crate::model::Transition],
     described: &'a [Described],
     with_history: bool,
@@ -274,34 +291,33 @@ impl Shown<'_> {
             akt,
             around,
             columns,
+            listed,
             ..
         } = *self;
         let mut text = String::new();
-        if !columns.is_empty() {
+        if !columns.is_empty() || !listed.is_empty() {
             text.push_str("\n## Members\n");
-            for column in columns {
-                text.push_str(&format!("\n### {}\n\n", column.name));
-                if column.akter.is_empty() {
-                    text.push_str("None.\n");
-                }
-                for member in &column.akter {
-                    text.push_str(&format!("- {}\n", other(member)));
-                }
+        }
+        for column in columns {
+            text.push_str(&format!("\n### {}\n\n", column.name));
+            if column.akter.is_empty() {
+                text.push_str("None.\n");
             }
-        } else if !around.members.nodes.is_empty() {
-            text.push_str("\n## Members\n");
-            let mut by_type: Vec<(&str, Vec<&Other>)> = Vec::new();
-            for member in &around.members.nodes {
-                match by_type.iter_mut().find(|(t, _)| *t == member.akt_type.name) {
-                    Some((_, members)) => members.push(member),
-                    None => by_type.push((&member.akt_type.name, vec![member])),
-                }
+            for member in &column.akter {
+                text.push_str(&format!("- {}\n", other(member)));
             }
-            for (type_name, members) in &by_type {
-                text.push_str(&format!("\n### {type_name}\n\n"));
-                for member in members {
-                    text.push_str(&format!("- {}\n", other(member)));
-                }
+        }
+        let mut by_type: Vec<(&str, Vec<&Other>)> = Vec::new();
+        for member in listed {
+            match by_type.iter_mut().find(|(t, _)| *t == member.akt_type.name) {
+                Some((_, members)) => members.push(member),
+                None => by_type.push((&member.akt_type.name, vec![member])),
+            }
+        }
+        for (type_name, members) in &by_type {
+            text.push_str(&format!("\n### {type_name}\n\n"));
+            for member in members {
+                text.push_str(&format!("- {}\n", other(member)));
             }
         }
         if around.members.page_info.has_next_page {
@@ -315,6 +331,7 @@ impl Shown<'_> {
             akt,
             around,
             columns,
+            listed,
             allowed,
             described,
             with_history,
@@ -337,13 +354,17 @@ impl Shown<'_> {
                 })
             })
             .collect();
-        json["members"] = if columns.is_empty() {
-            json!({ "akter": around.members.nodes.iter().map(other_json).collect::<Vec<_>>(), "more": around.members.page_info.has_next_page })
-        } else {
-            json!({ "columns": columns.iter().map(|c| json!({
-                "key": c.key, "name": c.name, "akter": c.akter.iter().map(other_json).collect::<Vec<_>>(),
-            })).collect::<Vec<_>>(), "more": around.members.page_info.has_next_page })
-        };
+        let mut members = json!({
+            "akter": listed.iter().map(|o| other_json(o)).collect::<Vec<_>>(),
+            "more": around.members.page_info.has_next_page,
+        });
+        if !columns.is_empty() {
+            members["columns"] = columns
+                .iter()
+                .map(|c| json!({ "key": c.key, "name": c.name, "akter": c.akter.iter().map(other_json).collect::<Vec<_>>() }))
+                .collect();
+        }
+        json["members"] = members;
         json["transitions"] = allowed
             .iter()
             .map(|t| json!({ "key": t.key, "name": t.name, "to": t.to, "requires": t.requires }))

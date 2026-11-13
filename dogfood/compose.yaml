@@ -1,0 +1,52 @@
+# Konklav for dogfooding Kuria locally: its Postgres, its migrations and
+# the server, at the Konklav release Kuria pins (=1.8.0). Unlike the
+# end-to-end stack, it keeps its data: `mise run dogfood:down` stops it,
+# and only `mise run dogfood:reset` forgets it.
+name: kuria-dogfood
+
+x-konklav: &konklav
+  image: cstruct/konklav:1.8.0
+  volumes:
+    - ./konklav/config.styx:/etc/konklav/config.styx:ro
+    # Made once by scripts/prepare.ts, never committed.
+    - ./.state/secrets.styx:/etc/konklav/secrets.styx:ro
+    - ./.state/keys:/keys:ro
+
+services:
+  postgres:
+    image: konklav-dev-postgres:18.6-jsonschema0.3.4
+    build: ../e2e/konklav/postgres
+    environment:
+      POSTGRES_USER: konklav
+      POSTGRES_PASSWORD: konklav
+      POSTGRES_DB: konklav
+    volumes:
+      - konklav-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U konklav -d konklav"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
+  migrate:
+    <<: *konklav
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  konklav:
+    <<: *konklav
+    command: ["serve"]
+    restart: on-failure
+    ports:
+      - "127.0.0.1:18180:8080"
+      - "127.0.0.1:18181:8081"
+      - "127.0.0.1:18182:8082"
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+
+volumes:
+  konklav-data:

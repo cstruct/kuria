@@ -1,14 +1,18 @@
 # Kuria Plan Standard
 
-This file defines the shared standard for task-specific planning documents in this repository.
+This file defines the shared standard for planning work in this repository. Plans live in Kuria itself, as akter of the planning example's akt types ([docs/examples/planning](../../docs/examples/planning/README.md)), read and written with the `kuria` command-line client. This file is the rubric; it is not a plan.
 
-Use it when creating or updating concrete plan files such as `IMPLEMENTATION_PLAN.md`, `.agents/plans/<topic>.md`, or another task-specific Markdown file. This file is the rubric. It is not itself the active implementation plan for every change.
+## Where Plans Live
+
+- **Locally:** the dogfooding stack keeps its data between runs ([dogfood/README.md](../../dogfood/README.md)). Start it with `mise run dogfood:serve`; agents then run `mise run dogfood:kuria -- <command>`, which signs in as the seeded agent. `mise run dogfood:kuria -- guide` explains the commands, the akt file and the exit codes.
+- **What a plan is:** a `plan` akt (`PLAN-007`) containing `task`, `gap` and `decision` akter (`PLAN-007-T03`, `PLAN-007-G01`, `PLAN-007-D01`), each created in it.
+- **The Markdown plans** that came before (`.agents/plans/<topic>.md`) were moved into Kuria by `dogfood/scripts/migrate.ts`. Don't start new ones.
 
 ## Purpose
 
-A plan document should let a new contributor, or a coding agent with no prior context, understand why the work matters, what the intended end state is, how to implement it safely, and how to prove it works.
+A plan should let a new contributor, or a coding agent with no prior context, understand why the work matters, what the intended end state is, how to implement it safely, and how to prove it works.
 
-Plans are required for work that is likely to span multiple commits, multiple sessions, or multiple design and implementation steps. Small, obvious, single-file edits do not need a full plan unless the user asks for one.
+Plans are required for work that is likely to span multiple commits, multiple sessions, or multiple design and implementation steps. Small, obvious, single-file edits do not need a plan unless the user asks for one.
 
 ## Core Principles
 
@@ -16,15 +20,15 @@ Every plan must be:
 
 - Self-contained enough that a newcomer can follow it without needing hidden context from chat history.
 - Outcome-focused, not just a list of code edits.
-- A living document that is updated as decisions, discoveries, and progress change.
+- Living: updated as decisions, discoveries, and progress change.
 - Spec-first: requirements and design should be clarified before implementation is treated as complete.
 - Verifiable: it must say how to observe the intended behavior or otherwise prove the change works.
 
-When a plan depends on prior work, restate the important assumptions instead of relying on memory. Link to relevant repo files, but also summarize the context the reader needs.
+When a plan depends on prior work, restate the important assumptions instead of relying on memory, and link to the relevant repository files or other plans by number.
 
 ## When To Use A Plan
 
-Create or update a task-specific plan when the work involves any of the following:
+Create or update a plan when the work involves any of the following:
 
 - A complex feature or substantial refactor.
 - A migration that spans multiple files, layers, or milestones.
@@ -32,38 +36,35 @@ Create or update a task-specific plan when the work involves any of the followin
 - Work that is expected to continue across multiple sessions.
 - User-visible behavior, data model, persistence, or API changes that need explicit acceptance criteria.
 
-If there are several concurrent efforts, prefer several focused plan files over one overloaded master plan.
+If there are several concurrent efforts, prefer several focused plans over one overloaded one.
 
-## Required Structure
+## What A Plan Holds
 
-Each concrete plan file should usually contain these sections, adapted to the task:
-
-1. Title
-2. Purpose or goal
-3. Current direction or constraints
-4. Progress snapshot
-5. Known gaps or open questions
-6. Task workflow
-7. Task list or milestones
-8. Verification or testing strategy
-9. Decision notes
-10. Updating this plan
-
-Not every plan needs the exact same section names, but it should cover the same concerns.
+| Concern | Where it goes |
+|---|---|
+| Title | the plan's `title` |
+| Purpose or goal: what becomes possible, and how anyone will know | `goal`; activating a plan requires it |
+| Current direction, constraints, design | `design`, in Markdown, with its own headings |
+| Verification or testing strategy | `verification` |
+| Tasks or milestones | `task` akter in the plan, worked in its order; `blocks` links say what comes first |
+| Progress | each task's state (to do, doing, in review, done, dropped), on the plan's board |
+| Known gaps and open questions | `gap` akter, closed with their resolution |
+| Decision notes | `decision` akter, decided with their context, the decision and why; a later one supersedes an earlier one |
+| Updating the plan | edits, transitions and their reasons, kept in each akt's history |
 
 ## Writing Guidance
 
 Start by explaining what becomes possible after the work is done and how someone will know it succeeded. Prefer concrete outcomes over internal implementation language.
 
-Name repository paths, modules, commands, and important data objects precisely. If a term is project-specific or easy to misread, define it in plain language the first time it appears.
+Name repository paths, modules, commands, and important data objects precisely. If a term is project-specific or easy to misread, define it in plain language the first time it appears, and add it to [docs/nomenclature.md](../../docs/nomenclature.md).
 
-Resolve ambiguity in the plan when possible. Do not leave major design choices implicit if those choices affect behavior, safety, migration order, or acceptance criteria.
+Resolve ambiguity in the plan when possible. Do not leave major design choices implicit if those choices affect behavior, safety, migration order, or acceptance criteria. An open one is a gap.
 
-Keep the plan idempotent and safe to resume. Someone should be able to stop midway, come back later, and continue from the document without guessing what changed.
+Keep the plan safe to resume: someone should be able to stop midway, come back later, and continue from the plan without guessing what changed.
 
-## Plan Workflow
+## Task Workflow
 
-Every task or milestone in a concrete plan should follow this workflow unless there is a documented reason not to:
+Every task should follow this workflow unless there is a documented reason not to:
 
 - Define or update requirements first.
 - Write or update design notes before committing to implementation details.
@@ -75,33 +76,32 @@ Every task or milestone in a concrete plan should follow this workflow unless th
 - Land one coherent changeset where practical.
 - Update the plan to reflect the new reality.
 
-If something is unclear and the answer would materially change the implementation, record the question explicitly and resolve it before marking the work complete.
+If something is unclear and the answer would materially change the implementation, record it as a gap and resolve it before marking the work done.
 
-## Progress Tracking
+## Working A Plan
 
-Concrete plan files should make progress easy to inspect at a glance.
+```sh
+kuria ls plan --state active                   # the plans being worked
+kuria show PLAN-007                            # its board, gaps, decisions
+kuria set PLAN-007-T03 assignee=@me            # take a task
+kuria do PLAN-007-T03 start --reason "…"
+kuria cat PLAN-007-T03 > t03.md                # record progress as a file…
+kuria apply t03.md --reason "…"                # …and write back what changed
+kuria do PLAN-007-T03 finish --reason "…"      # or `review` first, with its change
+kuria new gap --in PLAN-007 --set title="…"    # something found missing
+kuria new decision --in PLAN-007 --set title="…"
+```
 
-Use checklists for:
-
-- Completed slices
-- Known gaps
-- Per-task or per-milestone work items
-
-Checklist items in concrete plans should include stable short IDs when the plan is likely to be referenced across multiple sessions or status updates.
-
-- Prefer IDs that are easy to read in conversation, for example `T5.1`, `G2`, or `V3`.
-- IDs should be stable once introduced; do not renumber completed items unless there is a strong reason.
-- Put the ID at the start of the checklist text so humans and agents can cite it directly in chat and progress reports.
-- Apply IDs at least to task and milestone checklists. Use them for progress snapshots or known gaps too when those lists are expected to be referenced frequently.
+(Agents prefix each with `mise run dogfood:kuria --`.)
 
 When a task completes:
 
-1. Mark the relevant checklist items complete.
-2. Update the progress snapshot.
-3. Record follow-up work discovered during implementation.
-4. Update decision notes if the design changed.
+1. Record what was done, and how it was verified, in its description.
+2. Finish it, with a reason.
+3. Add the follow-up work it found as tasks or gaps.
+4. Record decisions the work made, and supersede those it reversed.
 
-Do not leave stale checked or unchecked items that no longer describe the codebase.
+Akt numbers are stable references: cite `PLAN-007-T03` in commits, conversation and other plans. Never reuse one; drop a task instead of deleting it (nothing is deleted).
 
 ## Verification Standard
 
@@ -117,21 +117,7 @@ Avoid acceptance criteria that only restate internal code structure. Prefer stat
 
 ## Decision Notes
 
-Include a section for important design decisions, tradeoffs, and reversals. The goal is to preserve why the current direction was chosen, not just what the current direction is.
-
-When you change the plan materially, update this section so a later reader can understand the pivot without reading prior chat logs.
-
-## Relationship To Existing Plans
-
-`IMPLEMENTATION_PLAN.md` and similar files are concrete plan instances. They should follow this standard while staying tailored to the actual effort.
-
-It is acceptable to keep:
-
-- one long-lived implementation plan for an ongoing initiative
-- several focused plan files for parallel efforts
-- short plan files for one-off migrations or refactors
-
-Choose the structure that keeps each plan readable and current. For agent-maintained task plans, prefer `.agents/plans/` unless there is a reason for the plan to live at the repository root.
+Record important design decisions, tradeoffs, and reversals as decisions, so a later reader understands why the current direction was chosen, not just what it is. When the plan changes materially, decide a new one and let it supersede the old (`kuria link <new> supersedes <old>`).
 
 ## Anti-Patterns
 
@@ -140,68 +126,35 @@ Avoid plans that:
 - only list code edits without stating the user-visible goal
 - assume unstated background knowledge
 - become stale after implementation starts
-- mix unrelated initiatives into one giant checklist
+- mix unrelated initiatives into one plan
 - treat tests or docs as optional afterthoughts
-- mark work complete without describing verification
+- mark work done without describing verification
 
-## Minimal Skeleton
+## Starting A Plan
 
-Use this as a starting point for new task-specific plans:
+```sh
+cat > plan.md <<'MD'
+---
+type: plan
+title: <what becomes possible>
+---
 
-```md
-# <Plan Title>
+<!-- field: goal -->
+The outcome, and how success will be recognized.
 
-This file tracks the plan for <initiative>.
-
-## Goal
-
-Describe the outcome and how success will be recognized.
-
+<!-- field: design -->
 ## Constraints And Assumptions
 
-- ...
+- …
 
-## Progress Snapshot
+## Design
 
-Completed slices:
+…
 
-- [ ] ...
-
-Known gaps:
-
-- [ ] ...
-
-## Task Workflow
-
-- [ ] Define or update requirements first.
-- [ ] Write or update design notes.
-- [ ] Implement the code.
-- [ ] Add or update tests.
-- [ ] Update docs.
-- [ ] Run verification and compare requirements, design, code, tests, and docs.
-- [ ] If any mismatch appears, loop back before continuing.
-- [ ] Land one coherent changeset.
-- [ ] Mark the task complete in this file.
-
-## Task List
-
-### Task 1: <name>
-
-Goal: <goal>
-
-- [ ] T1.1 ...
-
-## Verification Strategy
-
-- ...
-
-## Decision Notes
-
-- ...
-
-## Updating This Plan
-
-1. Mark completed work.
-2. Add follow-up tasks.
-3. Keep the snapshot and gaps current.
+<!-- field: verification -->
+- …
+MD
+kuria new plan --file plan.md --reason "…"     # answers its number
+kuria do PLAN-008 activate
+kuria new task --in PLAN-008 --set title="Spec" --set acceptance=@acceptance.md
 ```

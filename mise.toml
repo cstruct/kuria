@@ -66,6 +66,43 @@ run = "cargo run -q -p kuria-cli --"
 description = "Install the `kuria` CLI into Cargo's bin directory"
 run = "cargo install --locked --path items/cli"
 
+[tasks."dogfood:up"]
+description = "Start the dogfooding Konklav, keeping its data, and seed it the first time (see dogfood/README.md)"
+dir = "dogfood"
+run = [
+    "node scripts/prepare.ts",
+    "docker compose -f compose.yaml up -d --wait --wait-timeout 300 postgres",
+    "docker compose -f compose.yaml up -d konklav",
+    "node scripts/setup.ts",
+]
+
+[tasks."dogfood:serve"]
+description = "Run Kuria for dogfooding on http://localhost:18190, keeping its data"
+depends = ["db:up", "web:build", "dogfood:up"]
+dir = "dogfood"
+run = "node scripts/serve.ts"
+
+[tasks."dogfood:kuria"]
+description = "Run the kuria CLI as the dogfooding agent, such as `mise run dogfood:kuria -- ls plan`"
+# Paths in its arguments are the caller's.
+dir = "{{cwd}}"
+quiet = true
+run = "node {{config_root}}/dogfood/scripts/kuria.ts"
+
+[tasks."dogfood:down"]
+description = "Stop the dogfooding Konklav, keeping its data"
+dir = "dogfood"
+run = "docker compose -f compose.yaml stop"
+
+[tasks."dogfood:reset"]
+description = "Forget the dogfooding stack: Konklav's data, the kuria_dogfood database and the keys"
+dir = "dogfood"
+run = [
+    "docker compose -f compose.yaml down --volumes",
+    "docker compose -f ../dev/compose.yaml exec -T postgres psql -U kuria -d kuria -c 'drop database if exists kuria_dogfood with (force)'",
+    "rm -rf .state",
+]
+
 [tasks.serve]
 description = "Run the server, configured from the environment (see items/server/README.md)"
 depends = ["db:up"]

@@ -119,7 +119,7 @@ An akt file MUST be Markdown with YAML front matter:
   read-only, then each single-line field by key;
 - **body:** each multiline field as a section that starts with
   `<!-- field: <key> -->` and runs to the next such marker, in its type's
-  field order.
+  field order. A marker inside a fenced code block is the field's text.
 
 Users and contacts MUST be written by email, else name, and read back by
 email, name or `@me`. A field without a value MUST be left out.
