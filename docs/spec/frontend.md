@@ -46,8 +46,9 @@ The app MUST show and edit each field by its kind: text in a single-line or
 multiline box, a choice or choices from the field's options, a date, a user
 or contact chosen by name, a checkbox that can be checked for someone else,
 a reference's URL and label, a git repository with a SHA or tag, a Docker
-repository with a digest and tag, and an attachment uploaded or
-downloaded.
+repository with a digest and tag, an attachment uploaded or downloaded,
+several users or contacts for a `multiple` field, and each assignee's
+verdict.
 
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
@@ -68,6 +69,24 @@ on the board, and its members of every other akt type as a list per akt
 type, not as one unmapped column. Cards and lists MUST show each member's
 number, title, state and the fields its type's presentation names for
 them.
+
+r[app.sections]
+An akt with a `sections` field MUST show its members in those sections,
+nested as the field nests them: each section with its title, if any, its
+text as Markdown, and its outcome, and one that is `collapsible` closed
+until opened. Members no section names MUST follow, as `app.members`
+shows them.
+
+r[app.verdicts]
+Each member with a `verdict` field MUST show, where its sections or its
+container list it, its assignees, each one's verdict, and its outcome, and
+MUST let an assignee give, change or take back their own verdict there.
+An akt's page MUST show its outcome, if it has outcomes (`akt.outcome`).
+
+r[app.copy]
+The app MUST let a person copy an akt (`akt.copy`), choosing the sections
+and members to keep, all of them at first, and showing the copy once it is
+made.
 
 r[app.board-drop]
 Dropping a card on another column of a board MUST offer the transitions

@@ -177,9 +177,9 @@ Storing one would make a revision of the protocol and of every section for each 
 <!-- akt: PLAN-012-G01 -->
 ---
 type: gap
-revision: 2
+revision: 4
 rank: b3Q
-state: open
+state: closed
 in: [PLAN-012]
 links: [Resolved by PLAN-012-T01]
 title: What a section holds besides tests
@@ -187,6 +187,9 @@ title: What a section holds besides tests
 
 <!-- field: description -->
 A section has an optional title and holds members and sections. A protocol's sections may want their own text, such as preconditions or a setup, or a section-level assignee. Decide in the spec whether a section has a Markdown body.
+
+<!-- field: resolution -->
+Settled in PLAN-012-T01: a section has an optional Markdown `text` beside its optional title (`akt.field.sections`), which the app renders as Markdown (`app.sections`), for preconditions or setup. Section-level assignees were left out: assignees belong to tests.
 
 <!-- akt: PLAN-012-G02 -->
 ---
@@ -218,9 +221,9 @@ A protocol copied from a template may need a test added, moved between sections 
 <!-- akt: PLAN-012-G04 -->
 ---
 type: gap
-revision: 2
+revision: 4
 rank: b3T
-state: open
+state: closed
 in: [PLAN-012]
 links: [Resolved by PLAN-012-T01]
 title: Copying links and containers outside the copied tree
@@ -229,19 +232,33 @@ title: Copying links and containers outside the copied tree
 <!-- field: description -->
 A template's tests may link to requirements, or be in other containers too. Decide whether copies keep those links and memberships, or only those inside the copied tree.
 
+<!-- field: resolution -->
+Settled in PLAN-012-T01 (`akt.copy.links`, `akt.copy`). A link between two akter of the copied tree becomes a link between their copies. A link from the tree to an akt outside it is copied to the same akt with the same pin, so a copied test still verifies its requirement. Links into the tree from outside aren't copied. Memberships outside the tree aren't copied either: each member's copy is created in its copied parent only, and the copied akt goes where the copy says, else into the template's containers.
+
 <!-- akt: PLAN-012-T01 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3U
-state: todo
+state: done
 in: [PLAN-012]
 links: [Blocks PLAN-012-T02, Resolves PLAN-012-G01, Resolves PLAN-012-G04]
 title: "Spec templates, sections, verdicts and outcomes"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`docs/spec/akter.md`: the field kinds `sections` and `verdict`, `multiple` on `user`, the outcome rules, and copying. `docs/spec/frontend.md`: sections, verdicts, outcomes and the copy dialog in the app. `docs/spec/cli.md`: `copy`, `verdict`, outcomes, and the file forms. Terms in `docs/nomenclature.md`: template, section, verdict, outcome, copy. Decide PLAN-012-G01 and G04.
+The spec, in four files:
+- **`docs/spec/akter.md`:**
+  - `akt.field.kinds` gains `sections` and `verdict`, and `user` lists for `multiple`.
+  - New rules: `akt.field.multiple`; `akt.field.sections`, a list of member numbers and sections (optional title and Markdown text, collapsible, items), members only and once each, `of`, members leaving their sections when they leave; and `akt.field.verdict`, which names `assignees`, takes verdicts, `for` and `clear`, records who and when, refuses non-assignees, and drops a removed assignee's verdict.
+  - Outcomes: `akt.outcome`, the rules for verdicts and over members, pending when empty; `akt.outcome.section`; and `akt.outcome.derived`, never stored.
+  - Copying: `akt.copy`, the same type in its initial state, fields but not verdicts or checkboxes, readable members recursively, sections remapped, placed where given or in the template's containers; `akt.copy.only`; `akt.copy.links`; and `akt.copy.record`, the origin and all or nothing.
+- **`docs/spec/frontend.md`:** `app.fields` gains several users and verdicts, plus `app.sections`, `app.verdicts` and `app.copy`.
+- **`docs/spec/cli.md`:** `cli.file.kinds` gives the file forms, with outcome read-only; `cli.write` gains `verdict` and `copy`; and `show` gives outcomes and sections.
+- **`docs/nomenclature.md`:** template, copy, section, assignee, verdict and outcome.
+
+This settles PLAN-012-G01 (sections have optional text) and G04 (links out kept, memberships out not). Lint passes.
 
 <!-- field: acceptance -->
 - Rules for everything in PLAN-012's design.

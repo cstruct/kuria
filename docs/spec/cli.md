@@ -106,9 +106,10 @@ The client MUST offer:
   multi-akt file; with `--members <type>,…`, each followed by its direct
   members of those akt types, or with `--all-members` by all of them, in
   the container's order (`cli.members`);
-- `show <number>`: an akt's fields, containers, members by column and
-  type, links, and the transitions its state allows, and with `--history`
-  its revisions;
+- `show <number>`: an akt's fields, its outcome, containers, members by
+  column and type, or in their sections with each section's outcome,
+  links, and the transitions its state allows, and with `--history` its
+  revisions;
 - `history <number>`: its revisions, as the app's history says them
   (`app.history`);
 - `users` and `contacts`: whom values can name.
@@ -128,6 +129,14 @@ An akt file MUST be Markdown with YAML front matter:
 Users and contacts MUST be written by email, else name, and read back by
 email, name or `@me`. A field without a value MUST be left out.
 `cat` followed by `apply` of the unchanged file MUST change nothing.
+
+r[cli.file.kinds]
+In an akt file, a `multiple` `user` field MUST be a list of users and
+contacts; a `sections` field MUST be a section of its own whose body is
+the field's value as YAML, akter by number; and a `verdict` field MUST be
+a front-matter mapping of each assignee to their verdict, read-only, given
+with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
+key after `state`.
 
 r[cli.file.multi]
 A multi-akt file MUST hold its first akt as an akt file, and each other
@@ -177,6 +186,10 @@ The client MUST offer:
 - `link <source> <kind> <target> [--pin]` and `unlink <source> <kind>
   <target>`;
 - `draft <number> <field>`;
+- `verdict <number> pass|fail|skip|clear [--for <user>]`: one's own
+  verdict, or one for another assignee (`akt.field.verdict`);
+- `copy <number> [--only <number>…] [--in <container>…]`, answering the
+  copy's number and the numbers of the copies of its members (`akt.copy`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
