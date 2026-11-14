@@ -11,7 +11,9 @@ use serde_json::Value as Json;
 use uuid::Uuid;
 
 use crate::Connection;
-use crate::schema::{akt, akt_revision, akt_type, akt_type_version, change_event, tenant_counter};
+use crate::schema::{
+    akt, akt_origin, akt_revision, akt_type, akt_type_version, change_event, tenant_counter,
+};
 
 /// Takes the next value of a tenant's counter `name`, counting from 1. The
 /// counter's row stays locked until the transaction ends.
@@ -617,6 +619,54 @@ pub async fn changes_after(
             akt::number,
             akt_type_version::key,
         ))
+        .load(conn)
+        .await
+}
+
+/// Records that `akt` was copied from `origin` (`akt.copy.record`).
+pub async fn insert_origin(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+    origin: Uuid,
+) -> QueryResult<()> {
+    diesel::insert_into(akt_origin::table)
+        .values((
+            akt_origin::tenant_id.eq(tenant),
+            akt_origin::akt_id.eq(akt),
+            akt_origin::origin_id.eq(origin),
+        ))
+        .execute(conn)
+        .await
+        .map(drop)
+}
+
+/// The akt `akt` was copied from, if it is a copy.
+pub async fn origin_of(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+) -> QueryResult<Option<AktRow>> {
+    akt_origin::table
+        .inner_join(akt::table.on(akt::id.eq(akt_origin::origin_id)))
+        .filter(akt_origin::tenant_id.eq(tenant))
+        .filter(akt_origin::akt_id.eq(akt))
+        .select(AktRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+}
+
+/// The origins of the copies among `akter`, as `(copy, origin)`.
+pub async fn origins_of(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akter: &[Uuid],
+) -> QueryResult<Vec<(Uuid, Uuid)>> {
+    akt_origin::table
+        .filter(akt_origin::tenant_id.eq(tenant))
+        .filter(akt_origin::akt_id.eq_any(akter))
+        .select((akt_origin::akt_id, akt_origin::origin_id))
         .load(conn)
         .await
 }

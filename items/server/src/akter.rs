@@ -15,11 +15,13 @@
 //! the change-event counter.
 
 mod batch;
+mod copy;
 mod create;
 mod draft;
 mod links;
 mod membership;
 mod ordering;
+pub mod outcomes;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
 pub use ordering::Place;
@@ -452,6 +454,7 @@ async fn change_in(
             "akt {number} moved while locked"
         )));
     }
+    check_sections(conn, tenant, &stored.ty, Some(akt.id), &outcome).await?;
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
     store::append_revision(
@@ -710,6 +713,86 @@ fn current_hash(ty: &StoredType, akt: &AktRow) -> Result<[u8; 32], AktError> {
     Ok(kuria_engine::state_hash(&akt.state, &fields))
 }
 
+/// Refuses an outcome whose `sections` name an akt that isn't one of the
+/// akt `akt_id`'s members, or one more than once, or of a type its `of`
+/// leaves out; a new akt has no members yet.
+// r[impl akt.field.sections]
+async fn check_sections(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    ty: &AktType,
+    akt_id: Option<Uuid>,
+    outcome: &Outcome,
+) -> Result<(), AktError> {
+    for field in ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Sections)
+    {
+        let Some(Some(kuria_engine::Value::Sections(items))) = outcome.changes.get(&field.key)
+        else {
+            continue;
+        };
+        let members = match akt_id {
+            Some(id) => containers::members_with_types(conn, tenant, id).await?,
+            None => Vec::new(),
+        };
+        let named: Vec<(&str, &str)> = members
+            .iter()
+            .map(|(row, key)| (row.number.as_str(), key.as_str()))
+            .collect();
+        kuria_engine::sections::check(items, &named, &field.of).map_err(|reason| {
+            AktError::Refused(Refusal::InvalidValue {
+                field: field.key.clone(),
+                reason,
+            })
+        })?;
+    }
+    Ok(())
+}
+
+/// Takes `member` out of `akt`'s sections, as when it leaves the container,
+/// and answers the field changes that made, for its revision.
+// r[impl akt.field.sections]
+fn leave_sections(
+    ty: &StoredType,
+    akt: &mut AktRow,
+    member: &str,
+) -> Result<Map<String, Json>, AktError> {
+    let mut changes = Map::new();
+    let Some(field) = ty
+        .ty
+        .document()
+        .fields
+        .iter()
+        .find(|f| f.kind == FieldKind::Sections)
+    else {
+        return Ok(changes);
+    };
+    let Some(fields) = akt.fields.as_object_mut() else {
+        return Ok(changes);
+    };
+    let Some(raw) = fields.get(&field.key) else {
+        return Ok(changes);
+    };
+    let Ok(kuria_engine::Value::Sections(items)) = kuria_engine::Value::from_json(field, raw)
+    else {
+        return Err(AktError::Internal(format!(
+            "akt {}: unreadable sections",
+            akt.number
+        )));
+    };
+    if !kuria_engine::sections::numbers(&items).contains(&member) {
+        return Ok(changes);
+    }
+    let kept =
+        kuria_engine::Value::Sections(kuria_engine::sections::without(&items, member)).to_json();
+    fields.insert(field.key.clone(), kept.clone());
+    changes.insert(field.key.clone(), kept);
+    Ok(changes)
+}
+
 /// One side of a membership, as a membership revision records it.
 fn membership_entry(akt: &AktRow) -> Json {
     records::membership_entry(&akt.id.to_string(), &akt.number)
@@ -725,6 +808,26 @@ async fn record_membership(
     actor: Actor,
     reason: Option<String>,
     membership: Json,
+    now: DateTime<Utc>,
+) -> Result<(), AktError> {
+    record_membership_changing(conn, ty, akt, actor, reason, membership, Map::new(), now).await
+}
+
+/// [`record_membership`], also recording `changes` the membership made to
+/// the akt's fields, already set in `akt.fields`: a member leaving its
+/// sections (`akt.field.sections`).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "record_membership's, and the changes"
+)]
+async fn record_membership_changing(
+    conn: &mut kuria_store::Connection,
+    ty: &StoredType,
+    akt: &mut AktRow,
+    actor: Actor,
+    reason: Option<String>,
+    membership: Json,
+    changes: Map<String, Json>,
     now: DateTime<Utc>,
 ) -> Result<(), AktError> {
     let hash = current_hash(ty, akt)?;
@@ -746,7 +849,7 @@ async fn record_membership(
             author: actor.subject.into(),
             transition: None,
             reason: reason.filter(|r| !r.trim().is_empty()),
-            changes: Json::Object(Map::new()),
+            changes: Json::Object(changes),
             state: akt.state.clone(),
             hash: hash.to_vec(),
             created_at: now,

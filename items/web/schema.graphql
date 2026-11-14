@@ -59,6 +59,16 @@ type Akt {
 	"""
 	links: [Link!]!
 	"""
+	The akt it was copied from, if it is a copy and the viewer may read
+	it (`akt.copy.record`).
+	"""
+	copiedFrom: Akt
+	"""
+	What its verdicts, or its members' outcomes, add up to, if its type
+	has outcomes (`akt.outcome`); derived now, never stored.
+	"""
+	outcome: Outcome
+	"""
 	Every revision, oldest first.
 	"""
 	revisions: [AktRevision!]!
@@ -360,6 +370,27 @@ type Contact {
 }
 
 """
+What copying an akt takes (`akt.copy`).
+"""
+input CopyAktInput {
+	"""
+	The akt to copy.
+	"""
+	number: String!
+	"""
+	The akter of its tree to keep, with those between them and it and
+	every member under them; all of them if not given.
+	"""
+	only: [String!]
+	"""
+	The containers to make the copy in; the copied akt's own if not
+	given.
+	"""
+	in: [String!]
+	reason: String
+}
+
+"""
 What creating an akt takes.
 """
 input CreateAktInput {
@@ -643,6 +674,11 @@ type Mutation {
 	"""
 	createAkt(input: CreateAktInput!): Akt!
 	"""
+	Copies an akt, with the part of its member tree chosen, into new
+	akter of the same types in their initial states, and answers the copy.
+	"""
+	copyAkt(input: CopyAktInput!): Akt!
+	"""
 	Edits an akt's field values.
 	"""
 	editAkt(input: EditAktInput!): Akt!
@@ -716,6 +752,16 @@ input OperationInput @oneOf {
 	removeLink: UnlinkInput
 	moveAkt: MoveAktInput
 	draftField: DraftFieldInput
+}
+
+"""
+An outcome: what verdicts, or what a container holds, add up to.
+"""
+enum Outcome {
+	PASS
+	FAIL
+	SKIP
+	PENDING
 }
 
 """
@@ -859,6 +905,7 @@ type Section {
 	text: String
 	collapsible: Boolean!
 	items: [SectionItem!]!
+	outcome: Outcome!
 }
 
 """

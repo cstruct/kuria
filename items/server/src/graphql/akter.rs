@@ -7,7 +7,8 @@
 use std::collections::HashMap;
 
 use async_graphql::{
-    Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, OneofObject, SimpleObject, Union,
+    ComplexObject, Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, OneofObject,
+    SimpleObject, Union,
 };
 use chrono::{DateTime, Utc};
 use kuria_config::{
@@ -26,7 +27,7 @@ use super::attachments::Attachment;
 use super::filter::{self, FieldCondition};
 use super::page::{After, AktConnection, List, page_size};
 use super::people::{Someone, User};
-use crate::akter::{AktError, Akter, Caller, Operation, Place, StoredType};
+use crate::akter::{AktError, Akter, Caller, Operation, Place, StoredType, outcomes};
 use crate::authorize::{Authorizer, Permission};
 
 /// The most members one board shows.
@@ -421,6 +422,21 @@ pub struct EditAktInput {
     reason: Option<String>,
 }
 
+/// What copying an akt takes (`akt.copy`).
+#[derive(InputObject)]
+pub struct CopyAktInput {
+    /// The akt to copy.
+    number: String,
+    /// The akter of its tree to keep, with those between them and it and
+    /// every member under them; all of them if not given.
+    only: Option<Vec<String>>,
+    /// The containers to make the copy in; the copied akt's own if not
+    /// given.
+    #[graphql(name = "in")]
+    inside: Option<Vec<String>>,
+    reason: Option<String>,
+}
+
 /// What performing a transition takes.
 #[derive(InputObject)]
 pub struct PerformTransitionInput {
@@ -600,6 +616,28 @@ impl AkterMutation {
         let akter = akter(ctx)?;
         let row = akter
             .create(caller, &input.key, &fields, input.reason, &input.inside)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Copies an akt, with the part of its member tree chosen, into new
+    /// akter of the same types in their initial states, and answers the copy.
+    // r[impl akt.copy]
+    async fn copy_akt(&self, ctx: &Context<'_>, input: CopyAktInput) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .copy(
+                caller,
+                &input.number,
+                input.only.as_deref(),
+                input.inside.as_deref(),
+                input.reason,
+            )
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -1555,6 +1593,38 @@ impl Akt {
         Ok(links)
     }
 
+    /// The akt it was copied from, if it is a copy and the viewer may read
+    /// it (`akt.copy.record`).
+    async fn copied_from(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Akt>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let Some(origin) = store::origin_of(&mut conn, tenant, self.row.id)
+            .await
+            .map_err(internal)?
+        else {
+            return Ok(None);
+        };
+        let akt = with_types(&mut conn, tenant, vec![origin]).await?.pop();
+        match akt {
+            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Ok(Some(akt)),
+            _ => Ok(None),
+        }
+    }
+
+    /// What its verdicts, or its members' outcomes, add up to, if its type
+    /// has outcomes (`akt.outcome`); derived now, never stored.
+    async fn outcome(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<OutcomeKind>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let types = outcomes::Types::of(&mut conn, tenant)
+            .await
+            .map_err(error)?;
+        Ok(outcomes::of(&mut conn, tenant, &types, &self.row)
+            .await
+            .map_err(error)?
+            .map(Into::into))
+    }
+
     /// Every revision, oldest first.
     async fn revisions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<AktRevision>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
@@ -1614,6 +1684,7 @@ pub struct SectionItem {
 
 /// A section.
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub struct Section {
     title: Option<String>,
     /// Markdown.
@@ -1642,6 +1713,66 @@ impl SectionItem {
                 },
             })
             .collect()
+    }
+}
+
+/// What a section's tests add up to (`akt.outcome.section`).
+#[ComplexObject]
+impl Section {
+    async fn outcome(&self, ctx: &Context<'_>) -> async_graphql::Result<OutcomeKind> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let types = outcomes::Types::of(&mut conn, tenant)
+            .await
+            .map_err(error)?;
+        Ok(section_outcome(&mut conn, tenant, &types, &self.items)
+            .await
+            .map_err(error)?
+            .into())
+    }
+}
+
+/// The outcome of a section holding `items`, by the same rules as a
+/// container's.
+// r[impl akt.outcome.section]
+async fn section_outcome(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    types: &outcomes::Types,
+    items: &[SectionItem],
+) -> Result<kuria_engine::outcomes::Outcome, AktError> {
+    let mut held = Vec::new();
+    for item in items {
+        if let Some(number) = &item.number {
+            if let Some(outcome) = outcomes::of_number(conn, tenant, types, number).await? {
+                held.push(outcome);
+            }
+        } else if let Some(section) = &item.section {
+            held.push(Box::pin(section_outcome(conn, tenant, types, &section.items)).await?);
+        }
+    }
+    Ok(kuria_engine::outcomes::of_all(held))
+}
+
+/// An outcome: what verdicts, or what a container holds, add up to.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+#[graphql(name = "Outcome")]
+pub enum OutcomeKind {
+    Pass,
+    Fail,
+    Skip,
+    Pending,
+}
+
+impl From<kuria_engine::outcomes::Outcome> for OutcomeKind {
+    fn from(outcome: kuria_engine::outcomes::Outcome) -> Self {
+        use kuria_engine::outcomes::Outcome as O;
+        match outcome {
+            O::Pass => Self::Pass,
+            O::Fail => Self::Fail,
+            O::Skip => Self::Skip,
+            O::Pending => Self::Pending,
+        }
     }
 }
 

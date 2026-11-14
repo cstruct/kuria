@@ -195,6 +195,24 @@ pub async fn containers_of(
         .await
 }
 
+/// Every member of `container`, each with its akt type's key, in rank
+/// order.
+pub async fn members_with_types(
+    conn: &mut Connection,
+    tenant: Uuid,
+    container: Uuid,
+) -> QueryResult<Vec<(AktRow, String)>> {
+    akt_membership::table
+        .inner_join(akt::table.on(akt::id.eq(akt_membership::member_id)))
+        .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
+        .filter(akt_membership::tenant_id.eq(tenant))
+        .filter(akt_membership::container_id.eq(container))
+        .order(akt::rank)
+        .select((AktRow::as_select(), akt_type_version::key))
+        .load(conn)
+        .await
+}
+
 /// The members of `containers` whose akt types are among `keys`, in rank
 /// order, each with the container it was found in, up to `limit` per
 /// container.

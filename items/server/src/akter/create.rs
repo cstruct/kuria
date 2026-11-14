@@ -98,6 +98,7 @@ pub(super) async fn create_in(
             at: now,
         },
     )?;
+    super::check_sections(conn, tenant, &stored.ty, None, &outcome).await?;
     let parent = parents.first().map(|p| p.number.as_str());
     let number = next_number(conn, tenant, &stored.ty, parent, now).await?;
     let akt = AktRow {

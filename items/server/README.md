@@ -102,6 +102,17 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   Konklav never verified.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
+- Sections, verdicts and outcomes: a `sections` field lays out an akt's
+  members, checked against them on every write and losing one that leaves
+  in the same revision; a `verdict` field takes each assignee's verdict;
+  `Akt.outcome` and each `Section.outcome` are derived on read from
+  verdicts and members ([`src/akter/outcomes.rs`](src/akter/outcomes.rs)),
+  never stored.
+- Copying: `copyAkt` copies an akt and the part of its member tree chosen,
+  in one transaction, into new akter of the same types in their initial
+  states, with their sections remapped and their links out; each copy's
+  origin is kept in `akt_origin`, answered as `Akt.copiedFrom`, and carried
+  by bundles ([`src/akter/copy.rs`](src/akter/copy.rs)).
 - Batches: several akt writes run in order in one transaction, all of them
   or none, a later one naming an akt an earlier one created as `@<n>`
   (`akt.batch`).
@@ -346,6 +357,12 @@ mise run test
   shown as its user in values and drafts while the stored values stay;
   listing the tenant's users, linking a contact by hand and its refusals,
   and the people a revision's values name.
+- [`tests/templates.rs`](tests/templates.rs): sections placing only
+  members once and losing one that leaves; verdicts for assignees, by
+  anyone for them, making outcomes up through sections to the protocol; a
+  copy of part of a template in its initial state, without verdicts or
+  checkboxes, with its sections remapped, its link out and its origin, and
+  refused whole.
 - [`tests/batches.rs`](tests/batches.rs): batches all or none, a refused
   one leaving no trace (a create's number included), `@<n>` and sizes
   refused before running, each operation authorized as alone, revisions and

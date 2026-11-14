@@ -301,16 +301,37 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-012-T03 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3W
-state: todo
+state: done
 in: [PLAN-012]
 links: [Blocked by PLAN-012-T02, Blocks PLAN-012-T05, Blocks PLAN-012-T06]
 title: "The server: values, outcomes and copyAkt"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The new values through the write path and GraphQL; `sections` kept to members when members leave; `outcome` on `Akt` and on each section; `copyAkt(number, only)` as one batch, linking copies back.
+**Sections on write** (`akter.rs`):
+- `check_sections` checks a changed `sections` value against the akt's members, from the new `containers::members_with_types`, with the engine's `check`. It runs in `change_in` and `create_in`; a new akt has none, so its sections must be empty.
+- A member removed or transferred out leaves its container's sections in that same revision: `leave_sections`, through `record_membership_changing`, which records the field change and hashes the new fields.
+
+**Outcomes** (`akter/outcomes.rs`): `outcomes::of` derives an akt's outcome from its verdicts, else recursively from its members, deciding with the tenant's types whether a type has outcomes. GraphQL serves `Akt.outcome` and `Section.outcome` (a complex object over its items), as `Outcome`.
+
+**Copying** (`akter/copy.rs`): `copyAkt(input: { number, only, in, reason })` runs in one transaction:
+1. Walks the template's readable member tree, each akt once, and works out what `only` keeps: named akter, those between them and the root, and everything under them. Naming anything outside the tree is BAD_REQUEST.
+2. Takes the order lock and the rows of the containers and outside link targets, as batches do.
+3. Creates each copy through `create_in`, parents first, each in its parent's copy, with its fields minus verdicts, checkboxes and sections. The reason says what it was copied from.
+4. Records each origin in the new table `akt_origin` (migration 13), served as `Akt.copiedFrom` to readers.
+5. Sets each copy's sections once its members exist, through `sections::copied`.
+6. Copies links: within the tree between the copies, and out to the same akt with its pin.
+
+**Bundles** carry origins as `copiedFrom`, when the bundle holds the origin too. An import refuses one naming an akt the bundle lacks, and `bundle.contents` says so.
+
+**Tests:**
+- `tests/templates.rs` (3): sections against members, a leaving member, verdicts and outcomes up to sections and the protocol, and a copy of part of a template refused whole.
+- `tests/bundles.rs` (1): origins kept through a whole-tenant move.
+
+`schema.graphql` is regenerated and the server README updated. Lint, `mise run test` (333 Rust, 55 app) and all 27 e2e tests pass.
 
 <!-- field: acceptance -->
 - Server tests for copying a subset, verdicts, `for`, and outcomes.

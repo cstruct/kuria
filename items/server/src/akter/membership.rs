@@ -145,10 +145,12 @@ pub(super) async fn remove_member_in(
         now,
     )
     .await?;
-    record(
+    let left = m.akt.number.clone();
+    record_left(
         conn,
         caller,
         &mut c,
+        &left,
         reason.as_deref(),
         json!({ "removed_member": [membership_entry(&m.akt)] }),
         now,
@@ -195,10 +197,12 @@ pub(super) async fn transfer_member_in(
         now,
     )
     .await?;
-    record(
+    let left = m.akt.number.clone();
+    record_left(
         conn,
         caller,
         &mut source,
+        &left,
         reason.as_deref(),
         json!({ "removed_member": [membership_entry(&m.akt)] }),
         now,
@@ -340,6 +344,31 @@ async fn record(
         caller.actor,
         reason.map(str::to_owned),
         membership,
+        now,
+    )
+    .await
+}
+
+/// [`record`] of a container `member` left, taking it out of the
+/// container's sections in the same revision (`akt.field.sections`).
+async fn record_left(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    container: &mut Locked,
+    member: &str,
+    reason: Option<&str>,
+    membership: Json,
+    now: DateTime<Utc>,
+) -> Result<(), AktError> {
+    let changes = super::leave_sections(&container.ty, &mut container.akt, member)?;
+    super::record_membership_changing(
+        conn,
+        &container.ty,
+        &mut container.akt,
+        caller.actor,
+        reason.map(str::to_owned),
+        membership,
+        changes,
         now,
     )
     .await

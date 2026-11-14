@@ -95,6 +95,10 @@ pub struct BundleAkt {
     /// The attachments its fields hold, by field.
     #[serde(default)]
     pub attachments: Vec<BundleHeld>,
+    /// The `id` of the akt in the bundle it was copied from, if it is a
+    /// copy of one there (`akt.copy.record`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copied_from: Option<Uuid>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
