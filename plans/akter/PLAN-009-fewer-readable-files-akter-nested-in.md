@@ -1,9 +1,9 @@
 ---
 number: PLAN-009
 type: plan
-revision: 13
+revision: 14
 rank: b2p
-state: active
+state: done
 title: "Fewer, readable files: akter nested in their parent's file, named by title"
 owner: albin@mattsson.io
 ---
