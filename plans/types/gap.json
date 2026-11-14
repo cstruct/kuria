@@ -1,0 +1,73 @@
+{
+  "created_in": [
+    "plan"
+  ],
+  "fields": [
+    {
+      "key": "title",
+      "kind": "text",
+      "name": "Title",
+      "required": true
+    },
+    {
+      "key": "description",
+      "kind": "text",
+      "multiline": true,
+      "name": "Description"
+    },
+    {
+      "description": "How it was closed: decided, built, or left out, and why.",
+      "key": "resolution",
+      "kind": "text",
+      "multiline": true,
+      "name": "Resolution"
+    }
+  ],
+  "key": "gap",
+  "links": [
+    {
+      "inverse": "Resolves",
+      "key": "resolved_by",
+      "name": "Resolved by",
+      "to": [
+        "task",
+        "decision"
+      ]
+    }
+  ],
+  "name": "Gap",
+  "number": "{parent}-G{seq:2}",
+  "presentation": {
+    "colour": "amber",
+    "icon": "triangle-alert",
+    "tones": {
+      "closed": "success",
+      "open": "warning"
+    }
+  },
+  "states": [
+    {
+      "initial": true,
+      "key": "open",
+      "name": "Open"
+    },
+    {
+      "final": true,
+      "key": "closed",
+      "name": "Closed"
+    }
+  ],
+  "transitions": [
+    {
+      "from": [
+        "open"
+      ],
+      "key": "close",
+      "name": "Close",
+      "requires": [
+        "resolution"
+      ],
+      "to": "closed"
+    }
+  ]
+}

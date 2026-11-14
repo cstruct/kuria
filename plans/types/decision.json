@@ -1,0 +1,101 @@
+{
+  "created_in": [
+    "plan"
+  ],
+  "fields": [
+    {
+      "key": "title",
+      "kind": "text",
+      "name": "Title",
+      "required": true
+    },
+    {
+      "description": "What made a decision necessary.",
+      "key": "context",
+      "kind": "text",
+      "multiline": true,
+      "name": "Context"
+    },
+    {
+      "key": "decision",
+      "kind": "text",
+      "multiline": true,
+      "name": "Decision"
+    },
+    {
+      "description": "Why this, and not the alternatives.",
+      "key": "why",
+      "kind": "text",
+      "multiline": true,
+      "name": "Why"
+    },
+    {
+      "key": "decided_by",
+      "kind": "user",
+      "name": "Decided by"
+    }
+  ],
+  "key": "decision",
+  "links": [
+    {
+      "inverse": "Superseded by",
+      "key": "supersedes",
+      "name": "Supersedes",
+      "to": [
+        "decision"
+      ]
+    }
+  ],
+  "name": "Decision",
+  "number": "{parent}-D{seq:2}",
+  "presentation": {
+    "colour": "purple",
+    "icon": "milestone",
+    "list": [
+      "decided_by"
+    ],
+    "tones": {
+      "decided": "success",
+      "superseded": "neutral"
+    }
+  },
+  "states": [
+    {
+      "initial": true,
+      "key": "proposed",
+      "name": "Proposed"
+    },
+    {
+      "key": "decided",
+      "name": "Decided"
+    },
+    {
+      "final": true,
+      "key": "superseded",
+      "name": "Superseded"
+    }
+  ],
+  "transitions": [
+    {
+      "from": [
+        "proposed"
+      ],
+      "key": "decide",
+      "name": "Decide",
+      "requires": [
+        "context",
+        "decision",
+        "why"
+      ],
+      "to": "decided"
+    },
+    {
+      "from": [
+        "decided"
+      ],
+      "key": "supersede",
+      "name": "Supersede",
+      "to": "superseded"
+    }
+  ]
+}

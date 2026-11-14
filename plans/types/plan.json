@@ -1,0 +1,157 @@
+{
+  "board": {
+    "columns": [
+      {
+        "key": "todo",
+        "name": "To do",
+        "states": {
+          "task": [
+            "todo"
+          ]
+        }
+      },
+      {
+        "key": "doing",
+        "name": "Doing",
+        "states": {
+          "task": [
+            "doing"
+          ]
+        }
+      },
+      {
+        "key": "review",
+        "name": "In review",
+        "states": {
+          "task": [
+            "review"
+          ]
+        }
+      },
+      {
+        "key": "done",
+        "name": "Done",
+        "states": {
+          "task": [
+            "done",
+            "dropped"
+          ]
+        }
+      }
+    ]
+  },
+  "contains": [
+    {
+      "type": "task"
+    },
+    {
+      "type": "gap"
+    },
+    {
+      "type": "decision"
+    }
+  ],
+  "fields": [
+    {
+      "key": "title",
+      "kind": "text",
+      "name": "Title",
+      "required": true
+    },
+    {
+      "description": "What becomes possible, and how anyone will know.",
+      "key": "goal",
+      "kind": "text",
+      "multiline": true,
+      "name": "Goal"
+    },
+    {
+      "description": "How it will be built.",
+      "key": "design",
+      "kind": "text",
+      "multiline": true,
+      "name": "Design"
+    },
+    {
+      "description": "How it is checked.",
+      "key": "verification",
+      "kind": "text",
+      "multiline": true,
+      "name": "Verification"
+    },
+    {
+      "key": "owner",
+      "kind": "user",
+      "name": "Owner"
+    }
+  ],
+  "key": "plan",
+  "name": "Plan",
+  "number": "PLAN-{seq:3}",
+  "presentation": {
+    "card": [
+      "owner"
+    ],
+    "colour": "blue",
+    "icon": "target",
+    "list": [
+      "owner"
+    ],
+    "tones": {
+      "active": "active",
+      "done": "success",
+      "dropped": "neutral"
+    }
+  },
+  "states": [
+    {
+      "initial": true,
+      "key": "draft",
+      "name": "Draft"
+    },
+    {
+      "key": "active",
+      "name": "Active"
+    },
+    {
+      "final": true,
+      "key": "done",
+      "name": "Done"
+    },
+    {
+      "final": true,
+      "key": "dropped",
+      "name": "Dropped"
+    }
+  ],
+  "transitions": [
+    {
+      "from": [
+        "draft"
+      ],
+      "key": "activate",
+      "name": "Activate",
+      "requires": [
+        "goal"
+      ],
+      "to": "active"
+    },
+    {
+      "from": [
+        "active"
+      ],
+      "key": "finish",
+      "name": "Finish",
+      "to": "done"
+    },
+    {
+      "from": [
+        "draft",
+        "active"
+      ],
+      "key": "drop",
+      "name": "Drop",
+      "to": "dropped"
+    }
+  ]
+}

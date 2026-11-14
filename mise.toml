@@ -84,6 +84,14 @@ depends = ["db:up", "web:build", "dogfood:up"]
 dir = "dogfood"
 run = "node scripts/serve.ts"
 
+[tasks.plans]
+description = "Run the kuria CLI on Kuria's own plans in plans/, without a server, such as `mise run plans -- ls plan --state active`"
+# Paths in its arguments are the caller's.
+dir = "{{cwd}}"
+quiet = true
+env = { KURIA_DIR = "{{config_root}}/plans" }
+run = "cargo run -q --manifest-path {{config_root}}/Cargo.toml -p kuria-cli --"
+
 [tasks."dogfood:kuria"]
 description = "Run the kuria CLI as the dogfooding agent, such as `mise run dogfood:kuria -- ls plan`"
 # Paths in its arguments are the caller's.

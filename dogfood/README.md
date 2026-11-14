@@ -1,10 +1,10 @@
 # Dogfooding
 
-Kuria's own plans live in a Kuria on this machine: a Konklav and a Kuria
-that keep their data between runs, unlike the end-to-end stack (`e2e/`),
-which starts empty every time. Plans are the planning example's akt types
-([docs/examples/planning](../docs/examples/planning/README.md)), read and
-written with the `kuria` CLI ([.agents/plans/PLANS.md](../.agents/plans/PLANS.md)).
+A Kuria on this machine to try Kuria's own plans in: a Konklav and a
+Kuria that keep their data between runs, unlike the end-to-end stack
+(`e2e/`), which starts empty every time. It is optional: the plans live in
+[`plans/`](../plans/), which the `kuria` CLI works on without a server
+([.agents/plans/PLANS.md](../.agents/plans/PLANS.md)).
 
 ## Running it
 
@@ -15,12 +15,13 @@ mise run dogfood:down         # stops Konklav, keeping its data
 ```
 
 The first `dogfood:serve` makes Konklav's keys and secrets, seeds it, makes
-the database `kuria_dogfood`, and builds the CLI. Define the planning
-example once, then move the Markdown plans in:
+the database `kuria_dogfood`, and builds the CLI. Into a new one, take the
+plans in, with their types, numbers and revisions; to compare or keep
+what changed there, export them back as a directory:
 
 ```sh
-mise run dogfood:kuria -- types define docs/examples/planning/{task,gap,decision,plan}.json
-node dogfood/scripts/migrate.ts     # DRY=1 says what it would make
+mise run dogfood:kuria -- import --from-dir plans
+mise run dogfood:kuria -- export --types plan,task,gap,decision --to-dir /tmp/plans
 ```
 
 | What | Where |
@@ -45,8 +46,6 @@ end-to-end stack's, so the tests can run beside it.
 - [`scripts/serve.ts`](scripts/serve.ts): Kuria, on a database it keeps.
 - [`scripts/kuria.ts`](scripts/kuria.ts): the CLI as the agent, behind
   `mise run dogfood:kuria`; paths are the caller's.
-- [`scripts/migrate.ts`](scripts/migrate.ts): moves `.agents/plans/*.md`
-  into plans, tasks, gaps and decisions, once each (`.state/migrated.json`).
 
 ## Signing in yourself
 

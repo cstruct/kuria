@@ -1,12 +1,16 @@
 # Kuria Plan Standard
 
-This file defines the shared standard for planning work in this repository. Plans live in Kuria itself, as akter of the planning example's akt types ([docs/examples/planning](../../docs/examples/planning/README.md)), read and written with the `kuria` command-line client. This file is the rubric; it is not a plan.
+This file defines the shared standard for planning work in this repository. Plans are akter of the planning example's akt types ([docs/examples/planning](../../docs/examples/planning/README.md)), read and written with the `kuria` command-line client. This file is the rubric; it is not a plan.
 
 ## Where Plans Live
 
-- **Locally:** the dogfooding stack keeps its data between runs ([dogfood/README.md](../../dogfood/README.md)). Start it with `mise run dogfood:serve`; agents then run `mise run dogfood:kuria -- <command>`, which signs in as the seeded agent. `mise run dogfood:kuria -- guide` explains the commands, the akt file and the exit codes.
+- **In the repository:** [plans/](../../plans/) is an akt directory: `types/` holds the planning example's akt types, and `akter/<number>.md` holds each akt as its akt file. The CLI works on it in local mode, with nothing running: `mise run plans -- <command>`. `mise run plans -- guide` explains the commands, the akt file and the exit codes.
+- **History is git's:** every write answers the reason it was given as the message to commit with. Commit plan changes with the code they describe, or on their own with that message. `mise run plans -- history <number>` reads the commits.
+- **Checked in lint:** `mise run lint` runs `kuria check` on `plans/`. After a merge, run `mise run plans -- check`: two branches that took the same number, or a link one side lost, are named with their files. Fix those through the CLI, or by hand for a number clash, and check again.
+- **People** are written by email; `@me` is `KURIA_ME`, else git's `user.email`.
 - **What a plan is:** a `plan` akt (`PLAN-007`) containing `task`, `gap` and `decision` akter (`PLAN-007-T03`, `PLAN-007-G01`, `PLAN-007-D01`), each created in it.
-- **The Markdown plans** that came before (`.agents/plans/<topic>.md`) were moved into Kuria by `dogfood/scripts/migrate.ts`. Don't start new ones.
+- **A server is optional:** `kuria import --from-dir plans` takes the plans to a Kuria that hasn't defined their types, such as the dogfooding stack ([dogfood/README.md](../../dogfood/README.md)), and `kuria export --types plan,task,gap,decision --to-dir <dir>` brings a server's plans back as a directory.
+- **The Markdown plans** that came before (`.agents/plans/<topic>.md`, never committed) are PLAN-001 to PLAN-007. Don't start new ones.
 
 ## Purpose
 
