@@ -456,6 +456,19 @@ type Field {
 	For attachment fields: what files they hold.
 	"""
 	format: AttachmentFormat
+	"""
+	For user fields: whether they hold a list of users and contacts.
+	"""
+	multiple: Boolean!
+	"""
+	For sections fields: the akt types of the members they place; any
+	the akt type contains if empty.
+	"""
+	of: [String!]!
+	"""
+	For verdict fields: the key of the user field naming the assignees.
+	"""
+	assignees: String
 }
 
 """
@@ -485,12 +498,14 @@ enum FieldKind {
 	GIT
 	DOCKER
 	ATTACHMENT
+	SECTIONS
+	VERDICT
 }
 
 """
 A field's value, by its kind.
 """
-union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue
+union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue | UsersValue | SectionsValue | VerdictValue
 
 """
 A commit in a git repository.
@@ -500,6 +515,19 @@ type GitValue {
 	repository: String!
 	sha: String
 	tag: String
+}
+
+"""
+One assignee's verdict.
+"""
+type GivenVerdict {
+	assignee: Someone!
+	verdict: Verdict!
+	"""
+	Who gave it: the assignee, unless given for them.
+	"""
+	by: User!
+	at: DateTime!
 }
 
 """
@@ -821,6 +849,41 @@ enum SbomFormat {
 }
 
 """
+A section.
+"""
+type Section {
+	title: String
+	"""
+	Markdown.
+	"""
+	text: String
+	collapsible: Boolean!
+	items: [SectionItem!]!
+}
+
+"""
+An item of a sections field: a member, by number, or a section.
+"""
+type SectionItem {
+	"""
+	The member's number, if it is one.
+	"""
+	number: String
+	"""
+	The section, if it is one.
+	"""
+	section: Section
+}
+
+"""
+An akt's members laid out in sections.
+"""
+type SectionsValue {
+	field: String!
+	items: [SectionItem!]!
+}
+
+"""
 A user or a contact, as a value names them.
 """
 union Someone = User | Contact
@@ -911,6 +974,31 @@ type UserValue {
 	The user or contact it names.
 	"""
 	user: Someone!
+}
+
+"""
+A `multiple` user field's users and contacts, in order.
+"""
+type UsersValue {
+	field: String!
+	users: [Someone!]!
+}
+
+"""
+A verdict: pass, fail or skip.
+"""
+enum Verdict {
+	PASS
+	FAIL
+	SKIP
+}
+
+"""
+Each assignee's verdict.
+"""
+type VerdictValue {
+	field: String!
+	verdicts: [GivenVerdict!]!
 }
 
 """

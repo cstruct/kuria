@@ -137,7 +137,8 @@ assignee. Giving one MUST take the verdict, or `{"verdict": <verdict>,
 `user` field takes, and `{"clear": true}` or `{"clear": true, "for":
 <user>}` to take one back. It MUST record who gave it and when, taken from
 the change, never from the input, and for whom when that is someone else.
-A verdict from or for anyone who isn't an assignee MUST be refused. An
+A verdict MUST be refused unless it is for an assignee: one's own only if
+one is an assignee, and anyone's, with `for`, only for an assignee. An
 assignee removed from the `user` field MUST lose their verdict in the same
 change. An akt type MUST have at most one `verdict` field.
 

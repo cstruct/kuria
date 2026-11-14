@@ -643,3 +643,172 @@ fn shows_whom_a_box_was_checked_for() {
         "Carl"
     );
 }
+
+fn test_type() -> AktType {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "test", "name": "Test", "number": "T-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "testers", "name": "Testers", "kind": "user", "multiple": true },
+            { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ]
+    }))
+    .unwrap();
+    validate(document).unwrap()
+}
+
+fn subject(n: u128) -> String {
+    Uuid::from_u128(n).to_string()
+}
+
+fn by(n: u128) -> Change {
+    Change {
+        by: Uuid::from_u128(n),
+        ..change()
+    }
+}
+
+/// `(assignee, verdict, given by)` of an outcome's verdicts.
+fn verdicts(fields: &BTreeMap<String, Value>) -> Vec<(Someone, &'static str, Uuid)> {
+    match fields.get("verdict") {
+        Some(Value::Verdicts(given)) => given
+            .iter()
+            .map(|g| (g.assignee, g.verdict.as_str(), g.by))
+            .collect(),
+        None => Vec::new(),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// A test of `test_type()` assigned to 1 and 2.
+fn assigned() -> Current {
+    let made = create(
+        &test_type(),
+        &input(json!({ "title": "Boots", "testers": [subject(1), subject(2)] })),
+        change(),
+    )
+    .unwrap();
+    Current {
+        state: made.state,
+        fields: made.fields,
+    }
+}
+
+/// Gives `raw` as `who`, moving `now` on if it is taken.
+fn give(now: &mut Current, raw: &Json, who: u128) -> Result<(), Refusal> {
+    let o = edit(
+        &test_type(),
+        now,
+        &input(json!({ "verdict": raw })),
+        by(who),
+    )?;
+    *now = Current {
+        state: o.state,
+        fields: o.fields,
+    };
+    Ok(())
+}
+
+fn outcome_of(now: &Current) -> Option<outcomes::Outcome> {
+    outcomes::of_fields(&test_type(), &now.fields)
+}
+
+// r[verify akt.field.verdict]
+// r[verify akt.outcome]
+#[test]
+fn assignees_give_verdicts_and_the_outcome_follows() {
+    let (a, b, outsider) = (1, 2, 3);
+    let mut now = assigned();
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pending));
+    give(&mut now, &json!("pass"), a).unwrap();
+    assert!(
+        matches!(give(&mut now, &json!("pass"), a), Err(Refusal::NoChange)),
+        "the same again changes nothing"
+    );
+    // Not an assignee: not one's own, and not for someone else either.
+    for (raw, who) in [
+        (json!("fail"), outsider),
+        (json!({ "verdict": "skip", "for": subject(outsider) }), a),
+        (Json::Null, a),
+    ] {
+        let refused = give(&mut now, &raw, who).unwrap_err();
+        assert!(
+            matches!(refused, Refusal::InvalidValue { .. }),
+            "{raw}: {refused:?}"
+        );
+    }
+    // For an assignee, by anyone, recorded as given by them.
+    give(
+        &mut now,
+        &json!({ "verdict": "skip", "for": subject(b) }),
+        outsider,
+    )
+    .unwrap();
+    assert_eq!(
+        verdicts(&now.fields),
+        [
+            (
+                Someone::User(Uuid::from_u128(a)),
+                "pass",
+                Uuid::from_u128(a)
+            ),
+            (
+                Someone::User(Uuid::from_u128(b)),
+                "skip",
+                Uuid::from_u128(outsider)
+            ),
+        ]
+    );
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pass));
+    give(&mut now, &json!("fail"), b).unwrap();
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Fail));
+    give(&mut now, &json!({ "clear": true }), b).unwrap();
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pending));
+}
+
+// r[verify akt.field.multiple]
+// r[verify akt.field.verdict]
+#[test]
+fn an_assignee_removed_takes_their_verdict_with_them() {
+    let ty = test_type();
+    let (a, b, newcomer) = (1, 2, 4);
+    let mut now = assigned();
+    give(&mut now, &json!("pass"), a).unwrap();
+    let dropped = edit(
+        &ty,
+        &now,
+        &input(json!({ "testers": [subject(b)] })),
+        change(),
+    )
+    .unwrap();
+    assert_eq!(dropped.changes.get("verdict"), Some(&None));
+    assert_eq!(verdicts(&dropped.fields), []);
+    let none = edit(&ty, &now, &input(json!({ "testers": [] })), change()).unwrap();
+    assert!(
+        !none.fields.contains_key("testers"),
+        "an empty list is no value"
+    );
+    assert!(
+        edit(
+            &ty,
+            &now,
+            &input(json!({ "testers": [subject(a), subject(a)] })),
+            change()
+        )
+        .is_err(),
+        "someone named twice"
+    );
+    // Assignees and a verdict in one change: the verdict sees the new ones.
+    let both = edit(
+        &ty,
+        &now,
+        &input(json!({ "testers": [subject(a), subject(newcomer)], "verdict": "pass" })),
+        by(newcomer),
+    )
+    .unwrap();
+    assert_eq!(verdicts(&both.fields).len(), 2);
+}

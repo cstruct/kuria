@@ -89,6 +89,12 @@ pub enum Value {
     },
     /// An attachment of the akt's tenant, by its identifier.
     Attachment(Uuid),
+    /// A `multiple` `user` field's users and contacts, distinct, in order.
+    Users(Vec<Someone>),
+    /// The akt's members laid out in sections.
+    Sections(Vec<crate::sections::Item>),
+    /// Each assignee's verdict.
+    Verdicts(Vec<crate::verdicts::Given>),
 }
 
 /// Who makes a change, and when: what the server supplies to values such as
@@ -116,6 +122,10 @@ impl Value {
     // r[impl akt.field.checkbox]
     pub fn from_input(field: &FieldDef, json: &Json, change: Change) -> Result<Input, String> {
         if json.is_null() {
+            return Ok(Input::Clear);
+        }
+        // r[impl akt.field.multiple]
+        if field.multiple && json.as_array().is_some_and(Vec::is_empty) {
             return Ok(Input::Clear);
         }
         if field.kind == FieldKind::Checkbox {
@@ -197,7 +207,27 @@ impl Value {
                     .map(Self::Date)
                     .ok_or_else(|| format!("`{text}` is not a date, YYYY-MM-DD"))
             }
+            // r[impl akt.field.multiple]
+            FieldKind::User if field.multiple => {
+                let items = json
+                    .as_array()
+                    .ok_or("expected a list of users and contacts")?;
+                let mut people = Vec::new();
+                for item in items {
+                    let someone = Someone::from_json(item)?;
+                    if people.contains(&someone) {
+                        return Err("someone is named twice".to_owned());
+                    }
+                    people.push(someone);
+                }
+                if people.is_empty() {
+                    return Err("a list of no one is no value".to_owned());
+                }
+                Ok(Self::Users(people))
+            }
             FieldKind::User => Someone::from_json(json).map(Self::User),
+            FieldKind::Sections => crate::sections::from_json(json).map(Self::Sections),
+            FieldKind::Verdict => crate::verdicts::all_from_json(json).map(Self::Verdicts),
             FieldKind::Checkbox => checkbox(json),
             FieldKind::Reference => reference(json),
             FieldKind::Git => git(json),
@@ -217,6 +247,11 @@ impl Value {
     pub fn named(&self) -> Vec<Someone> {
         match self {
             Self::User(someone) => vec![*someone],
+            Self::Users(people) => people.clone(),
+            Self::Verdicts(given) => given
+                .iter()
+                .flat_map(|g| [g.assignee, Someone::User(g.by)])
+                .collect(),
             Self::Checkbox {
                 by, on_behalf_of, ..
             } => std::iter::once(Someone::User(*by))
@@ -244,6 +279,16 @@ impl Value {
             Self::Choices(keys) => keys.iter().map(|k| name(k)).collect::<Vec<_>>().join(", "),
             Self::Date(date) => date.format("%Y-%m-%d").to_string(),
             Self::User(someone) => person(someone),
+            Self::Users(people) => people.iter().map(person).collect::<Vec<_>>().join(", "),
+            Self::Sections(items) => {
+                let n = crate::sections::numbers(items).len();
+                format!("{n} akter in sections")
+            }
+            Self::Verdicts(given) => given
+                .iter()
+                .map(|g| format!("{}: {}", person(&g.assignee), g.verdict.as_str()))
+                .collect::<Vec<_>>()
+                .join(", "),
             Self::Attachment(id) => id.to_string(),
             Self::Checkbox {
                 on_behalf_of: None, ..
@@ -298,6 +343,11 @@ impl Value {
             Self::Choices(keys) => json!(keys),
             Self::Date(date) => json!(date.format("%Y-%m-%d").to_string()),
             Self::User(someone) => someone.to_json(),
+            Self::Users(people) => Json::Array(people.iter().map(Someone::to_json).collect()),
+            Self::Sections(items) => crate::sections::to_json(items),
+            Self::Verdicts(given) => {
+                Json::Array(given.iter().map(crate::verdicts::Given::to_json).collect())
+            }
             Self::Attachment(id) => json!(id.to_string()),
             Self::Checkbox {
                 by,
@@ -419,7 +469,10 @@ fn docker(json: &Json) -> Result<Value, String> {
 }
 
 /// `json` as an object with only the members `allowed`.
-fn members<'a>(json: &'a Json, allowed: &[&str]) -> Result<&'a Map<String, Json>, String> {
+pub(crate) fn members<'a>(
+    json: &'a Json,
+    allowed: &[&str],
+) -> Result<&'a Map<String, Json>, String> {
     let object = json
         .as_object()
         .ok_or_else(|| format!("expected an object with {}", allowed.join(", ")))?;

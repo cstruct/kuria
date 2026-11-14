@@ -9,6 +9,7 @@ function field(kind: FieldDef['kind'], extra: Partial<FieldDef> = {}): FieldDef 
 		description: null,
 		required: false,
 		multiline: false,
+		multiple: false,
 		options: [
 			{ key: 'a', name: 'A' },
 			{ key: 'b', name: 'B' }

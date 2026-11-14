@@ -141,6 +141,24 @@ export const FieldValues = graphql(`
 			digest
 			tag
 		}
+		... on UsersValue {
+			field
+			users {
+				...SomeoneShown
+			}
+		}
+		... on SectionsValue {
+			field
+		}
+		... on VerdictValue {
+			field
+			verdicts {
+				verdict
+				assignee {
+					...SomeoneShown
+				}
+			}
+		}
 		... on AttachmentValue {
 			field
 			attachment {
@@ -220,6 +238,7 @@ export const TypeShape = graphql(`
 			description
 			required
 			multiline
+			multiple
 			options {
 				key
 				name
@@ -396,6 +415,7 @@ export const ListFilters = graphql(`
 				name
 				kind
 				multiline
+				multiple
 				options {
 					key
 					name

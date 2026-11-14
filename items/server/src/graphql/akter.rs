@@ -998,6 +998,8 @@ pub enum FieldKind {
     Git,
     Docker,
     Attachment,
+    Sections,
+    Verdict,
 }
 
 impl From<ConfigKind> for FieldKind {
@@ -1013,6 +1015,8 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Docker => Self::Docker,
             ConfigKind::Reference => Self::Reference,
             ConfigKind::Attachment => Self::Attachment,
+            ConfigKind::Sections => Self::Sections,
+            ConfigKind::Verdict => Self::Verdict,
         }
     }
 }
@@ -1028,6 +1032,13 @@ pub struct Field {
     options: Vec<ChoiceOption>,
     /// For attachment fields: what files they hold.
     format: Option<AttachmentFormat>,
+    /// For user fields: whether they hold a list of users and contacts.
+    multiple: bool,
+    /// For sections fields: the akt types of the members they place; any
+    /// the akt type contains if empty.
+    of: Vec<String>,
+    /// For verdict fields: the key of the user field naming the assignees.
+    assignees: Option<String>,
 }
 
 /// What files an attachment field holds.
@@ -1051,6 +1062,9 @@ impl From<&FieldDef> for Field {
                 ConfigFormat::Any => AttachmentFormat::Any,
                 ConfigFormat::Sbom => AttachmentFormat::Sbom,
             }),
+            multiple: def.multiple,
+            of: def.of.clone(),
+            assignees: def.assignees.clone(),
         }
     }
 }
@@ -1570,6 +1584,91 @@ pub enum FieldValue {
     Docker(DockerValue),
     Reference(ReferenceValue),
     Attachment(AttachmentValue),
+    Users(UsersValue),
+    Sections(SectionsValue),
+    Verdict(VerdictValue),
+}
+
+/// A `multiple` user field's users and contacts, in order.
+#[derive(SimpleObject)]
+pub struct UsersValue {
+    field: String,
+    users: Vec<Someone>,
+}
+
+/// An akt's members laid out in sections.
+#[derive(SimpleObject)]
+pub struct SectionsValue {
+    field: String,
+    items: Vec<SectionItem>,
+}
+
+/// An item of a sections field: a member, by number, or a section.
+#[derive(SimpleObject)]
+pub struct SectionItem {
+    /// The member's number, if it is one.
+    number: Option<String>,
+    /// The section, if it is one.
+    section: Option<Section>,
+}
+
+/// A section.
+#[derive(SimpleObject)]
+pub struct Section {
+    title: Option<String>,
+    /// Markdown.
+    text: Option<String>,
+    collapsible: bool,
+    items: Vec<SectionItem>,
+}
+
+impl SectionItem {
+    fn of(items: &[kuria_engine::sections::Item]) -> Vec<Self> {
+        items
+            .iter()
+            .map(|item| match item {
+                kuria_engine::sections::Item::Akt(number) => Self {
+                    number: Some(number.clone()),
+                    section: None,
+                },
+                kuria_engine::sections::Item::Section(s) => Self {
+                    number: None,
+                    section: Some(Section {
+                        title: s.title.clone(),
+                        text: s.text.clone(),
+                        collapsible: s.collapsible,
+                        items: Self::of(&s.items),
+                    }),
+                },
+            })
+            .collect()
+    }
+}
+
+/// Each assignee's verdict.
+#[derive(SimpleObject)]
+pub struct VerdictValue {
+    field: String,
+    verdicts: Vec<GivenVerdict>,
+}
+
+/// One assignee's verdict.
+#[derive(SimpleObject)]
+pub struct GivenVerdict {
+    assignee: Someone,
+    verdict: VerdictKind,
+    /// Who gave it: the assignee, unless given for them.
+    by: User,
+    at: DateTime<Utc>,
+}
+
+/// A verdict: pass, fail or skip.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+#[graphql(name = "Verdict")]
+pub enum VerdictKind {
+    Pass,
+    Fail,
+    Skip,
 }
 
 impl FieldValue {
@@ -1646,6 +1745,30 @@ impl FieldValue {
             Value::Attachment(id) => Self::Attachment(AttachmentValue {
                 field,
                 attachment: Attachment(*id),
+            }),
+            Value::Users(people) => Self::Users(UsersValue {
+                field,
+                users: people.iter().map(|s| (*s).into()).collect(),
+            }),
+            Value::Sections(items) => Self::Sections(SectionsValue {
+                field,
+                items: SectionItem::of(items),
+            }),
+            Value::Verdicts(given) => Self::Verdict(VerdictValue {
+                field,
+                verdicts: given
+                    .iter()
+                    .map(|g| GivenVerdict {
+                        assignee: g.assignee.into(),
+                        verdict: match g.verdict {
+                            kuria_engine::verdicts::Verdict::Pass => VerdictKind::Pass,
+                            kuria_engine::verdicts::Verdict::Fail => VerdictKind::Fail,
+                            kuria_engine::verdicts::Verdict::Skip => VerdictKind::Skip,
+                        },
+                        by: User(g.by),
+                        at: g.at,
+                    })
+                    .collect(),
             }),
         }
     }

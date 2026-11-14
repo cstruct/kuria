@@ -227,8 +227,68 @@ fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSe
                 "only text fields are multiline",
             );
         }
+        kinds(problems, document, &path, field);
+    }
+    for (kind, said) in [
+        (FieldKind::Sections, "sections"),
+        (FieldKind::Verdict, "verdict"),
+    ] {
+        if document.fields.iter().filter(|f| f.kind == kind).count() > 1 {
+            problems.add(
+                "fields",
+                format!("an akt type has at most one `{said}` field"),
+            );
+        }
     }
     keys
+}
+
+/// Checks `multiple`, `of` and `assignees`, which only some kinds take.
+// r[impl akt.field.multiple]
+// r[impl akt.field.sections]
+// r[impl akt.field.verdict]
+fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field: &FieldDef) {
+    if field.multiple && field.kind != FieldKind::User {
+        problems.add(&format!("{path}.multiple"), "only user fields are multiple");
+    }
+    if field.kind == FieldKind::Sections {
+        for (j, key) in field.of.iter().enumerate() {
+            if !document.contains.iter().any(|c| &c.akt_type == key) {
+                problems.add(
+                    &format!("{path}.of[{j}]"),
+                    format!("`{key}` isn't a type this akt type contains"),
+                );
+            }
+        }
+    } else if !field.of.is_empty() {
+        problems.add(&format!("{path}.of"), "only sections fields have `of`");
+    }
+    match (field.kind, &field.assignees) {
+        (FieldKind::Verdict, None) => problems.add(
+            &format!("{path}.assignees"),
+            "a verdict field names its assignees' `user` field",
+        ),
+        (FieldKind::Verdict, Some(key)) => {
+            let names = document.fields.iter().find(|f| &f.key == key);
+            if !names.is_some_and(|f| f.kind == FieldKind::User && f.multiple) {
+                problems.add(
+                    &format!("{path}.assignees"),
+                    format!("`{key}` isn't a multiple user field of this akt type"),
+                );
+            }
+            if field.required {
+                problems.add(
+                    &format!("{path}.required"),
+                    "a verdict field can't be required: its assignees give it",
+                );
+            }
+        }
+        (_, Some(_)) => problems.add(
+            &format!("{path}.assignees"),
+            "only verdict fields have assignees",
+        ),
+        (_, None) => {}
+    }
 }
 
 /// Checks the transitions against the type's fields and states.
@@ -580,6 +640,79 @@ mod tests {
     }
 
     // r[verify akt.type.validation]
+    fn protocol() -> serde_json::Value {
+        json!({
+            "key": "protocol", "name": "Protocol", "number": "TP-{seq}",
+            "fields": [
+                { "key": "title", "name": "Title", "kind": "text", "required": true },
+                { "key": "testers", "name": "Testers", "kind": "user", "multiple": true },
+                { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" },
+                { "key": "sections", "name": "Sections", "kind": "sections", "of": ["test"] }
+            ],
+            "states": [{ "key": "open", "name": "Open", "initial": true }],
+            "contains": [{ "type": "test" }]
+        })
+    }
+
+    // r[verify akt.field.multiple]
+    // r[verify akt.field.sections]
+    // r[verify akt.field.verdict]
+    #[test]
+    fn checks_multiple_users_sections_and_verdicts() {
+        assert_eq!(problems(protocol()), Vec::<String>::new());
+        let with = |path: &str, value: serde_json::Value| {
+            let mut document = protocol();
+            let (parent, key) = path.rsplit_once('/').unwrap();
+            let object = document
+                .pointer_mut(parent)
+                .unwrap()
+                .as_object_mut()
+                .unwrap();
+            if value.is_null() {
+                object.remove(key);
+            } else {
+                object.insert(key.to_owned(), value);
+            }
+            problems(document)
+        };
+        assert_eq!(
+            with("/fields/0/multiple", json!(true)),
+            ["fields[0].multiple: only user fields are multiple"]
+        );
+        assert_eq!(
+            with("/fields/1/multiple", json!(false)),
+            ["fields[2].assignees: `testers` isn't a multiple user field of this akt type"]
+        );
+        assert_eq!(
+            with("/fields/2/assignees", json!("title")),
+            ["fields[2].assignees: `title` isn't a multiple user field of this akt type"]
+        );
+        assert_eq!(
+            with("/fields/2/assignees", serde_json::Value::Null),
+            ["fields[2].assignees: a verdict field names its assignees' `user` field"]
+        );
+        assert_eq!(
+            with("/fields/2/required", json!(true)),
+            ["fields[2].required: a verdict field can't be required: its assignees give it"]
+        );
+        assert_eq!(
+            with("/fields/3/of", json!(["note"])),
+            ["fields[3].of[0]: `note` isn't a type this akt type contains"]
+        );
+        let mut two = protocol();
+        two["fields"][0]["kind"] = json!("sections");
+        assert!(
+            problems(two)
+                .contains(&"fields: an akt type has at most one `sections` field".to_owned())
+        );
+        let mut stray = protocol();
+        stray["fields"][0]["assignees"] = json!("testers");
+        assert_eq!(
+            problems(stray),
+            ["fields[0].assignees: only verdict fields have assignees"]
+        );
+    }
+
     #[test]
     fn accepts_a_valid_document() {
         assert_eq!(problems(capa()), Vec::<String>::new());

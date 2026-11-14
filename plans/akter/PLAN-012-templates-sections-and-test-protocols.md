@@ -267,16 +267,33 @@ This settles PLAN-012-G01 (sections have optional text) and G04 (links out kept,
 <!-- akt: PLAN-012-T02 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3V
-state: todo
+state: done
 in: [PLAN-012]
 links: [Blocked by PLAN-012-T01, Blocks PLAN-012-T03, Blocks PLAN-012-T04]
 title: The field kinds and outcomes in config and engine
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`kuria-config` validates `sections` (`of`), `verdict` (the `user` field it names) and `multiple`; `kuria-engine` takes their inputs, refusing a non-assignee's verdict, keeps `sections` to members, and computes outcomes.
+**`kuria-config`:** `FieldDef` gains `multiple` (user only), `of` (sections only, naming types the akt type contains) and `assignees` (verdict only, naming a multiple user field; a verdict field can't be required). `FieldKind` gains `sections` and `verdict`, and a type has at most one of each.
+
+**`kuria-engine`:**
+- `Value` gains `Users`, `Sections` and `Verdicts`, with their JSON forms. An empty multiple list is no value.
+- `verdicts`: `Verdict`, `Given` (assignee, verdict, by, at), `Giving::from_input` for `pass`, `{verdict, for}` and `{clear, for}`, `apply`, and `only_of`.
+- In `apply`, verdict inputs are taken last, against the assignees as the same input leaves them. Every verdict field then drops removed assignees' verdicts. `null` is refused.
+- `sections`: `Item` and `Section`, `numbers`, `check` (members only, once, `of`), `without`, `copied` (for copies) and `outcome`. The stores call `check` and `without`, since the engine doesn't hold members.
+- `outcomes`: `Outcome`, `of_verdicts`, `of_all`, `of_fields` and `has_outcomes`.
+
+**Spec fix:** `akt.field.verdict` said a verdict *from* a non-assignee is refused, which contradicted D03's `for`. It now says a verdict must be *for* an assignee: anyone may give one for an assignee, and one's own only as an assignee.
+
+**To keep everything compiling,** ahead of T03 and T05:
+- GraphQL gains the kinds and `Field.multiple/of/assignees`, plus `UsersValue`, `SectionsValue` (with nested `SectionItem`/`Section`) and `VerdictValue`/`GivenVerdict`/`Verdict`. `schema.graphql` is regenerated.
+- The app fetches them, shows them as text, and holds them read-only (`SHOWN`) until T05.
+- A multiple user field isn't filterable yet.
+
+**Tests:** config checks of the new options; outcome rules for every mix, sections, and `has_outcomes`; sections' JSON, checks, removal, copying and section outcomes; and verdicts through `edit` (own, `for`, outsiders, `null`, clearing, removed assignees, assignees and a verdict in one change). Lint, `mise run test` (329 Rust, 55 app) and all 27 e2e tests pass.
 
 <!-- field: acceptance -->
 - Unit tests for every outcome rule, nested sections and an empty one.

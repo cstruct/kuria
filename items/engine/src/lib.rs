@@ -7,14 +7,17 @@
 pub mod board;
 pub mod draft;
 mod hash;
+pub mod outcomes;
 mod rank;
 pub mod rules;
 pub mod sbom;
+pub mod sections;
 mod value;
+pub mod verdicts;
 
 use std::collections::BTreeMap;
 
-use kuria_config::AktType;
+use kuria_config::{AktType, FieldKind};
 use serde_json::{Map, Value as Json};
 
 pub use hash::state_hash;
@@ -154,10 +157,28 @@ fn apply(
 ) -> Result<Applied, Refusal> {
     let mut fields = fields.clone();
     let mut changes = BTreeMap::new();
+    // Verdicts last, against the assignees as the input leaves them.
+    let mut givings = Vec::new();
     for (key, raw) in input {
         let Some(def) = ty.field(key) else {
             return Err(Refusal::UnknownField(key.clone()));
         };
+        if def.kind == FieldKind::Verdict {
+            let invalid = |reason: String| Refusal::InvalidValue {
+                field: key.clone(),
+                reason,
+            };
+            if raw.is_null() {
+                return Err(invalid(
+                    "a verdict is taken back with {\"clear\": true}".to_owned(),
+                ));
+            }
+            givings.push((
+                def,
+                verdicts::Giving::from_input(raw, change).map_err(invalid)?,
+            ));
+            continue;
+        }
         // r[impl akt.field.kinds]
         let input =
             Value::from_input(def, raw, change).map_err(|reason| Refusal::InvalidValue {
@@ -185,7 +206,66 @@ fn apply(
             }
         }
     }
+    // r[impl akt.field.verdict]
+    for (def, giving) in givings {
+        let given = verdicts_of(&fields, &def.key);
+        let assignees = assignees_of(&fields, def);
+        let now =
+            giving
+                .apply(&given, &assignees, change)
+                .map_err(|reason| Refusal::InvalidValue {
+                    field: def.key.clone(),
+                    reason,
+                })?;
+        set_verdicts(&mut fields, &mut changes, &def.key, &given, now);
+    }
+    // An assignee removed loses their verdict in the same change.
+    for def in ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Verdict)
+    {
+        let given = verdicts_of(&fields, &def.key);
+        let kept = verdicts::only_of(&given, &assignees_of(&fields, def));
+        set_verdicts(&mut fields, &mut changes, &def.key, &given, kept);
+    }
     Ok((fields, changes))
+}
+
+fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {
+    match fields.get(key) {
+        Some(Value::Verdicts(given)) => given.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn assignees_of(fields: &BTreeMap<String, Value>, def: &kuria_config::FieldDef) -> Vec<Someone> {
+    match def.assignees.as_ref().and_then(|key| fields.get(key)) {
+        Some(Value::Users(people)) => people.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// Sets a `verdict` field to `now`, none if empty, recording a change if it
+/// isn't `before`.
+fn set_verdicts(
+    fields: &mut BTreeMap<String, Value>,
+    changes: &mut BTreeMap<String, Option<Value>>,
+    key: &str,
+    before: &[verdicts::Given],
+    now: Vec<verdicts::Given>,
+) {
+    if now == before {
+        return;
+    }
+    if now.is_empty() {
+        fields.remove(key);
+        changes.insert(key.to_owned(), None);
+    } else {
+        fields.insert(key.to_owned(), Value::Verdicts(now.clone()));
+        changes.insert(key.to_owned(), Some(Value::Verdicts(now)));
+    }
 }
 
 fn outcome(

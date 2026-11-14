@@ -59,11 +59,8 @@ pub fn named(
 /// Whether conditions may be put on fields of `kind`.
 pub fn filterable(field: &FieldDef) -> bool {
     match field.kind {
-        FieldKind::Choice
-        | FieldKind::Choices
-        | FieldKind::User
-        | FieldKind::Checkbox
-        | FieldKind::Date => true,
+        FieldKind::Choice | FieldKind::Choices | FieldKind::Checkbox | FieldKind::Date => true,
+        FieldKind::User => !field.multiple,
         FieldKind::Text => !field.multiline,
         _ => false,
     }
