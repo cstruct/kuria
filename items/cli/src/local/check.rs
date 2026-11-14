@@ -9,7 +9,7 @@ use kuria_engine::rules::containment;
 use serde_json::json;
 
 use super::answers;
-use super::dir::{AktDir, LocalAkt, LocalType, files, read_akt, read_type};
+use super::dir::{AktDir, LocalAkt, LocalType, files, read_file, read_type};
 use crate::error::CliError;
 use crate::output::Answer;
 
@@ -87,9 +87,11 @@ pub fn check(root: &Path) -> Result<Answer, CliError> {
 
     let mut akter = Vec::new();
     for path in files(&root.join("akter"), "md")? {
-        match read_akt(&path, &types) {
-            Ok(akt) => akter.push(akt),
-            Err(e) => problems.add(&path, e.message),
+        for akt in read_file(&path, &types) {
+            match akt {
+                Ok(akt) => akter.push(akt),
+                Err(e) => problems.add(&path, e.message),
+            }
         }
     }
     akter.sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));

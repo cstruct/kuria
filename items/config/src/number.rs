@@ -2,6 +2,14 @@
 
 use std::fmt::Write;
 
+/// What reading a number back found so far.
+#[derive(Default)]
+struct Read {
+    scope: String,
+    sequence: Option<u64>,
+    parent: Option<String>,
+}
+
 /// A parsed number pattern.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NumberPattern {
@@ -154,38 +162,57 @@ impl NumberPattern {
     // r[impl bundle.import.counters]
     #[must_use]
     pub fn read(&self, number: &str) -> Option<(String, u64)> {
-        let mut scope = String::new();
-        let mut sequence = None;
-        self.read_from(0, number, &mut scope, &mut sequence)
-            .then(|| sequence.map(|s| (scope, s)))
+        let mut read = Read::default();
+        self.read_from(0, number, &mut read, &|_| true)
+            .then(|| read.sequence.map(|s| (read.scope, s)))
             .flatten()
     }
 
-    /// Whether `rest` matches the parts from `index` on, writing the scope
-    /// and sequence of the first way it does.
+    /// The parent `number` was numbered after, of those `is_parent` says
+    /// could be: `{parent}` matches any text, so a number such as
+    /// `PLAN-001-T01-T02` reads back as numbered after `PLAN-001-T01`, not
+    /// `PLAN-001`, only if `PLAN-001-T01` is a parent. `None` if the pattern
+    /// has no `{parent}` or no such parent.
+    #[must_use]
+    pub fn parent_of(&self, number: &str, is_parent: &dyn Fn(&str) -> bool) -> Option<String> {
+        if !self.uses_parent() {
+            return None;
+        }
+        let mut read = Read::default();
+        self.read_from(0, number, &mut read, is_parent)
+            .then_some(read.parent)
+            .flatten()
+    }
+
+    /// Whether `rest` matches the parts from `index` on, with a parent
+    /// `accept` takes, writing the scope, sequence and parent of the first
+    /// way it does.
     fn read_from(
         &self,
         index: usize,
         rest: &str,
-        scope: &mut String,
-        sequence: &mut Option<u64>,
+        read: &mut Read,
+        accept: &dyn Fn(&str) -> bool,
     ) -> bool {
         let Some(part) = self.parts.get(index) else {
-            return rest.is_empty();
+            return rest.is_empty() && read.parent.as_deref().is_none_or(accept);
         };
         let digits =
             |n: usize| rest.len() >= n && rest.as_bytes()[..n].iter().all(u8::is_ascii_digit);
         let mut attempt = |taken: usize, written: &str, seq: Option<u64>| {
-            let (kept_scope, kept_seq) = (scope.len(), *sequence);
-            scope.push_str(written);
+            let kept = (read.scope.len(), read.sequence, read.parent.clone());
+            read.scope.push_str(written);
             if seq.is_some() {
-                *sequence = seq;
+                read.sequence = seq;
             }
-            if self.read_from(index + 1, &rest[taken..], scope, sequence) {
+            if *part == Part::Parent {
+                read.parent = Some(written.to_owned());
+            }
+            if self.read_from(index + 1, &rest[taken..], read, accept) {
                 return true;
             }
-            scope.truncate(kept_scope);
-            *sequence = kept_seq;
+            read.scope.truncate(kept.0);
+            (read.sequence, read.parent) = (kept.1, kept.2);
             false
         };
         match part {
@@ -321,5 +348,27 @@ mod tests {
         assert_eq!(read("CAPA-{year}-{seq:4}", "CAPA-2026-042"), None);
         assert_eq!(read("CAPA-{seq}", "TASK-1"), None);
         assert_eq!(read("CAPA-{seq}", "CAPA-1x"), None);
+    }
+
+    #[test]
+    fn reads_the_parent_a_number_was_made_from() {
+        let task = NumberPattern::parse("{parent}-T{seq:2}").unwrap();
+        let parents = ["PLAN-001", "PLAN-001-T01"];
+        let is_parent = |n: &str| parents.contains(&n);
+        assert_eq!(
+            task.parent_of("PLAN-001-T07", &is_parent).as_deref(),
+            Some("PLAN-001")
+        );
+        assert_eq!(
+            task.parent_of("PLAN-001-T100", &is_parent).as_deref(),
+            Some("PLAN-001")
+        );
+        assert_eq!(
+            task.parent_of("PLAN-001-T01-T02", &is_parent).as_deref(),
+            Some("PLAN-001-T01")
+        );
+        assert_eq!(task.parent_of("PLAN-002-T01", &is_parent), None);
+        let plan = NumberPattern::parse("PLAN-{seq:3}").unwrap();
+        assert_eq!(plan.parent_of("PLAN-001", &|_| true), None);
     }
 }

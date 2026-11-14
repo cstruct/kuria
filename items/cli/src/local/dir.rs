@@ -46,6 +46,9 @@ pub struct LocalAkt {
     pub values: Map<String, Json>,
     /// The file as read.
     pub parsed: Parsed,
+    /// Whether it is a nested akt, after another in its file
+    /// (`cli.local.nesting`).
+    pub nested: bool,
 }
 
 /// An akt directory, loaded.
@@ -196,7 +199,7 @@ pub fn files(dir: &Path, extension: &str) -> Result<Vec<PathBuf>, CliError> {
     Ok(found)
 }
 
-fn strings(parsed: &Parsed, key: &str, path: &Path) -> Result<Vec<String>, CliError> {
+fn strings(parsed: &Parsed, key: &str) -> Result<Vec<String>, String> {
     match parsed.front.get(key) {
         None | Some(Json::Null) => Ok(Vec::new()),
         Some(Json::Array(items)) => items
@@ -204,71 +207,148 @@ fn strings(parsed: &Parsed, key: &str, path: &Path) -> Result<Vec<String>, CliEr
             .map(|i| {
                 i.as_str()
                     .map(str::to_owned)
-                    .ok_or_else(|| bad(path, format!("`{key}` lists text")))
+                    .ok_or_else(|| format!("`{key}` lists text"))
             })
             .collect(),
-        Some(_) => Err(bad(path, format!("`{key}` is a list"))),
+        Some(_) => Err(format!("`{key}` is a list")),
     }
 }
 
-/// Every `<number>.md` in `dir`, as akt files of `types`.
+/// Every akt in the files of `dir`, as akter of `types`.
 fn read_akter(dir: &Path, types: &BTreeMap<String, LocalType>) -> Result<Vec<LocalAkt>, CliError> {
-    files(dir, "md")?
-        .iter()
-        .map(|path| read_akt(path, types))
+    let mut akter = Vec::new();
+    for path in files(dir, "md")? {
+        for akt in read_file(&path, types) {
+            akter.push(akt?);
+        }
+    }
+    Ok(akter)
+}
+
+/// The akt a nested akt's line names: `<!-- akt: <NUMBER> -->`.
+fn nested_marker(line: &str) -> Option<&str> {
+    line.trim()
+        .strip_prefix("<!-- akt:")
+        .and_then(|l| l.strip_suffix("-->"))
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+}
+
+/// `text` split into its akter: the first, then each nested akt with the
+/// number its line names. A line in a fenced code block is text.
+// r[impl cli.local.layout]
+fn split(text: &str) -> Vec<(Option<&str>, String)> {
+    let mut parts: Vec<(Option<&str>, Vec<&str>)> = vec![(None, Vec::new())];
+    let mut fence: Option<&str> = None;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        let opens = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f));
+        match (fence, opens) {
+            (None, Some(f)) => fence = Some(f),
+            (Some(open), Some(_))
+                if trimmed
+                    .trim_end()
+                    .chars()
+                    .all(|c| c == open.chars().next().unwrap_or('`')) =>
+            {
+                fence = None;
+            }
+            _ => {}
+        }
+        match nested_marker(line).filter(|_| fence.is_none() && opens.is_none()) {
+            Some(number) => parts.push((Some(number), Vec::new())),
+            None => parts.last_mut().expect("never empty").1.push(line),
+        }
+    }
+    parts
+        .into_iter()
+        .map(|(number, lines)| {
+            let mut text = lines.join("\n").trim_matches('\n').to_owned();
+            text.push('\n');
+            (number, text)
+        })
         .collect()
 }
 
-/// The akt file at `path`, read as an akt of one of `types`.
-pub fn read_akt(path: &Path, types: &BTreeMap<String, LocalType>) -> Result<LocalAkt, CliError> {
-    let text = std::fs::read_to_string(path).map_err(|e| io_error(path, &e))?;
-    let parsed = file::parse(&text).map_err(|e| bad(path, e.message))?;
-    let named = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or_default()
-        .to_owned();
-    if parsed.text("number").as_deref() != Some(named.as_str()) {
-        return Err(bad(
-            path,
-            format!("its `number` isn't `{named}`, its file's name"),
-        ));
-    }
+/// Every akt in the file at `path`, each read as an akt of one of
+/// `types`: the first, and its nested akter (`cli.local.layout`).
+#[must_use]
+pub fn read_file(
+    path: &Path,
+    types: &BTreeMap<String, LocalType>,
+) -> Vec<Result<LocalAkt, CliError>> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) => return vec![Err(io_error(path, &e))],
+    };
+    let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
+    split(&text)
+        .into_iter()
+        .map(|(number, text)| read_akt(path, number, &text, types))
+        .collect()
+}
+
+/// One akt of the file at `path`, from its `text`: the first, or the
+/// nested akt `nested` names.
+fn read_akt(
+    path: &Path,
+    nested: Option<&str>,
+    text: &str,
+    types: &BTreeMap<String, LocalType>,
+) -> Result<LocalAkt, CliError> {
+    // A problem in a nested akt names it too.
+    let bad = |message: String| match nested {
+        Some(number) => bad(path, format!("{number}: {message}")),
+        None => bad(path, message),
+    };
+    let parsed = file::parse(text).map_err(|e| bad(e.message))?;
+    let number = match (nested, parsed.text("number")) {
+        (None, Some(number)) => number,
+        (None, None) => return Err(bad("names no `number`".to_owned())),
+        (Some(number), None) => number.to_owned(),
+        (Some(_), Some(_)) => {
+            return Err(bad(
+                "has a `number`, which its `<!-- akt: -->` line gives".to_owned()
+            ));
+        }
+    };
     let type_key = parsed
         .text("type")
-        .ok_or_else(|| bad(path, "names no `type`"))?;
+        .ok_or_else(|| bad("names no `type`".to_owned()))?;
     let ty = types
         .get(&type_key)
-        .ok_or_else(|| bad(path, format!("is a `{type_key}`, which `types/` lacks")))?;
+        .ok_or_else(|| bad(format!("is a `{type_key}`, which `types/` lacks")))?;
     let state = parsed
         .text("state")
-        .ok_or_else(|| bad(path, "names no `state`"))?;
+        .ok_or_else(|| bad("names no `state`".to_owned()))?;
     if ty.ty.state(&state).is_none() {
-        return Err(bad(path, format!("`{type_key}` has no state `{state}`")));
+        return Err(bad(format!("`{type_key}` has no state `{state}`")));
     }
     let revision = parsed
         .front
         .get("revision")
         .and_then(Json::as_i64)
         .and_then(|r| i32::try_from(r).ok())
-        .ok_or_else(|| bad(path, "names no `revision`"))?;
+        .ok_or_else(|| bad("names no `revision`".to_owned()))?;
     let rank = parsed
         .text("rank")
-        .ok_or_else(|| bad(path, "has no `rank`"))?;
-    let values = parsed.values().map_err(|e| bad(path, e.message))?;
+        .ok_or_else(|| bad("has no `rank`".to_owned()))?;
+    let values = parsed.values().map_err(|e| bad(e.message))?;
     if let Some(key) = values.keys().find(|k| ty.ty.field(k).is_none()) {
-        return Err(bad(path, format!("`{type_key}` has no field `{key}`")));
+        return Err(bad(format!("`{type_key}` has no field `{key}`")));
     }
+    let list = |key: &str| strings(&parsed, key).map_err(bad);
     Ok(LocalAkt {
-        containers: strings(&parsed, "in", path)?,
-        links: strings(&parsed, "links", path)?,
-        number: named,
+        containers: list("in")?,
+        links: list("links")?,
+        number,
         path: path.to_owned(),
         type_key,
         state,
         revision,
         rank,
         values,
+        nested: nested.is_some(),
         parsed,
     })
 }

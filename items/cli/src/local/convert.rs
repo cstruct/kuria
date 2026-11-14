@@ -271,6 +271,7 @@ fn akt_of(
             front: Map::new(),
             sections: Vec::new(),
         },
+        nested: false,
     })
 }
 

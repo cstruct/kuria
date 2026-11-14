@@ -199,6 +199,25 @@ impl Writer {
     /// Writes every file the change touched, each whole.
     // r[impl cli.local.layout]
     pub fn save(self) -> Result<(), CliError> {
+        // Until writes keep nested akter (PLAN-009-T03), never write a file
+        // over the other akter it holds.
+        for number in &self.touched {
+            let akt = self.dir.akt(number).expect("touched akter exist");
+            if self
+                .dir
+                .akter
+                .iter()
+                .any(|a| a.path == akt.path && a.number != *number)
+            {
+                return Err(super::unsupported(
+                    &format!("Writing {number}"),
+                    &format!(
+                        "{} holds other akter too, and writes don't keep nested akter yet",
+                        akt.path.display()
+                    ),
+                ));
+            }
+        }
         for key in &self.types {
             let path = self.dir.root.join("types").join(format!("{key}.json"));
             let text = serde_json::to_string_pretty(&self.dir.types[key].document)
@@ -244,6 +263,7 @@ impl Writer {
                 front: Map::new(),
                 sections: Vec::new(),
             },
+            nested: false,
         }
     }
 }

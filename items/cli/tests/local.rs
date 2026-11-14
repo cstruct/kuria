@@ -395,8 +395,8 @@ fn refuses_what_local_mode_doesn_t_do() {
 fn refuses_a_file_that_doesn_t_fit_naming_it() {
     for (front, why) in [
         (
-            "number: PLAN-009\ntype: plan\nrevision: 1\nrank: \"1\"\nstate: active\ntitle: X\n",
-            "its number isn't its name",
+            "number: PLAN-001\ntype: plan\nrevision: 1\nrank: \"1\"\nstate: active\ntitle: X\n---\n\n<!-- akt: PLAN-001-T01 -->\n---\nnumber: PLAN-001-T01\ntype: task\nrevision: 1\nrank: \"2\"\nstate: todo\ntitle: Y\n",
+            "a nested akt naming its number twice",
         ),
         (
             "number: PLAN-001\ntype: plan\nrevision: 1\nrank: \"1\"\nstate: shipped\ntitle: X\n",
@@ -1017,4 +1017,90 @@ fn a_directory_goes_to_a_bundle_and_back_unchanged() {
     }
     let refused = kuria_cli::local::convert::bundle_of(&again, None);
     assert!(refused.is_ok(), "a written directory converts again");
+}
+
+// r[verify cli.local.layout]
+// r[verify cli.local.nesting]
+#[test]
+fn reads_nested_akter_from_their_parent_s_file() {
+    let dir = Dir::new();
+    let text = r#"---
+number: PLAN-001
+type: plan
+revision: 2
+rank: "1"
+state: active
+title: Local mode
+---
+
+<!-- field: goal -->
+Plans in the repository. An example:
+
+```markdown
+<!-- akt: PLAN-001-T09 -->
+```
+
+<!-- akt: PLAN-001-T01 -->
+---
+type: task
+revision: 1
+rank: "2"
+state: doing
+in: [PLAN-001]
+links: [Blocks PLAN-001-T02]
+title: Spec it
+---
+
+<!-- field: description -->
+Rules first.
+
+<!-- akt: PLAN-001-T02 -->
+---
+type: task
+revision: 1
+rank: "3"
+state: todo
+in: [PLAN-001]
+links: [Blocked by PLAN-001-T01]
+title: Build it
+---
+"#;
+    std::fs::write(dir.root.join("akter/PLAN-001-local-mode.md"), text).unwrap();
+
+    let mut listed = numbers(&dir.ok(&["ls", "task", "--format", "json"]));
+    listed.sort();
+    assert_eq!(listed, ["PLAN-001-T01", "PLAN-001-T02"]);
+    let plan = dir.ok(&["cat", "PLAN-001"]).markdown;
+    assert!(
+        plan.contains("<!-- akt: PLAN-001-T09 -->"),
+        "a line in a fence is text"
+    );
+    let task = dir.ok(&["cat", "PLAN-001-T01"]).markdown;
+    assert!(task.starts_with("---\nnumber: PLAN-001-T01\n"), "{task}");
+    assert!(task.contains("Rules first."), "{task}");
+    assert!(!task.contains("Build it"), "only its own text: {task}");
+    let shown = dir.ok(&["show", "PLAN-001"]).markdown;
+    assert!(shown.contains("PLAN-001-T02 · Build it"), "{shown}");
+    // Writes leave a file of several akter alone, for now.
+    let path = dir.root.join("akter/PLAN-001-local-mode.md");
+    assert_eq!(
+        dir.refused(&["set", "PLAN-001-T01", "title=X"]).code,
+        "LOCAL_UNSUPPORTED"
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+
+    // A problem in a nested akt names its file and its number.
+    std::fs::write(
+        dir.root.join("akter/PLAN-001-local-mode.md"),
+        text.replace("state: todo", "state: shipped"),
+    )
+    .unwrap();
+    let refused = dir.refused(&["ls"]);
+    assert!(
+        refused
+            .message
+            .contains("PLAN-001-local-mode.md: PLAN-001-T02:"),
+        "{}",
+        refused.message
+    );
 }
