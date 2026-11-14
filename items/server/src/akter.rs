@@ -8,17 +8,20 @@
 //! - [`membership`]: adding members to containers and removing them.
 //! - [`ordering`]: moving akter in their tenant's order.
 //! - [`draft`]: drafting a field from the akter around its akt.
+//! - [`batch`]: several of these in one transaction.
 //!
 //! Locks are always taken in one order, so no two changes deadlock: the
 //! tenant's order lock, then akt rows (by id), then number counters, then
 //! the change-event counter.
 
+mod batch;
 mod create;
 mod draft;
 mod links;
 mod membership;
 mod ordering;
 
+pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
 pub use ordering::Place;
 
 use std::sync::Arc;
@@ -111,6 +114,8 @@ pub enum AktError {
     },
     #[error("the field `{0}` has no draft recipe")]
     NotDraftable(String),
+    #[error("{0}")]
+    BadRequest(String),
     #[error("{0}")]
     Unavailable(#[from] Unavailable),
     #[error("internal error")]

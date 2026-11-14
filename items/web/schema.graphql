@@ -225,6 +225,13 @@ type AttachmentValue {
 }
 
 """
+What a batch takes: its operations, run in order, all or none.
+"""
+input BatchInput {
+	operations: [OperationInput!]!
+}
+
+"""
 A container's members in columns.
 """
 type Board {
@@ -594,6 +601,12 @@ input MoveAktInput {
 
 type Mutation {
 	"""
+	Runs several akt writes in order in one transaction: all of them, or
+	none. Answers the akt each operation answers, in order; a refusal
+	carries the operation's position, from 1, as `operation`.
+	"""
+	batch(input: BatchInput!): [Akt!]!
+	"""
 	Submits an akt type document, creating the next version of its key.
 	"""
 	defineAktType(document: JSON!): AktType!
@@ -657,6 +670,24 @@ type Mutation {
 	values naming it still read.
 	"""
 	eraseContact(id: ID!): Contact!
+}
+
+"""
+One operation of a batch: exactly one of the akt mutations, with its
+input. Wherever it takes an akt's number, `@<n>` names the akt the
+batch's operation `n`, an earlier `createAkt`, created.
+"""
+input OperationInput @oneOf {
+	createAkt: CreateAktInput
+	editAkt: EditAktInput
+	performTransition: PerformTransitionInput
+	addToContainer: MembershipInput
+	removeFromContainer: MembershipInput
+	transferMember: TransferInput
+	addLink: LinkInput
+	removeLink: UnlinkInput
+	moveAkt: MoveAktInput
+	draftField: DraftFieldInput
 }
 
 """
@@ -904,6 +935,10 @@ type Viewer {
 Directs the executor to include this field or fragment only when the `if` argument is true.
 """
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)
+"""
+directive @oneOf on INPUT_OBJECT
 """
 Directs the executor to skip this field or fragment when the `if` argument is true.
 """

@@ -194,16 +194,26 @@ Each public method opens the transaction around its body and wakes the relay aft
 <!-- akt: PLAN-011-T03 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3H
-state: todo
+state: done
 in: [PLAN-011]
 links: [Blocked by PLAN-011-T02, Blocks PLAN-011-T04, Blocks PLAN-011-T05]
 title: "The batch: locks, operations, references"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`Akter::batch`: refuse over 200 operations and bad references; one transaction; the order lock if any operation creates or moves, then every existing akt named, by id; each operation in order, its `@<n>` resolved; the first refusal rolls back, naming its position; wake the relay once. The GraphQL `batch` mutation with a one-of `Operation`, its errors carrying `extensions.operation`.
+**The write path** (`items/server/src/akter/batch.rs`, new):
+- `Operation` has one variant per akt write, with `numbers_mut` listing every akt number it names.
+- `check` refuses an empty batch, more than 200 operations, or an `@<n>` naming anything but an earlier `createAkt` as `BAD_REQUEST`, with the operation's position, before anything runs.
+- `Akter::batch` runs in one transaction. `lock` takes the order lock if any operation creates or moves, then `lock_akter` on every existing akt named, by id. Each operation then runs through its body function (`create_in`, `edit_in`, …), its `@<n>` replaced by that operation's number.
+- The first refusal rolls back as a `BatchError` naming its position. The relay is woken once, only after a commit.
+- `AktError::BadRequest` is new, answered as `BAD_REQUEST`.
+
+**GraphQL** (`graphql/akter.rs`): `batch(input: { operations: [OperationInput!]! }): [Akt!]!`. `OperationInput` is `@oneOf` over the ten mutations' own input types, and a refusal carries the extension `operation`. `items/web/schema.graphql` is regenerated.
+
+**Tests:** a unit test of `check`'s references and limits, and `items/server/tests/batches.rs` with a smoke test against Postgres. It creates a plan, two tasks in it through `@1`, a link and a transition in one batch, then shows a batch refused at its second operation (STALE, `operation: 2`) undoes its first. Clippy and lint pass; T04 adds the rest of the server tests.
 
 <!-- field: acceptance -->
 - The mutation runs every akt write, all or nothing.

@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use async_graphql::{
-    Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, SimpleObject, Union,
+    Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, OneofObject, SimpleObject, Union,
 };
 use chrono::{DateTime, Utc};
 use kuria_config::{
@@ -26,7 +26,7 @@ use super::attachments::Attachment;
 use super::filter::{self, FieldCondition};
 use super::page::{After, AktConnection, List, page_size};
 use super::people::{Someone, User};
-use crate::akter::{AktError, Akter, Caller, Place, StoredType};
+use crate::akter::{AktError, Akter, Caller, Operation, Place, StoredType};
 use crate::authorize::{Authorizer, Permission};
 
 /// The most members one board shows.
@@ -103,7 +103,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::Frozen(_) => coded(message, "FROZEN"),
         AktError::NotAccepting { .. } => coded(message, "NOT_ACCEPTING"),
         AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
-        AktError::SelfMove => coded(message, "BAD_REQUEST"),
+        AktError::SelfMove | AktError::BadRequest(_) => coded(message, "BAD_REQUEST"),
         AktError::InvalidLink(_) => coded(message, "INVALID_LINK"),
         AktError::Unavailable(detail) => {
             tracing::warn!("akter: {detail}");
@@ -433,8 +433,142 @@ pub struct PerformTransitionInput {
     reason: Option<String>,
 }
 
+/// One operation of a batch: exactly one of the akt mutations, with its
+/// input. Wherever it takes an akt's number, `@<n>` names the akt the
+/// batch's operation `n`, an earlier `createAkt`, created.
+#[derive(OneofObject)]
+pub enum OperationInput {
+    CreateAkt(CreateAktInput),
+    EditAkt(EditAktInput),
+    PerformTransition(PerformTransitionInput),
+    AddToContainer(MembershipInput),
+    RemoveFromContainer(MembershipInput),
+    TransferMember(TransferInput),
+    AddLink(LinkInput),
+    RemoveLink(UnlinkInput),
+    MoveAkt(MoveAktInput),
+    DraftField(DraftFieldInput),
+}
+
+/// What a batch takes: its operations, run in order, all or none.
+#[derive(InputObject)]
+pub struct BatchInput {
+    operations: Vec<OperationInput>,
+}
+
+/// `operation` as the batch's write path takes it.
+fn operation(input: OperationInput) -> async_graphql::Result<Operation> {
+    Ok(match input {
+        OperationInput::CreateAkt(i) => Operation::Create {
+            fields: field_values(i.fields)?,
+            key: i.key,
+            reason: i.reason,
+            inside: i.inside,
+        },
+        OperationInput::EditAkt(i) => Operation::Edit {
+            fields: field_values(Some(i.fields))?,
+            number: i.number,
+            revision: i.revision,
+            reason: i.reason,
+        },
+        OperationInput::PerformTransition(i) => Operation::Transition {
+            fields: field_values(i.fields)?,
+            number: i.number,
+            revision: i.revision,
+            transition: i.transition,
+            reason: i.reason,
+        },
+        OperationInput::AddToContainer(i) => Operation::AddMember {
+            container: i.container,
+            member: i.member,
+            reason: i.reason,
+        },
+        OperationInput::RemoveFromContainer(i) => Operation::RemoveMember {
+            container: i.container,
+            member: i.member,
+            reason: i.reason,
+        },
+        OperationInput::TransferMember(i) => Operation::Transfer {
+            member: i.member,
+            from: i.from,
+            to: i.to,
+            reason: i.reason,
+        },
+        OperationInput::AddLink(i) => Operation::AddLink {
+            source: i.source,
+            kind: i.kind,
+            target: i.target,
+            pin: i.pin_revision,
+            reason: i.reason,
+        },
+        OperationInput::RemoveLink(i) => Operation::RemoveLink {
+            source: i.source,
+            kind: i.kind,
+            target: i.target,
+            reason: i.reason,
+        },
+        OperationInput::MoveAkt(i) => {
+            let (before, next_to) = match (i.before, i.after) {
+                (Some(before), None) => (true, before),
+                (None, Some(after)) => (false, after),
+                _ => {
+                    return Err(coded(
+                        "give exactly one of before and after".to_owned(),
+                        "BAD_REQUEST",
+                    ));
+                }
+            };
+            Operation::Move {
+                number: i.number,
+                before,
+                next_to,
+            }
+        }
+        OperationInput::DraftField(i) => Operation::Draft {
+            number: i.number,
+            revision: i.revision,
+            field: i.field,
+            reason: i.reason,
+        },
+    })
+}
+
+/// `error`, said of the batch's operation `n`, counting from 1.
+fn at_operation(error: async_graphql::Error, n: usize) -> async_graphql::Error {
+    error.extend_with(|_, e| e.set("operation", n))
+}
+
 #[Object]
 impl AkterMutation {
+    /// Runs several akt writes in order in one transaction: all of them, or
+    /// none. Answers the akt each operation answers, in order; a refusal
+    /// carries the operation's position, from 1, as `operation`.
+    // r[impl akt.batch]
+    // r[impl akt.batch.atomic]
+    async fn batch(&self, ctx: &Context<'_>, input: BatchInput) -> async_graphql::Result<Vec<Akt>> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let mut operations = Vec::with_capacity(input.operations.len());
+        for (i, op) in input.operations.into_iter().enumerate() {
+            operations.push(operation(op).map_err(|e| at_operation(e, i + 1))?);
+        }
+        let akter = akter(ctx)?;
+        let rows = akter.batch(caller, operations).await.map_err(|refused| {
+            let e = error(refused.error);
+            match refused.operation {
+                Some(n) => at_operation(e, n),
+                None => e,
+            }
+        })?;
+        let mut answered = Vec::with_capacity(rows.len());
+        for row in rows {
+            answered.push(reload(ctx, akter, row).await?);
+        }
+        Ok(answered)
+    }
+
     /// Submits an akt type document, creating the next version of its key.
     async fn define_akt_type(
         &self,
