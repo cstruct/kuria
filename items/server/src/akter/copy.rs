@@ -90,60 +90,37 @@ async fn tree(
     Ok(nodes)
 }
 
-/// The akter of `nodes` a copy keeps: all of them, or those `only` names,
-/// those between them and the root, and every member under them.
+/// The akter of `nodes` a copy keeps (`kuria_engine::copying::kept`).
 // r[impl akt.copy.only]
 fn kept(nodes: &[Node], only: Option<&[String]>) -> Result<HashSet<Uuid>, AktError> {
-    let Some(only) = only else {
-        return Ok(nodes.iter().map(|n| n.row.id).collect());
-    };
-    let by_number: HashMap<&str, &Node> =
-        nodes.iter().map(|n| (n.row.number.as_str(), n)).collect();
-    let parent_of: HashMap<Uuid, Option<Uuid>> =
-        nodes.iter().map(|n| (n.row.id, n.parent)).collect();
-    let mut kept = HashSet::from([nodes[0].row.id]);
-    let mut named = HashSet::new();
-    for number in only {
-        let node = by_number.get(number.as_str()).ok_or_else(|| {
-            AktError::BadRequest(format!(
-                "`{number}` isn't in the tree of {}",
-                nodes[0].row.number
-            ))
-        })?;
-        named.insert(node.row.id);
-        let mut up = Some(node.row.id);
-        while let Some(id) = up {
-            kept.insert(id);
-            up = parent_of[&id];
-        }
-    }
-    // Every member under a named one, parents being listed first.
-    for node in nodes {
-        if node.parent.is_some_and(|p| named.contains(&p)) {
-            named.insert(node.row.id);
-            kept.insert(node.row.id);
-        }
-    }
-    Ok(kept)
+    let numbers: HashMap<Uuid, &str> = nodes
+        .iter()
+        .map(|n| (n.row.id, n.row.number.as_str()))
+        .collect();
+    let tree: Vec<(&str, Option<&str>)> = nodes
+        .iter()
+        .map(|n| (n.row.number.as_str(), n.parent.map(|p| numbers[&p])))
+        .collect();
+    let kept = kuria_engine::copying::kept(&tree, only).map_err(AktError::BadRequest)?;
+    Ok(nodes
+        .iter()
+        .filter(|n| kept.contains(&n.row.number))
+        .map(|n| n.row.id)
+        .collect())
 }
 
-/// `fields` as a create takes them, without what a copy doesn't keep:
-/// verdicts and checkboxes, records of what someone did, and sections,
-/// which are set once the copy's members exist.
+/// `fields` as a create takes them, without what a copy doesn't keep
+/// (`kuria_engine::copying::keeps`).
 fn copied_fields(ty: &StoredType, fields: &Json) -> Map<String, Json> {
-    let left_out = |key: &str| {
-        ty.ty.field(key).is_none_or(|f| {
-            matches!(
-                f.kind,
-                FieldKind::Verdict | FieldKind::Checkbox | FieldKind::Sections
-            )
-        })
-    };
     fields
         .as_object()
         .into_iter()
         .flatten()
-        .filter(|(key, _)| !left_out(key))
+        .filter(|(key, _)| {
+            ty.ty
+                .field(key)
+                .is_some_and(|f| kuria_engine::copying::keeps(f.kind))
+        })
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect()
 }

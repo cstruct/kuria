@@ -11,7 +11,10 @@ use crate::error::CliError;
 use crate::file::{self, AKT, Akt, Other};
 use crate::history::{Described, REVISIONS, Revision, describe};
 use crate::local::answers;
-use crate::model::{SHAPE, SOMEONE, VALUES, read};
+use kuria_engine::outcomes::Outcome;
+use kuria_engine::sections::Item;
+
+use crate::model::{SHAPE, SOMEONE, VALUES, Value, read};
 use crate::output::Answer;
 use crate::profile::io_error;
 use crate::values::text_of;
@@ -203,14 +206,100 @@ fn other(o: &Other) -> String {
         .as_deref()
         .map(|t| format!(" · {t}"))
         .unwrap_or_default();
+    let outcome = o
+        .outcome
+        .as_deref()
+        .map(|o| format!(" — {}", o.to_lowercase()))
+        .unwrap_or_default();
     format!(
-        "{}{title} ({}, {})",
+        "{}{title} ({}, {}){outcome}",
         o.number, o.akt_type.name, o.state.name
     )
 }
 
 fn other_json(o: &Other) -> Json {
-    json!({ "number": o.number, "title": o.title, "type": o.akt_type.key, "state": o.state.key })
+    let mut json = json!({ "number": o.number, "title": o.title, "type": o.akt_type.key, "state": o.state.key });
+    if let Some(outcome) = &o.outcome {
+        json["outcome"] = outcome.to_lowercase().into();
+    }
+    json
+}
+
+/// The akt's sections, if it has them.
+fn sections_of(akt: &Akt) -> Option<Vec<Item>> {
+    akt.fields.iter().find_map(|v| match v {
+        Value::SectionsValue { value, .. } => kuria_engine::sections::from_json(value).ok(),
+        _ => None,
+    })
+}
+
+/// An outcome as GraphQL names it, read.
+fn outcome_of(text: &str) -> Option<Outcome> {
+    match text.to_ascii_lowercase().as_str() {
+        "pass" => Some(Outcome::Pass),
+        "fail" => Some(Outcome::Fail),
+        "skip" => Some(Outcome::Skip),
+        "pending" => Some(Outcome::Pending),
+        _ => None,
+    }
+}
+
+/// Sections' items as `show` says them: a nested list, each section with
+/// its title, outcome (from its members', `member_outcome`) and text, each
+/// member a line.
+// r[impl cli.read]
+// r[impl akt.outcome.section]
+fn sections_markdown(
+    items: &[Item],
+    depth: usize,
+    member: &dyn Fn(&str) -> String,
+    member_outcome: &dyn Fn(&str) -> Option<Outcome>,
+) -> String {
+    let indent = "  ".repeat(depth);
+    let mut text = String::new();
+    for item in items {
+        match item {
+            Item::Akt(number) => text.push_str(&format!("{indent}- {}\n", member(number))),
+            Item::Section(section) => {
+                let title = section.title.as_deref().unwrap_or("Untitled section");
+                let outcome = kuria_engine::sections::outcome(section, member_outcome);
+                text.push_str(&format!("{indent}- **{title}** — {}\n", outcome.as_str()));
+                if let Some(said) = &section.text {
+                    for line in said.trim_end().lines() {
+                        if line.trim().is_empty() {
+                            text.push('\n');
+                        } else {
+                            text.push_str(&format!("{indent}  {line}\n"));
+                        }
+                    }
+                }
+                text.push_str(&sections_markdown(
+                    &section.items,
+                    depth + 1,
+                    member,
+                    member_outcome,
+                ));
+            }
+        }
+    }
+    text
+}
+
+/// Sections' items in JSON, with each section's outcome.
+fn sections_json(items: &[Item], member_outcome: &dyn Fn(&str) -> Option<Outcome>) -> Json {
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Akt(number) => json!(number),
+            Item::Section(s) => json!({
+                "title": s.title,
+                "text": s.text,
+                "collapsible": s.collapsible,
+                "outcome": kuria_engine::sections::outcome(s, member_outcome).as_str(),
+                "items": sections_json(&s.items, member_outcome),
+            }),
+        })
+        .collect()
 }
 
 /// `kuria show <number>`: its fields, containers, members, links and the
@@ -222,8 +311,8 @@ pub async fn show(
     with_history: bool,
 ) -> Result<Answer, CliError> {
     let extra = format!(
-        "board(first: {MEMBERS}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} }} }} }}
-         members(first: {MEMBERS}) {{ nodes {{ number title type {{ key name }} state {{ key name }} }} pageInfo {{ hasNextPage }} }}
+        "board(first: {MEMBERS}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} outcome }} }} }}
+         members(first: {MEMBERS}) {{ nodes {{ number title type {{ key name }} state {{ key name }} outcome }} pageInfo {{ hasNextPage }} }}
          {}",
         if with_history { REVISIONS } else { "" }
     );
@@ -303,8 +392,13 @@ impl Shown<'_> {
         if let Some(title) = &akt.title {
             text.push_str(&format!(" · {title}"));
         }
+        let outcome = akt
+            .outcome
+            .as_deref()
+            .map(|o| format!(" · {}", o.to_lowercase()))
+            .unwrap_or_default();
         text.push_str(&format!(
-            "\n\n{} · {} · revision {} · changed {}\n",
+            "\n\n{} · {}{outcome} · revision {} · changed {}\n",
             shape.name,
             akt.state.name,
             akt.revision,
@@ -316,6 +410,7 @@ impl Shown<'_> {
             .fields
             .iter()
             .filter(|v| Some(v.field()) != title_field)
+            .filter(|v| !matches!(v, Value::SectionsValue { .. }))
             .partition(|v| shape.field(v.field()).is_some_and(|f| f.multiline));
         if !inline.is_empty() || !sections.is_empty() {
             text.push_str("\n## Fields\n\n");
@@ -392,6 +487,9 @@ impl Shown<'_> {
             ..
         } = *self;
         let mut text = String::new();
+        if let Some(items) = sections_of(akt) {
+            return self.in_sections(&items);
+        }
         if !columns.is_empty() || !listed.is_empty() {
             text.push_str("\n## Members\n");
         }
@@ -415,6 +513,59 @@ impl Shown<'_> {
             text.push_str(&format!("\n### {type_name}\n\n"));
             for member in members {
                 text.push_str(&format!("- {}\n", other(member)));
+            }
+        }
+        if around.members.page_info.has_next_page {
+            text.push_str(&format!("\nMore members: `kuria ls --in {}`\n", akt.number));
+        }
+        text
+    }
+
+    /// Its members' outcomes, by number.
+    fn member_outcomes(&self) -> HashMap<&str, Outcome> {
+        self.around
+            .members
+            .nodes
+            .iter()
+            .filter_map(|m| Some((m.number.as_str(), outcome_of(m.outcome.as_deref()?)?)))
+            .collect()
+    }
+
+    /// Its members in its sections, then those the sections don't place,
+    /// by type.
+    fn in_sections(&self, items: &[Item]) -> String {
+        let Self { akt, around, .. } = *self;
+        let by_number: HashMap<&str, &Other> = around
+            .members
+            .nodes
+            .iter()
+            .map(|m| (m.number.as_str(), m))
+            .collect();
+        let member = |n: &str| by_number.get(n).map_or_else(|| n.to_owned(), |m| other(m));
+        let outcomes = self.member_outcomes();
+        let member_outcome = |n: &str| outcomes.get(n).copied();
+        let mut text = String::from("\n## Sections\n\n");
+        text.push_str(&sections_markdown(items, 0, &member, &member_outcome));
+        let placed = kuria_engine::sections::numbers(items);
+        let mut by_type: Vec<(&str, Vec<&Other>)> = Vec::new();
+        for m in around
+            .members
+            .nodes
+            .iter()
+            .filter(|m| !placed.contains(&m.number.as_str()))
+        {
+            match by_type.iter_mut().find(|(t, _)| *t == m.akt_type.name) {
+                Some((_, members)) => members.push(m),
+                None => by_type.push((&m.akt_type.name, vec![m])),
+            }
+        }
+        if !by_type.is_empty() {
+            text.push_str("\n## Other members\n");
+        }
+        for (type_name, members) in &by_type {
+            text.push_str(&format!("\n### {type_name}\n\n"));
+            for m in members {
+                text.push_str(&format!("- {}\n", other(m)));
             }
         }
         if around.members.page_info.has_next_page {
@@ -460,6 +611,10 @@ impl Shown<'_> {
                 .iter()
                 .map(|c| json!({ "key": c.key, "name": c.name, "akter": c.akter.iter().map(other_json).collect::<Vec<_>>() }))
                 .collect();
+        }
+        if let Some(items) = sections_of(akt) {
+            let outcomes = self.member_outcomes();
+            members["sections"] = sections_json(&items, &|n| outcomes.get(n).copied());
         }
         json["members"] = members;
         json["transitions"] = allowed

@@ -5,6 +5,7 @@
 //! stores what it answers.
 
 pub mod board;
+pub mod copying;
 pub mod draft;
 mod hash;
 pub mod outcomes;

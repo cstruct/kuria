@@ -7,7 +7,7 @@ use serde_json::Value as Json;
 /// An akt type's shape: its fields, states, transitions and presentation.
 pub const SHAPE: &str = "fragment Shape on AktType {
   key version name numberPattern
-  fields { key name kind description required multiline options { key name } format }
+  fields { key name kind description required multiline multiple of assignees options { key name } format }
   states { key name initial final tone }
   transitions { key name from to requires }
   presentation { title card list icon colour }
@@ -33,11 +33,14 @@ pub const VALUES: &str = "fragment Values on FieldValue {
   ... on GitValue { field repository sha tag }
   ... on DockerValue { field repository digest tag }
   ... on AttachmentValue { field attachment { id name mediaType size sha256 url } }
+  ... on UsersValue { field users { ...Someone } }
+  ... on VerdictValue { field verdicts { assignee { ...Someone } verdict by { id name email } at } }
+  ... on SectionsValue { field value }
 }";
 
 /// An akt as lists show it.
 pub const ROW: &str = "fragment Row on Akt {
-  number title updatedAt
+  number title updatedAt outcome
   type { key name }
   state { key name tone }
   fields { ...Values }
@@ -89,6 +92,15 @@ pub struct FieldDef {
     pub multiline: bool,
     pub options: Vec<Opt>,
     pub format: Option<String>,
+    /// For user fields: whether it names any number of people.
+    #[serde(default)]
+    pub multiple: bool,
+    /// For sections fields: the akt types of the members it places.
+    #[serde(default)]
+    pub of: Vec<String>,
+    /// For verdict fields: the user field naming the assignees.
+    #[serde(default)]
+    pub assignees: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -213,6 +225,30 @@ pub enum Value {
         field: String,
         attachment: Attachment,
     },
+    UsersValue {
+        field: String,
+        users: Vec<Someone>,
+    },
+    VerdictValue {
+        field: String,
+        verdicts: Vec<GivenVerdict>,
+    },
+    SectionsValue {
+        field: String,
+        /// As `editAkt` takes it: akt numbers and `{title, text,
+        /// collapsible, items}`.
+        value: Json,
+    },
+}
+
+/// One assignee's verdict.
+#[derive(Clone, Debug, Deserialize)]
+pub struct GivenVerdict {
+    pub assignee: Someone,
+    /// `PASS`, `FAIL` or `SKIP`.
+    pub verdict: String,
+    pub by: User,
+    pub at: String,
 }
 
 impl Value {
@@ -229,7 +265,10 @@ impl Value {
             | Self::ReferenceValue { field, .. }
             | Self::GitValue { field, .. }
             | Self::DockerValue { field, .. }
-            | Self::AttachmentValue { field, .. } => field,
+            | Self::AttachmentValue { field, .. }
+            | Self::UsersValue { field, .. }
+            | Self::VerdictValue { field, .. }
+            | Self::SectionsValue { field, .. } => field,
         }
     }
 }
@@ -257,6 +296,9 @@ pub struct Row {
     pub akt_type: TypeName,
     pub state: StateName,
     pub fields: Vec<Value>,
+    /// `PASS`, …, if its type has outcomes.
+    #[serde(default)]
+    pub outcome: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

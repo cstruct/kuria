@@ -107,7 +107,9 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   in the same revision; a `verdict` field takes each assignee's verdict;
   `Akt.outcome` and each `Section.outcome` are derived on read from
   verdicts and members ([`src/akter/outcomes.rs`](src/akter/outcomes.rs)),
-  never stored.
+  never stored. `SectionsValue.value` gives the value as `editAkt` takes
+  it, whatever its depth, which `items` can only be asked for as deep as
+  the query's depth limit allows.
 - Copying: `copyAkt` copies an akt and the part of its member tree chosen,
   in one transaction, into new akter of the same types in their initial
   states, with their sections remapped and their links out; each copy's

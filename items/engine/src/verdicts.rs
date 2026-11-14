@@ -16,7 +16,8 @@ pub enum Verdict {
 }
 
 impl Verdict {
-    fn read(text: &str) -> Result<Self, String> {
+    /// Reads `pass`, `fail` or `skip`.
+    pub fn read(text: &str) -> Result<Self, String> {
         match text {
             "pass" => Ok(Self::Pass),
             "fail" => Ok(Self::Fail),

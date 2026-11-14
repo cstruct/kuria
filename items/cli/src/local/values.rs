@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use chrono::{DateTime, Utc};
 use kuria_config::AktType;
+use kuria_engine::verdicts::{Given, Verdict};
 use kuria_engine::{Someone, Value};
 use serde_json::{Map, Value as Json, json};
 use uuid::Uuid;
@@ -103,7 +104,36 @@ pub fn input(field: &FieldDef, raw: &Json, ids: &mut Ids) -> Result<Json, CliErr
         } else {
             Json::Null
         }),
-        ("USER", Json::String(text)) => Ok(ids.person(text).map_err(in_field)?.to_string().into()),
+        ("USER", Json::String(text)) if !field.multiple => {
+            Ok(ids.person(text).map_err(in_field)?.to_string().into())
+        }
+        ("USER", Json::String(_) | Json::Array(_)) => {
+            let given: Vec<String> = match raw {
+                Json::Array(items) => items
+                    .iter()
+                    .map(|i| i.as_str().map(str::to_owned))
+                    .collect::<Option<_>>()
+                    .ok_or_else(|| {
+                        in_field(CliError::refused(
+                            "BAD_REQUEST",
+                            format!("{} takes a list of people", field.name),
+                        ))
+                    })?,
+                _ => raw
+                    .as_str()
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|t| !t.is_empty())
+                    .map(str::to_owned)
+                    .collect(),
+            };
+            let mut people = Vec::new();
+            for text in given {
+                people.push(Json::from(ids.person(&text).map_err(in_field)?.to_string()));
+            }
+            Ok(Json::Array(people))
+        }
         ("CHECKBOX", Json::String(text)) => match text.trim().strip_prefix("for:") {
             Some(who) => Ok(json!({ "for": ids.person(who).map_err(in_field)?.to_string() })),
             None => input_of(field, raw, &People::default()),
@@ -133,6 +163,32 @@ pub fn current(
         let value = match (kind.as_str().unwrap_or_default(), raw) {
             (_, Json::Null) | ("checkbox", Json::Bool(false)) => continue,
             ("user", Json::String(text)) => Value::User(Someone::User(ids.id(text))),
+            ("user", Json::Array(items)) => Value::Users(
+                items
+                    .iter()
+                    .map(|i| {
+                        i.as_str()
+                            .map(|t| Someone::User(ids.id(t)))
+                            .ok_or_else(|| bad(key, "lists people".to_owned()))
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            // An akt directory keeps each assignee's verdict, not who gave
+            // it for them, nor when: git does.
+            ("verdict", Json::Object(given)) => {
+                let mut verdicts = Vec::new();
+                for (who, verdict) in given {
+                    let id = ids.id(who);
+                    verdicts.push(Given {
+                        assignee: Someone::User(id),
+                        verdict: Verdict::read(verdict.as_str().unwrap_or_default())
+                            .map_err(|e| bad(key, e))?,
+                        by: id,
+                        at: DateTime::<Utc>::UNIX_EPOCH,
+                    });
+                }
+                Value::Verdicts(verdicts)
+            }
             ("checkbox", Json::Bool(true)) => Value::Checkbox {
                 by: ids.changer(),
                 at: DateTime::<Utc>::UNIX_EPOCH,
@@ -176,6 +232,12 @@ pub fn file_form(value: &Value, ids: &Ids) -> Json {
             ..
         } => format!("for:{}", someone(s)).into(),
         Value::Attachment(id) => json!({ "id": id.to_string() }),
+        Value::Users(people) => people.iter().map(|s| Json::from(someone(s))).collect(),
+        Value::Verdicts(given) => given
+            .iter()
+            .map(|g| (someone(&g.assignee), Json::from(g.verdict.as_str())))
+            .collect::<Map<_, _>>()
+            .into(),
         other => other.to_json(),
     }
 }

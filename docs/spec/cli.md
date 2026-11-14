@@ -224,7 +224,8 @@ r[cli.local.layout]
 An akt directory MUST hold each akt type's document as
 `types/<key>.json`, one version per key, and its akter in `akter/*.md`.
 Each file MUST begin with an akt as an akt file (`cli.file`) with one more
-front-matter key, `rank`, its place in the directory's order. Any nested
+front-matter key, `rank`, its place in the directory's order, and without
+`outcome`, which is derived each time it is read (`akt.outcome.derived`). Any nested
 akter (`cli.local.nesting`) MUST follow it, each beginning with the line
 `<!-- akt: <NUMBER> -->` and then as an akt file of its own with `rank`
 but without `number`, which the line gives. Such a line inside a fenced

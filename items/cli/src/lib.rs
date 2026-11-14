@@ -263,6 +263,67 @@ async fn local(root: &Path, command: Command) -> Result<Answer, CliError> {
 /// A command that writes, on the akt directory at `root`, under its lock.
 // r[impl cli.local.rules]
 // r[impl cli.local.lock]
+/// `link`, `unlink`, `verdict` and `copy` in local mode.
+fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, CliError> {
+    use local::arrange;
+    match command {
+        Command::Link {
+            source,
+            kind,
+            target,
+            pin,
+            reason,
+        } => arrange::link(w, &source, &kind, &target, pin, reason.as_deref()),
+        Command::Unlink {
+            source,
+            kind,
+            target,
+            reason,
+        } => arrange::unlink(w, &source, &kind, &target, reason.as_deref()),
+        Command::Verdict {
+            number,
+            verdict,
+            for_whom,
+            reason,
+        } => local::edits::verdict(w, &number, &verdict, for_whom.as_deref(), reason.as_deref()),
+        Command::Copy {
+            number,
+            only,
+            inside,
+            reason,
+        } => local::copy::copy(w, &number, &only, &inside, reason.as_deref()),
+        _ => unreachable!("only links, verdicts and copies"),
+    }
+}
+
+/// `verdict` and `copy`, on a server.
+async fn protocol(session: &Session, command: Command) -> Result<Answer, CliError> {
+    match command {
+        Command::Verdict {
+            number,
+            verdict,
+            for_whom,
+            reason,
+        } => {
+            writes::verdict(
+                session,
+                &number,
+                &verdict,
+                for_whom.as_deref(),
+                reason.as_deref(),
+            )
+            .await
+        }
+        Command::Copy {
+            number,
+            only,
+            inside,
+            reason,
+        } => writes::copy(session, &number, &only, &inside, reason.as_deref()).await,
+        _ => unreachable!("only verdict and copy"),
+    }
+}
+
 fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answer, CliError> {
     use local::{arrange, edits};
     let mut w = local::write::Writer::open(root, me)?;
@@ -334,19 +395,10 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             before,
             after,
         } => arrange::move_akt(&mut w, &number, before.as_deref(), after.as_deref()),
-        Command::Link {
-            source,
-            kind,
-            target,
-            pin,
-            reason,
-        } => arrange::link(&mut w, &source, &kind, &target, pin, reason.as_deref()),
-        Command::Unlink {
-            source,
-            kind,
-            target,
-            reason,
-        } => arrange::unlink(&mut w, &source, &kind, &target, reason.as_deref()),
+        command @ (Command::Link { .. }
+        | Command::Unlink { .. }
+        | Command::Verdict { .. }
+        | Command::Copy { .. }) => local_more(&mut w, command),
         Command::Types {
             action: Some(TypesCommand::Define { files, .. }),
         } => {
@@ -539,6 +591,9 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             target,
             reason,
         } => writes::unlink(session, &source, &kind, &target, reason.as_deref()).await,
+        command @ (Command::Verdict { .. } | Command::Copy { .. }) => {
+            protocol(session, command).await
+        }
         Command::Draft {
             number,
             field,

@@ -1671,6 +1671,9 @@ pub struct UsersValue {
 pub struct SectionsValue {
     field: String,
     items: Vec<SectionItem>,
+    /// The value as `editAkt` takes it, whatever its depth: a list of akt
+    /// numbers and `{title, text, collapsible, items}`.
+    value: Json<JsonValue>,
 }
 
 /// An item of a sections field: a member, by number, or a section.
@@ -1884,6 +1887,7 @@ impl FieldValue {
             Value::Sections(items) => Self::Sections(SectionsValue {
                 field,
                 items: SectionItem::of(items),
+                value: Json(value.to_json()),
             }),
             Value::Verdicts(given) => Self::Verdict(VerdictValue {
                 field,

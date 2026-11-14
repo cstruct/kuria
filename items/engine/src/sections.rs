@@ -33,7 +33,7 @@ pub struct Section {
 /// number or `{"title", "text", "collapsible", "items"}`, all optional but
 /// `items`.
 // r[impl akt.field.sections]
-pub(crate) fn from_json(json: &Json) -> Result<Vec<Item>, String> {
+pub fn from_json(json: &Json) -> Result<Vec<Item>, String> {
     let items = json
         .as_array()
         .ok_or("expected a list of akt numbers and sections")?;
@@ -70,7 +70,9 @@ fn item_from_json(json: &Json) -> Result<Item, String> {
     }))
 }
 
-pub(crate) fn to_json(items: &[Item]) -> Json {
+/// `items` as a stored or given `sections` value.
+#[must_use]
+pub fn to_json(items: &[Item]) -> Json {
     Json::Array(
         items
             .iter()

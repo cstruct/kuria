@@ -227,6 +227,32 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
+    /// Give one's verdict of an akt, or one for another assignee with
+    /// `--for`; `clear` takes it back.
+    Verdict {
+        number: String,
+        /// `pass`, `fail`, `skip` or `clear`.
+        verdict: String,
+        /// The assignee to give it for, by email, name or `@me`.
+        #[arg(long = "for", value_name = "USER")]
+        for_whom: Option<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Copy an akt and its members, or the part `--only` names, as new
+    /// akter of the same types.
+    Copy {
+        number: String,
+        /// Keep only these akter of its tree, with their members and those
+        /// between them and it.
+        #[arg(long, value_name = "NUMBER")]
+        only: Vec<String>,
+        /// The containers to put the copy in; else those of the akt.
+        #[arg(long = "in", value_name = "CONTAINER")]
+        inside: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Fill a field from its recipe.
     Draft {
         number: String,

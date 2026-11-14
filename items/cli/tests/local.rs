@@ -1520,3 +1520,305 @@ fn applies_a_multi_akt_file_checking_every_akt_first() {
             .contains("its `number` is PLAN-001-T02")
     );
 }
+
+/// A protocol type, laying out its tests in sections, and a test type,
+/// with testers and their verdicts, in `dir`.
+fn protocols(dir: &Dir) {
+    let states = json!([{ "key": "open", "name": "Open", "initial": true }]);
+    let protocol = json!({
+        "key": "protocol", "name": "Protocol", "number": "PROT-{seq:3}", "states": states,
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "layout", "name": "Layout", "kind": "sections", "of": ["test"] }
+        ],
+        "contains": [{ "type": "test" }]
+    });
+    let test = json!({
+        "key": "test", "name": "Test", "number": "{parent}-T{seq}", "states": states,
+        "created_in": ["protocol"],
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "testers", "name": "Testers", "kind": "user", "multiple": true },
+            { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" },
+            { "key": "reviewed", "name": "Reviewed", "kind": "checkbox" }
+        ]
+    });
+    for (key, document) in [("protocol", protocol), ("test", test)] {
+        std::fs::write(
+            dir.root.join(format!("types/{key}.json")),
+            serde_json::to_string_pretty(&document).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+/// The outcome `show --format json` gives `number`.
+fn outcome(dir: &Dir, number: &str) -> Value {
+    dir.ok(&["show", number, "--format", "json"]).json["akt"]["outcome"].clone()
+}
+
+/// A release protocol of three tests, the first two in a section, the
+/// first with two testers.
+fn released(dir: &Dir) {
+    protocols(dir);
+    dir.ok(&["new", "protocol", "--set", "title=Release"]);
+    for (title, testers) in [
+        ("Sign in", "@me,bo@kuria.example"),
+        ("Sign out", "@me"),
+        ("Reset", "@me"),
+    ] {
+        dir.ok(&[
+            "new",
+            "test",
+            "--in",
+            "PROT-001",
+            "--set",
+            &format!("title={title}"),
+            "--set",
+            &format!("testers={testers}"),
+        ]);
+    }
+    assert_eq!(outcome(dir, "PROT-001"), json!("pending"));
+
+    let layout = dir.root.parent().unwrap().join("layout.yaml");
+    std::fs::write(
+        &layout,
+        "- title: Session\n  collapsible: true\n  text: Each way in and out.\n  items:\n  - PROT-001-T1\n  - PROT-001-T2\n- PROT-001-T3\n",
+    )
+    .unwrap();
+    dir.ok(&["set", "PROT-001", &format!("layout=@{}", layout.display())]);
+}
+
+// r[verify cli.file.kinds]
+// r[verify cli.local.rules]
+// r[verify akt.outcome]
+// r[verify akt.outcome.section]
+// r[verify akt.field.sections]
+// r[verify akt.field.verdict]
+#[test]
+fn tests_in_sections_take_verdicts_and_add_up() {
+    let dir = Dir::new();
+    released(&dir);
+    // Sections place only members, each once.
+    let layout = dir.root.parent().unwrap().join("bad.yaml");
+    std::fs::write(&layout, "- PROT-001\n").unwrap();
+    let at = format!("layout=@{}", layout.display());
+    assert_eq!(dir.refused(&["set", "PROT-001", &at]).code, "REFUSED");
+    std::fs::write(&layout, "- PROT-001-T1\n- PROT-001-T1\n").unwrap();
+    assert_eq!(dir.refused(&["set", "PROT-001", &at]).code, "REFUSED");
+    let text = dir.ok(&["cat", "PROT-001"]).markdown;
+    assert!(
+        text.contains("state: open\noutcome: pending\n"),
+        "outcome after state: {text}"
+    );
+    assert!(
+        text.contains("<!-- field: layout -->\n- title: Session\n  text: Each way in and out.\n  collapsible: true\n  items:\n  - PROT-001-T1\n  - PROT-001-T2\n- PROT-001-T3\n"),
+        "{text}"
+    );
+    let test = dir.ok(&["cat", "PROT-001-T1"]).markdown;
+    assert!(
+        test.contains("testers: [me@kuria.example, bo@kuria.example]\n"),
+        "{test}"
+    );
+
+    // Verdicts, one's own and one given for another assignee.
+    let said = dir.ok(&["verdict", "PROT-001-T1", "pass"]);
+    assert!(
+        said.markdown.starts_with("PROT-001-T1: pass (revision "),
+        "{}",
+        said.markdown
+    );
+    assert_eq!(said.json["outcome"], json!("pending"), "bo hasn't answered");
+    dir.ok(&[
+        "verdict",
+        "PROT-001-T1",
+        "skip",
+        "--for",
+        "bo@kuria.example",
+    ]);
+    assert_eq!(outcome(&dir, "PROT-001-T1"), json!("pass"));
+    assert_eq!(
+        dir.refused(&[
+            "verdict",
+            "PROT-001-T1",
+            "pass",
+            "--for",
+            "eve@kuria.example"
+        ])
+        .code,
+        "REFUSED",
+        "not an assignee"
+    );
+    assert_eq!(
+        dir.refused(&["verdict", "PROT-001-T1", "maybe"]).code,
+        "BAD_REQUEST"
+    );
+    assert_eq!(
+        dir.refused(&["verdict", "PROT-001", "pass"]).code,
+        "BAD_REQUEST"
+    );
+    assert_eq!(
+        dir.refused(&["set", "PROT-001-T1", "verdict=pass"]).code,
+        "READ_ONLY"
+    );
+    dir.ok(&["verdict", "PROT-001-T2", "fail"]);
+    assert_eq!(outcome(&dir, "PROT-001"), json!("fail"));
+    dir.ok(&["verdict", "PROT-001-T2", "clear"]);
+    dir.ok(&["verdict", "PROT-001-T2", "skip"]);
+    assert_eq!(outcome(&dir, "PROT-001"), json!("pending"), "T3 is open");
+    dir.ok(&["verdict", "PROT-001-T3", "pass"]);
+    assert_eq!(outcome(&dir, "PROT-001"), json!("pass"));
+
+    let shown = dir.ok(&["show", "PROT-001"]);
+    assert!(
+        shown.markdown.contains("Protocol · Open · pass · revision"),
+        "{}",
+        shown.markdown
+    );
+    assert!(
+        shown.markdown.contains("## Sections\n\n- **Session** — pass\n  Each way in and out.\n  - PROT-001-T1 · Sign in (Test, Open) — pass\n  - PROT-001-T2 · Sign out (Test, Open) — skip\n- PROT-001-T3 · Reset (Test, Open) — pass\n"),
+        "{}",
+        shown.markdown
+    );
+    assert_eq!(
+        shown.json["akt"]["members"]["sections"][0]["outcome"],
+        json!("pass")
+    );
+    let listed = dir.ok(&["ls", "test", "--in", "PROT-001"]).markdown;
+    assert!(listed.contains("| Outcome |"), "{listed}");
+}
+
+// r[verify cli.file.kinds]
+// r[verify akt.field.sections]
+#[test]
+fn protocol_files_apply_and_a_test_leaves_its_section() {
+    let dir = Dir::new();
+    released(&dir);
+    for test in ["PROT-001-T1", "PROT-001-T2", "PROT-001-T3"] {
+        dir.ok(&["verdict", test, "pass"]);
+    }
+    dir.ok(&[
+        "verdict",
+        "PROT-001-T1",
+        "skip",
+        "--for",
+        "bo@kuria.example",
+    ]);
+    // A file read and applied unchanged changes nothing; its verdicts and
+    // outcome are read-only.
+    let out = dir.root.parent().unwrap().join("out");
+    dir.ok(&[
+        "cat",
+        "PROT-001",
+        "PROT-001-T1",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let applied = dir.ok(&[
+        "apply",
+        out.join("PROT-001.md").to_str().unwrap(),
+        out.join("PROT-001-T1.md").to_str().unwrap(),
+    ]);
+    assert_eq!(
+        applied.markdown,
+        "PROT-001: nothing changed.\nPROT-001-T1: nothing changed."
+    );
+    let file = out.join("PROT-001-T1.md");
+    let read = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(&file, read.replace(": skip", ": fail")).unwrap();
+    assert_eq!(
+        dir.refused(&["apply", file.to_str().unwrap()]).code,
+        "READ_ONLY"
+    );
+    std::fs::write(&file, read.replace("outcome: pass", "outcome: fail")).unwrap();
+    assert_eq!(
+        dir.refused(&["apply", file.to_str().unwrap()]).code,
+        "READ_ONLY"
+    );
+
+    // A test that leaves takes its place in the sections with it.
+    dir.ok(&["remove", "PROT-001", "PROT-001-T3"]);
+    assert!(
+        !dir.ok(&["cat", "PROT-001"])
+            .markdown
+            .contains("- PROT-001-T3")
+    );
+    dir.ok(&["check"]);
+}
+
+// r[verify akt.copy]
+// r[verify akt.copy.only]
+// r[verify akt.copy.links]
+#[test]
+fn copies_a_protocol_with_the_tests_chosen() {
+    let dir = Dir::new();
+    protocols(&dir);
+    dir.ok(&["new", "protocol", "--set", "title=Template"]);
+    for title in ["One", "Two"] {
+        dir.ok(&[
+            "new",
+            "test",
+            "--in",
+            "PROT-001",
+            "--set",
+            &format!("title={title}"),
+            "--set",
+            "testers=@me",
+        ]);
+    }
+    let layout = dir.root.parent().unwrap().join("layout.yaml");
+    std::fs::write(
+        &layout,
+        "- title: First\n  items: [PROT-001-T1]\n- title: Second\n  items: [PROT-001-T2]\n",
+    )
+    .unwrap();
+    dir.ok(&["set", "PROT-001", &format!("layout=@{}", layout.display())]);
+    dir.ok(&["verdict", "PROT-001-T1", "pass"]);
+    dir.ok(&["set", "PROT-001-T1", "reviewed=true"]);
+    assert!(
+        dir.ok(&["cat", "PROT-001-T1"])
+            .markdown
+            .contains("reviewed: true\n")
+    );
+
+    let copied = dir.ok(&[
+        "copy",
+        "PROT-001",
+        "--only",
+        "PROT-001-T1",
+        "--reason",
+        "Run it",
+    ]);
+    assert_eq!(
+        copied.markdown,
+        "Copied PROT-001 to PROT-002, with 1 member:\n\n- PROT-001-T1 → PROT-002-T1\n\nCommit with: Run it"
+    );
+    assert_eq!(
+        copied.json["members"],
+        json!([{ "from": "PROT-001-T1", "number": "PROT-002-T1" }])
+    );
+    let copy = dir.ok(&["cat", "PROT-002"]).markdown;
+    assert!(
+        copy.contains("<!-- field: layout -->\n- title: First\n  items:\n  - PROT-002-T1\n"),
+        "sections pointing at the copies, an emptied one gone: {copy}"
+    );
+    assert!(!copy.contains("Second"), "{copy}");
+    let test = dir.ok(&["cat", "PROT-002-T1"]).markdown;
+    assert!(test.contains("testers: [me@kuria.example]\n"), "{test}");
+    assert!(!test.contains("verdict:"), "a copy has no verdicts: {test}");
+    assert!(!test.contains("reviewed:"), "nor checked boxes: {test}");
+    assert!(test.contains("outcome: pending\n"), "{test}");
+    assert_eq!(outcome(&dir, "PROT-001"), json!("pending"));
+
+    assert_eq!(
+        dir.refused(&["copy", "PROT-001", "--only", "PROT-009"])
+            .code,
+        "BAD_REQUEST"
+    );
+    dir.ok(&["copy", "PROT-001"]);
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "test", "--in", "PROT-003", "--format", "json"])),
+        ["PROT-003-T1", "PROT-003-T2"]
+    );
+    dir.ok(&["check"]);
+}

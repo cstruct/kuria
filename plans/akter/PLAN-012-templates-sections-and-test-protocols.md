@@ -340,16 +340,49 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-012-T04 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b3X
-state: todo
+state: done
 in: [PLAN-012]
 links: [Blocked by PLAN-012-T02, Blocks PLAN-012-T06]
 title: "The CLI: copy, verdicts and outcomes, on a server and in a directory"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The file forms of the new kinds; `kuria copy <number> [--only <section or number>…]`; `kuria verdict <test> pass|fail|skip [--for <user>]`; outcomes in `cat`, `show` and `ls`; all of it in local mode through the engine.
+The CLI reads and writes the new kinds, gives verdicts and copies akter, on a server and in an akt directory, through the same engine rules.
+
+**The akt file** (`cli.file.kinds`, `file.rs`, `values.rs`):
+- A `multiple` user field is a list of people; `--set` takes them comma-separated.
+- A sections field is a section of its own, its body YAML: member numbers and `{title, text, collapsible, items}`, keys in that order. `--set` takes it as `@<file>` too.
+- A verdict field is a mapping of each assignee to `pass`, `fail` or `skip`, and `outcome` follows `state`. Both are read-only: `apply` refuses a change to either as `READ_ONLY`, and `--set verdict=…` too.
+
+**Commands** (`writes/edit.rs`, `writes/copy.rs`):
+- `kuria verdict <number> pass|fail|skip|clear [--for <user>]` edits the type's verdict field and answers the outcome after it.
+- `kuria copy <number> [--only <number>…] [--in <container>…]` calls `copyAkt`, then walks the copy's members, parents first, to answer each copy with its original.
+- `show` gives the outcome, each member's, and the members in their sections as a nested list with each section's outcome; `ls` adds an Outcome column when a row has one.
+
+**The server** gains `SectionsValue.value`, the value as `editAkt` takes it. The CLI's first try asked for `items` five sections deep, past the GraphQL depth limit of 12, so every akt read was refused; and a fixed depth would have let `cat` then `apply` drop deeper sections. The CLI now reads `value` and works out section outcomes from its members' through `kuria_engine::sections::outcome`. The app should do the same in T05.
+
+**Shared through the engine:** `kuria_engine::copying` now holds which akter a copy keeps (`kept`) and which values it leaves behind (`keeps`), used by the server's `copyAkt` and local mode's `copy`. `sections::from_json` and `to_json` are public, and so is `Verdict::read`.
+
+**Local mode:**
+- Sections are read from their YAML when the directory loads, and written back as YAML.
+- Verdicts are kept by assignee, without who gave one for them or when, which git says. A file holds no `outcome`: `cli.local.layout` now says it is derived on read (`answers::outcome`, recursive, guarding a cycle).
+- Every create, `set`, `do` and `apply` checks sections against the akt's members (`Writer::check_sections`, refused as the server does). `remove` and `transfer` take a leaving member out of its container's sections.
+- `verdict` runs as `@me`. `copy` (`local/copy.rs`) walks the tree, creates each copy through `create_with` (split out of `create`), sets sections renamed to the copies, and copies links through `add_link`, keeping the original's pin.
+
+**Tests:**
+- `tests/local.rs` (3 new):
+  - Sections refusing non-members and duplicates, then own and `--for` verdicts, refusals, and outcomes up through a section to the protocol, in `show`, `show --format json` and `ls`.
+  - A protocol's files applied unchanged; a changed verdict or outcome refused; a test leaving its section.
+  - A partial and a whole copy, a checked box read and left behind.
+- `engine/copying.rs`: what `only` keeps.
+- `e2e/tests/parity.spec.ts`: a second parity test runs a protocol sequence on the server and in a directory, `@me` set to whom the server names the client by: sections, verdicts, outcomes in `cat` and `ls`, copies, a removal, and files applied unchanged and with a verdict changed.
+
+The guide, the CLI and server READMEs and `schema.graphql` are updated.
+
+Lint, `mise run test` (337 Rust, 55 app) and all 28 e2e tests pass.
 
 <!-- field: acceptance -->
 - Local-mode tests, and the parity test extended.

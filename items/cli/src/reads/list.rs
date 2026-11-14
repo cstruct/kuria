@@ -339,6 +339,11 @@ fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, al
         headers.push("Type");
     }
     headers.extend(["Title", "State"]);
+    // r[impl cli.read]
+    let outcomes = rows.iter().any(|r| r.outcome.is_some());
+    if outcomes {
+        headers.push("Outcome");
+    }
     let names: Vec<&str> = list
         .iter()
         .map(|k| shape.map_or(*k, |s| s.field_name(k)))
@@ -353,6 +358,14 @@ fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, al
             }
             cells.push(r.title.clone().unwrap_or_default());
             cells.push(r.state.name.clone());
+            if outcomes {
+                cells.push(
+                    r.outcome
+                        .as_deref()
+                        .map(str::to_lowercase)
+                        .unwrap_or_default(),
+                );
+            }
             for key in &list {
                 cells.push(
                     r.fields
@@ -399,6 +412,7 @@ fn row_json(row: &Row) -> Json {
         "type": row.akt_type.key,
         "title": row.title,
         "state": row.state.key,
+        "outcome": row.outcome.as_ref().map(|o| o.to_lowercase()),
         "updatedAt": row.updated_at,
         "fields": fields,
     })

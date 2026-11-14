@@ -928,6 +928,11 @@ An akt's members laid out in sections.
 type SectionsValue {
 	field: String!
 	items: [SectionItem!]!
+	"""
+	The value as `editAkt` takes it, whatever its depth: a list of akt
+	numbers and `{title, text, collapsible, items}`.
+	"""
+	value: JSON!
 }
 
 """

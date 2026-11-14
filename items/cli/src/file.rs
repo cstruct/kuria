@@ -25,7 +25,9 @@ use crate::model::{Shape, State, StateName, TypeName, Value};
 use crate::values::file_value;
 
 /// The keys every file has before its fields, which `apply` doesn't edit.
-pub const READ_ONLY: [&str; 7] = ["number", "type", "revision", "state", "in", "links", "rank"];
+pub const READ_ONLY: [&str; 8] = [
+    "number", "type", "revision", "state", "outcome", "in", "links", "rank",
+];
 
 /// An akt with everything its file and `show` say.
 #[derive(Clone, Debug, Deserialize)]
@@ -42,6 +44,9 @@ pub struct Akt {
     pub fields: Vec<Value>,
     pub containers: Vec<Other>,
     pub links: Vec<Link>,
+    /// `PASS`, …, if its type has outcomes (`akt.outcome`).
+    #[serde(default)]
+    pub outcome: Option<String>,
 }
 
 /// Another akt, as an akt names it.
@@ -52,6 +57,9 @@ pub struct Other {
     #[serde(rename = "type")]
     pub akt_type: TypeName,
     pub state: StateName,
+    /// Its outcome, where it is asked for.
+    #[serde(default)]
+    pub outcome: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -73,7 +81,7 @@ pub struct Pinned {
 }
 
 /// What to ask for an akt's file: its fields and everything around them.
-pub const AKT: &str = "number title revision createdAt updatedAt
+pub const AKT: &str = "number title revision createdAt updatedAt outcome
   type { ...Shape document }
   state { key name initial final tone }
   fields { ...Values }
@@ -95,10 +103,24 @@ impl Link {
     }
 }
 
-/// Whether `value` goes in a section of its own: a multiline text field's.
+/// Whether `value` goes in a section of its own: a multiline text
+/// field's, or a sections field's (`cli.file.kinds`).
 fn sectioned(shape: &Shape, value: &Value) -> bool {
-    matches!(value, Value::TextValue { .. })
-        && shape.field(value.field()).is_some_and(|f| f.multiline)
+    match value {
+        Value::TextValue { .. } => shape.field(value.field()).is_some_and(|f| f.multiline),
+        Value::SectionsValue { .. } => true,
+        _ => false,
+    }
+}
+
+/// The body of `value`'s section: a multiline text, or a sections value
+/// as YAML.
+fn section_body(value: &Value) -> Option<String> {
+    match value {
+        Value::TextValue { text, .. } => Some(text.clone()),
+        Value::SectionsValue { .. } => Some(crate::values::sections_yaml(&file_value(value))),
+        _ => None,
+    }
 }
 
 /// The akt as its file.
@@ -137,6 +159,10 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
         ("revision", akt.revision.into()),
         ("state", akt.state.key.clone().into()),
     ]);
+    // r[impl cli.file.kinds]
+    if let Some(outcome) = &akt.outcome {
+        front.push(("outcome", outcome.to_lowercase().into()));
+    }
     if !akt.containers.is_empty() {
         front.push((
             "in",
@@ -156,10 +182,7 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
         .fields
         .iter()
         .filter(|v| sectioned(&akt.shape, v))
-        .filter_map(|v| match v {
-            Value::TextValue { field, text } => Some((field.clone(), text.clone())),
-            _ => None,
-        })
+        .filter_map(|v| Some((v.field().to_owned(), section_body(v)?)))
         .collect::<Vec<_>>();
     write_parts(&front, &single, &sections)
 }
@@ -203,6 +226,7 @@ pub fn json(akt: &Akt) -> Json {
         "type": akt.shape.key,
         "revision": akt.revision,
         "state": akt.state.key,
+        "outcome": akt.outcome.as_ref().map(|o| o.to_lowercase()),
         "in": akt.containers.iter().map(|c| c.number.clone()).collect::<Vec<_>>(),
         "links": akt.links.iter().map(|l| json!({
             "kind": l.kind,

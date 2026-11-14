@@ -92,10 +92,17 @@ type.
     name or by email is the same user), and edits only those that differ.
     A field the file leaves out is cleared. A file read at an older
     revision is refused as `STALE` (exit 3), naming what changed since; a
-    changed `type`, `state`, `in` or `links`, and a key the type lacks, are
-    refused with the key as the field;
+    changed `type`, `state`, `outcome`, `in`, `links` or verdicts, and a key
+    the type lacks, are refused with the key as the field;
   - `set <number> <field>=<value>…`; `do <number> <transition>` (by key or
     name) `[--set …]`; `draft <number> <field>`;
+  - `verdict <number> pass|fail|skip|clear [--for <user>]`: one's own
+    verdict, or one for another assignee, as an edit of the type's
+    `verdict` field, answering the outcome after it;
+  - `copy <number> [--only <number>…] [--in <container>…]`
+    ([`src/writes/copy.rs`](src/writes/copy.rs)): `copyAkt`, then the
+    copy's members walked, parents first, to answer each copy with its
+    original;
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
     <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;
@@ -118,8 +125,20 @@ type.
   contacts by email, name, `@me` or identifier, dates as `YYYY-MM-DD`,
   checkboxes as `true`, `false` or `for:<someone>`, references, Git and
   Docker values as JSON (a reference also as its URL), attachments by id,
-  a multiline text as `@<file>` or `@-`, and an empty value to clear. The
-  file's values are read the same way.
+  a multiline text as `@<file>` or `@-`, and an empty value to clear. A
+  field naming several people takes a list, or them comma-separated, and a
+  sections field YAML, as `@<file>` too. The file's values are read the
+  same way.
+- **The akt file's kinds** (`cli.file.kinds`): several people are a list;
+  a sections field is a section of its own whose body is YAML, a list of
+  member numbers and `{title, text, collapsible, items}`; verdicts are a
+  mapping of each assignee to `pass`, `fail` or `skip`; and an akt whose
+  type has outcomes has `outcome` after `state`. `show` gives the outcome,
+  each member's, and the members in their sections, a nested list with
+  each section's outcome; `ls` adds an Outcome column when any row has
+  one. Sections are read as `SectionsValue.value`, the JSON `editAkt`
+  takes, whatever their depth, and each section's outcome is worked out
+  from its members' through `kuria-engine`.
 
 - **The guide** (`cli.guide`, [`src/guide.md`](src/guide.md)): `kuria
   guide` prints, for agents, signing in, finding an akt type's fields,
@@ -140,7 +159,10 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   (outside fenced code blocks), each without `number`. Each akt is read
   and checked against its type, found by its number whatever the file is
   named, with any problem naming the file, and the number of a nested akt
-  (`BAD_FILE`).
+  (`BAD_FILE`). A file holds no `outcome`: it is derived when read, from
+  the directory's verdicts, through `kuria-engine`'s `outcomes`; verdicts
+  are kept by assignee, without who gave one for them or when, which git
+  says.
 - **The same answers** ([`src/local/answers.rs`](src/local/answers.rs)): the
   directory answers what Kuria's GraphQL would for each of the CLI's
   queries, so every read renders through the same code: `types`, `schema`,
@@ -166,7 +188,10 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 - **Writes** ([`src/local/write.rs`](src/local/write.rs),
   [`edits.rs`](src/local/edits.rs), [`arrange.rs`](src/local/arrange.rs)):
   every write the server takes, through `kuria-engine` (`create`, `edit`,
-  `transition` and its `rules`), refused with the server's codes. A write
+  `transition` and its `rules`), refused with the server's codes; sections
+  checked against the akt's members, and a member that leaves taken out of
+  them; `verdict`; and `copy` ([`copy.rs`](src/local/copy.rs)), keeping
+  what `kuria_engine::copying` says, as the server does. A write
   loads the directory under `.kuria.lock` (waiting up to 10 seconds, then
   `LOCKED`, exit 5), changes it in memory, and writes the files it touched
   whole, through a file renamed over each. It raises revisions as a server
@@ -217,15 +242,17 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `whoami` | `{url, tenant, subject, name, email, signedInWith, profile}`; in local mode `{dir, me, signedInWith: "local"}` |
 | `types` | `{types: [{key, name, version, numberPattern, akterCount}]}` |
 | `schema` | `{type: {key, name, version, numberPattern, fields: [{key, name, kind, required, multiline, description, options, format, draft}], states: [{key, name, initial, final, tone}], transitions: [{key, name, from, to, requires, action}], contains, createdIn, links, board, presentation}}` |
-| `ls`, `find` | `{akter: [{number, type, title, state, updatedAt, fields}], endCursor, hasNextPage}` |
-| `cat` | `{akter: [{number, type, revision, state, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o` |
-| `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns?, akter, more}, transitions, history?}}` |
+| `ls`, `find` | `{akter: [{number, type, title, state, outcome, updatedAt, fields}], endCursor, hasNextPage}` |
+| `cat` | `{akter: [{number, type, revision, state, outcome, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o` |
+| `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns?, akter, more, sections?}, transitions, history?}}` |
 | `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}`; in local mode also `tracked` and `uncommitted` |
 | `users`, `contacts` | `{users: [{id, name, email}]}`, `{contacts: [{id, displayName, name, email, user}]}` |
 
 | `new` | `{number, revision}` |
 | `apply` | `{applied: [{file, number, revision, changed, dryRun?}]}` |
 | `set`, `do`, `draft` | `{number, revision, changed \| state, transition \| field}` |
+| `verdict` | `{number, revision, verdict, for, outcome}` |
+| `copy` | `{number, from, members: [{from, number}]}` |
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
 | `guide` | `{guide}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
@@ -255,8 +282,9 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   [`src/values.rs`](src/values.rs), [`src/file.rs`](src/file.rs),
   [`src/history.rs`](src/history.rs), [`src/md.rs`](src/md.rs).
 - [`src/writes.rs`](src/writes.rs): the writes, in `writes/edit.rs` (`new`,
-  `apply`, `set`, `do`, `draft`), `writes/arrange.rs` (membership, order,
-  links) and `writes/types.rs` (documents).
+  `apply`, `set`, `do`, `draft`, `verdict`), `writes/copy.rs`,
+  `writes/arrange.rs` (membership, order, links) and `writes/types.rs`
+  (documents).
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),
   [`src/output.rs`](src/output.rs), [`src/error.rs`](src/error.rs).
 
@@ -291,7 +319,11 @@ cargo test -p kuria-cli
   that don't fit, named; and every write: numbering in and across plans,
   revisions of containers, the server's refusals, `apply` with dry runs,
   stale files and read-only keys, links with pins on both files, order,
-  transfers, redefining types, and eight writers at once; and `check`, on a
+  transfers, redefining types, and eight writers at once; a protocol of
+  tests in sections taking verdicts, its outcome adding up, its file
+  applied unchanged and with read-only verdicts and outcome refused, a
+  test leaving its section, and copies of the whole and of a part; and
+  `check`, on a
   consistent directory and on one with eight kinds of problem, each named
   with its file.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
@@ -315,8 +347,11 @@ cargo test -p kuria-cli
   one sequence of commands, each run against the e2e server and then
   with `--dir` against a new akt directory. Each answer must be the same
   (a refusal by its code, the reason to commit with set aside), then each
-  akt's `cat` and their order. It is how local mode is held to "the same
-  rules, through a shared engine".
+  akt's `cat` and their order; and a second for a protocol: sections, own
+  verdicts, outcomes in files and lists, copies whole and in part, a test
+  removed, and files applied unchanged and with a verdict changed, `@me`
+  in the directory being whom the server names the client by. It is how
+  local mode is held to "the same rules, through a shared engine".
 
 ## Traceability
 
