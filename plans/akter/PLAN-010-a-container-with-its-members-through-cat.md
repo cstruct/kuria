@@ -1,9 +1,9 @@
 ---
 number: PLAN-010
 type: plan
-revision: 11
+revision: 12
 rank: b30
-state: active
+state: done
 title: "A container with its members, through cat and apply"
 owner: albin@mattsson.io
 ---

@@ -1,9 +1,9 @@
 ---
 number: PLAN-011
 type: plan
-revision: 11
+revision: 12
 rank: b3A
-state: active
+state: done
 title: "Batches: several akt writes in one transaction"
 owner: albin@mattsson.io
 ---
