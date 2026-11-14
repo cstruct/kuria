@@ -227,7 +227,7 @@ pub fn row(dir: &AktDir, times: &Times, akt: &LocalAkt) -> Result<Json, CliError
     let t = dir.type_of(akt);
     let mut answer = other(dir, akt);
     answer["state"]["tone"] = screaming(&t.ty.tone(&akt.state));
-    answer["updatedAt"] = json!(times.of_file(&dir.root, &akt.path).1);
+    answer["updatedAt"] = json!(times.of_akt(akt).1);
     answer["fields"] = json!(values(dir, akt)?);
     Ok(answer)
 }
@@ -296,7 +296,7 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
         return Ok(None);
     };
     let t = dir.type_of(akt);
-    let (created, updated) = times.of_file(&dir.root, &akt.path);
+    let (created, updated) = times.of_akt(akt);
     let members: Vec<&LocalAkt> = dir.members_of(&akt.number).collect();
     let board = t.ty.board();
     let mut columns: Vec<Json> = board

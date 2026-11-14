@@ -10,7 +10,7 @@ use super::{Local, Source};
 use crate::error::CliError;
 use crate::file::{self, AKT, Akt, Other};
 use crate::history::{Described, REVISIONS, Revision, describe};
-use crate::local::{self, answers};
+use crate::local::answers;
 use crate::model::{SHAPE, SOMEONE, VALUES, read};
 use crate::output::Answer;
 use crate::profile::io_error;
@@ -407,19 +407,19 @@ fn described(revisions: &[Revision], shape: &crate::model::Shape) -> Vec<Describ
         .collect()
 }
 
-/// The commits that changed an akt's file, as revisions are said, and
-/// whether it has changes not committed yet; `None` outside git.
+/// The commits that changed an akt, as revisions are said, and whether it
+/// has changes not committed yet; `None` outside git.
 // r[impl cli.local.history]
 fn local_history(local: &Local, number: &str) -> Result<(Vec<Described>, Option<bool>), CliError> {
     let akt = local.dir.akt(number).ok_or_else(|| not_found(number))?;
-    let Some((commits, dirty)) = local::git::history(&local.dir.root, &akt.path) else {
+    let Some((commits, dirty)) = local.times.history(akt) else {
         return Ok((Vec::new(), None));
     };
     let described = commits
         .into_iter()
         .enumerate()
-        .map(|(i, c)| Described {
-            revision: i64::try_from(i + 1).unwrap_or(i64::MAX),
+        .map(|(i, (c, revision))| Described {
+            revision: revision.into(),
             who: c.author,
             at: c.at,
             what: if i == 0 { "created it" } else { "changed it" }.to_owned(),

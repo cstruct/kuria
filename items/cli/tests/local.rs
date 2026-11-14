@@ -440,8 +440,41 @@ fn refuses_a_file_that_doesn_t_fit_naming_it() {
     assert_eq!(value["akter"][0]["fields"], json!({}));
 }
 
+/// The file holding `number`, and where its part of it is.
+fn holding(dir: &Dir, number: &str) -> (PathBuf, String, std::ops::Range<usize>) {
+    for entry in std::fs::read_dir(dir.root.join("akter")).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let marker = format!("<!-- akt: {number} -->\n");
+        let start = if text.starts_with(&format!("---\nnumber: {number}\n")) {
+            Some(0)
+        } else {
+            text.find(&marker).map(|i| i + marker.len())
+        };
+        if let Some(start) = start {
+            let end = text[start..]
+                .find("\n<!-- akt: ")
+                .map_or(text.len(), |i| start + i + 1);
+            return (path, text, start..end);
+        }
+    }
+    panic!("no file holds {number}")
+}
+
+/// `number`'s part of the file that holds it.
 fn file(dir: &Dir, number: &str) -> String {
-    std::fs::read_to_string(dir.root.join(format!("akter/{number}.md"))).unwrap()
+    let (_, text, range) = holding(dir, number);
+    text[range].to_owned()
+}
+
+/// Replaces `from` with `to` once in `number`'s part of its file.
+fn edit_akt(dir: &Dir, number: &str, from: &str, to: &str) {
+    let (path, mut text, range) = holding(dir, number);
+    let part = &text[range.clone()];
+    assert!(part.contains(from), "{number} has no `{from}`:\n{part}");
+    let changed = part.replacen(from, to, 1);
+    text.replace_range(range, &changed);
+    std::fs::write(path, text).unwrap();
 }
 
 fn revision_of(dir: &Dir, number: &str) -> i64 {
@@ -563,10 +596,12 @@ fn writes_akter_by_the_server_s_rules() {
         .filter(|l| !l.starts_with("rank:"))
         .collect::<Vec<_>>()
         .join("\n");
-    assert_eq!(
-        dir.ok(&["cat", "PLAN-001-T01"]).markdown.trim_end(),
-        without_rank.trim_end()
-    );
+    // Nested in the plan's file, whose line gives its number.
+    let catted =
+        dir.ok(&["cat", "PLAN-001-T01"])
+            .markdown
+            .replacen("number: PLAN-001-T01\n", "", 1);
+    assert_eq!(catted.trim_end(), without_rank.trim_end());
 }
 
 // r[verify cli.local.revision]
@@ -843,12 +878,7 @@ fn check_names_every_problem_with_its_file() {
     worked(&dir);
     dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
     dir.ok(&["link", "PLAN-001-T01", "blocks", "PLAN-001-T02"]);
-    let edit = |number: &str, from: &str, to: &str| {
-        let path = dir.root.join(format!("akter/{number}.md"));
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert!(text.contains(from), "{number} has no `{from}`:\n{text}");
-        std::fs::write(&path, text.replacen(from, to, 1)).unwrap();
-    };
+    let edit = |number: &str, from: &str, to: &str| edit_akt(&dir, number, from, to);
     // A link only one side lists, and a kind no type declares.
     edit("PLAN-001-T02", "links: [Blocked by PLAN-001-T01]\n", "");
     edit(
@@ -897,21 +927,23 @@ fn check_names_every_problem_with_its_file() {
         (refused.code.as_str(), refused.kind.exit_code()),
         ("INCONSISTENT", 1)
     );
+    // The tasks and the gap are nested in the plan's file.
+    let plan = "akter/PLAN-001-local-writes.md";
     for (file, says) in [
         (
-            "akter/PLAN-001-T01.md",
-            "doesn't list `Blocked by PLAN-001-T01`",
+            plan,
+            "PLAN-001-T01: lists `Blocks PLAN-001-T02`, but PLAN-001-T02 doesn't list `Blocked by PLAN-001-T01`",
         ),
         (
-            "akter/PLAN-001-T01.md",
-            "`Relates PLAN-001-T02` is of no kind",
+            plan,
+            "PLAN-001-T01: the link `Relates PLAN-001-T02` is of no kind",
         ),
         (
-            "akter/PLAN-001-T02.md",
-            "`PLAN-404`, which the directory lacks",
+            plan,
+            "PLAN-001-T02: is in `PLAN-404`, which the directory lacks",
         ),
-        ("akter/PLAN-001-T02.md", "a `gap` can't contain a `task`"),
-        ("akter/PLAN-001-G01.md", "has the rank of PLAN-001"),
+        (plan, "a `gap` can't contain a `task`"),
+        (plan, "PLAN-001-G01: has the rank of PLAN-001"),
         ("akter/TASK-9.md", "isn't a number `task` gives"),
         ("akter/PLAN-002.md", "starts with `---`"),
         ("akter/PLAN-003.md", "no state `shipped`"),
@@ -995,25 +1027,33 @@ fn a_directory_goes_to_a_bundle_and_back_unchanged() {
             .any(|p| p["email"] == "Dev@Shop.example")
     );
 
-    // And back: every akt file as it was.
+    // And back: every akt as it was, nested in its plan's file.
     let again = dir.root.parent().unwrap().join("again");
     kuria_cli::local::convert::to_dir(&bundle, &again).unwrap();
-    for sub in ["types", "akter"] {
-        let mut names: Vec<_> = std::fs::read_dir(dir.root.join(sub))
+    let back = Dir {
+        _temp: tempfile::tempdir().unwrap(),
+        root: again.clone(),
+    };
+    for number in numbers(&dir.ok(&["ls", "--format", "json"])) {
+        assert_eq!(
+            back.ok(&["cat", &number]).markdown,
+            dir.ok(&["cat", &number]).markdown,
+            "{number}"
+        );
+    }
+    let files: Vec<_> = std::fs::read_dir(again.join("akter"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(files, ["PLAN-001-local-mode.md"]);
+    for key in TYPES {
+        let doc = |root: &Path| {
+            serde_json::from_str::<Value>(
+                &std::fs::read_to_string(root.join(format!("types/{key}.json"))).unwrap(),
+            )
             .unwrap()
-            .map(|e| e.unwrap().file_name())
-            .collect();
-        names.sort();
-        for name in names {
-            let read = |root: &Path| std::fs::read_to_string(root.join(sub).join(&name)).unwrap();
-            if sub == "types" {
-                // Documents as written by hand, the same document.
-                let doc = |text: String| serde_json::from_str::<Value>(&text).unwrap();
-                assert_eq!(doc(read(&again)), doc(read(&dir.root)), "{name:?}");
-            } else {
-                assert_eq!(read(&again), read(&dir.root), "{name:?}");
-            }
-        }
+        };
+        assert_eq!(doc(&again), doc(&dir.root), "{key}");
     }
     let refused = kuria_cli::local::convert::bundle_of(&again, None);
     assert!(refused.is_ok(), "a written directory converts again");
@@ -1081,13 +1121,14 @@ title: Build it
     assert!(!task.contains("Build it"), "only its own text: {task}");
     let shown = dir.ok(&["show", "PLAN-001"]).markdown;
     assert!(shown.contains("PLAN-001-T02 · Build it"), "{shown}");
-    // Writes leave a file of several akter alone, for now.
+    // A write to a nested akt rewrites its file, the rest as it was.
     let path = dir.root.join("akter/PLAN-001-local-mode.md");
-    assert_eq!(
-        dir.refused(&["set", "PLAN-001-T01", "title=X"]).code,
-        "LOCAL_UNSUPPORTED"
-    );
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+    dir.ok(&["set", "PLAN-001-T01", "title=Spec it well"]);
+    let changed = text
+        .replacen("revision: 1\nrank: \"2\"", "revision: 2\nrank: \"2\"", 1)
+        .replace("title: Spec it\n", "title: Spec it well\n");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), changed);
+    let text = changed;
 
     // A problem in a nested akt names its file and its number.
     std::fs::write(
@@ -1103,4 +1144,126 @@ title: Build it
         "{}",
         refused.message
     );
+}
+
+/// The names of the files in `akter/`, sorted.
+fn akt_files(dir: &Dir) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(dir.root.join("akter"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    names
+}
+
+// r[verify cli.local.nesting]
+// r[verify cli.local.names]
+#[test]
+fn writes_akter_into_their_parent_s_file_named_by_title() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
+    // One file for the plan and everything numbered after it.
+    assert_eq!(akt_files(&dir), ["PLAN-001-local-writes.md"]);
+    let text = std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap();
+    let at = |marker: &str| text.find(marker).unwrap_or_else(|| panic!("no {marker}"));
+    assert!(text.starts_with("---\nnumber: PLAN-001\n"));
+    assert!(at("<!-- akt: PLAN-001-T01 -->") < at("<!-- akt: PLAN-001-T02 -->"));
+    assert!(at("<!-- akt: PLAN-001-T02 -->") < at("<!-- akt: PLAN-001-G01 -->"));
+
+    // Its order is the directory's.
+    dir.ok(&["move", "PLAN-001-G01", "--before", "PLAN-001-T01"]);
+    let text = std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap();
+    assert!(text.find("PLAN-001-G01 -->") < text.find("PLAN-001-T01 -->"));
+
+    // A new title renames the file, with its nested akter.
+    dir.ok(&["set", "PLAN-001", "title=Writes, nested"]);
+    assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "task", "--in", "PLAN-001", "--format", "json"])).len(),
+        2
+    );
+    // A nested akt's title names no file.
+    dir.ok(&["set", "PLAN-001-T01", "title=Renamed task"]);
+    assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
+    // Removed from its plan, a task stays in its file, in nothing.
+    dir.ok(&["remove", "PLAN-001", "PLAN-001-T02"]);
+    assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
+    assert!(!file(&dir, "PLAN-001-T02").contains("in:"));
+    dir.ok(&["check"]);
+}
+
+// r[verify cli.local.nesting]
+#[test]
+fn a_write_moves_an_akt_of_its_own_file_into_its_parent_s() {
+    let dir = Dir::new();
+    dir.planned();
+    assert_eq!(akt_files(&dir).len(), 5);
+    dir.ok(&["set", "PLAN-001-T02", "title=Build it now"]);
+    assert_eq!(
+        akt_files(&dir),
+        [
+            "PLAN-001-D01.md",
+            "PLAN-001-G01.md",
+            "PLAN-001-T01.md",
+            "PLAN-001.md"
+        ]
+    );
+    let plan = std::fs::read_to_string(dir.root.join("akter/PLAN-001.md")).unwrap();
+    assert!(
+        plan.contains("<!-- akt: PLAN-001-T02 -->\n---\ntype: task\n"),
+        "{plan}"
+    );
+    assert!(
+        dir.ok(&["cat", "PLAN-001-T02"])
+            .markdown
+            .contains("title: Build it now")
+    );
+}
+
+// r[verify cli.local.history]
+#[test]
+fn history_follows_each_akt_whatever_file_holds_it() {
+    let dir = Dir::new();
+    dir.planned();
+    dir.commit("Plan local mode");
+    // T02 moves into the plan's file; T01 is left as it was.
+    dir.ok(&["set", "PLAN-001-T02", "title=Build it now"]);
+    dir.commit("Retitle the build");
+    dir.ok(&["set", "PLAN-001-G01", "title=Where reasons go, really"]);
+    let said = |number: &str| {
+        let history = dir.ok(&["history", number, "--format", "json"]).json;
+        let revisions: Vec<(i64, String)> = history["revisions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| {
+                (
+                    r["revision"].as_i64().unwrap(),
+                    r["reason"].as_str().unwrap_or_default().to_owned(),
+                )
+            })
+            .collect();
+        (revisions, history["uncommitted"].as_bool().unwrap())
+    };
+    assert_eq!(
+        said("PLAN-001-T02"),
+        (
+            vec![
+                (1, "Plan local mode".to_owned()),
+                (2, "Retitle the build".to_owned())
+            ],
+            false
+        )
+    );
+    assert_eq!(
+        said("PLAN-001-T01"),
+        (vec![(2, "Plan local mode".to_owned())], false)
+    );
+    // The plan's file changed, but not the plan.
+    assert_eq!(
+        said("PLAN-001"),
+        (vec![(3, "Plan local mode".to_owned())], false)
+    );
+    assert!(said("PLAN-001-G01").1, "changed, not committed");
 }

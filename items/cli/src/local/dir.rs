@@ -237,7 +237,7 @@ fn nested_marker(line: &str) -> Option<&str> {
 /// `text` split into its akter: the first, then each nested akt with the
 /// number its line names. A line in a fenced code block is text.
 // r[impl cli.local.layout]
-fn split(text: &str) -> Vec<(Option<&str>, String)> {
+pub(crate) fn split(text: &str) -> Vec<(Option<&str>, String)> {
     let mut parts: Vec<(Option<&str>, Vec<&str>)> = vec![(None, Vec::new())];
     let mut fence: Option<&str> = None;
     for line in text.lines() {

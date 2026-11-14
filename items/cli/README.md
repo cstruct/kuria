@@ -136,10 +136,21 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   `local:<offset>` cursors), `find`, `cat` (the file, without `rank`),
   `show` (board columns through `kuria-engine`, links read back by name)
   and `whoami` (the directory and who `@me` is).
-- **Git** ([`src/local/git.rs`](src/local/git.rs)): one `git log` gives
-  when each file was created and last changed (an uncommitted one, when it
-  was written); `history` answers the commits that changed the file, and
-  whether it has changes not committed yet.
+- **Git** ([`src/local/git.rs`](src/local/git.rs)): a file may hold
+  several akter, so history is per akt. One `git log` of `akter/` and one
+  `git cat-file --batch` read the revisions each commit's files held; an
+  akt changed in the commit where it first reached a revision, whichever
+  file held it, so a move between files keeps its history. `history`
+  answers those commits with the revision after each; created and changed
+  are the first and last of them, or when its file was written if its
+  revision differs from `HEAD`'s. Outside git, a file's akter share its
+  time.
+- **Layout** ([`src/local/layout.rs`](src/local/layout.rs)): an akt
+  numbered after its parent goes in its parent's file, any other begins a
+  file named `<NUMBER>-<slug>.md` from its title. A write moves the akter of
+  the files it touched to where they belong and writes each file whole,
+  nested akter in the directory's order; a file left empty, as by a new
+  title, is removed.
 - **Writes** ([`src/local/write.rs`](src/local/write.rs),
   [`edits.rs`](src/local/edits.rs), [`arrange.rs`](src/local/arrange.rs)):
   every write the server takes, through `kuria-engine` (`create`, `edit`,

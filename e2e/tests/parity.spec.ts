@@ -166,14 +166,23 @@ test('local mode answers a sequence of commands as the server does', async () =>
 		expect(applied.code, applied.stderr).toBe(0);
 	}
 
-	// Every akt reads the same, and they are in the same order.
+	// Every akt reads the same, and each box's members are in the same
+	// order. (Outside git, akter in one file share its time, so the most
+	// recently changed first isn't compared.)
 	for (const n of [a, b, one, two, three]) {
 		await both(['cat', n]);
 	}
-	const order = async (prefix: string[]) =>
-		JSON.parse((await cli.run([...prefix, 'ls', item, '--format', 'json'])).stdout).akter.map(
-			(x: { number: string }) => x.number
-		);
-	expect(await order(['--dir', dir])).toEqual(await order([]));
+	const order = async (prefix: string[], container: string) =>
+		JSON.parse(
+			(await cli.run([...prefix, 'ls', item, '--in', container, '--format', 'json'])).stdout
+		).akter.map((x: { number: string }) => x.number);
+	for (const container of [a, b]) {
+		expect(await order(['--dir', dir], container)).toEqual(await order([], container));
+	}
+	const all = async (prefix: string[]) =>
+		JSON.parse((await cli.run([...prefix, 'ls', item, '--format', 'json'])).stdout)
+			.akter.map((x: { number: string }) => x.number)
+			.sort();
+	expect(await all(['--dir', dir])).toEqual(await all([]));
 	expect((await cli.run(['--dir', dir, 'check'])).code).toBe(0);
 });

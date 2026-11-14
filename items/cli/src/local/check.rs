@@ -33,6 +33,16 @@ impl Problems {
             .map_or(message.clone(), str::to_owned);
         self.found.push((file, message));
     }
+
+    /// What is wrong with `akt`, named by its number too if it is nested.
+    fn of(&mut self, akt: &LocalAkt, message: impl Into<String>) {
+        let message = message.into();
+        if akt.nested {
+            self.add(&akt.path, format!("{}: {message}", akt.number));
+        } else {
+            self.add(&akt.path, message);
+        }
+    }
 }
 
 /// A link as a file lists it: its name, the other akt, and any pin.
@@ -135,11 +145,11 @@ fn check_akter(dir: &AktDir, problems: &mut Problems) {
     for akt in &dir.akter {
         let t = dir.type_of(akt);
         if let Err(e) = answers::values(dir, akt) {
-            problems.add(&akt.path, e.message);
+            problems.of(akt, e.message);
         }
         if t.ty.number().read(&akt.number).is_none() {
-            problems.add(
-                &akt.path,
+            problems.of(
+                akt,
                 format!(
                     "`{}` isn't a number `{}` gives (`{}`)",
                     akt.number,
@@ -149,13 +159,10 @@ fn check_akter(dir: &AktDir, problems: &mut Problems) {
             );
         }
         if let Some(other) = numbers.insert(akt.number.to_lowercase(), akt) {
-            problems.add(
-                &akt.path,
-                format!("has the number of {}", other.path.display()),
-            );
+            problems.of(akt, format!("has the number of {}", other.path.display()));
         }
         if let Some(other) = ranks.insert(&akt.rank, akt) {
-            problems.add(&akt.path, format!("has the rank of {}", other.number));
+            problems.of(akt, format!("has the rank of {}", other.number));
         }
         check_containers(dir, akt, problems);
         check_links(dir, akt, problems);
@@ -168,24 +175,21 @@ fn check_containers(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
     let mut exclusive: HashMap<&str, &str> = HashMap::new();
     for (i, number) in akt.containers.iter().enumerate() {
         if akt.containers[..i].contains(number) {
-            problems.add(&akt.path, format!("is in `{number}` twice"));
+            problems.of(akt, format!("is in `{number}` twice"));
             continue;
         }
         if *number == akt.number {
-            problems.add(&akt.path, "is in itself");
+            problems.of(akt, "is in itself");
             continue;
         }
         let Some(container) = dir.akt(number) else {
-            problems.add(
-                &akt.path,
-                format!("is in `{number}`, which the directory lacks"),
-            );
+            problems.of(akt, format!("is in `{number}`, which the directory lacks"));
             continue;
         };
         let container_ty = &dir.type_of(container).ty;
         match container_ty.contains(ty.key()) {
-            None => problems.add(
-                &akt.path,
+            None => problems.of(
+                akt,
                 format!(
                     "is in `{number}`, but a `{}` can't contain a `{}`",
                     container_ty.key(),
@@ -194,8 +198,8 @@ fn check_containers(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
             ),
             Some(contains) if contains.exclusive => {
                 if let Some(other) = exclusive.insert(container_ty.key(), number) {
-                    problems.add(
-                        &akt.path,
+                    problems.of(
+                        akt,
                         format!(
                             "is in `{other}` and `{number}`, but may be in only one `{}`",
                             container_ty.key()
@@ -212,7 +216,7 @@ fn check_containers(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
             .collect::<Vec<_>>()
     };
     if containment::contains(&akt.number, &akt.number, members_of) {
-        problems.add(&akt.path, "contains itself, through its members");
+        problems.of(akt, "contains itself, through its members");
     }
 }
 
@@ -221,15 +225,12 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
     let ty = &dir.type_of(akt).ty;
     for text in &akt.links {
         let Some((name, number, pin)) = said(text) else {
-            problems.add(
-                &akt.path,
-                format!("the link `{text}` isn't `<name> <number>`"),
-            );
+            problems.of(akt, format!("the link `{text}` isn't `<name> <number>`"));
             continue;
         };
         let Some(other) = dir.akt(number) else {
-            problems.add(
-                &akt.path,
+            problems.of(
+                akt,
                 format!("the link `{text}` names an akt the directory lacks"),
             );
             continue;
@@ -239,8 +240,8 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
         let (target, counterpart) =
             if let Some(def) = ty.document().links.iter().find(|l| l.name == name) {
                 if !def.to.iter().any(|k| k == other_ty.key()) {
-                    problems.add(
-                        &akt.path,
+                    problems.of(
+                        akt,
                         format!(
                             "the link `{text}` goes to a `{}`, which `{}` doesn't link to",
                             other_ty.key(),
@@ -251,8 +252,7 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
                 (other, format!("{} {}{at}", def.inverse, akt.number))
             } else if let Some(def) = other_ty.document().links.iter().find(|l| l.inverse == name) {
                 if !def.to.iter().any(|k| k == ty.key()) {
-                    problems.add(
-                    &akt.path,
+                    problems.of(akt,
                     format!(
                         "the link `{text}` comes from a `{}`, whose `{}` doesn't link to a `{}`",
                         other_ty.key(),
@@ -263,8 +263,8 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
                 }
                 (akt, format!("{} {}{at}", def.name, akt.number))
             } else {
-                problems.add(
-                    &akt.path,
+                problems.of(
+                    akt,
                     format!("the link `{text}` is of no kind either akt's type declares"),
                 );
                 continue;
@@ -273,8 +273,8 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
         if let Some(pin) = pin
             && !(1..=target.revision).contains(&pin)
         {
-            problems.add(
-                &akt.path,
+            problems.of(
+                akt,
                 format!(
                     "the link `{text}` pins a revision {} hasn't reached",
                     target.number
@@ -282,8 +282,8 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
             );
         }
         if !other.links.iter().any(|l| l.trim() == counterpart) {
-            problems.add(
-                &akt.path,
+            problems.of(
+                akt,
                 format!(
                     "lists `{text}`, but {} doesn't list `{counterpart}`",
                     other.number

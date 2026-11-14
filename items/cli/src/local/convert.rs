@@ -10,7 +10,7 @@
 //!   change nothing. Every hash then matches (`bundle.import.hashes`), and
 //!   pins the files hold name revisions the server has.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -23,8 +23,8 @@ use super::answers;
 use super::check::{check, said};
 use super::dir::{AktDir, LocalAkt, LocalType, init};
 use super::git::Times;
+use super::layout;
 use super::values::{Ids, NAMESPACE, current, file_form};
-use super::write::text_of;
 use crate::error::CliError;
 use crate::file::Parsed;
 use crate::profile::io_error;
@@ -144,8 +144,10 @@ pub fn to_dir(bundle: &Json, root: &Path) -> Result<Json, CliError> {
         let text = serde_json::to_string_pretty(&t.document).expect("serializable") + "\n";
         std::fs::write(&path, text).map_err(|e| io_error(&path, &e))?;
     }
-    for akt in &dir.akter {
-        std::fs::write(&akt.path, text_of(&dir, akt)).map_err(|e| io_error(&akt.path, &e))?;
+    let mut dir = dir;
+    let every: BTreeSet<_> = dir.akter.iter().map(|a| a.path.clone()).collect();
+    for path in layout::relocate(&mut dir, &every) {
+        std::fs::write(&path, layout::file_text(&dir, &path)).map_err(|e| io_error(&path, &e))?;
     }
     // What was written reads back as a consistent directory.
     check(root)?;
@@ -352,7 +354,7 @@ pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Json, CliError> {
     let mut links = Vec::new();
     for akt in &dir.akter {
         let t = dir.type_of(akt);
-        let (created, updated) = times.of_file(root, &akt.path);
+        let (created, updated) = times.of_akt(akt);
         let (created, updated) = (time(&created, now), time(&updated, now));
         let mut fields = current(&t.ty, akt, &mut ids)?;
         for value in fields.values_mut() {

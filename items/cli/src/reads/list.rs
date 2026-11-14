@@ -276,8 +276,7 @@ fn local_page(
         }
         None => {
             let mut all: Vec<_> = dir.akter.iter().collect();
-            let updated =
-                |a: &&crate::local::dir::LocalAkt| local.times.of_file(&dir.root, &a.path).1;
+            let updated = |a: &&crate::local::dir::LocalAkt| local.times.of_akt(a).1;
             all.sort_by(|a, b| {
                 updated(b)
                     .cmp(&updated(a))

@@ -14,6 +14,7 @@ use serde_json::{Map, Value as Json, json};
 
 use super::answers;
 use super::dir::{AktDir, LocalAkt, LocalType};
+use super::layout;
 use super::values::{Ids, current};
 use crate::error::{CliError, Kind};
 use crate::file::{self, Parsed};
@@ -196,28 +197,13 @@ impl Writer {
         self.dir.types.insert(t.ty.key().to_owned(), t);
     }
 
-    /// Writes every file the change touched, each whole.
+    /// Writes every file the change touched, each whole: the akter it
+    /// touched, with the other akter of their files, moved to where they
+    /// belong (`cli.local.nesting`), and a file whose akter all left it,
+    /// such as one renamed for a new title, removed.
     // r[impl cli.local.layout]
-    pub fn save(self) -> Result<(), CliError> {
-        // Until writes keep nested akter (PLAN-009-T03), never write a file
-        // over the other akter it holds.
-        for number in &self.touched {
-            let akt = self.dir.akt(number).expect("touched akter exist");
-            if self
-                .dir
-                .akter
-                .iter()
-                .any(|a| a.path == akt.path && a.number != *number)
-            {
-                return Err(super::unsupported(
-                    &format!("Writing {number}"),
-                    &format!(
-                        "{} holds other akter too, and writes don't keep nested akter yet",
-                        akt.path.display()
-                    ),
-                ));
-            }
-        }
+    // r[impl cli.local.names]
+    pub fn save(mut self) -> Result<(), CliError> {
         for key in &self.types {
             let path = self.dir.root.join("types").join(format!("{key}.json"));
             let text = serde_json::to_string_pretty(&self.dir.types[key].document)
@@ -225,9 +211,25 @@ impl Writer {
                 + "\n";
             write_whole(&path, &text)?;
         }
-        for number in &self.touched {
-            let akt = self.dir.akt(number).expect("touched akter exist");
-            write_whole(&akt.path, &text_of(&self.dir, akt))?;
+        let from: BTreeSet<PathBuf> = self
+            .touched
+            .iter()
+            .map(|n| self.dir.akt(n).expect("touched akter exist").path.clone())
+            .collect();
+        let to = layout::relocate(&mut self.dir, &from);
+        // Written first, so that an akt is never in no file.
+        for path in &to {
+            write_whole(path, &layout::file_text(&self.dir, path))?;
+        }
+        for path in from.difference(&to) {
+            if self.dir.akter.iter().all(|a| a.path != *path) {
+                match std::fs::remove_file(path) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                        return Err(io_error(path, &e));
+                    }
+                    _ => {}
+                }
+            }
         }
         Ok(())
     }
@@ -250,6 +252,7 @@ impl Writer {
         values: Map<String, Json>,
     ) -> LocalAkt {
         LocalAkt {
+            // Where it belongs is found when it is saved.
             path: self.dir.root.join("akter").join(format!("{number}.md")),
             number,
             type_key: t.ty.key().to_owned(),
@@ -277,18 +280,23 @@ fn write_whole(path: &Path, text: &str) -> Result<(), CliError> {
     std::fs::rename(&partial, path).map_err(|e| io_error(path, &e))
 }
 
-/// `akt`'s file: the akt file `cat` prints, with its `rank`.
+/// `akt` as its file holds it: the akt file `cat` prints, with its
+/// `rank`, and without its `number` unless `numbered`, as a nested akt,
+/// whose line gives it.
 // r[impl cli.local.layout]
 #[must_use]
-pub fn text_of(dir: &AktDir, akt: &LocalAkt) -> String {
+pub fn text_of(dir: &AktDir, akt: &LocalAkt, numbered: bool) -> String {
     let t = dir.type_of(akt);
-    let mut front = vec![
-        ("number", Json::from(akt.number.clone())),
-        ("type", akt.type_key.clone().into()),
+    let mut front = Vec::new();
+    if numbered {
+        front.push(("number", Json::from(akt.number.clone())));
+    }
+    front.extend([
+        ("type", Json::from(akt.type_key.clone())),
         ("revision", akt.revision.into()),
         ("rank", akt.rank.clone().into()),
         ("state", akt.state.clone().into()),
-    ];
+    ]);
     if !akt.containers.is_empty() {
         front.push(("in", akt.containers.clone().into()));
     }

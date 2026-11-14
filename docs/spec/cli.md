@@ -244,10 +244,15 @@ name. `@me` MUST be `KURIA_ME`, else the email `git config user.email`
 gives in the directory, and MUST otherwise be refused as `BAD_REQUEST`.
 
 r[cli.local.history]
-`history` in local mode MUST answer the commits that changed the akt's
-file, newest last, each with its author, time and message, from git, and
-say when the file has changes not yet committed. In a directory git
-doesn't track, it MUST say there is no history.
+`history` in local mode MUST answer the commits that changed the akt,
+newest last, each with its author, time, message and the akt's revision
+after it, from git, and say when the akt has changes not yet committed. A
+commit changed an akt when its `revision` changed, whichever file held it,
+so that an akt moved between files keeps its history. When an akt was
+created and last changed MUST be its first and last such commits, or,
+with changes not committed, when its file was written. In a directory git
+doesn't track, it MUST say there is no history, and every akt of a file
+MUST be as old as the file.
 
 r[cli.local.reason]
 `--reason` in local mode MUST be accepted and kept nowhere: the answer

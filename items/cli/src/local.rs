@@ -6,6 +6,7 @@
 //!   built from the directory, so every read renders as it does against a
 //!   server.
 //! - [`git`]: when files changed, and their history.
+//! - [`layout`]: which file holds each akt, and each file's name and text.
 //! - [`check`]: the whole directory checked, every problem named.
 //! - [`convert`]: a server's bundle to a directory, and back.
 //! - [`write`], [`edits`] and [`arrange`]: writes, through the engine's
@@ -19,6 +20,7 @@ pub mod convert;
 pub mod dir;
 pub mod edits;
 pub mod git;
+pub mod layout;
 pub mod values;
 pub mod write;
 
