@@ -104,8 +104,15 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   and `KURIA_KEY` signing in as software, saving nothing, with its exit
   codes; every read command against the release-management example; and
   every write, on akt types the test defines with the CLI; and a bundle
-  moved from `shop` to `lab`; and the planning example, defined from
+  moved from `shop` to `lab`; selected types converted to an akt
+  directory and back into `lab`; and the planning example, defined from
   `docs/examples/planning` and worked as `kuria guide` says.
+- [`tests/parity.spec.ts`](tests/parity.spec.ts): local mode's parity
+  with a server. One sequence of some thirty commands (types, creation,
+  edits, transitions, links with pins, order, membership, transfers, and
+  the refusals of each rule) runs against the server and against a new
+  akt directory; every answer, and every akt's `cat` and order after it,
+  must be the same.
 - [`tests/akt-page.spec.ts`](tests/akt-page.spec.ts): the title first, a
   field edited in place, and the history saying what changed.
 - [`tests/accessibility.spec.ts`](tests/accessibility.spec.ts): axe

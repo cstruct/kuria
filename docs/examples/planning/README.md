@@ -58,6 +58,25 @@ kuria link PLAN-007-T03 blocks PLAN-007-T04      # say what comes first
 
 `kuria guide` says the same for agents.
 
+## Without a server
+
+The same types work in an akt directory, Markdown files in a git
+repository, with no server at all; Kuria's own plans are kept that way.
+Every command above takes `--dir <path>` (or `KURIA_DIR`), and git is the
+history: commit with the reason each write gives back.
+
+```sh
+kuria init --dir plans
+cp docs/examples/planning/*.json plans/types/
+kuria --dir plans new plan --set "title=Local mode"   # PLAN-001
+kuria --dir plans new task --in PLAN-001 --set "title=Spec it"
+kuria --dir plans check                                # after a merge
+```
+
+`kuria export --types plan,task,gap,decision --to-dir plans` makes such a
+directory from a server's plans, and `kuria import --from-dir plans` takes
+it to a server that hasn't defined the types yet, keeping numbers.
+
 ## Konklav roles
 
 - **Planner**, tenant-wide: `kuria:akter:read`; and at `plan`, `task`, `gap`

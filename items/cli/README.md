@@ -284,12 +284,19 @@ cargo test -p kuria-cli
   and imported into `lab` with their numbers and revisions; and the
   planning example defined from `docs/examples/planning` and a plan
   worked as the guide says.
+- Parity ([`e2e/tests/parity.spec.ts`](../../e2e/tests/parity.spec.ts)):
+  one sequence of commands, each run against the e2e server and then
+  with `--dir` against a new akt directory. Each answer must be the same
+  (a refusal by its code, the reason to commit with set aside), then each
+  akt's `cat` and their order. It is how local mode is held to "the same
+  rules, through a shared engine".
 
 ## Traceability
 
 - Spec: [`docs/spec/cli.md`](../../docs/spec/cli.md) (`cli.profile`,
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
-  `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`); `app.history`
-  for the history's wording.
+  `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`, and
+  `local.*` for local mode); `app.history` for the history's wording.
 - Annotations: `r[impl cli.*]` in `src/`, `r[verify cli.*]` in the unit
-  tests and `e2e/tests/cli.spec.ts`.
+  tests, `tests/local.rs`, `e2e/tests/cli.spec.ts` and
+  `e2e/tests/parity.spec.ts`.

@@ -1,0 +1,179 @@
+/** Local mode's parity with a server: one sequence of commands, run against
+ * the end-to-end Kuria and against a new akt directory, answers and akter
+ * compared step by step (`cli.local.rules`, `cli.local.revision`). */
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test } from '@playwright/test';
+import { Cli, type Ran } from '../support/cli.ts';
+import { seeded } from '../support/stack.ts';
+
+/** What a run answered, as comparable across a server and a directory. */
+interface Said {
+	code: number | null;
+	error?: string;
+	markdown?: string;
+}
+
+/** The answer without what only local mode adds: the reason to commit with. */
+function said(ran: Ran): Said {
+	if (ran.code !== 0) {
+		// A refusal ends with its code; a usage error is said as it is.
+		const code = ran.stderr.trim().match(/\(([A-Z_]+)\)$/);
+		return { code: ran.code, error: code ? code[1] : ran.stderr.trim() };
+	}
+	return { code: 0, markdown: ran.stdout.replace(/\n\nCommit with: .*$/s, '').trim() };
+}
+
+// r[verify cli.local.rules]
+// r[verify cli.local.revision]
+test('local mode answers a sequence of commands as the server does', async () => {
+	test.setTimeout(300_000);
+	const stamp = Date.now();
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const dir = join(cli.dir, 'plans');
+	const box = `parity_box_${stamp}`;
+	const item = `parity_item_${stamp}`;
+	writeFileSync(
+		join(cli.dir, 'types.json'),
+		JSON.stringify([
+			{
+				key: box,
+				name: 'Parity box',
+				number: `PB${stamp}-{seq}`,
+				fields: [{ key: 'title', name: 'Title', kind: 'text', required: true }],
+				states: [
+					{ key: 'open', name: 'Open', initial: true },
+					{ key: 'paused', name: 'Paused' },
+					{ key: 'shut', name: 'Shut', final: true }
+				],
+				transitions: [
+					{ key: 'pause', name: 'Pause', from: ['open'], to: 'paused' },
+					{ key: 'shut', name: 'Shut', from: ['open', 'paused'], to: 'shut' }
+				],
+				contains: [{ type: item, exclusive: true, while: ['open'] }]
+			},
+			{
+				key: item,
+				name: 'Parity item',
+				number: '{parent}-I{seq}',
+				created_in: [box],
+				fields: [
+					{ key: 'title', name: 'Title', kind: 'text', required: true },
+					{ key: 'notes', name: 'Notes', kind: 'text', multiline: true },
+					{
+						key: 'size',
+						name: 'Size',
+						kind: 'choice',
+						options: [
+							{ key: 'small', name: 'Small' },
+							{ key: 'large', name: 'Large' }
+						]
+					},
+					{ key: 'due', name: 'Due', kind: 'date' },
+					{ key: 'checked', name: 'Checked', kind: 'checkbox' }
+				],
+				states: [
+					{ key: 'todo', name: 'To do', initial: true },
+					{ key: 'doing', name: 'Doing' },
+					{ key: 'done', name: 'Done', final: true }
+				],
+				transitions: [
+					{ key: 'start', name: 'Start', from: ['todo'], to: 'doing' },
+					{ key: 'finish', name: 'Finish', from: ['doing'], to: 'done', requires: ['checked'] }
+				],
+				links: [{ key: 'blocks', name: 'Blocks', inverse: 'Blocked by', to: [item] }]
+			}
+		])
+	);
+	writeFileSync(join(cli.dir, 'notes.md'), 'Why it matters.\n\nWhat done is.\n');
+	expect((await cli.run(['init', '--dir', dir])).code).toBe(0);
+
+	/** Runs `args` against the server and the directory, and compares. */
+	const both = async (args: string[]): Promise<Said> => {
+		const server = said(await cli.run(args));
+		const local = said(await cli.run(['--dir', dir, ...args]));
+		expect(local, args.join(' ')).toEqual(server);
+		return server;
+	};
+	const number = (s: Said) => s.markdown!.match(/[A-Z0-9]+-\d+(?:-I\d+)?/)![0];
+
+	await both(['types', 'define', join(cli.dir, 'types.json')]);
+	const a = number(await both(['new', box, '--set', 'title=Box A', '--reason', 'Boxing']));
+	const b = number(await both(['new', box, '--set', 'title=Box B']));
+	const one = number(
+		await both([
+			'new',
+			item,
+			'--in',
+			a,
+			'--set',
+			'title=One',
+			'--set',
+			'size=Small',
+			'--set',
+			`notes=@${join(cli.dir, 'notes.md')}`
+		])
+	);
+	const two = number(await both(['new', item, '--in', a, '--set', 'title=Two']));
+	const three = number(await both(['new', item, '--in', a, '--set', 'title=Three']));
+	expect([one, two, three]).toEqual([`${a}-I1`, `${a}-I2`, `${a}-I3`]);
+
+	const steps: [string[], number][] = [
+		[['new', item, '--set', 'title=Nowhere'], 1],
+		[['new', item, '--in', a, '--set', 'size=Huge', '--set', 'title=Bad'], 1],
+		[['set', one, 'size=Large', 'due=2026-12-01'], 0],
+		[['set', one, 'title='], 1],
+		[['do', one, 'start', '--reason', 'Begun'], 0],
+		[['do', one, 'finish'], 1],
+		[['set', one, 'checked=true'], 0],
+		[['do', one, 'finish'], 0],
+		[['do', one, 'start'], 1],
+		[['link', two, 'blocks', one, '--pin'], 0],
+		[['link', two, 'blocks', one], 1],
+		[['link', three, 'blocks', three], 1],
+		[['link', three, 'blocks', two], 0],
+		[['unlink', two, 'blocks', one], 0],
+		[['unlink', two, 'blocks', one], 2],
+		[['move', three, '--before', one], 0],
+		[['move', three, '--after', three], 1],
+		[['add', b, three], 1],
+		[['transfer', two, a, b], 0],
+		[['transfer', two, a, b], 1],
+		[['remove', a, three], 0],
+		[['remove', a, three], 1],
+		[['add', b, three], 0],
+		[['do', b, 'pause'], 0],
+		[['add', b, one], 1],
+		[['do', a, 'shut'], 0],
+		[['remove', a, one], 1],
+		[['set', 'NOPE-1', 'title=x'], 2]
+	];
+	for (const [args, code] of steps) {
+		expect((await both(args)).code, args.join(' ')).toBe(code);
+	}
+
+	// The akt file, edited and applied, on both.
+	for (const [where, prefix] of [
+		['server', []],
+		['local', ['--dir', dir]]
+	] as const) {
+		const out = join(cli.dir, `out-${where}`);
+		mkdirSync(out);
+		expect((await cli.run([...prefix, 'cat', two, '-o', out])).code).toBe(0);
+		const file = join(out, `${two}.md`);
+		writeFileSync(file, readFileSync(file, 'utf8').replace('title: Two', 'title: Two, applied'));
+		const applied = await cli.run([...prefix, 'apply', file, '--reason', 'Applied']);
+		expect(applied.code, applied.stderr).toBe(0);
+	}
+
+	// Every akt reads the same, and they are in the same order.
+	for (const n of [a, b, one, two, three]) {
+		await both(['cat', n]);
+	}
+	const order = async (prefix: string[]) =>
+		JSON.parse((await cli.run([...prefix, 'ls', item, '--format', 'json'])).stdout).akter.map(
+			(x: { number: string }) => x.number
+		);
+	expect(await order(['--dir', dir])).toEqual(await order([]));
+	expect((await cli.run(['--dir', dir, 'check'])).code).toBe(0);
+});

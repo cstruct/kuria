@@ -13,18 +13,26 @@ has, then work with what it answers.
 
 ## Local mode
 
-With `--dir <path>`, or `KURIA_DIR`, every command works on an akt
-directory instead of a server: `kuria.toml`, the akt types in `types/`,
-and each akt as an akt file in `akter/<number>.md`, with git as their
-history. `kuria init --dir <path>` makes one, and `kuria check --dir
-<path>` checks all of it as a server would, naming each problem's file
-(run it after a merge). People are written by email
-or name; `@me` is `KURIA_ME`, else git's `user.email`. Signing in, users,
-contacts, drafts and bundles aren't there (`LOCAL_UNSUPPORTED`, exit 1).
-Signed in, `kuria export --types <key>,… --to-dir <path>` makes a
-directory from a server's akter, and `kuria import --from-dir <path>`
-takes a directory's akter to a server that lacks its types, keeping
-numbers.
+With `--dir <path>`, or `KURIA_DIR`, every command below works on an akt
+directory instead of a server, by the same rules and with the same
+answers. An akt directory has `kuria.toml`, the akt types in `types/`,
+and each akt as its akt file in `akter/<number>.md`. Git is the history.
+
+- `kuria init --dir <path>` makes one; put the akt types in `types/`, or
+  `kuria types define <file>`.
+- After each write, commit what it changed: an answer to `--reason` ends
+  "Commit with: <reason>", the message to use. `kuria history` reads the
+  commits.
+- People are written by email or name. `@me` is `KURIA_ME`, else git's
+  `user.email`.
+- After a merge or pull, run `kuria check`: it names each problem's file,
+  such as two branches taking the same number, and exits 1 if any.
+- Writes lock the directory, so agents may write at once.
+- Signing in, users, contacts, drafts, attachments and bundles aren't
+  there (`LOCAL_UNSUPPORTED`, exit 1). Signed in, `kuria export --types
+  <key>,… --to-dir <path>` makes a directory from a server's akter, and
+  `kuria import --from-dir <path>` takes one to a server that lacks its
+  types, keeping numbers.
 
 ## Finding your way
 
