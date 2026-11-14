@@ -186,11 +186,33 @@ refuse a directory without a `kuria.toml` whose format it reads, as
 
 r[cli.local.layout]
 An akt directory MUST hold each akt type's document as
-`types/<key>.json`, one version per key, and each akt as
-`akter/<number>.md`: an akt file (`cli.file`) whose `number` is its name,
-with one more front-matter key, `rank`, its place in the directory's
-order. Files MUST be written whole, so that a reader never sees half a
-write.
+`types/<key>.json`, one version per key, and its akter in `akter/*.md`.
+Each file MUST begin with an akt as an akt file (`cli.file`) with one more
+front-matter key, `rank`, its place in the directory's order. Any nested
+akter (`cli.local.nesting`) MUST follow it, each beginning with the line
+`<!-- akt: <NUMBER> -->` and then as an akt file of its own with `rank`
+but without `number`, which the line gives. Such a line inside a fenced
+code block MUST be read as text. An akt MUST be found by its number,
+whatever file holds it. Files MUST be written whole, so that a reader
+never sees half a write.
+
+r[cli.local.nesting]
+An akt whose number its type's pattern makes from its parent's
+(`{parent}`) MUST be stored in the file that holds that parent, as a nested
+akt; any other akt MUST begin a file of its own. A file's akter after the
+first MUST be in the directory's order, each after its parent. Which file
+holds an akt MUST NOT say what it is in: its `in` lists every container,
+its parent too, as its akt file does, so that one removed from its parent
+stays in the parent's file and in nothing. A change MUST write each file
+whose akter it touched, whole.
+
+r[cli.local.names]
+A file MUST be named by the akt it begins with: `<NUMBER>-<slug>.md`,
+where the slug is its title in lower case with every run of characters
+other than ASCII letters and digits made one `-`, trimmed of `-` and cut
+at a `-` to at most 40 characters; or `<NUMBER>.md` if that leaves
+nothing. A change to that akt's title MUST rename the file in the same
+change.
 
 r[cli.local.types]
 `types define` in local mode MUST replace the type's document, refusing a
@@ -246,8 +268,10 @@ r[cli.local.check]
 `kuria check --dir <path>` MUST check the whole directory as a server
 would: every document valid and each akt fitting its type, numbers
 unique, every `in` and `links` entry naming an akt the directory has by a
-kind its type declares, containment rules held, and orders unique. It
-MUST name each problem's file, and exit with 1 if there is any, 0 if
+kind its type declares, containment rules held, orders unique, each akt
+stored once and in the file `cli.local.nesting` puts it in, and each file
+named as `cli.local.names` says. It MUST name each problem's file, and the
+akt's number for a nested akt, and exit with 1 if there is any, 0 if
 none.
 
 r[cli.local.convert]

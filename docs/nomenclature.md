@@ -174,8 +174,10 @@ Terms are introduced in dependency order: each definition only uses terms define
   - An akt as `kuria cat` writes it and `kuria apply` reads it: Markdown with the akt's single-line fields in YAML front matter and each multiline field as its own section.
 
 - `akt directory`
-  - A directory of Markdown files that local mode reads and writes instead of a Kuria server: `kuria.toml`, akt type documents in `types/`, and akt files in `akter/`, with git as their history.
+  - A directory of Markdown files that local mode reads and writes instead of a Kuria server: `kuria.toml`, akt type documents in `types/`, and akter in `akter/`, each file holding an akt and its nested akter, named by number and title, with git as their history.
 
+- `nested akt`
+  - An akt stored in its parent's file in an akt directory, after the line `<!-- akt: <NUMBER> -->`, because its number is made from its parent's.
 - `local mode`
   - The client working on an akt directory (`--dir`, `KURIA_DIR`) instead of a server, with the same commands, answers and rules.
 

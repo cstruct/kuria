@@ -1,7 +1,7 @@
 ---
 number: PLAN-009
 type: plan
-revision: 11
+revision: 12
 rank: b2p
 state: active
 title: "Fewer, readable files: akter nested in their parent's file, named by title"
@@ -35,7 +35,7 @@ Success: `plans/` holds one file per plan, named by its title; `kuria check --di
 - **Where an akt is stored:** an akt whose number is made from its parent's is stored in the file of that parent, after the parent's own fields, in the directory's order. Any other akt has a file of its own. The rule comes from the number pattern, so no akt type or setting changes (decided: PLAN-009-D01).
 - **The marker:** each nested akt begins with `<!-- akt: <NUMBER> -->` on a line of its own, followed by its front matter and its field sections, as its akt file would be, without `number` (the marker says it). A marker inside a fenced code block is text, as a field marker is.
 - **Nested deeper:** an akt numbered after a nested akt is stored in the same file, after its parent.
-- **Containers:** a nested akt is in the parent whose file holds it; its `in` lists only its other containers. Moving it to another container changes `in`, never which file holds it, since its number doesn't change either.
+- **Containers:** which file holds an akt doesn't say what it is in: `in` lists every container, the parent too, as in an akt file. One removed from its parent, or moved to another container, stays in its parent's file, since its number doesn't change either.
 
 ### File names
 
