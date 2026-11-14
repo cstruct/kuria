@@ -142,36 +142,43 @@ impl AktDir {
 fn read_types(dir: &Path) -> Result<BTreeMap<String, LocalType>, CliError> {
     let mut types = BTreeMap::new();
     for path in files(dir, "json")? {
-        let text = std::fs::read_to_string(&path).map_err(|e| io_error(&path, &e))?;
-        let document: AktTypeDocument = serde_json::from_str(&text).map_err(|e| bad(&path, e))?;
-        let ty = validate(document).map_err(|problems| {
-            bad(
-                &path,
-                problems
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; "),
-            )
-        })?;
-        let named = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default();
-        if named != ty.key() {
-            return Err(bad(
-                &path,
-                format!("defines `{}`, so it is `types/{}.json`", ty.key(), ty.key()),
-            ));
-        }
-        let document = serde_json::to_value(ty.document()).expect("serializable");
-        types.insert(ty.key().to_owned(), LocalType { ty, document });
+        let t = read_type(&path)?;
+        types.insert(t.ty.key().to_owned(), t);
     }
     Ok(types)
 }
 
+/// The akt type document at `path`, validated as `defineAktType`
+/// validates it.
+pub fn read_type(path: &Path) -> Result<LocalType, CliError> {
+    let text = std::fs::read_to_string(path).map_err(|e| io_error(path, &e))?;
+    let document: AktTypeDocument = serde_json::from_str(&text).map_err(|e| bad(path, e))?;
+    let ty = validate(document).map_err(|problems| {
+        bad(
+            path,
+            problems
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
+    })?;
+    let named = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    if named != ty.key() {
+        return Err(bad(
+            path,
+            format!("defines `{}`, so it is `types/{}.json`", ty.key(), ty.key()),
+        ));
+    }
+    let document = serde_json::to_value(ty.document()).expect("serializable");
+    Ok(LocalType { ty, document })
+}
+
 /// The files of `dir` with `extension`, by name.
-fn files(dir: &Path, extension: &str) -> Result<Vec<PathBuf>, CliError> {
+pub fn files(dir: &Path, extension: &str) -> Result<Vec<PathBuf>, CliError> {
     let mut found = Vec::new();
     match std::fs::read_dir(dir) {
         Ok(entries) => {
@@ -206,58 +213,62 @@ fn strings(parsed: &Parsed, key: &str, path: &Path) -> Result<Vec<String>, CliEr
 
 /// Every `<number>.md` in `dir`, as akt files of `types`.
 fn read_akter(dir: &Path, types: &BTreeMap<String, LocalType>) -> Result<Vec<LocalAkt>, CliError> {
-    let mut akter = Vec::new();
-    for path in files(dir, "md")? {
-        let text = std::fs::read_to_string(&path).map_err(|e| io_error(&path, &e))?;
-        let parsed = file::parse(&text).map_err(|e| bad(&path, e.message))?;
-        let named = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or_default()
-            .to_owned();
-        if parsed.text("number").as_deref() != Some(named.as_str()) {
-            return Err(bad(
-                &path,
-                format!("its `number` isn't `{named}`, its file's name"),
-            ));
-        }
-        let type_key = parsed
-            .text("type")
-            .ok_or_else(|| bad(&path, "names no `type`"))?;
-        let ty = types
-            .get(&type_key)
-            .ok_or_else(|| bad(&path, format!("is a `{type_key}`, which `types/` lacks")))?;
-        let state = parsed
-            .text("state")
-            .ok_or_else(|| bad(&path, "names no `state`"))?;
-        if ty.ty.state(&state).is_none() {
-            return Err(bad(&path, format!("`{type_key}` has no state `{state}`")));
-        }
-        let revision = parsed
-            .front
-            .get("revision")
-            .and_then(Json::as_i64)
-            .and_then(|r| i32::try_from(r).ok())
-            .ok_or_else(|| bad(&path, "names no `revision`"))?;
-        let rank = parsed
-            .text("rank")
-            .ok_or_else(|| bad(&path, "has no `rank`"))?;
-        let values = parsed.values().map_err(|e| bad(&path, e.message))?;
-        if let Some(key) = values.keys().find(|k| ty.ty.field(k).is_none()) {
-            return Err(bad(&path, format!("`{type_key}` has no field `{key}`")));
-        }
-        akter.push(LocalAkt {
-            containers: strings(&parsed, "in", &path)?,
-            links: strings(&parsed, "links", &path)?,
-            number: named,
+    files(dir, "md")?
+        .iter()
+        .map(|path| read_akt(path, types))
+        .collect()
+}
+
+/// The akt file at `path`, read as an akt of one of `types`.
+pub fn read_akt(path: &Path, types: &BTreeMap<String, LocalType>) -> Result<LocalAkt, CliError> {
+    let text = std::fs::read_to_string(path).map_err(|e| io_error(path, &e))?;
+    let parsed = file::parse(&text).map_err(|e| bad(path, e.message))?;
+    let named = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_owned();
+    if parsed.text("number").as_deref() != Some(named.as_str()) {
+        return Err(bad(
             path,
-            type_key,
-            state,
-            revision,
-            rank,
-            values,
-            parsed,
-        });
+            format!("its `number` isn't `{named}`, its file's name"),
+        ));
     }
-    Ok(akter)
+    let type_key = parsed
+        .text("type")
+        .ok_or_else(|| bad(path, "names no `type`"))?;
+    let ty = types
+        .get(&type_key)
+        .ok_or_else(|| bad(path, format!("is a `{type_key}`, which `types/` lacks")))?;
+    let state = parsed
+        .text("state")
+        .ok_or_else(|| bad(path, "names no `state`"))?;
+    if ty.ty.state(&state).is_none() {
+        return Err(bad(path, format!("`{type_key}` has no state `{state}`")));
+    }
+    let revision = parsed
+        .front
+        .get("revision")
+        .and_then(Json::as_i64)
+        .and_then(|r| i32::try_from(r).ok())
+        .ok_or_else(|| bad(path, "names no `revision`"))?;
+    let rank = parsed
+        .text("rank")
+        .ok_or_else(|| bad(path, "has no `rank`"))?;
+    let values = parsed.values().map_err(|e| bad(path, e.message))?;
+    if let Some(key) = values.keys().find(|k| ty.ty.field(k).is_none()) {
+        return Err(bad(path, format!("`{type_key}` has no field `{key}`")));
+    }
+    Ok(LocalAkt {
+        containers: strings(&parsed, "in", path)?,
+        links: strings(&parsed, "links", path)?,
+        number: named,
+        path: path.to_owned(),
+        type_key,
+        state,
+        revision,
+        rank,
+        values,
+        parsed,
+    })
 }

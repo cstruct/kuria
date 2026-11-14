@@ -6,12 +6,14 @@
 //!   built from the directory, so every read renders as it does against a
 //!   server.
 //! - [`git`]: when files changed, and their history.
+//! - [`check`]: the whole directory checked, every problem named.
 //! - [`write`], [`edits`] and [`arrange`]: writes, through the engine's
 //!   rules, under the directory's lock; [`values`]: values to and from the
 //!   engine's, people as text.
 
 pub mod answers;
 pub mod arrange;
+pub mod check;
 pub mod dir;
 pub mod edits;
 pub mod git;

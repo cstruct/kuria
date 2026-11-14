@@ -16,7 +16,9 @@ has, then work with what it answers.
 With `--dir <path>`, or `KURIA_DIR`, every command works on an akt
 directory instead of a server: `kuria.toml`, the akt types in `types/`,
 and each akt as an akt file in `akter/<number>.md`, with git as their
-history. `kuria init --dir <path>` makes one. People are written by email
+history. `kuria init --dir <path>` makes one, and `kuria check --dir
+<path>` checks all of it as a server would, naming each problem's file
+(run it after a merge). People are written by email
 or name; `@me` is `KURIA_ME`, else git's `user.email`. Signing in, users,
 contacts, drafts and bundles aren't there (`LOCAL_UNSUPPORTED`, exit 1).
 

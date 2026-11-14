@@ -56,6 +56,8 @@ run = [
     "npm --prefix items/web run lint",
     "npm --prefix items/web run check",
     "tracey query validate",
+    # Kuria's own plans, once they live in the repository (PLAN-008-T08).
+    "test ! -d plans || cargo run -q -p kuria-cli -- check --dir plans",
 ]
 
 [tasks.kuria]

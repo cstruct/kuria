@@ -155,6 +155,16 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   answered back to commit with (`reason` in JSON, "Commit with:" in
   Markdown). `types define` replaces a document, refusing one the
   directory's akter wouldn't fit.
+- **Check** ([`src/local/check.rs`](src/local/check.rs), `cli.local.check`):
+  `kuria check --dir <path>` reads every file, collecting rather than
+  stopping at problems, and checks what spans files: types' references to
+  each other, values that fit their fields, numbers their pattern gives
+  and unique (ignoring case), containers that exist and contain the type,
+  exclusive containers, cycles, links of a declared kind to a type it
+  allows, pins the target reached, both sides listing each link, and
+  unique ranks. It answers `INCONSISTENT` (exit 1) with each problem as
+  `- <file>: <what>`; `mise run lint` runs it on `plans/` once that
+  exists. A merge left unresolved shows as a file that doesn't read.
 - **People** are text: `@me` is `KURIA_ME`, else git's `user.email`. On
   their way through the engine, each name or email stands in as a subject
   derived from its text ([`src/local/values.rs`](src/local/values.rs)); a
@@ -243,7 +253,9 @@ cargo test -p kuria-cli
   that don't fit, named; and every write: numbering in and across plans,
   revisions of containers, the server's refusals, `apply` with dry runs,
   stale files and read-only keys, links with pins on both files, order,
-  transfers, redefining types, and eight writers at once.
+  transfers, redefining types, and eight writers at once; and `check`, on a
+  consistent directory and on one with eight kinds of problem, each named
+  with its file.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
   built binary against the e2e stack. Playwright authorizes the link
   `kuria login` prints; then `whoami` from the profile, a refresh, `logout`

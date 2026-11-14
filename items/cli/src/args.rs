@@ -225,6 +225,9 @@ pub enum Command {
     Guide,
     /// Make an akt directory for local mode: `kuria init --dir <path>`.
     Init,
+    /// Check a whole akt directory as a server would hold it, naming each
+    /// problem's file: `kuria check --dir <path>`.
+    Check,
     /// Export a bundle: selected akt types, with or without their akter,
     /// or the whole tenant, into a new directory.
     #[command(group(clap::ArgGroup::new("what").required(true).args(["types", "whole_tenant"])))]

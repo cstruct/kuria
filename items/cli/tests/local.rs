@@ -822,3 +822,111 @@ fn refuses_writes_as_the_server_does() {
         "FROZEN"
     );
 }
+
+// r[verify cli.local.check]
+#[test]
+fn check_passes_a_consistent_directory() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["link", "PLAN-001-T01", "blocks", "PLAN-001-T02", "--pin"]);
+    let checked = dir.ok(&["check", "--format", "json"]).json;
+    assert_eq!(
+        checked,
+        json!({ "consistent": true, "types": 4, "akter": 3, "problems": [] })
+    );
+}
+
+// r[verify cli.local.check]
+#[test]
+fn check_names_every_problem_with_its_file() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
+    dir.ok(&["link", "PLAN-001-T01", "blocks", "PLAN-001-T02"]);
+    let edit = |number: &str, from: &str, to: &str| {
+        let path = dir.root.join(format!("akter/{number}.md"));
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains(from), "{number} has no `{from}`:\n{text}");
+        std::fs::write(&path, text.replacen(from, to, 1)).unwrap();
+    };
+    // A link only one side lists, and a kind no type declares.
+    edit("PLAN-001-T02", "links: [Blocked by PLAN-001-T01]\n", "");
+    edit(
+        "PLAN-001-T01",
+        "links: [Blocks PLAN-001-T02]",
+        "links: [Blocks PLAN-001-T02, Relates PLAN-001-T02]",
+    );
+    // A container the directory lacks, and one that can't contain it.
+    edit(
+        "PLAN-001-T02",
+        "in: [PLAN-001]",
+        "in: [PLAN-404, PLAN-001-G01]",
+    );
+    // Two akter in one place in the order.
+    let rank = file(&dir, "PLAN-001")
+        .lines()
+        .find(|l| l.starts_with("rank:"))
+        .unwrap()
+        .to_owned();
+    let gap_rank = file(&dir, "PLAN-001-G01")
+        .lines()
+        .find(|l| l.starts_with("rank:"))
+        .unwrap()
+        .to_owned();
+    edit("PLAN-001-G01", &gap_rank, &rank);
+    // A number its type's pattern doesn't give.
+    std::fs::write(
+        dir.root.join("akter/TASK-9.md"),
+        "---\nnumber: TASK-9\ntype: task\nrevision: 1\nrank: \"9\"\nstate: todo\ntitle: Loose\n---\n",
+    )
+    .unwrap();
+    // A merge left unresolved, and a state the type lacks.
+    std::fs::write(
+        dir.root.join("akter/PLAN-002.md"),
+        "<<<<<<< HEAD\n---\nnumber: PLAN-002\n=======\n>>>>>>> other\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.root.join("akter/PLAN-003.md"),
+        "---\nnumber: PLAN-003\ntype: plan\nrevision: 1\nrank: \"8\"\nstate: shipped\ntitle: X\n---\n",
+    )
+    .unwrap();
+
+    let refused = dir.refused(&["check"]);
+    assert_eq!(
+        (refused.code.as_str(), refused.kind.exit_code()),
+        ("INCONSISTENT", 1)
+    );
+    for (file, says) in [
+        (
+            "akter/PLAN-001-T01.md",
+            "doesn't list `Blocked by PLAN-001-T01`",
+        ),
+        (
+            "akter/PLAN-001-T01.md",
+            "`Relates PLAN-001-T02` is of no kind",
+        ),
+        (
+            "akter/PLAN-001-T02.md",
+            "`PLAN-404`, which the directory lacks",
+        ),
+        ("akter/PLAN-001-T02.md", "a `gap` can't contain a `task`"),
+        ("akter/PLAN-001-G01.md", "has the rank of PLAN-001"),
+        ("akter/TASK-9.md", "isn't a number `task` gives"),
+        ("akter/PLAN-002.md", "starts with `---`"),
+        ("akter/PLAN-003.md", "no state `shipped`"),
+    ] {
+        assert!(
+            refused
+                .message
+                .lines()
+                .any(|l| l.starts_with(&format!("- {file}: ")) && l.contains(says)),
+            "no `{says}` for {file} in:\n{}",
+            refused.message
+        );
+    }
+    assert_eq!(
+        dir.refused(&["check", "--format", "json"]).code,
+        "INCONSISTENT"
+    );
+}
