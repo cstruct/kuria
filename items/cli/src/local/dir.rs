@@ -225,51 +225,6 @@ fn read_akter(dir: &Path, types: &BTreeMap<String, LocalType>) -> Result<Vec<Loc
     Ok(akter)
 }
 
-/// The akt a nested akt's line names: `<!-- akt: <NUMBER> -->`.
-fn nested_marker(line: &str) -> Option<&str> {
-    line.trim()
-        .strip_prefix("<!-- akt:")
-        .and_then(|l| l.strip_suffix("-->"))
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
-}
-
-/// `text` split into its akter: the first, then each nested akt with the
-/// number its line names. A line in a fenced code block is text.
-// r[impl cli.local.layout]
-pub(crate) fn split(text: &str) -> Vec<(Option<&str>, String)> {
-    let mut parts: Vec<(Option<&str>, Vec<&str>)> = vec![(None, Vec::new())];
-    let mut fence: Option<&str> = None;
-    for line in text.lines() {
-        let trimmed = line.trim_start();
-        let opens = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f));
-        match (fence, opens) {
-            (None, Some(f)) => fence = Some(f),
-            (Some(open), Some(_))
-                if trimmed
-                    .trim_end()
-                    .chars()
-                    .all(|c| c == open.chars().next().unwrap_or('`')) =>
-            {
-                fence = None;
-            }
-            _ => {}
-        }
-        match nested_marker(line).filter(|_| fence.is_none() && opens.is_none()) {
-            Some(number) => parts.push((Some(number), Vec::new())),
-            None => parts.last_mut().expect("never empty").1.push(line),
-        }
-    }
-    parts
-        .into_iter()
-        .map(|(number, lines)| {
-            let mut text = lines.join("\n").trim_matches('\n').to_owned();
-            text.push('\n');
-            (number, text)
-        })
-        .collect()
-}
-
 /// Every akt in the file at `path`, each read as an akt of one of
 /// `types`: the first, and its nested akter (`cli.local.layout`).
 #[must_use]
@@ -282,7 +237,7 @@ pub fn read_file(
         Err(e) => return vec![Err(io_error(path, &e))],
     };
     let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
-    split(&text)
+    file::split(&text)
         .into_iter()
         .map(|(number, text)| read_akt(path, number, &text, types))
         .collect()

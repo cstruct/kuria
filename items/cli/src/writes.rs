@@ -9,6 +9,7 @@ mod types;
 
 pub use arrange::{Membership, link, membership, move_akt, transfer, unlink};
 pub use bundles::{Exported, export as export_bundle, import as import_bundle};
+pub(crate) use edit::read_akter;
 pub use edit::{Created, apply, create, draft, perform, set};
 pub(crate) use types::documents;
 pub use types::{define, export};

@@ -20,7 +20,7 @@ and the akter in `akter/`: each file named by its first akt's number and
 title, such as `akter/PLAN-008-the-cli-in-local-mode.md`, holds that akt
 and, after `<!-- akt: <NUMBER> -->` lines, every akt numbered after it.
 Git is the history. Change akter through the commands, which keep files
-in that shape; `cat` and `apply` still work on one akt at a time.
+in that shape, rather than editing the directory's files by hand.
 
 - `kuria init --dir <path>` makes one; put the akt types in `types/`, or
   `kuria types define <file>`.
@@ -97,6 +97,21 @@ Markdown, as long as it needs.
 - `revision` is the revision you read. If the akt changed since, `apply`
   is refused as `STALE` (exit 3) and says what changed: `cat` it again,
   merge, and apply again. Never force it.
+
+### A whole plan as one file
+
+```sh
+kuria cat PLAN-007 --all-members > plan.md    # the plan, then each member
+kuria cat PLAN-007 --members task,gap         # only these akt types
+# edit any of its akter in place
+kuria apply plan.md --reason "Why"            # each akt that changed
+```
+
+After the first akt, each member follows a line `<!-- akt: <NUMBER> -->`
+and has no `number` of its own. `apply` checks every akt in the file before
+changing any: one that is stale, or a changed read-only key, anywhere,
+and nothing changes. Members are direct ones only, in the container's
+order.
 
 ## Changing things with verbs
 

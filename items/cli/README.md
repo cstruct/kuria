@@ -58,7 +58,11 @@ type.
     or name, people by email, name or `@me`, dates as `YYYY-MM-DD`,
     single-line text whole), `--search`, `--limit` and `--after`, or
     `--all` pages. With a type, its list fields are the columns;
-  - `find <text>`; `cat <number>… [-o <dir>]` (`cli.file`); `show <number>
+  - `find <text>`; `cat <number>… [--members <type>,… | --all-members]
+    [-o <dir>]` (`cli.file`, `cli.members`): several akter, or an akt with
+    its direct members in the container's order, print as one multi-akt
+    file (`cli.file.multi`), each after the first following its
+    `<!-- akt: <NUMBER> -->` line without `number`; `show <number>
     [--history]` (fields, containers, members by board column, and those
     no column holds by type, as the app shows them,
     links with pins, the transitions its state allows); `history
@@ -78,7 +82,10 @@ type.
     <file>]`: from flags, a file, or a file and flags (flags win). A file's
     `number`, `revision`, `state` and `links` are another akt's, so they're
     ignored; its `in` is added to `--in`;
-  - `apply <file>… [--dry-run]`: compares each field of the file with the
+  - `apply <file>… [--dry-run]`: reads every akt of every file (a
+    multi-akt file holds several), refuses one given twice, and checks
+    every one, stale or read-only, before changing any; then, for each,
+    compares each field of the file with the
     akt as it is, as the inputs the server takes (so a user written by
     name or by email is the same user), and edits only those that differ.
     A field the file leaves out is cleared. A file read at an older

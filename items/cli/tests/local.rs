@@ -1349,3 +1349,174 @@ fn check_names_akter_out_of_place_and_files_misnamed_and_fixes_them() {
         );
     }
 }
+
+// r[verify cli.members]
+// r[verify cli.file.multi]
+#[test]
+fn cat_gives_an_akt_with_its_members_as_one_file() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
+    dir.ok(&["move", "PLAN-001-G01", "--before", "PLAN-001-T02"]);
+    let json = |args: &[&str]| {
+        let mut all = args.to_vec();
+        all.extend(["--format", "json"]);
+        dir.ok(&all).json["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| a["number"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>()
+    };
+    // In the container's order, whatever their types.
+    assert_eq!(
+        json(&["cat", "PLAN-001", "--all-members"]),
+        ["PLAN-001", "PLAN-001-T01", "PLAN-001-G01", "PLAN-001-T02"]
+    );
+    assert_eq!(
+        json(&["cat", "PLAN-001", "--members", "task"]),
+        ["PLAN-001", "PLAN-001-T01", "PLAN-001-T02"]
+    );
+    assert_eq!(
+        json(&["cat", "PLAN-001-T01", "--all-members"]),
+        ["PLAN-001-T01"]
+    );
+    assert_eq!(
+        dir.refused(&["cat", "PLAN-001", "--members", "nope"]).code,
+        "UNKNOWN_AKT_TYPE"
+    );
+
+    // One file: its own first, each member after its line, without
+    // `number`; the plan's file, but for `rank`.
+    let text = dir.ok(&["cat", "PLAN-001", "--all-members"]).markdown;
+    assert!(text.starts_with("---\nnumber: PLAN-001\n"), "{text}");
+    assert!(
+        text.contains("\n<!-- akt: PLAN-001-G01 -->\n---\ntype: gap\n"),
+        "{text}"
+    );
+    let stored = std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap();
+    let unranked = stored
+        .lines()
+        .filter(|l| !l.starts_with("rank: "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(text.trim_end(), unranked.trim_end());
+    // One akt is its file, as before.
+    assert!(
+        !dir.ok(&["cat", "PLAN-001-T01"])
+            .markdown
+            .contains("<!-- akt:")
+    );
+
+    // Written out, each to its own file.
+    let out = dir.root.parent().unwrap().join("out");
+    dir.ok(&[
+        "cat",
+        "PLAN-001",
+        "--members",
+        "gap",
+        "-o",
+        out.to_str().unwrap(),
+    ]);
+    let mut names: Vec<_> = std::fs::read_dir(&out)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["PLAN-001-G01.md", "PLAN-001.md"]);
+}
+
+// r[verify cli.apply]
+// r[verify cli.file.multi]
+#[test]
+fn applies_a_multi_akt_file_checking_every_akt_first() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
+    let plan = dir.root.parent().unwrap().join("plan.md");
+    let write = |text: &str| std::fs::write(&plan, text).unwrap();
+    let apply = |args: &[&str]| {
+        let mut all = vec!["apply", plan.to_str().unwrap()];
+        all.extend_from_slice(args);
+        dir.run(&all)
+    };
+    let read = dir.ok(&["cat", "PLAN-001", "--all-members"]).markdown;
+
+    // Unchanged, nothing changes.
+    write(&read);
+    let said = apply(&["--format", "json"]).unwrap().json;
+    assert_eq!(said["applied"].as_array().unwrap().len(), 4);
+    assert!(
+        said["applied"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|a| a["changed"] == json!([]))
+    );
+
+    // Two tasks edited in place: exactly those change.
+    let edited = read
+        .replace("title: First\n", "title: First edited\n")
+        .replace("title: Second\n", "title: Second edited\n");
+    write(&edited);
+    let said = apply(&["--reason", "Edited the tasks", "--format", "json"])
+        .unwrap()
+        .json;
+    let changed: Vec<(String, Value)> = said["applied"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| {
+            (
+                a["number"].as_str().unwrap().to_owned(),
+                a["changed"].clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        changed,
+        [
+            ("PLAN-001".to_owned(), json!([])),
+            ("PLAN-001-T01".to_owned(), json!(["title"])),
+            ("PLAN-001-T02".to_owned(), json!(["title"])),
+            ("PLAN-001-G01".to_owned(), json!([])),
+        ]
+    );
+    assert_eq!(said["reason"], "Edited the tasks");
+    assert!(file(&dir, "PLAN-001-T02").contains("title: Second edited"));
+
+    // Stale or read-only anywhere, nothing changes.
+    let stored = std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap();
+    let again = edited.replace("title: Open\n", "title: Open edited\n");
+    write(&again);
+    assert_eq!(apply(&[]).unwrap_err().code, "STALE");
+    let fresh = dir
+        .ok(&["cat", "PLAN-001", "--all-members"])
+        .markdown
+        .replace("title: First edited\n", "title: First again\n");
+    write(&fresh.replace("type: gap\n", "type: task\n"));
+    assert_eq!(apply(&[]).unwrap_err().code, "READ_ONLY");
+    assert_eq!(
+        std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap(),
+        stored,
+        "nothing changed"
+    );
+
+    // An akt given twice, and a line and a `number` that disagree.
+    write(&format!(
+        "{fresh}\n<!-- akt: PLAN-001-T01 -->\n{}",
+        file(&dir, "PLAN-001-T01")
+    ));
+    assert!(apply(&[]).unwrap_err().message.contains("given twice"));
+    write(&fresh.replacen(
+        "<!-- akt: PLAN-001-T01 -->\n---\n",
+        "<!-- akt: PLAN-001-T01 -->\n---\nnumber: PLAN-001-T02\n",
+        1,
+    ));
+    assert!(
+        apply(&[])
+            .unwrap_err()
+            .message
+            .contains("its `number` is PLAN-001-T02")
+    );
+}

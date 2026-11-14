@@ -13,7 +13,8 @@ use std::process::{Command, Stdio};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 
-use super::dir::{LocalAkt, split};
+use super::dir::LocalAkt;
+use crate::file::split;
 
 /// A commit that changed an akt.
 #[derive(Clone, Debug, PartialEq, Eq)]

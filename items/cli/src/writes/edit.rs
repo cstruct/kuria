@@ -198,8 +198,53 @@ async fn stale(session: &Session, akt: &Akt, revision: i64) -> CliError {
     )
 }
 
-/// `kuria apply <file>…`: edits each akt with the fields its file changed,
-/// refusing read-only keys and stale files.
+/// Every akt the files at `paths` hold, each with its file, its number and
+/// the revision it was read at; an akt given twice is refused.
+// r[impl cli.apply]
+// r[impl cli.file.multi]
+pub(crate) fn read_akter(
+    paths: &[PathBuf],
+) -> Result<Vec<(PathBuf, String, i64, Parsed)>, CliError> {
+    let mut akter: Vec<(PathBuf, String, i64, Parsed)> = Vec::new();
+    for path in paths {
+        let text = std::fs::read_to_string(path).map_err(|e| io_error(path, &e))?;
+        let in_file = |e: CliError| CliError {
+            message: format!("{}: {}", path.display(), e.message),
+            ..e
+        };
+        for (number, parsed) in file::parse_all(&text).map_err(in_file)? {
+            let revision = parsed
+                .front
+                .get("revision")
+                .and_then(Json::as_i64)
+                .ok_or_else(|| {
+                    CliError::refused(
+                        "BAD_FILE",
+                        format!(
+                            "{}: {number} names no `revision` it was read at",
+                            path.display()
+                        ),
+                    )
+                })?;
+            if let Some((other, ..)) = akter.iter().find(|(_, n, ..)| *n == number) {
+                return Err(CliError::refused(
+                    "BAD_FILE",
+                    format!(
+                        "{number} is given twice, in {} and {}",
+                        other.display(),
+                        path.display()
+                    ),
+                ));
+            }
+            akter.push((path.clone(), number, revision, parsed));
+        }
+    }
+    Ok(akter)
+}
+
+/// `kuria apply <file>…`: edits each akt its files hold with the fields
+/// the file changed, after checking every one, refusing read-only keys and
+/// stale akter before changing any.
 // r[impl cli.apply]
 pub async fn apply(
     session: &Session,
@@ -207,29 +252,20 @@ pub async fn apply(
     dry_run: bool,
     reason: Option<&str>,
 ) -> Result<Answer, CliError> {
-    let mut lines = Vec::new();
-    let mut applied = Vec::new();
-    for path in paths {
-        let parsed = read_file(path)?;
-        let number = parsed.text("number").ok_or_else(|| {
-            CliError::refused("BAD_FILE", format!("{} names no `number`", path.display()))
-        })?;
-        let revision = parsed
-            .front
-            .get("revision")
-            .and_then(Json::as_i64)
-            .ok_or_else(|| {
-                CliError::refused(
-                    "BAD_FILE",
-                    format!("{} names no `revision` it was read at", path.display()),
-                )
-            })?;
+    // Every akt checked first, so that a refusal changes nothing.
+    let mut checked = Vec::new();
+    for (path, number, revision, parsed) in read_akter(paths)? {
         let akt = akt(session, &number).await?;
         if akt.revision != revision {
             return Err(stale(session, &akt, revision).await);
         }
         check_read_only(&akt, &parsed)?;
         let changed = changes(session, &akt, &parsed).await?;
+        checked.push((path, number, revision, akt, changed));
+    }
+    let mut lines = Vec::new();
+    let mut applied = Vec::new();
+    for (path, number, revision, akt, changed) in checked {
         let names: Vec<&str> = changed.keys().map(|k| akt.shape.field_name(k)).collect();
         if changed.is_empty() {
             lines.push(format!("{number}: nothing changed."));

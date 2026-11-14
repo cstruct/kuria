@@ -102,6 +102,19 @@ pub enum Command {
         /// Write each to `<DIR>/<NUMBER>.md` instead.
         #[arg(long, short, value_name = "DIR")]
         output: Option<PathBuf>,
+        /// Each followed by its direct members of these akt types, in the
+        /// container's order.
+        #[arg(
+            long,
+            value_delimiter = ',',
+            value_name = "TYPE,…",
+            conflicts_with = "all_members"
+        )]
+        members: Vec<String>,
+        /// Each followed by all its direct members, in the container's
+        /// order.
+        #[arg(long)]
+        all_members: bool,
     },
     /// Everything about one akt: fields, containers, members, links and the
     /// transitions its state allows.

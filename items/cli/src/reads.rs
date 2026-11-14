@@ -6,7 +6,7 @@ mod akter;
 mod catalog;
 mod list;
 
-pub use akter::{cat, history, show};
+pub use akter::{WithMembers, cat, history, show};
 pub use catalog::{contacts, schema, types, users};
 pub use list::{Listing, find, ls};
 

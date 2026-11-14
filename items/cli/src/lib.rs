@@ -215,7 +215,19 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             reads::ls(source, &listing).await
         }
         Command::Find { text, limit } => reads::find(source, &text.join(" "), limit).await,
-        Command::Cat { numbers, output } => reads::cat(source, &numbers, output.as_deref()).await,
+        Command::Cat {
+            numbers,
+            output,
+            members,
+            all_members,
+        } => {
+            let members = match (all_members, members.is_empty()) {
+                (true, _) => reads::WithMembers::All,
+                (false, false) => reads::WithMembers::Types(&members),
+                (false, true) => reads::WithMembers::None,
+            };
+            reads::cat(source, &numbers, output.as_deref(), members).await
+        }
         Command::Show { number, history } => reads::show(source, &number, history).await,
         Command::History { number } => reads::history(source, &number).await,
         Command::Users => reads::users(source).await,

@@ -132,11 +132,11 @@ A multi-akt file makes a stale part likely, since a whole plan is edited at once
 <!-- akt: PLAN-010-G01 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b35
 state: open
 in: [PLAN-010]
-links: [Resolved by PLAN-010-T03]
+links: [Resolved by PLAN-010-T03, Resolved by PLAN-011-T05]
 title: A server takes a multi-akt apply one edit at a time
 ---
 
@@ -146,16 +146,17 @@ Checked first (PLAN-010-D04), a stale part or a read-only key changes nothing; b
 <!-- akt: PLAN-010-T01 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b36
-state: todo
+state: done
 in: [PLAN-010]
 links: [Blocks PLAN-010-T02, Blocks PLAN-010-T03]
 title: "Spec cat with members, the multi-akt file, and its apply"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-In `docs/spec/cli.md`: `cat --members` and `--all-members` (`cli.read`), the multi-akt file (`cli.file`), and `apply` of it, checking every akt first (`cli.apply`).
+In `docs/spec/cli.md`: `cli.read` names `cat --members` and `--all-members`; `cli.members` (new) says which members, in what order, refusing an unknown type, with JSON and `-o`; `cli.file.multi` (new) defines the multi-akt file, the directory's file without `rank`, which `cat` of several akter prints; `cli.apply` applies each akt of a multi-akt file, checking every akt first, and refuses an akt given twice. Lint passes.
 
 <!-- field: acceptance -->
 - The rules say all of PLAN-010's design.
@@ -164,16 +165,17 @@ In `docs/spec/cli.md`: `cat --members` and `--all-members` (`cli.read`), the mul
 <!-- akt: PLAN-010-T02 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b37
-state: todo
+state: done
 in: [PLAN-010]
 links: [Blocked by PLAN-010-T01, Blocks PLAN-010-T04]
 title: cat --members and --all-members
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`items/cli/src/args.rs` and `reads/akter.rs`: the flags; the members, on a server through `members` paged, in a directory through `members_of`; the multi-akt file for several akter, through the directory's splitting and writing.
+`cat --members <type>,…` and `--all-members` (`args.rs`, `reads/akter.rs`): unknown types are refused first; each akt is followed by its direct members, from `members` paged on a server or `members_of` in a directory, in the container's order, filtered by type, each akt once. Several akter print as one multi-akt file (`file::write_all`): the first as its file, each other after its line without `number`. One akt prints as before, and `-o` writes each to its own file. `cat PLAN-009 --all-members` in `plans/` is exactly that plan's file without `rank`. A local-mode test covers order across types, the filter, an unknown type, the file's form against the stored file, one akt, and `-o`. The server's side is tested in T04's e2e.
 
 <!-- field: acceptance -->
 - Members of the given types, or all, in the container's order, after the akt.
@@ -183,16 +185,17 @@ title: cat --members and --all-members
 <!-- akt: PLAN-010-T03 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b38
-state: todo
+state: done
 in: [PLAN-010]
 links: [Blocked by PLAN-010-T01, Blocks PLAN-010-T04, Resolves PLAN-010-G01]
 title: "Apply multi-akt files, checked first"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`writes/edit.rs` and `local/edits.rs`: split each file into its akter, check every one before changing any, then apply each.
+Multi-akt `apply`. `file::split` moved from the directory reader into `file.rs` and is shared with `git.rs`. `file::parse_all` reads a multi-akt file, each akt's number from its line or its `number`, which must agree. `writes::read_akter` reads every akt of every file and refuses one given twice. On a server, `apply` now fetches and checks every akt (stale, read-only keys, what changed) before sending any edit. Locally it already saved only at the end. A local-mode test covers an unchanged plan file (nothing changes), two tasks edited in place (exactly those change), a stale part and a read-only key in a later part (nothing changes, file byte for byte), an akt given twice, and a line and `number` that disagree. PLAN-010-G01 stays open: a server refusal made while editing still comes after earlier edits. Lint and the CLI tests pass.
 
 <!-- field: acceptance -->
 - A multi-akt file applies each part.
@@ -202,16 +205,17 @@ title: "Apply multi-akt files, checked first"
 <!-- akt: PLAN-010-T04 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b39
-state: todo
+state: done
 in: [PLAN-010]
 links: [Blocked by PLAN-010-T02, Blocked by PLAN-010-T03]
 title: "Parity, e2e and docs"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The parity test and the CLI e2e test for `cat --all-members` and a multi-akt `apply`; the CLI README, `kuria guide`, and `.agents/plans/PLANS.md` on reading and editing a whole plan.
+The parity test reads box A with `--all-members`, box B with `--members`, and an unknown type, the same on both. On each side, it then reads B with its members as one file and edits a member's title and B's. With another member changed meanwhile, `apply` is refused as STALE and B is unchanged. Read again, it applies each part, changing only the edited title. This covers the server's paged `members` and its check-first `apply`, so the CLI e2e test needs no case of its own. Docs: `kuria guide` has "A whole plan as one file" (the loop, the form, checked first); the CLI README describes `cat --members`/`--all-members` and multi-akt `apply`; `.agents/plans/PLANS.md` adds the whole-plan lines and now says to run commands as `mise run plans --`, which PLAN-008-T08 had missed. Lint, `mise run test` and all 27 e2e tests pass.
 
 <!-- field: acceptance -->
 - `mise run e2e` passes.

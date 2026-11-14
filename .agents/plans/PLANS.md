@@ -91,12 +91,14 @@ kuria set PLAN-007-T03 assignee=@me            # take a task
 kuria do PLAN-007-T03 start --reason "…"
 kuria cat PLAN-007-T03 > t03.md                # record progress as a file…
 kuria apply t03.md --reason "…"                # …and write back what changed
+kuria cat PLAN-007 --all-members > plan.md     # or the whole plan, as one file…
+kuria apply plan.md --reason "…"               # …each akt that changed
 kuria do PLAN-007-T03 finish --reason "…"      # or `review` first, with its change
 kuria new gap --in PLAN-007 --set title="…"    # something found missing
 kuria new decision --in PLAN-007 --set title="…"
 ```
 
-(Agents prefix each with `mise run dogfood:kuria --`.)
+(In this repository, run each as `mise run plans -- <command>`, which works on `plans/` with nothing running.)
 
 When a task completes:
 

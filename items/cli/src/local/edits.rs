@@ -265,21 +265,9 @@ pub fn apply(
 ) -> Result<Answer, CliError> {
     let mut lines = Vec::new();
     let mut applied = Vec::new();
-    for path in paths {
-        let parsed = read_file(path)?;
-        let number = parsed.text("number").ok_or_else(|| {
-            CliError::refused("BAD_FILE", format!("{} names no `number`", path.display()))
-        })?;
-        let at = parsed
-            .front
-            .get("revision")
-            .and_then(Json::as_i64)
-            .ok_or_else(|| {
-                CliError::refused(
-                    "BAD_FILE",
-                    format!("{} names no `revision` it was read at", path.display()),
-                )
-            })?;
+    // Nothing is written until the end, so a refusal anywhere changes
+    // nothing (`cli.apply`).
+    for (path, number, at, parsed) in crate::writes::read_akter(paths)? {
         let akt = w.akt(&number)?.clone();
         if i64::from(akt.revision) != at {
             return Err(CliError::new(

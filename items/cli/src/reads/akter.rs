@@ -42,25 +42,108 @@ fn not_found(number: &str) -> CliError {
     CliError::from_server("NOT_FOUND", format!("No akt `{number}`"), None)
 }
 
-/// `kuria cat <number>…`: each akt as its file, or written to `output` as
-/// `<number>.md`.
+/// Which members `cat` gives after each akt (`cli.members`).
+#[derive(Clone, Copy, Debug)]
+pub enum WithMembers<'a> {
+    None,
+    Types(&'a [String]),
+    All,
+}
+
+/// The direct members of `container`, in its order, with their types'
+/// keys.
+// r[impl cli.members]
+async fn members_of(
+    source: Source<'_>,
+    container: &str,
+) -> Result<Vec<(String, String)>, CliError> {
+    let session = match source {
+        Source::Server(session) => session,
+        Source::Local(l) => {
+            return Ok(l
+                .dir
+                .members_of(container)
+                .map(|m| (m.number.clone(), m.type_key.clone()))
+                .collect());
+        }
+    };
+    let mut found = Vec::new();
+    let mut after: Option<String> = None;
+    loop {
+        let data = session
+            .graphql(
+                &format!(
+                    "query($n: String!, $after: String) {{ akt(number: $n) {{
+                       members(first: {MEMBERS}, after: $after) {{
+                         nodes {{ number type {{ key }} }} pageInfo {{ hasNextPage endCursor }} }} }} }}"
+                ),
+                json!({ "n": container, "after": after }),
+            )
+            .await?;
+        let members = &data["akt"]["members"];
+        for node in members["nodes"].as_array().into_iter().flatten() {
+            if let (Some(n), Some(k)) = (node["number"].as_str(), node["type"]["key"].as_str()) {
+                found.push((n.to_owned(), k.to_owned()));
+            }
+        }
+        if members["pageInfo"]["hasNextPage"] != true {
+            return Ok(found);
+        }
+        after = members["pageInfo"]["endCursor"].as_str().map(str::to_owned);
+    }
+}
+
+/// `kuria cat <number>…`: each akt as its file, followed by the members
+/// `with` asks for, several as one multi-akt file, or each written to
+/// `output` as `<number>.md`.
 // r[impl cli.read]
 // r[impl cli.file]
+// r[impl cli.members]
 pub async fn cat(
     source: Source<'_>,
     numbers: &[String],
     output: Option<&Path>,
+    with: WithMembers<'_>,
 ) -> Result<Answer, CliError> {
-    let mut akter = Vec::new();
+    if let WithMembers::Types(keys) = with {
+        for key in keys {
+            super::shape(source, key).await?;
+        }
+    }
+    let mut wanted: Vec<String> = Vec::new();
     for number in numbers {
+        // Known before its members are asked for, so a missing one says so.
         let akt: Akt = read(akt_data(source, number, "").await?, "the akt")?;
-        akter.push(akt);
+        wanted.push(akt.number);
+        let members = match with {
+            WithMembers::None => Vec::new(),
+            _ => members_of(source, number).await?,
+        };
+        for (member, key) in members {
+            let asked = match with {
+                WithMembers::Types(keys) => keys.contains(&key),
+                _ => true,
+            };
+            if asked {
+                wanted.push(member);
+            }
+        }
+    }
+    let mut akter = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for number in wanted {
+        if seen.insert(number.clone()) {
+            akter.push(read::<Akt>(
+                akt_data(source, &number, "").await?,
+                "the akt",
+            )?);
+        }
     }
     let files: Vec<String> = akter.iter().map(file::write).collect();
     let json = json!({ "akter": akter.iter().map(file::json).collect::<Vec<_>>() });
     let Some(dir) = output else {
         return Ok(Answer {
-            markdown: files.join("\n"),
+            markdown: file::write_all(&akter),
             json,
         });
     };

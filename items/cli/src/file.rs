@@ -105,12 +105,38 @@ fn sectioned(shape: &Shape, value: &Value) -> bool {
 // r[impl cli.file]
 #[must_use]
 pub fn write(akt: &Akt) -> String {
-    let mut front = vec![
-        ("number", Json::from(akt.number.clone())),
-        ("type", akt.shape.key.clone().into()),
+    write_numbered(akt, true)
+}
+
+/// Several akter as one multi-akt file: the first as its file, each other
+/// after its line, without `number`; one akt as its file.
+// r[impl cli.file.multi]
+#[must_use]
+pub fn write_all(akter: &[Akt]) -> String {
+    let mut text = String::new();
+    for (i, akt) in akter.iter().enumerate() {
+        if i == 0 {
+            text.push_str(&write(akt));
+        } else {
+            text.push_str(&format!("\n<!-- akt: {} -->\n", akt.number));
+            text.push_str(&write_numbered(akt, false));
+        }
+    }
+    text
+}
+
+/// The akt as its file, with `number` unless a multi-akt file's line
+/// gives it.
+fn write_numbered(akt: &Akt, numbered: bool) -> String {
+    let mut front = Vec::new();
+    if numbered {
+        front.push(("number", Json::from(akt.number.clone())));
+    }
+    front.extend([
+        ("type", Json::from(akt.shape.key.clone())),
         ("revision", akt.revision.into()),
         ("state", akt.state.key.clone().into()),
-    ];
+    ]);
     if !akt.containers.is_empty() {
         front.push((
             "in",
@@ -226,6 +252,85 @@ impl Parsed {
         }
         Ok(values)
     }
+}
+
+/// The akt a nested akt's line names: `<!-- akt: <NUMBER> -->`.
+fn nested_marker(line: &str) -> Option<&str> {
+    line.trim()
+        .strip_prefix("<!-- akt:")
+        .and_then(|l| l.strip_suffix("-->"))
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+}
+
+/// `text` split into its akter: the first, then each other with the
+/// number its line names, as a multi-akt file or an akt directory's file
+/// holds them. A line in a fenced code block is text.
+// r[impl cli.local.layout]
+// r[impl cli.file.multi]
+#[must_use]
+pub fn split(text: &str) -> Vec<(Option<&str>, String)> {
+    let mut parts: Vec<(Option<&str>, Vec<&str>)> = vec![(None, Vec::new())];
+    let mut fence: Option<&str> = None;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        let opens = ["```", "~~~"].into_iter().find(|f| trimmed.starts_with(f));
+        match (fence, opens) {
+            (None, Some(f)) => fence = Some(f),
+            (Some(open), Some(_))
+                if trimmed
+                    .trim_end()
+                    .chars()
+                    .all(|c| c == open.chars().next().unwrap_or('`')) =>
+            {
+                fence = None;
+            }
+            _ => {}
+        }
+        match nested_marker(line).filter(|_| fence.is_none() && opens.is_none()) {
+            Some(number) => parts.push((Some(number), Vec::new())),
+            None => parts.last_mut().expect("never empty").1.push(line),
+        }
+    }
+    parts
+        .into_iter()
+        .map(|(number, lines)| {
+            let mut text = lines.join("\n").trim_matches('\n').to_owned();
+            text.push('\n');
+            (number, text)
+        })
+        .collect()
+}
+
+/// Reads a multi-akt file (`cli.file.multi`), or an akt file: each akt
+/// with its number, from its line or its `number`, which must agree.
+// r[impl cli.file.multi]
+pub fn parse_all(text: &str) -> Result<Vec<(String, Parsed)>, CliError> {
+    let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
+    let mut akter = Vec::new();
+    for (line, part) in split(&text) {
+        let in_akt = |e: CliError| match line {
+            Some(number) => CliError {
+                message: format!("{number}: {}", e.message),
+                ..e
+            },
+            None => e,
+        };
+        let parsed = parse(&part).map_err(in_akt)?;
+        let number = match (line, parsed.text("number")) {
+            (Some(line), Some(own)) if line != own => {
+                return Err(CliError::refused(
+                    "BAD_FILE",
+                    format!("Its line names {line}, but its `number` is {own}"),
+                ));
+            }
+            (Some(line), _) => line.to_owned(),
+            (None, Some(own)) => own,
+            (None, None) => return Err(CliError::refused("BAD_FILE", "It names no `number`")),
+        };
+        akter.push((number, parsed));
+    }
+    Ok(akter)
 }
 
 /// Reads an akt file.

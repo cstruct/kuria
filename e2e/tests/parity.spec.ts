@@ -166,6 +166,43 @@ test('local mode answers a sequence of commands as the server does', async () =>
 		expect(applied.code, applied.stderr).toBe(0);
 	}
 
+	// A box with its members, read, edited and applied as one file.
+	// r[verify cli.members]
+	// r[verify cli.file.multi]
+	await both(['cat', a, '--all-members']);
+	await both(['cat', b, '--members', item]);
+	await both(['cat', b, '--members', 'nope']);
+	for (const [where, prefix] of [
+		['server', []],
+		['local', ['--dir', dir]]
+	] as const) {
+		const read = await cli.run([...prefix, 'cat', b, '--all-members']);
+		expect(read.code, read.stderr).toBe(0);
+		const file = join(cli.dir, `box-${where}.md`);
+		const edited = read.stdout.replace('title: Three\n', 'title: Three edited\n');
+		expect(edited).not.toBe(read.stdout);
+
+		// A part gone stale changes nothing, its other edits neither.
+		writeFileSync(file, edited.replace('title: Box B\n', 'title: Box B edited\n'));
+		expect((await cli.run([...prefix, 'set', two, 'notes=Changed meanwhile'])).code).toBe(0);
+		const stale = await cli.run([...prefix, 'apply', file, '--format', 'json']);
+		expect(JSON.parse(stale.stderr).error.code, where).toBe('STALE');
+		const box = await cli.run([...prefix, 'cat', b]);
+		expect(box.stdout, where).toContain('title: Box B\n');
+
+		// Read again, it applies each part.
+		const fresh = await cli.run([...prefix, 'cat', b, '--all-members']);
+		writeFileSync(file, fresh.stdout.replace('title: Three\n', 'title: Three edited\n'));
+		const applied = await cli.run([...prefix, 'apply', file, '--format', 'json', '--reason', 'Edited']);
+		expect(applied.code, applied.stderr).toBe(0);
+		expect(
+			Object.fromEntries(
+				JSON.parse(applied.stdout).applied.map((x: { number: string; changed: string[] }) => [x.number, x.changed])
+			)
+		).toEqual({ [b]: [], [two]: [], [three]: ['title'] });
+	}
+	await both(['cat', b, '--all-members']);
+
 	// Every akt reads the same, and each box's members are in the same
 	// order. (Outside git, akter in one file share its time, so the most
 	// recently changed first isn't compared.)

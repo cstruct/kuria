@@ -102,7 +102,10 @@ The client MUST offer:
   `--where <field>=<value>` (`akt.filter`, `@me` for oneself) and
   `--search`, a page at a time, or every page with `--all` (`akt.page`);
 - `find <text>`: a search (`akt.search`);
-- `cat <number>…`: each akt as an akt file (`cli.file`);
+- `cat <number>…`: each akt as an akt file (`cli.file`), several as one
+  multi-akt file; with `--members <type>,…`, each followed by its direct
+  members of those akt types, or with `--all-members` by all of them, in
+  the container's order (`cli.members`);
 - `show <number>`: an akt's fields, containers, members by column and
   type, links, and the transitions its state allows, and with `--history`
   its revisions;
@@ -126,13 +129,32 @@ Users and contacts MUST be written by email, else name, and read back by
 email, name or `@me`. A field without a value MUST be left out.
 `cat` followed by `apply` of the unchanged file MUST change nothing.
 
+r[cli.file.multi]
+A multi-akt file MUST hold its first akt as an akt file, and each other
+after a line `<!-- akt: <NUMBER> -->`, as its akt file without `number`,
+which the line gives; such a line inside a fenced code block is text. It
+is an akt directory's file without `rank` (`cli.local.layout`). `cat` of
+more than one akt MUST print one; `cat` of one akt prints its akt file.
+
+r[cli.members]
+`cat --members <type>,…` MUST answer each akt it is given followed by its
+direct members of those akt types, and `--all-members` by all its direct
+members, in the container's order, whatever their types; members are the
+akter whose `in` lists it, on a server as in an akt directory. An unknown
+akt type MUST be refused as `UNKNOWN_AKT_TYPE`. In JSON, `akter` MUST list
+them in that order; with `-o <dir>`, each MUST be written to its own file.
+
 r[cli.apply]
 `kuria apply <file>…` MUST edit each akt with the fields its file changed
-since the revision the file names, and only those (`app.inline-edit`). It
-MUST refuse:
+since the revision the file names, and only those (`app.inline-edit`),
+each akt of a multi-akt file (`cli.file.multi`) as if it were a file of
+its own, its number from its line or its `number`, which MUST agree. It
+MUST read and check every akt it is given before changing any, and MUST
+refuse, changing nothing:
 - a change to a read-only key, or to a key the type lacks, saying which;
-- a file whose revision is stale, as `STALE`, saying which fields changed
-  since, so the file can be merged and applied again.
+- an akt whose revision is stale, as `STALE`, saying which fields changed
+  since, so the file can be merged and applied again;
+- an akt given twice.
 
 With `--dry-run` it MUST say what it would change and change nothing. `new
 <type> --file <file>` MUST create an akt from a file, ignoring `number` and
