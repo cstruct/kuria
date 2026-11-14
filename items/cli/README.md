@@ -165,13 +165,23 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   unique ranks. It answers `INCONSISTENT` (exit 1) with each problem as
   `- <file>: <what>`; `mise run lint` runs it on `plans/` once that
   exists. A merge left unresolved shows as a file that doesn't read.
+- **Converting** ([`src/local/convert.rs`](src/local/convert.rs),
+  `cli.local.convert`), signed in, by way of a bundle:
+  `export --types <key>,… --to-dir <path>` writes the bundle of those types
+  and their akter as a new directory (each type's latest document, links
+  ordered as the server lists them, people by email or name), then checks
+  it. `import --from-dir <path>` sends a consistent directory as a `types`
+  bundle: each akt with revisions numbered up to its file's `revision`,
+  the first recording it as it is and the rest changing nothing, so that
+  every hash matches and pins hold; each person as a subject named by
+  their email, which the import maps to a user who has signed in.
 - **People** are text: `@me` is `KURIA_ME`, else git's `user.email`. On
   their way through the engine, each name or email stands in as a subject
   derived from its text ([`src/local/values.rs`](src/local/values.rs)); a
   checkbox records whom it is for (`true`, or `for:<someone>`), not who
   checked it, which git keeps.
 - **Refused** as `LOCAL_UNSUPPORTED`: signing in, `users`, `contacts`,
-  `draft`, attachments and bundles.
+  `draft`, attachments and bundles (convert instead).
 
 ### JSON answers
 
@@ -192,6 +202,7 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
 | `guide` | `{guide}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
+| `export --to-dir` | `{dir, aktTypes, akter}` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
 `fields` maps field keys to values in the akt file's form.
@@ -268,7 +279,9 @@ cargo test -p kuria-cli
   links with pins, order, membership, transfers, a draft, and `new
   --file`; and a bundle exported and imported into the second tenant
   `lab`, with the same history and numbering on, then clashing, a type
-  alone as a new version, and a whole tenant refused there; and the
+  alone as a new version, and a whole tenant refused there; selected types
+  converted to an akt directory reading as on the server, changed there,
+  and imported into `lab` with their numbers and revisions; and the
   planning example defined from `docs/examples/planning` and a plan
   worked as the guide says.
 

@@ -38,28 +38,9 @@ async fn refused(response: reqwest::Response) -> CliError {
     }
 }
 
-/// `kuria export (--types <key>,… [--akter] | --whole-tenant) -o <dir>`.
-// r[impl cli.write]
-pub async fn export(
-    session: &Session,
-    what: &Exported<'_>,
-    dir: &Path,
-) -> Result<Answer, CliError> {
-    if dir.exists()
-        && std::fs::read_dir(dir)
-            .map_err(|e| io_error(dir, &e))?
-            .next()
-            .is_some()
-    {
-        return Err(CliError::refused(
-            "NOT_EMPTY",
-            format!("{} isn't empty; export into a new directory", dir.display()),
-        ));
-    }
-    let query = match what {
-        Exported::Types { keys, akter } => format!("types={}&akter={akter}", keys.join(",")),
-        Exported::Tenant => "tenant=true".to_owned(),
-    };
+/// The bundle Kuria exports for `query`, unpacked: `bundle.json` and each
+/// attachment's bytes, by their names in the bundle.
+pub async fn fetch(session: &Session, query: &str) -> Result<Vec<(String, Vec<u8>)>, CliError> {
     let response = session
         .http
         .send(
@@ -73,7 +54,7 @@ pub async fn export(
         return Err(refused(response).await);
     }
     let archive = response.bytes().await?;
-    let mut written = 0;
+    let mut files = Vec::new();
     let mut entries = tar::Archive::new(archive.as_ref());
     let unreadable = |e: std::io::Error| {
         CliError::unavailable(format!("Kuria's bundle isn't a tar archive: {e}"))
@@ -93,19 +74,59 @@ pub async fn export(
         if !safe {
             continue;
         }
-        let path = dir.join(&name);
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).map_err(unreadable)?;
+        files.push((name, bytes));
+    }
+    Ok(files)
+}
+
+/// `bundle.json` of an unpacked bundle.
+pub fn bundle_json(files: &[(String, Vec<u8>)]) -> Result<Json, CliError> {
+    files
+        .iter()
+        .find(|(name, _)| name == "bundle.json")
+        .and_then(|(_, b)| serde_json::from_slice(b).ok())
+        .ok_or_else(|| CliError::unavailable("Kuria's bundle holds no bundle.json"))
+}
+
+/// Refuses `dir` unless it is new or empty.
+pub fn check_new(dir: &Path) -> Result<(), CliError> {
+    if dir.exists()
+        && std::fs::read_dir(dir)
+            .map_err(|e| io_error(dir, &e))?
+            .next()
+            .is_some()
+    {
+        return Err(CliError::refused(
+            "NOT_EMPTY",
+            format!("{} isn't empty; export into a new directory", dir.display()),
+        ));
+    }
+    Ok(())
+}
+
+/// `kuria export (--types <key>,… [--akter] | --whole-tenant) -o <dir>`.
+// r[impl cli.write]
+pub async fn export(
+    session: &Session,
+    what: &Exported<'_>,
+    dir: &Path,
+) -> Result<Answer, CliError> {
+    check_new(dir)?;
+    let query = match what {
+        Exported::Types { keys, akter } => format!("types={}&akter={akter}", keys.join(",")),
+        Exported::Tenant => "tenant=true".to_owned(),
+    };
+    let files = fetch(session, &query).await?;
+    let bundle = bundle_json(&files)?;
+    for (name, bytes) in &files {
+        let path = dir.join(name);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| io_error(parent, &e))?;
         }
-        let mut bytes = Vec::new();
-        entry.read_to_end(&mut bytes).map_err(unreadable)?;
         std::fs::write(&path, bytes).map_err(|e| io_error(&path, &e))?;
-        written += 1;
     }
-    let bundle: Json = std::fs::read(dir.join("bundle.json"))
-        .ok()
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .ok_or_else(|| CliError::unavailable("Kuria's bundle holds no bundle.json"))?;
     let count = |key: &str| bundle[key].as_array().map_or(0, Vec::len);
     Ok(Answer {
         markdown: format!(
@@ -123,7 +144,7 @@ pub async fn export(
             "akter": count("akter"),
             "contacts": count("contacts"),
             "attachments": count("attachments"),
-            "files": written,
+            "files": files.len(),
         }),
     })
 }
@@ -137,9 +158,6 @@ pub async fn import(
     dir: &Path,
     subjects: Option<&Path>,
 ) -> Result<Answer, CliError> {
-    let tarred =
-        |e: std::io::Error| CliError::refused("IO", format!("packing {}: {e}", dir.display()));
-    let mut builder = tar::Builder::new(Vec::new());
     let bundle = dir.join("bundle.json");
     if !bundle.is_file() {
         return Err(CliError::refused(
@@ -147,13 +165,36 @@ pub async fn import(
             format!("{} holds no bundle.json", dir.display()),
         ));
     }
-    builder
-        .append_path_with_name(&bundle, "bundle.json")
-        .map_err(tarred)?;
+    let bytes = std::fs::read(&bundle).map_err(|e| io_error(&bundle, &e))?;
     let attachments = dir.join("attachments");
-    if attachments.is_dir() {
+    post(
+        session,
+        &bytes,
+        attachments.is_dir().then_some(attachments.as_path()),
+        subjects,
+    )
+    .await
+}
+
+/// Posts a bundle to Kuria: `bundle` as its `bundle.json`, the files of
+/// `attachments`, and `subjects` as its `subjects.json`.
+pub async fn post(
+    session: &Session,
+    bundle: &[u8],
+    attachments: Option<&Path>,
+    subjects: Option<&Path>,
+) -> Result<Answer, CliError> {
+    let tarred = |e: std::io::Error| CliError::refused("IO", format!("packing a bundle: {e}"));
+    let mut builder = tar::Builder::new(Vec::new());
+    let mut header = tar::Header::new_ustar();
+    header.set_size(bundle.len() as u64);
+    header.set_mode(0o644);
+    builder
+        .append_data(&mut header, "bundle.json", bundle)
+        .map_err(tarred)?;
+    if let Some(attachments) = attachments {
         builder
-            .append_dir_all("attachments", &attachments)
+            .append_dir_all("attachments", attachments)
             .map_err(tarred)?;
     }
     if let Some(path) = subjects {

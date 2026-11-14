@@ -7,6 +7,7 @@
 //!   server.
 //! - [`git`]: when files changed, and their history.
 //! - [`check`]: the whole directory checked, every problem named.
+//! - [`convert`]: a server's bundle to a directory, and back.
 //! - [`write`], [`edits`] and [`arrange`]: writes, through the engine's
 //!   rules, under the directory's lock; [`values`]: values to and from the
 //!   engine's, people as text.
@@ -14,6 +15,7 @@
 pub mod answers;
 pub mod arrange;
 pub mod check;
+pub mod convert;
 pub mod dir;
 pub mod edits;
 pub mod git;

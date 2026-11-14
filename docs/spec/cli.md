@@ -251,7 +251,13 @@ MUST name each problem's file, and exit with 1 if there is any, 0 if
 none.
 
 r[cli.local.convert]
-`kuria export --to-dir <path>`, signed in to a server, MUST write the
-selected akt types and their akter as a new akt directory, in the server's
-order, refusing an akt that doesn't fit its type's latest document, which
-is the one an akt directory keeps.
+`kuria export --types <key>,… --to-dir <path>`, signed in to a server, MUST
+write the selected akt types and their akter as a new akt directory, in
+the server's order, each akt reading through `cat` as it does on the
+server, refusing an akt that doesn't fit its type's latest document, which
+is the one an akt directory keeps, and one holding an attachment.
+`kuria import --from-dir <path>` MUST import a directory `kuria check`
+finds consistent as a bundle of its types and akter (`bundle.import.*`),
+keeping their numbers, memberships, links and pins. Since git holds a
+directory's history, each akt MUST get revisions numbered up to its file's
+`revision`: the first recording it as it is, the rest changing nothing.

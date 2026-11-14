@@ -21,6 +21,10 @@ history. `kuria init --dir <path>` makes one, and `kuria check --dir
 (run it after a merge). People are written by email
 or name; `@me` is `KURIA_ME`, else git's `user.email`. Signing in, users,
 contacts, drafts and bundles aren't there (`LOCAL_UNSUPPORTED`, exit 1).
+Signed in, `kuria export --types <key>,… --to-dir <path>` makes a
+directory from a server's akter, and `kuria import --from-dir <path>`
+takes a directory's akter to a server that lacks its types, keeping
+numbers.
 
 ## Finding your way
 

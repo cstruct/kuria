@@ -436,6 +436,69 @@ test('kuria exports a bundle and imports it into another tenant', async () => {
 	expect(JSON.parse(full.stderr).error.code).toBe('CONFLICT');
 });
 
+// r[verify cli.local.convert]
+test('kuria converts selected akt types to an akt directory and back', async () => {
+	test.setTimeout(240_000);
+	const { lab, clients } = seeded();
+	const cli = new Cli({ KURIA_KEY: clients.admin.key });
+	const ok = async (args: string[], env: Record<string, string> = {}) => {
+		const ran = await cli.run([...args, '--format', 'json'], env);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return JSON.parse(ran.stdout);
+	};
+	const text = async (args: string[], env: Record<string, string> = {}) => {
+		const ran = await cli.run(args, env);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return ran.stdout;
+	};
+	const inLab = { KURIA_TENANT: lab };
+	const key = `dir_note_${Date.now()}`;
+	writeFileSync(
+		join(cli.dir, 'note.json'),
+		JSON.stringify({
+			key,
+			name: 'Directory note',
+			number: `DN${Date.now()}-{seq}`,
+			fields: [
+				{ key: 'title', name: 'Title', kind: 'text', required: true },
+				{ key: 'body', name: 'Body', kind: 'text', multiline: true }
+			],
+			states: [
+				{ key: 'open', name: 'Open', initial: true },
+				{ key: 'closed', name: 'Closed', final: true }
+			],
+			transitions: [{ key: 'close', name: 'Close', from: ['open'], to: 'closed' }],
+			links: [{ key: 'follows', name: 'Follows', inverse: 'Followed by', to: [key] }]
+		})
+	);
+	await ok(['types', 'define', join(cli.dir, 'note.json')]);
+	const first = (await ok(['new', key, '--set', 'title=First'])).number;
+	const second = (await ok(['new', key, '--set', 'title=Second'])).number;
+	await ok(['do', first, 'close']);
+	await ok(['link', second, 'follows', first, '--pin']);
+
+	// To a directory: each akt reads as the server's.
+	const dir = join(cli.dir, 'plans');
+	expect(await ok(['export', '--types', key, '--to-dir', dir])).toMatchObject({ aktTypes: 1, akter: 2 });
+	for (const number of [first, second]) {
+		expect(await text(['--dir', dir, 'cat', number])).toBe(await text(['cat', number]));
+	}
+	expect((await ok(['--dir', dir, 'check'])).consistent).toBe(true);
+	const refused = await cli.run(['export', '--types', key, '--to-dir', dir, '--format', 'json']);
+	expect(JSON.parse(refused.stderr).error.code).toBe('NOT_EMPTY');
+
+	// Changed locally, then into the lab with its numbers and revisions.
+	await ok(['--dir', dir, 'set', second, 'title=Second, changed']);
+	expect(await ok(['import', '--from-dir', dir], inLab)).toMatchObject({ scope: 'types', akter: 2 });
+	for (const number of [first, second]) {
+		expect(await text(['cat', number], inLab)).toBe(await text(['--dir', dir, 'cat', number]));
+	}
+	const revisions = (await ok(['history', second], inLab)).revisions;
+	expect(revisions.length).toBe((await ok(['--dir', dir, 'cat', second])).akter[0].revision);
+	const again = await cli.run(['import', '--from-dir', dir, '--format', 'json'], inLab);
+	expect(JSON.parse(again.stderr).error.code).toBe('CONFLICT');
+});
+
 // r[verify cli.guide]
 test('an agent works a plan as the guide says, on the planning example', async () => {
 	test.setTimeout(300_000);

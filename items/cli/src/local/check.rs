@@ -36,7 +36,7 @@ impl Problems {
 }
 
 /// A link as a file lists it: its name, the other akt, and any pin.
-fn said(text: &str) -> Option<(&str, &str, Option<i32>)> {
+pub(super) fn said(text: &str) -> Option<(&str, &str, Option<i32>)> {
     let (name, target) = text.trim().rsplit_once(' ')?;
     Some(match target.split_once('@') {
         Some((number, pin)) => (name, number, pin.parse().ok()),

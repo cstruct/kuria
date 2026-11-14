@@ -930,3 +930,91 @@ fn check_names_every_problem_with_its_file() {
         "INCONSISTENT"
     );
 }
+
+// r[verify cli.local.convert]
+#[test]
+fn a_directory_goes_to_a_bundle_and_back_unchanged() {
+    let dir = Dir::new();
+    dir.planned();
+    dir.ok(&[
+        "link",
+        "PLAN-001-G01",
+        "resolved_by",
+        "PLAN-001-T02",
+        "--pin",
+    ]);
+    dir.ok(&["set", "PLAN-001-D01", "decided_by=Dev@Shop.example"]);
+    dir.commit("Planned");
+    let bundle =
+        kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
+            .unwrap();
+
+    // As the server's import checks it: revisions from 1 to the file's,
+    // each hash its state's and values'.
+    let types: std::collections::HashMap<String, kuria_config::AktType> = bundle["aktTypes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            let v = &t["versions"][0];
+            let doc = serde_json::from_value(v["definition"].clone()).unwrap();
+            (
+                v["id"].as_str().unwrap().to_owned(),
+                kuria_config::validate(doc).unwrap(),
+            )
+        })
+        .collect();
+    for akt in bundle["akter"].as_array().unwrap() {
+        let ty = &types[akt["typeVersion"].as_str().unwrap()];
+        let fields =
+            kuria_engine::fields_from_json(ty, akt["fields"].as_object().unwrap()).unwrap();
+        let hash: String = kuria_engine::state_hash(akt["state"].as_str().unwrap(), &fields)
+            .iter()
+            .fold(String::new(), |mut s, b| {
+                write!(s, "{b:02x}").unwrap();
+                s
+            });
+        let revisions = akt["revisions"].as_array().unwrap();
+        let file = revision_of(&dir, akt["number"].as_str().unwrap());
+        assert_eq!(revisions.len(), usize::try_from(file).unwrap());
+        for (i, r) in revisions.iter().enumerate() {
+            assert_eq!(r["revision"], i + 1);
+            assert_eq!(r["hash"], hash.as_str());
+        }
+    }
+    assert_eq!(
+        bundle["links"].as_array().unwrap().len(),
+        2,
+        "each link once"
+    );
+    assert!(
+        bundle["people"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["email"] == "Dev@Shop.example")
+    );
+
+    // And back: every akt file as it was.
+    let again = dir.root.parent().unwrap().join("again");
+    kuria_cli::local::convert::to_dir(&bundle, &again).unwrap();
+    for sub in ["types", "akter"] {
+        let mut names: Vec<_> = std::fs::read_dir(dir.root.join(sub))
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        names.sort();
+        for name in names {
+            let read = |root: &Path| std::fs::read_to_string(root.join(sub).join(&name)).unwrap();
+            if sub == "types" {
+                // Documents as written by hand, the same document.
+                let doc = |text: String| serde_json::from_str::<Value>(&text).unwrap();
+                assert_eq!(doc(read(&again)), doc(read(&dir.root)), "{name:?}");
+            } else {
+                assert_eq!(read(&again), read(&dir.root), "{name:?}");
+            }
+        }
+    }
+    let refused = kuria_cli::local::convert::bundle_of(&again, None);
+    assert!(refused.is_ok(), "a written directory converts again");
+}

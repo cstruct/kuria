@@ -3,7 +3,7 @@
 //! containers, order and links; and akt type documents.
 
 mod arrange;
-mod bundles;
+pub(crate) mod bundles;
 mod edit;
 mod types;
 

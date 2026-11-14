@@ -229,8 +229,10 @@ pub enum Command {
     /// problem's file: `kuria check --dir <path>`.
     Check,
     /// Export a bundle: selected akt types, with or without their akter,
-    /// or the whole tenant, into a new directory.
+    /// or the whole tenant, into a new directory. With `--to-dir`, the
+    /// selected types and their akter as a new akt directory instead.
     #[command(group(clap::ArgGroup::new("what").required(true).args(["types", "whole_tenant"])))]
+    #[command(group(clap::ArgGroup::new("into").required(true).args(["output", "to_dir"])))]
     Export {
         /// The akt types, comma-separated.
         #[arg(long, value_delimiter = ',', value_name = "KEY,…")]
@@ -243,15 +245,24 @@ pub enum Command {
         whole_tenant: bool,
         /// The directory to write the bundle to.
         #[arg(long, short, value_name = "DIR")]
-        output: PathBuf,
+        output: Option<PathBuf>,
+        /// The new akt directory to write the selected types and their
+        /// akter to, for local mode.
+        #[arg(long, value_name = "DIR", conflicts_with = "whole_tenant")]
+        to_dir: Option<PathBuf>,
     },
     /// Import a bundle into the tenant, keeping its akter's numbers and
-    /// history.
+    /// history. With `--from-dir`, an akt directory's types and akter.
+    #[command(group(clap::ArgGroup::new("from").required(true).args(["bundle", "from_dir"])))]
     Import {
         /// The bundle's directory, as `export` wrote it. (Not `dir`, which
         /// names the global `--dir` of local mode.)
         #[arg(value_name = "DIR")]
-        bundle: PathBuf,
+        bundle: Option<PathBuf>,
+        /// The akt directory whose types and akter to import, keeping
+        /// their numbers.
+        #[arg(long, value_name = "DIR")]
+        from_dir: Option<PathBuf>,
         /// A JSON object mapping the bundle's subjects to this tenant's.
         #[arg(long, value_name = "FILE")]
         map_subjects: Option<PathBuf>,
@@ -316,7 +327,7 @@ mod tests {
         let cli = Cli::try_parse_from(["kuria", "import", "bundle"]).unwrap();
         assert!(cli.dir.is_none());
         assert!(
-            matches!(cli.command, Command::Import { bundle, .. } if bundle == std::path::Path::new("bundle"))
+            matches!(cli.command, Command::Import { bundle: Some(bundle), .. } if bundle == std::path::Path::new("bundle"))
         );
     }
 }

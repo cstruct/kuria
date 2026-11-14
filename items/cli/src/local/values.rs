@@ -19,7 +19,7 @@ use crate::model::FieldDef;
 use crate::values::{People, input_of};
 
 /// The namespace stand-in identifiers are derived in.
-const NAMESPACE: Uuid = Uuid::from_u128(0x6b75_7269_612d_6c6f_6361_6c2d_7065_6f70);
+pub(crate) const NAMESPACE: Uuid = Uuid::from_u128(0x6b75_7269_612d_6c6f_6361_6c2d_7065_6f70);
 
 /// People as text, and their stand-in identifiers.
 #[derive(Debug, Default)]
@@ -44,6 +44,16 @@ impl Ids {
         let id = Uuid::new_v5(&NAMESPACE, text.to_lowercase().as_bytes());
         self.texts.entry(id).or_insert_with(|| text.to_owned());
         id
+    }
+
+    /// Names `id` by `text`, as a bundle records whom it names.
+    pub fn name(&mut self, id: Uuid, text: &str) {
+        self.texts.insert(id, text.trim().to_owned());
+    }
+
+    /// Everyone named so far, with their text.
+    pub fn known(&self) -> impl Iterator<Item = (Uuid, &str)> {
+        self.texts.iter().map(|(id, text)| (*id, text.as_str()))
     }
 
     /// The text `id` stands in for.

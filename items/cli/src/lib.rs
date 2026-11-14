@@ -238,7 +238,7 @@ async fn local(root: &Path, command: Command) -> Result<Answer, CliError> {
         )),
         Command::Export { .. } | Command::Import { .. } => Err(local::unsupported(
             "Bundles",
-            "a directory converts from a server with `export --to-dir` (PLAN-008-T06)",
+            "a directory converts to and from a server with `export --to-dir` and `import --from-dir`, signed in",
         )),
         command => {
             let me = local.me.clone();
@@ -380,9 +380,28 @@ async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliErro
         } => writes::define(Some(session), &files, check).await,
         Command::Export {
             types,
+            to_dir: Some(to_dir),
+            ..
+        } => to_dir_of(session, &types, &to_dir).await,
+        Command::Import {
+            from_dir: Some(from_dir),
+            map_subjects,
+            ..
+        } => {
+            let me = std::env::var("KURIA_ME")
+                .ok()
+                .filter(|v| !v.is_empty())
+                .or_else(|| local::git::email(&from_dir));
+            let bundle = local::convert::bundle_of(&from_dir, me)?;
+            let bytes = serde_json::to_vec(&bundle).expect("serializable");
+            writes::bundles::post(session, &bytes, None, map_subjects.as_deref()).await
+        }
+        Command::Export {
+            types,
             akter,
             whole_tenant,
-            output,
+            output: Some(output),
+            ..
         } => {
             let what = if whole_tenant {
                 writes::Exported::Tenant
@@ -395,11 +414,31 @@ async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliErro
             writes::export_bundle(session, &what, &output).await
         }
         Command::Import {
-            bundle,
+            bundle: Some(bundle),
             map_subjects,
+            ..
         } => writes::import_bundle(session, &bundle, map_subjects.as_deref()).await,
         command => write(session, command).await,
     }
+}
+
+/// `kuria export --types <key>,… --to-dir <dir>` (`cli.local.convert`).
+// r[impl cli.local.convert]
+async fn to_dir_of(session: &Session, types: &[String], dir: &Path) -> Result<Answer, CliError> {
+    writes::bundles::check_new(dir)?;
+    let query = format!("types={}&akter=true", types.join(","));
+    let files = writes::bundles::fetch(session, &query).await?;
+    let bundle = writes::bundles::bundle_json(&files)?;
+    let wrote = local::convert::to_dir(&bundle, dir)?;
+    Ok(Answer {
+        markdown: format!(
+            "Wrote {} akt types and {} akter to the akt directory {}; commit it to start its history.",
+            wrote["aktTypes"],
+            wrote["akter"],
+            dir.display()
+        ),
+        json: wrote,
+    })
 }
 
 async fn write(session: &Session, command: Command) -> Result<Answer, CliError> {
