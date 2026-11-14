@@ -194,10 +194,11 @@ Settled in PLAN-012-T01: a section has an optional Markdown `text` beside its op
 <!-- akt: PLAN-012-G02 -->
 ---
 type: gap
-revision: 2
+revision: 5
 rank: b3R
 state: open
 in: [PLAN-012]
+links: [Resolved by PLAN-013-T02, Resolved by PLAN-013-T03, Resolved by PLAN-013-T04]
 title: Outcomes in filters and transitions
 ---
 
