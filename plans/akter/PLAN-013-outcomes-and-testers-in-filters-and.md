@@ -103,16 +103,32 @@ A gated transition is rare and a tree small, so the cost is low, and it keeps "c
 <!-- akt: PLAN-013-T01 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3d
-state: todo
+state: done
 in: [PLAN-013]
 links: [Blocks PLAN-013-T02, Blocks PLAN-013-T03, Blocks PLAN-013-T04]
 title: "Spec several-people filters, outcome filters and outcome-gated transitions"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`akt.filter`: a `multiple` user field matches by anyone it names; a list filtered by outcome (`akt.filter.outcome`), as PLAN-013-D01 says. `akt.transition` or a new `akt.transition.outcomes`: a transition naming the outcomes it allows, refused otherwise. `cli.read` (`ls --outcome`), `app.filters` (the outcome filter) and `app.my-work` (several-people fields). Nomenclature if a term is needed.
+The spec says what PLAN-013 builds. No implementation yet.
+
+**`docs/spec/akter.md`:**
+- `akt.filter`: a `user` field naming several people matches by any one of them.
+- `akt.filter.outcome` (new): a list of one akt type filtered by outcome if the type has a `verdict` field, and a container's members of one type if the type has outcomes. The outcome is as it is when the list is answered, and paging works as `akt.page` says. Anything else is refused as `BAD_REQUEST` (PLAN-013-D01).
+- `akt.transition.outcomes` (new): a transition may name the outcomes it allows. It is refused unless the akt has outcomes and its outcome is one of them, saying which. No verdict or membership in the member tree may change between the check and the revision (PLAN-013-D02).
+- `akt.type.validation`: the outcomes a transition allows are `pass`, `fail`, `skip` or `pending`, each once, and only on a type with a `verdict` field or one that contains an akt type. Containment, not "contains a type with outcomes", because types may be defined in any order, so whether a contained type has outcomes isn't known when the document is checked. An akt of such a type without outcomes is refused at the transition.
+
+**`docs/spec/cli.md`:** `schema` gives the outcomes each transition allows; `ls` takes `--outcome`, and its table has the outcome where akter have one (as PLAN-012 built).
+
+**`docs/spec/frontend.md`:**
+- `app.transitions`: a transition the outcome doesn't allow is shown as unavailable, saying what it allows.
+- `app.filters`: a type's list filters by outcome where the type has a `verdict` field.
+- `app.my-work`: user fields naming several people count.
+
+No new term was needed. `mise run lint` passes, Tracey included.
 
 <!-- field: acceptance -->
 - Spec rules with ids, and no implementation yet.

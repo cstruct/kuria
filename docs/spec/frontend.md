@@ -61,7 +61,9 @@ scripts, styles, frames, forms or event handlers, and links only to
 
 r[app.transitions]
 The app MUST offer the transitions an akt's state allows, asking for the
-fields a transition requires before performing it.
+fields a transition requires before performing it. A transition the akt's
+outcome doesn't allow (`akt.transition.outcomes`) MUST be shown as
+unavailable, saying the outcomes it allows.
 
 r[app.members]
 A container's page MUST show its members of the akt types its board names
@@ -107,12 +109,14 @@ number or title (`app.pickers`), and remove one.
 
 r[app.filters]
 A type's list MUST let a person filter it by the values of its filterable
-fields (`akt.filter`), keeping the filters in the page's address, and load
+fields (`akt.filter`), and by outcome where its type has a `verdict` field
+(`akt.filter.outcome`), keeping the filters in the page's address, and load
 more akter a page at a time (`akt.page`).
 
 r[app.my-work]
-Home MUST show the akter whose `user` fields or checkboxes name the
-viewer, by akt type, for the types that have such fields.
+Home MUST show the akter whose `user` fields, also those naming several
+people, or checkboxes name the viewer, by akt type, for the types that have
+such fields.
 
 r[app.pickers]
 Wherever the app asks for an akt, such as a container to add an akt to, or

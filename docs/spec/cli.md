@@ -96,10 +96,12 @@ The client MUST offer:
 - `types`: the akt types, with how many akter each has;
 - `schema <type>`: a type's fields with their kinds, whether required, and
   options; its states and their tones; its transitions with what they
-  require; the types it contains and links to; its board and presentation;
-- `ls [<type>]`: akter as a table of number, title, state and the
-  presentation's list fields, filtered by `--state`, `--in <container>`,
-  `--where <field>=<value>` (`akt.filter`, `@me` for oneself) and
+  require and the outcomes they allow; the types it contains and links
+  to; its board and presentation;
+- `ls [<type>]`: akter as a table of number, title, state, outcome where
+  they have one, and the presentation's list fields, filtered by
+  `--state`, `--in <container>`, `--where <field>=<value>` (`akt.filter`,
+  `@me` for oneself), `--outcome <outcome>` (`akt.filter.outcome`) and
   `--search`, a page at a time, or every page with `--all` (`akt.page`);
 - `find <text>`: a search (`akt.search`);
 - `cat <number>…`: each akt as an akt file (`cli.file`), several as one

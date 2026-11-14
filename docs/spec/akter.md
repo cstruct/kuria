@@ -32,6 +32,9 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - every choice field has at least one option;
 - the number pattern is valid (`akt.number.pattern`);
 - every action a transition names is valid (`authz.transition-action`);
+- the outcomes a transition allows are `pass`, `fail`, `skip` or
+  `pending`, each once, and only on a type that has a `verdict` field or
+  contains an akt type (`akt.transition.outcomes`);
 - the keys in `contains` and `created_in` are valid akt type keys, each listed
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
@@ -182,6 +185,13 @@ as an edit does. It MUST be refused unless every field the transition
 requires holds a value afterwards. The akt then moves to the transition's
 target state.
 
+r[akt.transition.outcomes]
+A transition MAY name the outcomes it allows. Performing it MUST then be
+refused unless the akt has outcomes (`akt.outcome`) and its outcome, as
+it is when the transition is performed, is one of them, saying the
+outcome and those allowed. No verdict or membership in the akt's member
+tree MUST change between that check and the transition's revision.
+
 r[akt.version-pinned]
 An akt MUST be validated against the akt type version it was created with,
 also after newer versions of its akt type exist.
@@ -217,11 +227,21 @@ A list of akter of one akt type, and a container's members of one akt
 type, MAY be filtered by field values: each condition names a field of
 that type and a value, and an akt MUST match every condition. A field
 holding a choice matches by option key; a `user` field, by the user or
-contact it names, or `me` for the subject asking; a checkbox, by whom it
+contact it names, or one of those it names if it names several, or `me`
+for the subject asking; a checkbox, by whom it
 was checked for, or `me`; a date, by the date; a single-line `text` field,
 by the whole text. A condition on a field of any other kind, on a field
 the type lacks, or without one akt type to filter, MUST be refused as
 `BAD_REQUEST`.
+
+r[akt.filter.outcome]
+A list of akter of one akt type MAY be filtered by outcome if the type has
+a `verdict` field, and a container's members of one akt type if the type
+has outcomes: only akter with that outcome, as it is when the list is
+answered (`akt.outcome`), MUST be answered, a page at a time
+(`akt.page`). Filtering a type without outcomes, or a list other than a
+container's members of a type whose outcome comes from its members, MUST
+be refused as `BAD_REQUEST`.
 
 ## Outcomes
 
