@@ -132,9 +132,9 @@ A multi-akt file makes a stale part likely, since a whole plan is edited at once
 <!-- akt: PLAN-010-G01 -->
 ---
 type: gap
-revision: 3
+revision: 5
 rank: b35
-state: open
+state: closed
 in: [PLAN-010]
 links: [Resolved by PLAN-010-T03, Resolved by PLAN-011-T05]
 title: A server takes a multi-akt apply one edit at a time
@@ -142,6 +142,9 @@ title: A server takes a multi-akt apply one edit at a time
 
 <!-- field: description -->
 Checked first (PLAN-010-D04), a stale part or a read-only key changes nothing; but a refusal only the server makes while editing, such as a value its rules refuse, comes after the parts before it were edited. A directory changes nothing then. One mutation editing several akter in one transaction would close it, if it becomes a problem.
+
+<!-- field: resolution -->
+Closed by PLAN-011: the API's `batch` runs several akt writes in one transaction, and `apply` sends every edit of its files as one batch (PLAN-011-T05). So a refusal only the server makes while editing, such as an edit of an akt in a final state, now changes nothing on a server, as in a directory, and the parity test shows it.
 
 <!-- akt: PLAN-010-T01 -->
 ---

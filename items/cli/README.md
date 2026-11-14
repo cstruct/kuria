@@ -84,8 +84,10 @@ type.
     ignored; its `in` is added to `--in`;
   - `apply <file>… [--dry-run]`: reads every akt of every file (a
     multi-akt file holds several), refuses one given twice, and checks
-    every one, stale or read-only, before changing any; then, for each,
-    compares each field of the file with the
+    every one, stale or read-only, before changing any, and against a
+    server sends every edit in one `batch`, so that a refusal of any
+    changes none (naming the akt it refused). For each, it compares each
+    field of the file with the
     akt as it is, as the inputs the server takes (so a user written by
     name or by email is the same user), and edits only those that differ.
     A field the file leaves out is cleared. A file read at an older

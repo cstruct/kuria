@@ -65,6 +65,10 @@ fn answered(mut answer: Value) -> Result<Value, CliError> {
                 ));
             }
         }
+        // A batch's refusal names its operation, counting from 1.
+        if let Some(n) = error["extensions"]["operation"].as_u64() {
+            message = format!("operation {n}: {message}");
+        }
         let field = error["extensions"]["field"].as_str().map(str::to_owned);
         return Err(CliError::from_server(code, message, field));
     }
@@ -85,6 +89,12 @@ mod tests {
         .unwrap_err();
         assert_eq!(refused.kind, Kind::Stale);
         assert_eq!(refused.message, "Changed since");
+        let batch = answered(json!({
+            "errors": [{ "message": "Final", "extensions": { "code": "REFUSED", "operation": 2 } }],
+            "data": null
+        }))
+        .unwrap_err();
+        assert_eq!(batch.message, "operation 2: Final");
         assert_eq!(
             answered(json!({ "data": { "viewer": { "tenant": "t" } } })).unwrap(),
             json!({ "viewer": { "tenant": "t" } })

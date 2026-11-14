@@ -203,6 +203,29 @@ test('local mode answers a sequence of commands as the server does', async () =>
 	}
 	await both(['cat', b, '--all-members']);
 
+	// A refusal only the edit itself finds, of a task already done, comes
+	// after another's edit in the same file: neither changes, on both.
+	// r[verify cli.apply]
+	for (const [where, prefix] of [
+		['server', []],
+		['local', ['--dir', dir]]
+	] as const) {
+		const read = await cli.run([...prefix, 'cat', two, one]);
+		const file = join(cli.dir, `done-${where}.md`);
+		// Both titles rewritten, whatever they are by now.
+		let seen = 0;
+		const edited = read.stdout.replace(/^title: .*$/gm, () => `title: ${++seen === 1 ? 'Two again' : 'One again'}`);
+		expect(seen, where).toBe(2);
+		writeFileSync(file, edited);
+		const refused = await cli.run([...prefix, 'apply', file, '--format', 'json']);
+		expect(refused.code, `${where}: ${refused.stdout}`).toBe(1);
+		expect(JSON.parse(refused.stderr).error.code, where).toBe('REFUSED');
+		if (where === 'server') {
+			expect(JSON.parse(refused.stderr).error.message).toContain(`${one}: `);
+		}
+		expect((await cli.run([...prefix, 'cat', two])).stdout, where).not.toContain('Two again');
+	}
+
 	// Every akt reads the same, and each box's members are in the same
 	// order. (Outside git, akter in one file share its time, so the most
 	// recently changed first isn't compared.)

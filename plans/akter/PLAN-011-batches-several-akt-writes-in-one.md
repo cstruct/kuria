@@ -248,16 +248,26 @@ The deadlock test was checked by turning off the batch's up-front row locks: it 
 <!-- akt: PLAN-011-T05 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b3J
-state: todo
+state: done
 in: [PLAN-011]
 links: [Blocked by PLAN-011-T03, Resolves PLAN-010-G01]
 title: apply sends one batch
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The CLI's `apply`, against a server, sends every edit as one batch after its checks, so a server refusal anywhere changes nothing (PLAN-010-G01). The server README, the CLI README and the API docs describe batches.
+**The CLI's `apply`** (`items/cli/src/writes/edit.rs`): against a server, after checking every akt, it sends every edit in one `batch` and takes each akt's new revision from the answer. A refusal comes back with its `operation`, which `graphql.rs` now says as `operation <n>: …`, and `apply` names the akt and says nothing was changed. `cli.apply` says it sends one batch. This closes PLAN-010-G01.
+
+**Tests:**
+- The parity test edits a task and then one already done in one file, which only the edit itself refuses. It answers REFUSED on both sides, the server naming the done task, and neither edit stays.
+- Run against the old `apply`, the same test fails, because the server kept the first edit. A first version only passed because a quoted title went unmatched, which a position-based rewrite fixed.
+- A unit test covers the `operation` prefix.
+
+**Docs:** the server README describes batches (mutation, `@<n>`, `operation`, the up-front locks, the tests), and the CLI README describes `apply`'s batch.
+
+Lint, `mise run test` and all 27 e2e tests pass.
 
 <!-- field: acceptance -->
 - An e2e test: a multi-akt file whose second edit the server refuses changes nothing.

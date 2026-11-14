@@ -102,6 +102,9 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   Konklav never verified.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
+- Batches: several akt writes run in order in one transaction, all of them
+  or none, a later one naming an akt an earlier one created as `@<n>`
+  (`akt.batch`).
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt
@@ -143,7 +146,12 @@ Not yet: signatures.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
-  `linkContact`, `eraseContact`, `addLink`, `removeLink`; and the queries
+  `linkContact`, `eraseContact`, `addLink`, `removeLink`, and `batch`: up to
+  200 `OperationInput`s, each one of the akt mutations with its input
+  (`@oneOf`), run in order in one transaction and answered as their `Akt`s;
+  wherever one takes a number, `@<n>` names what an earlier `createAkt`,
+  operation `n`, created; a refusal rolls it all back and carries the
+  operation's position as the extension `operation`. And the queries
   `contacts` and `users`. An akt's `links` lists its links both ways, as
   it reads them (`src/akter/links.rs`; link kinds are declared in a type's
   `links`, stored in `akt_link`, and recorded as a revision of both akter,
@@ -181,6 +189,10 @@ Not yet: signatures.
   with [`create`](src/akter/create.rs),
   [`membership`](src/akter/membership.rs) and
   [`ordering`](src/akter/ordering.rs) and [`draft`](src/akter/draft.rs).
+  Each write's body (`edit_in`, `create_in`, …) runs in a transaction it is
+  given, so that [`batch`](src/akter/batch.rs) can run several in one: it
+  takes the order lock if any operation creates or moves, then every named
+  akt's row by id, before its first operation, keeping the one lock order.
   Every path takes its locks in one
   order: the tenant's order lock, akt rows by id, number counters, then the
   change-event counter. The rules themselves (numbering, containment, link
@@ -334,6 +346,11 @@ mise run test
   shown as its user in values and drafts while the stored values stay;
   listing the tenant's users, linking a contact by hand and its refusals,
   and the people a revision's values name.
+- [`tests/batches.rs`](tests/batches.rs): batches all or none, a refused
+  one leaving no trace (a create's number included), `@<n>` and sizes
+  refused before running, each operation authorized as alone, revisions and
+  change events in order, and batches with single writes at once never
+  deadlocking.
 - [`tests/links.rs`](tests/links.rs): links both ways with revisions on
   both akter, the kinds and targets they allow, pinned targets as they
   were, and linking needing edit at the source and read at the target.

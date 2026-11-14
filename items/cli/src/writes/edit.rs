@@ -242,6 +242,21 @@ pub(crate) fn read_akter(
     Ok(akter)
 }
 
+/// A batch's refusal of its operation `n`, said of the akt it edited, and
+/// that nothing changed.
+fn in_batch(error: CliError, edited: &[&String]) -> CliError {
+    let said = (1..=edited.len()).find_map(|n| {
+        error
+            .message
+            .strip_prefix(&format!("operation {n}: "))
+            .map(|rest| format!("{}: {rest}; nothing was changed", edited[n - 1]))
+    });
+    match said {
+        Some(message) => CliError { message, ..error },
+        None => error,
+    }
+}
+
 /// `kuria apply <file>…`: edits each akt its files hold with the fields
 /// the file changed, after checking every one, refusing read-only keys and
 /// stale akter before changing any.
@@ -263,35 +278,58 @@ pub async fn apply(
         let changed = changes(session, &akt, &parsed).await?;
         checked.push((path, number, revision, akt, changed));
     }
+    // Every edit in one batch: all of them, or none (`akt.batch`).
+    let edits: Vec<Json> = checked
+        .iter()
+        .filter(|(.., changed)| !changed.is_empty() && !dry_run)
+        .map(|(_, number, revision, _, changed)| {
+            json!({ "editAkt": { "number": number, "revision": revision, "fields": changed, "reason": reason } })
+        })
+        .collect();
+    let edited: Vec<&String> = checked
+        .iter()
+        .filter(|(.., changed)| !changed.is_empty() && !dry_run)
+        .map(|(_, number, ..)| number)
+        .collect();
+    let mut now = Vec::new();
+    if !edits.is_empty() {
+        let data = session
+            .graphql(
+                "mutation($o: [OperationInput!]!) { batch(input: { operations: $o }) { revision } }",
+                json!({ "o": edits }),
+            )
+            .await
+            .map_err(|e| in_batch(e, &edited))?;
+        now = data["batch"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|r| r["revision"].as_i64().unwrap_or_default())
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
+    let mut now = now.into_iter();
     let mut lines = Vec::new();
     let mut applied = Vec::new();
-    for (path, number, revision, akt, changed) in checked {
+    for (path, number, _, akt, changed) in checked {
         let names: Vec<&str> = changed.keys().map(|k| akt.shape.field_name(k)).collect();
         if changed.is_empty() {
             lines.push(format!("{number}: nothing changed."));
             applied.push(
                 json!({ "file": path, "number": number, "revision": akt.revision, "changed": [] }),
             );
-            continue;
-        }
-        if dry_run {
+        } else if dry_run {
             lines.push(format!("{number}: would change {}.", names.join(", ")));
             applied.push(json!({ "file": path, "number": number, "revision": akt.revision, "changed": changed.keys().collect::<Vec<_>>(), "dryRun": true }));
-            continue;
+        } else {
+            let revision = now.next().unwrap_or_default();
+            lines.push(format!(
+                "{number}: changed {} (revision {revision}).",
+                names.join(", ")
+            ));
+            applied.push(json!({ "file": path, "number": number, "revision": revision, "changed": changed.keys().collect::<Vec<_>>() }));
         }
-        let data = session
-            .graphql(
-                "mutation($n: String!, $v: Int!, $f: JSON!, $r: String) {
-                   editAkt(input: { number: $n, revision: $v, fields: $f, reason: $r }) { revision } }",
-                json!({ "n": number, "v": revision, "f": changed, "r": reason }),
-            )
-            .await?;
-        let now = data["editAkt"]["revision"].as_i64().unwrap_or_default();
-        lines.push(format!(
-            "{number}: changed {} (revision {now}).",
-            names.join(", ")
-        ));
-        applied.push(json!({ "file": path, "number": number, "revision": now, "changed": changed.keys().collect::<Vec<_>>() }));
     }
     Ok(Answer {
         markdown: lines.join("\n"),

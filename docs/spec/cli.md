@@ -149,8 +149,9 @@ r[cli.apply]
 since the revision the file names, and only those (`app.inline-edit`),
 each akt of a multi-akt file (`cli.file.multi`) as if it were a file of
 its own, its number from its line or its `number`, which MUST agree. It
-MUST read and check every akt it is given before changing any, and MUST
-refuse, changing nothing:
+MUST read and check every akt it is given before changing any, and,
+against a server, MUST then send every edit in one batch (`akt.batch`), so
+that a refusal of any changes none. It MUST refuse, changing nothing:
 - a change to a read-only key, or to a key the type lacks, saying which;
 - an akt whose revision is stale, as `STALE`, saying which fields changed
   since, so the file can be merged and applied again;
