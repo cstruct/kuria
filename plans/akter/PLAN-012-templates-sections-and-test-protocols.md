@@ -1,9 +1,9 @@
 ---
 number: PLAN-012
 type: plan
-revision: 17
+revision: 18
 rank: b3K
-state: active
+state: done
 title: "Templates, sections and test protocols"
 owner: albin@mattsson.io
 ---
