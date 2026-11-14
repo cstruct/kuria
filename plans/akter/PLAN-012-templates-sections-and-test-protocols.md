@@ -207,9 +207,9 @@ An outcome is derived on read (PLAN-012-D05), so it can't yet be filtered on (`a
 <!-- akt: PLAN-012-G03 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b3S
-state: open
+state: closed
 in: [PLAN-012]
 links: [Resolved by PLAN-012-T05]
 title: Changing a protocol after it was copied
@@ -217,6 +217,9 @@ title: Changing a protocol after it was copied
 
 <!-- field: description -->
 A protocol copied from a template may need a test added, moved between sections or dropped. Adding a member and editing `sections` covers it, but the app needs a way to do both at once, and whether a test can be moved after verdicts were given is open.
+
+<!-- field: resolution -->
+A protocol copied from a template changes as any akt does: add a test as a member, then place it with the sections outline in the app (or edit the sections field in a file). A test may move between sections after verdicts were given, since the verdicts belong to the test, not the section (PLAN-012-T05).
 
 <!-- akt: PLAN-012-G04 -->
 ---
@@ -390,16 +393,43 @@ Lint, `mise run test` (337 Rust, 55 app) and all 28 e2e tests pass.
 <!-- akt: PLAN-012-T05 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3Y
-state: todo
+state: done
 in: [PLAN-012]
 links: [Blocked by PLAN-012-T03, Blocks PLAN-012-T06, Resolves PLAN-012-G03]
 title: "The app: sections, verdicts, outcomes and copying"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-An akt's members in its sections, nested and collapsible; each test's assignees, verdicts and outcome, and an assignee's verdict buttons; each section's outcome; the copy dialog with its section and test choices.
+The app shows sections, verdicts and outcomes, edits several people and sections, and copies akter.
+
+**Reading** (`operations.ts`): `SectionsValue.value` (the JSON form, at any depth), `outcome` on the akt and its board members, `copiedFrom`, the field flags `of` and `assignees`, and `kind`/`assignees` on members' types. `copyAkt` is a new mutation.
+
+**Logic, tested without a browser:**
+- `sections.ts`: a value read as a tree and given back as `editAkt` takes it; each section's outcome from its members' (`outcomes.ts`, the engine's rules); and the outline's moves (up, down, into the section above, out, remove, add, edit), copied through JSON, since `structuredClone` can't read Svelte's state proxies.
+- `verdicts.ts`: a member's assignees, each one's verdict, and the viewer's own; the input that gives or takes back a verdict.
+- `values.ts`: drafts for several people (`USERS`) and sections (`SECTIONS`); verdicts stay shown, given with their buttons.
+- `history.ts`: sections and verdicts said in words, not JSON.
+
+**Components:**
+- `Sections`: members in nested sections, each with its Markdown text and outcome. A collapsible one is a `<details>`, and the page keeps which are open across reloads, since giving a verdict reloads the akt. Members no section names follow under "Not in a section", through `Members`.
+- `VerdictButtons`: assignees and their verdicts. An assignee gets Pass, Fail and Skip (`aria-pressed`) and Take back, in a section, in a members list (with Outcome and Verdicts columns) and on the test's own page. Board cards show outcomes.
+- `CopyDialog`: "Make a copy" in the header, sections and members as checkboxes, all checked at first (a section ticks what it holds), then the copy opens. A copy says "Copied from …".
+- `SectionsEditor`: sections edited as an outline (title, Markdown text, collapsible), with "Place" for members not in them. `PeopleSelect`: several people as a checkbox list.
+- The new-akt form leaves out verdicts and sections, which come once the akt exists.
+
+**G03:** a protocol copied from a template changes as any akt does: add a test as a member, then place it in the outline. A test may move between sections after verdicts were given, since the verdicts are the test's.
+
+**Tests:**
+- 61 app unit tests (sections, outcomes, copy choices, verdicts, drafts, history).
+- `e2e/tests/protocols.spec.ts`: a developer opens a protocol's collapsible section, gives, changes and takes back verdicts in sections and in a list, sees outcomes add up, edits the outline, opens a test, and copies part of the protocol. axe checks the sections, the outline and the copy dialog.
+- The e2e seed grants the developer work at `test_protocol` and `test_case`, the keys the T06 example will use.
+
+The app and e2e READMEs are updated.
+
+Lint, `mise run test` (337 Rust, 61 app) and all 29 e2e tests pass.
 
 <!-- field: acceptance -->
 - Component tests, and the accessibility e2e test over the new views.

@@ -44,7 +44,7 @@
 		if (!type) return;
 		const fields = Object.fromEntries(
 			type.fields
-				.filter((f) => drafts[f.key] && !isEmpty(drafts[f.key]))
+				.filter((f) => drafts[f.key] && drafts[f.key].kind !== 'SHOWN' && !isEmpty(drafts[f.key]))
 				.map((f) => [f.key, inputOf(drafts[f.key])])
 		);
 		busy = true;
@@ -75,7 +75,8 @@
 		{#if refusal}<p role="alert">{refusal.message}</p>{/if}
 		<form onsubmit={create} aria-label="New {type.name}">
 			{#each type.fields as field (field.key)}
-				{#if drafts[field.key]}
+				<!-- Verdicts are given, and sections laid out, once it exists. -->
+				{#if drafts[field.key] && !['SHOWN', 'SECTIONS'].includes(drafts[field.key].kind)}
 					<FieldEditor
 						{field}
 						bind:draft={drafts[field.key]}

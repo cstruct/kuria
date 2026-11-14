@@ -2,15 +2,22 @@
 	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { page } from '$app/state';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
+	import Copy from '@lucide/svelte/icons/copy';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
 	import FieldRow from '#lib/akt/FieldRow.svelte';
 	import HistoryList from '#lib/akt/HistoryList.svelte';
+	import CopyDialog from '#lib/akt/CopyDialog.svelte';
 	import Members from '#lib/akt/Members.svelte';
+	import OutcomeBadge from '#lib/akt/OutcomeBadge.svelte';
+	import Sections from '#lib/akt/Sections.svelte';
+	import { numbersIn, readSections } from '#lib/akt/sections.ts';
+	import { judgedOf, verdictInput } from '#lib/akt/verdicts.ts';
 	import LinksCard, { type ShownLink } from '#lib/akt/LinksCard.svelte';
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
@@ -27,13 +34,14 @@
 	import { pickable } from '#lib/akt/pickers.ts';
 	import { changes, draftOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
-	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
+	import type { AktPageQuery, Verdict } from '#lib/graphql/generated/graphql.ts';
 	import {
 		AddLink,
 		AddToContainer,
 		RemoveLink,
 		AktPage,
 		Contacts,
+		CopyAkt,
 		Users,
 		DraftField,
 		EditAkt,
@@ -90,6 +98,28 @@
 		actionsOf(akt ? availableTransitions(akt.type.transitions, akt.state) : [])
 	);
 	const editable = $derived(Boolean(akt && !akt.state.final));
+	const me = $derived(view.data?.viewer.subject);
+
+	// r[impl app.sections]: the members in the akt's sections, and those
+	// no section names after them, as the board and lists show them.
+	const sectionItems = $derived.by(() => {
+		const def = akt?.type.fields.find((f) => f.kind === 'SECTIONS');
+		const value = akt?.fields.find((v) => v.__typename === 'SectionsValue' && v.field === def?.key);
+		return value?.__typename === 'SectionsValue' ? readSections(value.value) : [];
+	});
+	const allMembers = $derived(akt ? akt.board.columns.flatMap((c) => c.akter) : []);
+	const memberNames = $derived(allMembers.map((m) => ({ number: m.number, title: m.title })));
+	const placed = $derived(new Set(numbersIn(sectionItems)));
+	const unplacedColumns = $derived(
+		(akt?.board.columns ?? []).map((c) => ({
+			...c,
+			akter: c.akter.filter((m) => !placed.has(m.number))
+		}))
+	);
+	const ownVerdicts = $derived(akt ? judgedOf(akt, me) : null);
+	let copyOpen = $state(false);
+	// The collapsible sections opened, kept while the akt reloads.
+	const opened = new SvelteSet<string>();
 
 	// What the editors hold, and what they held when the akt was loaded.
 	// Kept across refetches, so a refusal or a change made elsewhere never
@@ -131,6 +161,7 @@
 			base = snapshot(akt);
 			drafts = snapshot(akt);
 			loadedFor = akt.number;
+			opened.clear();
 			editingField = null;
 		}
 	});
@@ -248,6 +279,44 @@
 		}
 	}
 
+	/** Gives the viewer's verdict on `of`, this akt or a member, or takes
+	 * it back. */
+	// r[impl app.verdicts]
+	async function giveVerdict(
+		of: {
+			number: string;
+			revision: number;
+			fields: Akt['fields'];
+			type: Akt['type'] | Member['type'];
+		},
+		verdict: Verdict | null
+	) {
+		const judged = judgedOf(of, me);
+		if (!judged) return;
+		const input = {
+			number: of.number,
+			revision: of.revision,
+			fields: { [judged.field]: verdictInput(verdict) }
+		};
+		await run(() => mutate(client, EditAkt, { input }));
+	}
+
+	/** Copies the akt, keeping `only` of its members, and opens the copy. */
+	// r[impl app.copy]
+	async function copy(only: string[] | null) {
+		busy = true;
+		refusal = null;
+		const { data, error } = await mutate(client, CopyAkt, { input: { number, only } });
+		busy = false;
+		if (error || !data) {
+			refusal = refusalOf(error!, fieldNames);
+			return;
+		}
+		copyOpen = false;
+		toast(`Copied to ${data.copyAkt.number}`, 'success');
+		await goto(resolve('/akt/[number]', { number: data.copyAkt.number }));
+	}
+
 	async function draft(field: string) {
 		if (!akt) return;
 		const revision = akt.revision;
@@ -314,17 +383,34 @@
 					<span data-testid="number"><Mono value={akt.number} max={40} copy /></span>
 				</p>
 				<h1>{headingOf(akt)}</h1>
-				<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
+				<div class="badges">
+					<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
+					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
+						>{/if}
+				</div>
+				{#if akt.copiedFrom}
+					<p class="origin">
+						Copied from <a href={resolve('/akt/[number]', { number: akt.copiedFrom.number })}
+							>{akt.copiedFrom.title ?? akt.copiedFrom.number}</a
+						>
+					</p>
+				{/if}
 			</div>
-			{#if actions.primary}
-				{@const primary = actions.primary}
-				<div class="actions">
+			<div class="actions">
+				<Button
+					onclick={() => {
+						refusal = null;
+						copyOpen = true;
+					}}><Copy size={14} aria-hidden={true} /> Make a copy</Button
+				>
+				{#if actions.primary}
+					{@const primary = actions.primary}
 					{#each actions.others as transition (transition.key)}
 						<Button onclick={() => begin(transition)}>{transition.name}</Button>
 					{/each}
 					<Button variant="primary" onclick={() => begin(primary)}>{primary.name}</Button>
-				</div>
-			{/if}
+				{/if}
+			</div>
 		</header>
 
 		<div class="columns">
@@ -350,6 +436,10 @@
 								onSave={() => save(field.key)}
 								onCancel={() => cancelEdit(field.key)}
 								onDraft={() => draft(field.key)}
+								members={memberNames}
+								number={akt.number}
+								judged={ownVerdicts}
+								onVerdict={(verdict) => giveVerdict(akt, verdict)}
 							/>
 						{/each}
 					</dl>
@@ -383,16 +473,31 @@
 								/>
 							{/if}
 						</header>
-						<Members
-							columns={akt.board.columns}
-							document={akt.type.document}
-							{contained}
-							{editable}
-							{busy}
-							onMove={move}
-							onRemove={removeMember}
-							onInto={into}
-						/>
+						{#if sectionItems.length > 0}
+							<Sections
+								items={sectionItems}
+								members={allMembers}
+								{me}
+								{busy}
+								{opened}
+								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
+							/>
+						{/if}
+						{#if sectionItems.length === 0 || unplacedColumns.some((c) => c.akter.length > 0)}
+							{#if sectionItems.length > 0}<h3 class="others">Not in a section</h3>{/if}
+							<Members
+								columns={unplacedColumns}
+								document={akt.type.document}
+								{contained}
+								{editable}
+								{busy}
+								onMove={move}
+								onRemove={removeMember}
+								onInto={into}
+								{me}
+								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
+							/>
+						{/if}
 					</section>
 				{/if}
 			</div>
@@ -483,6 +588,16 @@
 				onPerform={perform}
 			/>
 		{/if}
+
+		<CopyDialog
+			bind:open={copyOpen}
+			number={akt.number}
+			items={sectionItems}
+			members={memberNames}
+			{busy}
+			error={copyOpen && refusal ? refusal.message : undefined}
+			onCopy={copy}
+		/>
 
 		<Dialog
 			bind:open={transferOpen}
@@ -592,6 +707,23 @@
 
 	h1 {
 		overflow-wrap: anywhere;
+	}
+
+	.badges {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	.origin {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
+	.others {
+		margin: 0;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
 	}
 
 	.actions {

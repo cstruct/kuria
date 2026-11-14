@@ -83,6 +83,11 @@ export function valueText(value: unknown, names: Map<string, string> = new Map()
 		if ('url' in o) return String(o.label ?? o.url);
 		if ('digest' in o) return `${o.repository}${o.tag ? `:${o.tag}` : ''}`;
 		if ('repository' in o) return `${o.repository}${o.tag ? `@${o.tag}` : ''}`;
+		if ('verdict' in o && 'assignee' in o) return `${someone(o.assignee)}: ${o.verdict}`;
+		if (Array.isArray(o.items)) {
+			const title = typeof o.title === 'string' ? o.title : 'a section';
+			return `${title} (${valueText(o.items, names) || 'empty'})`;
+		}
 	}
 	return JSON.stringify(value);
 }

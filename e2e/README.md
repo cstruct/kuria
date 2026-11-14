@@ -133,6 +133,13 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   that leads there (or refused where none does); an akt type's list
   filtered by state and by field values in the address, sorted, and
   loading more a page at a time.
+- [`tests/protocols.spec.ts`](tests/protocols.spec.ts): a test protocol
+  (`test_protocol` and `test_case`, which the developer may work on):
+  tests in nested sections, a collapsible one opened, verdicts given,
+  changed and taken back in a section and in a list, outcomes on the
+  tests, sections and protocol, the sections edited as an outline, a test's
+  own page, and a copy of part of it from the copy dialog, each view
+  checked by axe.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, and signing out of
   Kuria and of the login page's Konklav session.

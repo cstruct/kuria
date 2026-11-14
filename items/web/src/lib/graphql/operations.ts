@@ -149,6 +149,7 @@ export const FieldValues = graphql(`
 		}
 		... on SectionsValue {
 			field
+			value
 		}
 		... on VerdictValue {
 			field
@@ -212,6 +213,8 @@ export const ShownType = graphql(`
 		fields {
 			key
 			name
+			kind
+			assignees
 		}
 		presentation {
 			card
@@ -239,6 +242,8 @@ export const TypeShape = graphql(`
 			required
 			multiline
 			multiple
+			of
+			assignees
 			options {
 				key
 				name
@@ -276,6 +281,12 @@ export const AktPage = graphql(`
 			number
 			title
 			revision
+			outcome
+			copiedFrom {
+				id
+				number
+				title
+			}
 			state {
 				key
 				name
@@ -307,6 +318,7 @@ export const AktPage = graphql(`
 						number
 						title
 						revision
+						outcome
 						state {
 							key
 							name
@@ -486,6 +498,15 @@ export const EditAkt = graphql(`
 		editAkt(input: $input) {
 			id
 			revision
+		}
+	}
+`);
+
+export const CopyAkt = graphql(`
+	mutation CopyAkt($input: CopyAktInput!) {
+		copyAkt(input: $input) {
+			id
+			number
 		}
 	}
 `);

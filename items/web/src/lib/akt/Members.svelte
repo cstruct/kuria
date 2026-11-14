@@ -13,7 +13,11 @@
 	import { truncateMiddle } from '#lib/ui/text.ts';
 	import { boardLabels } from './labels';
 	import { groupMembers, mappedTypes, shownFields, transitionsInto } from './members';
+	import OutcomeBadge from './OutcomeBadge.svelte';
 	import { Reorder, type Place } from './reorder.svelte';
+	import VerdictButtons from './VerdictButtons.svelte';
+	import { judgedOf } from './verdicts';
+	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
 
 	type Columns = NonNullable<AktPageQuery['akt']>['board']['columns'];
 	type Member = Columns[number]['akter'][number];
@@ -31,11 +35,26 @@
 		/** A member dropped on another column, with the transitions that
 		 * lead there and the column's name. */
 		onInto: (member: Member, transitions: Transition[], column: string) => void;
+		/** The viewer's subject, for their own verdicts. */
+		me?: string;
+		/** Gives the viewer's verdict on a member, or takes it back. */
+		onVerdict?: (member: Member, verdict: Verdict | null) => void;
 	}
 
 	type Transition = Member['type']['transitions'][number];
 
-	let { columns, document, contained, editable, busy, onMove, onRemove, onInto }: Props = $props();
+	let {
+		columns,
+		document,
+		contained,
+		editable,
+		busy,
+		onMove,
+		onRemove,
+		onInto,
+		me,
+		onVerdict = () => {}
+	}: Props = $props();
 
 	const grouped = $derived(groupMembers(columns, mappedTypes(document), contained));
 	const memberOf = (number: string) =>
@@ -151,6 +170,7 @@
 								<span class="grip" aria-hidden="true"><GripVertical size={12} /></span>
 								{#if member.title}<Mono value={member.number} max={22} />{/if}
 								<Badge tone={member.state.tone}>{member.state.name}</Badge>
+								{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}
 							</div>
 						</li>
 					{/each}
@@ -165,6 +185,8 @@
 	{@const group = `list:${list.type}`}
 	{@const numbers = list.akter.map((m) => m.number)}
 	{@const listFields = list.akter[0].type.presentation.list.length}
+	{@const outcomes = list.akter.some((m) => m.outcome)}
+	{@const judging = list.akter.some((m) => judgedOf(m, me))}
 	<section class="list" aria-label={list.name}>
 		<h3>{list.name} <span class="count">{list.akter.length}</span></h3>
 		<div class="scroll">
@@ -179,6 +201,8 @@
 							{/each}
 						{/if}
 						<th scope="col">State</th>
+						{#if outcomes}<th scope="col">Outcome</th>{/if}
+						{#if judging}<th scope="col">Verdicts</th>{/if}
 						<th scope="col"><span class="visually-hidden">Actions</span></th>
 					</tr>
 				</thead>
@@ -207,6 +231,22 @@
 								<td>{field.text}</td>
 							{/each}
 							<td><Badge tone={member.state.tone}>{member.state.name}</Badge></td>
+							{#if outcomes}
+								<td
+									>{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}</td
+								>
+							{/if}
+							{#if judging}
+								{@const judged = judgedOf(member, me)}
+								<td
+									>{#if judged}<VerdictButtons
+											number={member.number}
+											{judged}
+											busy={busy || member.state.final === true}
+											onGive={(verdict) => onVerdict(member, verdict)}
+										/>{/if}</td
+								>
+							{/if}
 							<td class="menu"
 								><Menu
 									label={boardLabels(member.number).menu}
