@@ -140,16 +140,26 @@ It keeps each operation's input exactly the mutation's, and its check the same. 
 <!-- akt: PLAN-011-T01 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b3F
-state: todo
+state: done
 in: [PLAN-011]
 links: [Blocks PLAN-011-T02]
 title: Spec batches
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-A "Batches" section in `docs/spec/akter.md`: the mutation, all or nothing with the refused operation named, `@<n>`, expected revisions, locks, the limit, change events after the commit. `batch` and `operation` in `docs/nomenclature.md`.
+A "Batches" section in `docs/spec/akter.md`, before "Change events":
+- `akt.batch`: the ten akt mutations as operations, each answered and checked as itself.
+- `akt.batch.atomic`: in order, in one transaction; the first refused rolls back, with its code, message and position as the extension `operation`.
+- `akt.batch.refer`: `@<n>` for an earlier `createAkt`'s akt, refused as `BAD_REQUEST` before anything runs otherwise.
+- `akt.batch.revision`: expected revisions after the earlier operations.
+- `akt.batch.locks`: the order lock if creating or moving, then every existing akt named, by id, before any operation.
+- `akt.batch.limit`: 1 to 200 operations.
+- `akt.batch.published`: change events published only once it commits.
+
+`docs/nomenclature.md` gains `batch` and `operation`. Lint passes.
 
 <!-- field: acceptance -->
 - The rules say all of PLAN-011's design.

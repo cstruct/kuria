@@ -210,6 +210,49 @@ r[akt.revision.atomic]
 An akt's current state, its new akt revision and its change event MUST be
 written in one transaction, so that none is ever stored without the others.
 
+## Batches
+
+r[akt.batch]
+The API MUST take a batch: a list of operations, each one of the akt
+mutations (`createAkt`, `editAkt`, `performTransition`, `addToContainer`,
+`removeFromContainer`, `transferMember`, `addLink`, `removeLink`,
+`moveAkt` and `draftField`) with that mutation's input, and MUST answer the
+akt each operation answers, in order. Each operation MUST be checked,
+authorized, recorded and given change events exactly as the mutation it
+stands for would be.
+
+r[akt.batch.atomic]
+A batch's operations MUST run in order in one transaction: all of them, or
+none. The first operation refused MUST roll the batch back and refuse it
+with that operation's code and message, and its position, counting from 1,
+as the extension `operation`.
+
+r[akt.batch.refer]
+Wherever an operation takes an akt's number, `@<n>` MUST name the akt that
+the batch's operation `n`, a `createAkt` before it, created. A batch whose
+`@<n>` names an operation that isn't an earlier `createAkt` MUST be refused
+as `BAD_REQUEST` before any operation runs.
+
+r[akt.batch.revision]
+An edit or a transition in a batch MUST name the revision it expects as the
+akt will be after the batch's operations before it, and is refused as
+`STALE` against that (`akt.revision.concurrency`).
+
+r[akt.batch.locks]
+A batch MUST take its locks before running any operation, in the order every
+write takes them: the tenant's order lock, if any operation creates or moves
+an akt, then every existing akt any operation names, by id. It MUST then
+never wait on a lock that a write waiting on one of its own could hold, so
+that batches and single writes never deadlock.
+
+r[akt.batch.limit]
+A batch MUST hold at least 1 and at most 200 operations, and MUST otherwise
+be refused as `BAD_REQUEST`.
+
+r[akt.batch.published]
+A batch's change events MUST be published once it commits, and never for
+a batch rolled back.
+
 ## Change events
 
 r[akt.change-event]

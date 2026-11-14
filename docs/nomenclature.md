@@ -176,6 +176,10 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `akt directory`
   - A directory of Markdown files that local mode reads and writes instead of a Kuria server: `kuria.toml`, akt type documents in `types/`, and akter in `akter/`, each file holding an akt and its nested akter, named by number and title, with git as their history.
 
+- `batch`
+  - A list of akt writes, operations, that the API runs in order in one transaction: all of them, or none.
+- `operation`
+  - One akt write in a batch, counted from 1; `@<n>` names the akt that operation `n` created.
 - `nested akt`
   - An akt stored in its parent's file in an akt directory, after the line `<!-- akt: <NUMBER> -->`, because its number is made from its parent's.
 - `local mode`
