@@ -976,6 +976,8 @@ fn a_directory_goes_to_a_bundle_and_back_unchanged() {
         "--pin",
     ]);
     dir.ok(&["set", "PLAN-001-D01", "decided_by=Dev@Shop.example"]);
+    // Written by hand in files of their own, then moved as the layout says.
+    dir.ok(&["check", "--fix"]);
     dir.commit("Planned");
     let bundle =
         kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
@@ -1266,4 +1268,84 @@ fn history_follows_each_akt_whatever_file_holds_it() {
         (vec![(3, "Plan local mode".to_owned())], false)
     );
     assert!(said("PLAN-001-G01").1, "changed, not committed");
+}
+
+// r[verify cli.local.check]
+// r[verify cli.local.nesting]
+// r[verify cli.local.names]
+#[test]
+fn check_names_akter_out_of_place_and_files_misnamed_and_fixes_them() {
+    let dir = Dir::new();
+    dir.planned();
+    let before: Vec<String> = [
+        "PLAN-001",
+        "PLAN-001-T01",
+        "PLAN-001-T02",
+        "PLAN-001-G01",
+        "PLAN-001-D01",
+    ]
+    .iter()
+    .map(|n| dir.ok(&["cat", n]).markdown)
+    .collect();
+    let refused = dir.refused(&["check"]);
+    for says in [
+        "- akter/PLAN-001-T01.md: is numbered after PLAN-001, so it belongs in akter/PLAN-001.md, after it",
+        "- akter/PLAN-001.md: is named for PLAN-001, its first akt, as `PLAN-001-local-mode.md`",
+    ] {
+        assert!(
+            refused.message.contains(says),
+            "no `{says}` in:\n{}",
+            refused.message
+        );
+    }
+
+    // Fixed: one file, named by its plan, every akt as it was.
+    let fixed = dir.ok(&["check", "--fix", "--format", "json"]).json;
+    assert_eq!(fixed["consistent"], true);
+    assert_eq!(fixed["files"], json!({ "before": 5, "after": 1 }));
+    assert_eq!(akt_files(&dir), ["PLAN-001-local-mode.md"]);
+    let after: Vec<String> = [
+        "PLAN-001",
+        "PLAN-001-T01",
+        "PLAN-001-T02",
+        "PLAN-001-G01",
+        "PLAN-001-D01",
+    ]
+    .iter()
+    .map(|n| dir.ok(&["cat", n]).markdown)
+    .collect();
+    assert_eq!(after, before);
+
+    // An akt stored twice, one nested where it isn't numbered after
+    // anything, and a file left named by an old title.
+    let path = dir.root.join("akter/PLAN-001-local-mode.md");
+    let text = std::fs::read_to_string(&path).unwrap();
+    std::fs::write(
+        dir.root.join("akter/PLAN-001-T01.md"),
+        file(&dir, "PLAN-001-T01").replace("---\ntype:", "---\nnumber: PLAN-001-T01\ntype:"),
+    )
+    .unwrap();
+    std::fs::write(
+        &path,
+        text.replace("title: Local mode", "title: Local mode, renamed"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.root.join("akter/PLAN-002.md"),
+        "---\nnumber: PLAN-002\ntype: plan\nrevision: 1\nrank: \"9\"\nstate: draft\ntitle: Other\n---\n\n<!-- akt: PLAN-003 -->\n---\ntype: plan\nrevision: 1\nrank: \"10\"\nstate: draft\ntitle: Third\n---\n",
+    )
+    .unwrap();
+    let refused = dir.refused(&["check"]);
+    for says in [
+        "- akter/PLAN-001-local-mode.md: PLAN-001-T01: is stored twice: also in akter/PLAN-001-T01.md",
+        "- akter/PLAN-001-local-mode.md: is named for PLAN-001, its first akt, as `PLAN-001-local-mode-renamed.md`",
+        "- akter/PLAN-002.md: PLAN-003: isn't numbered after an akt of its file, so it begins a file of its own",
+        "- akter/PLAN-002.md: is named for PLAN-002, its first akt, as `PLAN-002-other.md`",
+    ] {
+        assert!(
+            refused.message.contains(says),
+            "no `{says}` in:\n{}",
+            refused.message
+        );
+    }
 }

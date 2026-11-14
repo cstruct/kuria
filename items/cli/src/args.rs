@@ -227,7 +227,12 @@ pub enum Command {
     Init,
     /// Check a whole akt directory as a server would hold it, naming each
     /// problem's file: `kuria check --dir <path>`.
-    Check,
+    Check {
+        /// First move every akt into the file it belongs in, and name each
+        /// file by its first akt, as writes do.
+        #[arg(long)]
+        fix: bool,
+    },
     /// Export a bundle: selected akt types, with or without their akter,
     /// or the whole tenant, into a new directory. With `--to-dir`, the
     /// selected types and their akter as a new akt directory instead.

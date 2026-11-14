@@ -110,8 +110,8 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
                 json: serde_json::json!({ "dir": root }),
             })
         }
-        (Command::Check, Some(root)) => local::check::check(&root),
-        (Command::Check, None) => Err(CliError::refused(
+        (Command::Check { fix }, Some(root)) => local::check::run(&root, fix),
+        (Command::Check { .. }, None) => Err(CliError::refused(
             "BAD_REQUEST",
             "`check` checks an akt directory: `kuria check --dir <path>`",
         )),

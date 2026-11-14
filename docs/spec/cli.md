@@ -277,7 +277,9 @@ kind its type declares, containment rules held, orders unique, each akt
 stored once and in the file `cli.local.nesting` puts it in, and each file
 named as `cli.local.names` says. It MUST name each problem's file, and the
 akt's number for a nested akt, and exit with 1 if there is any, 0 if
-none.
+none. `kuria check --fix` MUST first move every akt into the file
+`cli.local.nesting` puts it in and name every file, as a write would,
+changing no akt, under the directory's lock, then check.
 
 r[cli.local.convert]
 `kuria export --types <key>,… --to-dir <path>`, signed in to a server, MUST

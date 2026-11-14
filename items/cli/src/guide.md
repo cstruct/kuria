@@ -16,7 +16,11 @@ has, then work with what it answers.
 With `--dir <path>`, or `KURIA_DIR`, every command below works on an akt
 directory instead of a server, by the same rules and with the same
 answers. An akt directory has `kuria.toml`, the akt types in `types/`,
-and each akt as its akt file in `akter/<number>.md`. Git is the history.
+and the akter in `akter/`: each file named by its first akt's number and
+title, such as `akter/PLAN-008-the-cli-in-local-mode.md`, holds that akt
+and, after `<!-- akt: <NUMBER> -->` lines, every akt numbered after it.
+Git is the history. Change akter through the commands, which keep files
+in that shape; `cat` and `apply` still work on one akt at a time.
 
 - `kuria init --dir <path>` makes one; put the akt types in `types/`, or
   `kuria types define <file>`.
@@ -27,6 +31,8 @@ and each akt as its akt file in `akter/<number>.md`. Git is the history.
   `user.email`.
 - After a merge or pull, run `kuria check`: it names each problem's file,
   such as two branches taking the same number, and exits 1 if any.
+  `kuria check --fix` first moves akter into the files they belong in and
+  renames files by their titles.
 - Writes lock the directory, so agents may write at once.
 - Signing in, users, contacts, drafts, attachments and bundles aren't
   there (`LOCAL_UNSUPPORTED`, exit 1). Signed in, `kuria export --types

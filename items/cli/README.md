@@ -126,9 +126,12 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 - **The directory** ([`src/local/dir.rs`](src/local/dir.rs)): `kuria init
   --dir <path>` makes `kuria.toml` (format 1), `types/` and `akter/`. Each
   `types/<key>.json` is validated as `defineAktType` validates it and kept
-  as a server stores it; each `akter/<number>.md` is an akt file plus
-  `rank`, read and checked against its type, with any problem naming the
-  file (`BAD_FILE`).
+  as a server stores it. Each file in `akter/` begins with an akt file plus
+  `rank`, and holds its nested akter after `<!-- akt: <NUMBER> -->` lines
+  (outside fenced code blocks), each without `number`. Each akt is read
+  and checked against its type, found by its number whatever the file is
+  named, with any problem naming the file, and the number of a nested akt
+  (`BAD_FILE`).
 - **The same answers** ([`src/local/answers.rs`](src/local/answers.rs)): the
   directory answers what Kuria's GraphQL would for each of the CLI's
   queries, so every read renders through the same code: `types`, `schema`,
@@ -175,7 +178,11 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   allows, pins the target reached, both sides listing each link, and
   unique ranks. It answers `INCONSISTENT` (exit 1) with each problem as
   `- <file>: <what>`; `mise run lint` runs it on `plans/` once that
-  exists. A merge left unresolved shows as a file that doesn't read.
+  exists. A merge left unresolved shows as a file that doesn't read. It
+  also names an akt stored twice, one outside its parent's file or nested
+  where it isn't numbered after an akt of the file, and a file not named
+  by its first akt. `check --fix` first moves every akt to where it
+  belongs and names every file, through the writer, changing no akt.
 - **Converting** ([`src/local/convert.rs`](src/local/convert.rs),
   `cli.local.convert`), signed in, by way of a bundle:
   `export --types <key>,… --to-dir <path>` writes the bundle of those types

@@ -10,6 +10,8 @@ use serde_json::json;
 
 use super::answers;
 use super::dir::{AktDir, LocalAkt, LocalType, files, read_file, read_type};
+use super::layout;
+use super::write::Writer;
 use crate::error::CliError;
 use crate::output::Answer;
 
@@ -21,17 +23,21 @@ struct Problems {
 
 impl Problems {
     fn add(&mut self, path: &Path, message: impl Into<String>) {
-        let file = path
-            .strip_prefix(&self.root)
-            .unwrap_or(path)
-            .display()
-            .to_string();
+        let file = self.relative(path);
         let message = message.into();
         // A refusal reading the file already names it.
         let message = message
             .strip_prefix(&format!("{}: ", path.display()))
             .map_or(message.clone(), str::to_owned);
         self.found.push((file, message));
+    }
+
+    /// `path`, from the directory's root.
+    fn relative(&self, path: &Path) -> String {
+        path.strip_prefix(&self.root)
+            .unwrap_or(path)
+            .display()
+            .to_string()
     }
 
     /// What is wrong with `akt`, named by its number too if it is nested.
@@ -52,6 +58,37 @@ pub(super) fn said(text: &str) -> Option<(&str, &str, Option<i32>)> {
         Some((number, pin)) => (name, number, pin.parse().ok()),
         None => (name, target, None),
     })
+}
+
+/// `kuria check [--fix]`: with `fix`, the directory's akter first moved
+/// into the files they belong in, and every file named, then checked.
+// r[impl cli.local.check]
+pub fn run(root: &Path, fix: bool) -> Result<Answer, CliError> {
+    if !fix {
+        return check(root);
+    }
+    let before = files(&root.join("akter"), "md")?;
+    let mut w = Writer::open(root, None)?;
+    w.touch_all();
+    w.save()?;
+    let after = files(&root.join("akter"), "md")?;
+    let checked = check(root);
+    let said = format!(
+        "Moved the akter of {} files into {} files.",
+        before.len(),
+        after.len()
+    );
+    match checked {
+        Ok(mut answer) => {
+            answer.markdown = format!("{said}\n\n{}", answer.markdown);
+            answer.json["files"] = json!({ "before": before.len(), "after": after.len() });
+            Ok(answer)
+        }
+        Err(e) => Err(CliError {
+            message: format!("{said}\n\n{}", e.message),
+            ..e
+        }),
+    }
 }
 
 /// Checks the akt directory at `root`.
@@ -111,6 +148,7 @@ pub fn check(root: &Path) -> Result<Answer, CliError> {
         akter,
     };
     check_akter(&dir, &mut problems);
+    check_names(&dir, &mut problems);
 
     if problems.found.is_empty() {
         return Ok(Answer {
@@ -158,10 +196,24 @@ fn check_akter(dir: &AktDir, problems: &mut Problems) {
                 ),
             );
         }
+        let mut twice = false;
         if let Some(other) = numbers.insert(akt.number.to_lowercase(), akt) {
-            problems.of(akt, format!("has the number of {}", other.path.display()));
+            let other_file = problems.relative(&other.path);
+            twice = other.number == akt.number;
+            if !twice {
+                problems.of(
+                    akt,
+                    format!("has the number of {} in {other_file}", other.number),
+                );
+            } else if other.path == akt.path {
+                problems.of(akt, "is in its file twice");
+            } else {
+                problems.of(akt, format!("is stored twice: also in {other_file}"));
+            }
         }
-        if let Some(other) = ranks.insert(&akt.rank, akt) {
+        check_place(dir, akt, problems);
+        // An akt stored twice has its own rank twice, which says nothing.
+        if let Some(other) = ranks.insert(&akt.rank, akt).filter(|_| !twice) {
             problems.of(akt, format!("has the rank of {}", other.number));
         }
         check_containers(dir, akt, problems);
@@ -288,6 +340,50 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
                     "lists `{text}`, but {} doesn't list `{counterpart}`",
                     other.number
                 ),
+            );
+        }
+    }
+}
+
+/// Whether `akt` is in the file `cli.local.nesting` puts it in.
+// r[impl cli.local.check]
+// r[impl cli.local.nesting]
+fn check_place(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
+    match layout::parent(dir, akt) {
+        Some(parent) if parent.path != akt.path => {
+            let file = problems.relative(&parent.path);
+            problems.of(
+                akt,
+                format!(
+                    "is numbered after {}, so it belongs in {file}, after it",
+                    parent.number
+                ),
+            );
+        }
+        None if akt.nested => problems.of(
+            akt,
+            "isn't numbered after an akt of its file, so it begins a file of its own",
+        ),
+        _ => {}
+    }
+}
+
+/// Whether each file is named by the akt it begins with
+/// (`cli.local.names`).
+// r[impl cli.local.check]
+// r[impl cli.local.names]
+fn check_names(dir: &AktDir, problems: &mut Problems) {
+    for akt in dir.akter.iter().filter(|a| !a.nested) {
+        let named = layout::file_name(&akt.number, answers::title(dir, akt).as_deref());
+        let name = akt
+            .path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        if name != named {
+            problems.add(
+                &akt.path,
+                format!("is named for {}, its first akt, as `{named}`", akt.number),
             );
         }
     }

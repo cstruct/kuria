@@ -53,6 +53,63 @@ Success: `plans/` holds one file per plan, named by its title; `kuria check --di
 - The parity test (`e2e/tests/parity.spec.ts`) and the conversion e2e test pass unchanged.
 - `plans/` moved to the new layout: `kuria check` passes, every akt's `cat` is the same before and after, and the file count is 8.
 
+<!-- akt: PLAN-009-D01 -->
+---
+type: decision
+revision: 2
+rank: b2q
+state: decided
+in: [PLAN-009]
+title: "Nest an akt in its parent's file when its number is made from its parent's"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+237 files in `plans/akter/`, one per akt, are hard to browse: a plan and its tasks are scattered across dozens of files, and the whole plan no longer reads top to bottom as the Markdown plans did.
+
+<!-- field: decision -->
+An akt whose number pattern uses `{parent}` is stored in its parent's file, marked `<!-- akt: <NUMBER> -->`. Any other akt has a file of its own. Nothing in an akt type or `kuria.toml` says so; the number pattern does.
+
+<!-- field: why -->
+The number already says where an akt belongs, and it never changes, so the file holding an akt never has to move. A setting per directory or per type would be one more thing to agree on and check. Nesting by the first container in `in` was rejected: `in` changes with transfers, which would move akter between files.
+
+<!-- akt: PLAN-009-D02 -->
+---
+type: decision
+revision: 2
+rank: b2r
+state: decided
+in: [PLAN-009]
+title: "Name each file by its number and its title, the number deciding"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+A file named only by its number (`PLAN-008.md`) says nothing to a person browsing the directory or reading a diff.
+
+<!-- field: decision -->
+Files are named `<NUMBER>-<slug>.md`, the slug made from the title (lower case, ASCII letters and digits joined by `-`, at most 40 characters, cut at a word), or `<NUMBER>.md` with no slug. A write that changes the title renames the file. Akter are found by the number in their front matter, never by file name.
+
+<!-- field: why -->
+The name is for people; the number is for the CLI and for links, so a rename breaks nothing, and git records it as a rename. Keeping the slug from creation was rejected: names would drift from titles, which is what the name is for.
+
+<!-- akt: PLAN-009-G01 -->
+---
+type: gap
+revision: 4
+rank: b2s
+state: closed
+in: [PLAN-009]
+links: [Resolved by PLAN-009-T05]
+title: How an akt directory moves to the new layout
+---
+
+<!-- field: description -->
+`plans/` and any other akt directory hold one file per akt today. Options: reading accepts both layouts and each write saves in the new one, so a directory moves file by file; or one explicit command (such as `kuria check --rewrite`) rewrites the whole directory in one commit. A mixed directory is harder to reason about, and a merge of a moved and an unmoved branch would hold an akt twice, which `check` must then name.
+
+<!-- field: resolution -->
+One explicit step: `kuria check --fix` (PLAN-009-T04) moves every akt into the file it belongs in and names every file, as a write would, changing no akt. Reads accept any layout, finding akter by number, but `check`, and so lint, names every akt out of place, so a directory moves in one commit rather than file by file. `plans/` moved so in PLAN-009-T05. The same command puts akter back in place after a merge.
+
 <!-- akt: PLAN-009-G02 -->
 ---
 type: gap
@@ -69,6 +126,67 @@ With a plan's tasks in one file, two branches that each change a task of the sam
 
 <!-- field: resolution -->
 Accepted. Two branches changing different akter of one plan edit different parts of its file, which git merges. Two branches adding to the same plan conflict on the plan's `revision` line and near each other at its end, where today they already clash on the new numbers. Resolve by hand, then run `kuria check`, which names what is left. Keeping a container's revision out of the hunk adding a member touches would mean not bumping it, which the server does (`cli.local.revision`), so it stays.
+
+<!-- akt: PLAN-009-T01 -->
+---
+type: task
+revision: 6
+rank: b2u
+state: done
+in: [PLAN-009]
+links: [Blocks PLAN-009-T02]
+title: Spec nesting and file names
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+In `docs/spec/cli.md`:
+- **`cli.local.layout`, rewritten:** each file begins with an akt and holds its nested akter after `<!-- akt: <NUMBER> -->` lines, each without `number`. Such a line in a fenced code block is text. Akter are found by number, whatever file holds them.
+- **`cli.local.nesting`, new:** an akt numbered from its parent's (`{parent}`) is stored in the file that holds the parent, in the directory's order, after its parent. Which file holds an akt doesn't say what it is in. `in` stays explicit, the parent included, so that an akt removed from its parent stays in the parent's file and is in nothing; the plan's design is corrected to match.
+- **`cli.local.names`, new:** `<NUMBER>-<slug>.md`, the slug made from the title (lower case, runs of other characters made one `-`, trimmed, cut at a `-` to at most 40 characters), else `<NUMBER>.md`. A title change renames the file in the same change.
+- **`cli.local.check`, extended:** an akt stored twice or in the wrong file, and a misnamed file, are named, with the akt's number for a nested one.
+
+`docs/nomenclature.md` gains `nested akt`, and `akt directory` now describes the layout.
+
+For PLAN-009-G01: since reads find akter by number in any file, a directory in the old layout still reads, but `check`, and so lint, names every akt that isn't in its parent's file. A directory must therefore move in one step, and T05 decides the command.
+
+<!-- field: acceptance -->
+- The rules say where an akt is stored, the marker, nesting deeper, `in` of a nested akt, the slug, renames on a title change, and what `check` names.
+- `mise run lint` passes.
+
+<!-- akt: PLAN-009-T02 -->
+---
+type: task
+revision: 8
+rank: b2v
+state: done
+in: [PLAN-009]
+links: [Blocked by PLAN-009-T01, Blocks PLAN-009-T03, Blocks PLAN-009-T04]
+title: Read nested akter and named files
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+**Reading** (`items/cli/src/local/dir.rs`):
+- `read_file` splits each file at its `<!-- akt: <NUMBER> -->` lines, skipping those inside fenced code blocks.
+- It reads the first part and each nested akt as akt files. A nested akt takes its number from its line, and one that also gives `number` is refused.
+- Each `LocalAkt` keeps its file and whether it is nested. A problem in a nested akt names both the file and the akt's number, for reads and for `check`.
+- A file's name no longer has to be its number: akter are found by number in any file, and T04's `check` will name a misnamed file.
+
+**Parents:** `kuria-config` gains `NumberPattern::parent_of(number, is_parent)`, the parent a number was made from among those that could be, so `PLAN-001-T01-T02` reads as numbered after `PLAN-001-T01`. T03 and T04 need it.
+
+**A guard until T03:** a write that touches a file holding other akter is refused as `LOCAL_UNSUPPORTED`, and the file is left as it was.
+
+**Tests:**
+- A local-mode test reads a plan file with two nested tasks and an example marker inside a fence. `ls`, `cat` and `show` answer as for separate files, a problem in the second task names the file and the task's number, and a write is refused without changing the file.
+- A `kuria-config` test reads parents back, nested two deep and past 99.
+
+Lint, `mise run test`, and the CLI and parity e2e tests (8) pass.
+
+<!-- field: acceptance -->
+- Every read answers as before on a nested directory.
+- A marker in a fenced code block is text.
+- A problem in a nested akt names its file and number.
 
 <!-- akt: PLAN-009-T03 -->
 ---
@@ -105,6 +223,71 @@ Until T05, `plans/` is mixed: recording through the CLI moves the akter it touch
 - A change rewrites only the files it touched, still under the lock and through a rename.
 - A title change renames the file in the same change.
 - The parity test and the conversion e2e test pass.
+
+<!-- akt: PLAN-009-T04 -->
+---
+type: task
+revision: 7
+rank: b2x
+state: done
+in: [PLAN-009]
+links: [Blocked by PLAN-009-T02, Blocks PLAN-009-T05]
+title: check for nesting and names
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+**`check`** (`items/cli/src/local/check.rs`) now names:
+- an akt numbered after its parent but outside the parent's file (`is numbered after PLAN-001, so it belongs in akter/PLAN-001-….md, after it`);
+- a nested akt not numbered after an akt of its file;
+- an akt stored twice, or twice in one file, without the redundant duplicate-rank line;
+- a file not named by its first akt, giving the name it should have.
+
+A nested akt's problems name its number (from T03).
+
+**`kuria check --fix`**, for PLAN-009-G01, the explicit one-step move: under the lock, it marks every akt touched and saves through the writer. Every akt moves to the file it belongs in and every file is renamed by its first akt, with no akt changed. Then it checks. `cli.local.check` says so. The CLI README and `kuria guide` describe it.
+
+**Tests:**
+- A local-mode test finds the old layout's misplaced akter and misnamed file. `--fix` makes one file named by the plan, with every akt's `cat` unchanged. Then an akt stored twice, a stray nested akt and a stale name are each named.
+- The round-trip test moves its hand-written directory with `--fix` before converting.
+- On a copy of `plans/`, `--fix` made 9 files from 244, one per plan, with all 248 akter reading the same.
+
+`mise run test` and the CLI and parity e2e tests pass. Lint passes except for its `check` of `plans/` itself, which reports 478 problems: the old layout, which T05 moves with `check --fix`.
+
+<!-- field: acceptance -->
+- Each problem is named with its file and the akt's number.
+- A consistent nested directory passes.
+
+<!-- akt: PLAN-009-T05 -->
+---
+type: task
+revision: 8
+rank: b2y
+state: done
+in: [PLAN-009]
+links: [Blocked by PLAN-009-T03, Blocked by PLAN-009-T04, Resolves PLAN-009-G01]
+title: Move plans/ to the new layout
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+`mise run plans -- check --fix` moved `plans/` into the new layout: the akter of 243 files into 9, one per plan, each named by its number and title (for example `PLAN-008-the-cli-in-local-mode-akter-as-markdown.md`). `kuria check` passes.
+
+Every one of the 248 akter's `cat` is byte for byte the same before and after. `history` still answers each akt's commits from before the move, since history follows revisions across files and the move changes none.
+
+Docs:
+- **`kuria guide`:** describes the layout, and says to change akter through the commands.
+- **The CLI README:** describes the layout.
+- **`.agents/plans/PLANS.md`:** says a plan is one file to read top to bottom but to change through the CLI, and to run `check --fix` after resolving a merge conflict in a plan's file.
+
+PLAN-009-G01 is closed: `check --fix`, in one commit.
+
+Lint (with `check` on `plans/`) and `mise run test` pass.
+
+<!-- field: acceptance -->
+- `plans/akter/` holds 8 files, one per plan, named by title.
+- `kuria check --dir plans` passes, and every akt's `cat` is the same before and after.
+- The docs describe the layout.
 
 <!-- akt: PLAN-009-G03 -->
 ---

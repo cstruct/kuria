@@ -234,6 +234,13 @@ impl Writer {
         Ok(())
     }
 
+    /// Marks every akt as touched, so that saving moves each into the file
+    /// it belongs in and names every file, changing no akt.
+    pub fn touch_all(&mut self) {
+        self.touched
+            .extend(self.dir.akter.iter().map(|a| a.number.clone()));
+    }
+
     /// The highest rank in the directory.
     #[must_use]
     pub fn last_rank(&self) -> Option<&str> {
