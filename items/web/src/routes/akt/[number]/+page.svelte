@@ -398,6 +398,7 @@
 			</div>
 			<div class="actions">
 				<Button
+					disabled={busy}
 					onclick={() => {
 						refusal = null;
 						copyOpen = true;
@@ -406,9 +407,11 @@
 				{#if actions.primary}
 					{@const primary = actions.primary}
 					{#each actions.others as transition (transition.key)}
-						<Button onclick={() => begin(transition)}>{transition.name}</Button>
+						<Button disabled={busy} onclick={() => begin(transition)}>{transition.name}</Button>
 					{/each}
-					<Button variant="primary" onclick={() => begin(primary)}>{primary.name}</Button>
+					<Button variant="primary" disabled={busy} onclick={() => begin(primary)}
+						>{primary.name}</Button
+					>
 				{/if}
 			</div>
 		</header>

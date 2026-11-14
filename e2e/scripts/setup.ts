@@ -147,7 +147,8 @@ const people = {
 	releaseManager: await person(tenant, 'rm@shop.example', [
 		'reader',
 		'contacts-manager',
-		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] }
+		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] },
+		{ role: 'developer-work', at: ['test_protocol', 'test_case'] }
 	]),
 	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])
 };

@@ -1,0 +1,25 @@
+{
+  "key": "test_case",
+  "name": "Test case",
+  "number": "{parent}-C{seq:2}",
+  "created_in": ["test_protocol"],
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "steps", "name": "Steps", "kind": "text", "multiline": true,
+      "description": "What to do, in order." },
+    { "key": "expected", "name": "Expected result", "kind": "text", "multiline": true },
+    { "key": "testers", "name": "Testers", "kind": "user", "multiple": true,
+      "description": "Who runs it; each gives a verdict." },
+    { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" },
+    { "key": "notes", "name": "Notes", "kind": "text", "multiline": true,
+      "description": "What was seen, such as why it failed." }
+  ],
+  "states": [
+    { "key": "open", "name": "Open", "initial": true }
+  ],
+  "transitions": [],
+  "presentation": {
+    "icon": "flask-conical", "colour": "blue",
+    "card": ["testers"], "list": ["testers"]
+  }
+}

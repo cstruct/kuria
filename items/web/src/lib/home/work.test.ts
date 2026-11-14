@@ -11,7 +11,9 @@ describe('my work', () => {
 					fields: [
 						{ key: 'manager', kind: 'USER' },
 						{ key: 'go', kind: 'CHECKBOX' },
-						{ key: 'title', kind: 'TEXT' }
+						{ key: 'title', kind: 'TEXT' },
+						// Several people can't be filtered by.
+						{ key: 'testers', kind: 'USER', multiple: true }
 					]
 				},
 				{ key: 'backlog', fields: [{ key: 'title', kind: 'TEXT' }] }

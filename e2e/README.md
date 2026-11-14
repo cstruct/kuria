@@ -26,8 +26,8 @@ mise exec -- npx --prefix e2e playwright test -g "release"
 mise run e2e:serve
 ```
 
-starts the same stack, defines the release-management example's akt
-types, and prints who can sign in at <http://localhost:18090> (use
+starts the same stack, defines the release-management and
+test-protocols examples' akt types, and prints who can sign in at <http://localhost:18090> (use
 `localhost`, not `127.0.0.1`). Each start begins with an empty Kuria and
 a fresh Konklav. Ctrl-C stops the server.
 
@@ -133,13 +133,16 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   that leads there (or refused where none does); an akt type's list
   filtered by state and by field values in the address, sorted, and
   loading more a page at a time.
-- [`tests/protocols.spec.ts`](tests/protocols.spec.ts): a test protocol
-  (`test_protocol` and `test_case`, which the developer may work on):
-  tests in nested sections, a collapsible one opened, verdicts given,
-  changed and taken back in a section and in a list, outcomes on the
-  tests, sections and protocol, the sections edited as an outline, a test's
-  own page, and a copy of part of it from the copy dialog, each view
-  checked by axe.
+- [`tests/test-protocols.spec.ts`](tests/test-protocols.spec.ts): the
+  [test-protocols example](../docs/examples/test-protocols/README.md):
+  a template of three sections copied with two of them from the copy
+  dialog, started, and run by two testers (the developer and the release
+  manager, who may work on `test_protocol` and `test_case`), giving,
+  changing and taking back verdicts in its sections, a collapsible one
+  opened, and in its list; a test case taken out of the sections in the
+  outline; each test case's, section's and the protocol's outcome; the run
+  finished, and the template unchanged. axe checks the copy dialog, the
+  run in its sections and the outline.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, and signing out of
   Kuria and of the login page's Konklav session.

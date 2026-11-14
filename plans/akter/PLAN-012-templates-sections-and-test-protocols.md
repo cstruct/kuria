@@ -194,7 +194,7 @@ Settled in PLAN-012-T01: a section has an optional Markdown `text` beside its op
 <!-- akt: PLAN-012-G02 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b3R
 state: open
 in: [PLAN-012]
@@ -203,6 +203,8 @@ title: Outcomes in filters and transitions
 
 <!-- field: description -->
 An outcome is derived on read (PLAN-012-D05), so it can't yet be filtered on (`akt.filter`) or required by a transition, such as a protocol that can only be finished when no test is pending, or a release that needs a passed protocol. Both need the outcome computed in queries and in transition checks.
+
+Filtering by a field that names several people (a test case's testers) isn't supported either, so a tester's test cases don't show in their "My work" on Home, which leaves such fields out (PLAN-012-T06). Filtering by one of them, as `--where testers=@me` would, would fix both.
 
 <!-- akt: PLAN-012-G03 -->
 ---
@@ -437,16 +439,43 @@ Lint, `mise run test` (337 Rust, 61 app) and all 29 e2e tests pass.
 <!-- akt: PLAN-012-T06 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3Z
-state: todo
+state: done
 in: [PLAN-012]
 links: [Blocked by PLAN-012-T03, Blocked by PLAN-012-T04, Blocked by PLAN-012-T05]
 title: A test protocol example
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`docs/examples/test-protocols` with `protocol` and `test`, its README, and an e2e walkthrough: copy a protocol from the template with two of its three sections, record verdicts as two testers, and see each outcome.
+The test-protocols example puts templates, sections, verdicts and outcomes together, and an e2e walkthrough runs it.
+
+**`docs/examples/test-protocols`:**
+- `test_protocol` (`TP-001`): title, scope, owner, a `layout` sections field of test cases, and a conclusion that finishing requires. Its states are draft, template, running, done and withdrawn: kept as a template, revised, started, finished or withdrawn.
+- `test_case` (`TP-001-C01`, created in a protocol): steps, expected result, `testers` (several people), a `verdict` field on them, and notes. It has one state: a test that no longer applies is removed from its run, not retired, since a retired one would still count toward the protocol's outcome.
+- The keys are `test_protocol` and `test_case`, not the plan's `protocol` and `test`: they say what they are among other types, and are less likely to clash.
+- The README covers how it fits together, a run in the app and from the CLI, the file form, and Konklav roles (test lead, tester). The whole flow was tried in local mode too.
+
+**The walkthrough** (`e2e/tests/test-protocols.spec.ts`, which replaces T05's `protocols.spec.ts`, now on the example's own documents):
+1. The admin makes a template of five test cases in three sections, one collapsible, each with two testers.
+2. The developer copies it with two of the sections from the copy dialog, starts the run, and gives verdicts.
+3. A failure fails its section and the protocol while the other tester hasn't answered.
+4. The developer takes a case out of the sections in the outline, and it is listed after them.
+5. The release manager gives verdicts in the sections and in the list. The developer takes back a failure and passes it, so the section and the protocol pass.
+6. The run is finished with a conclusion, and the template is unchanged.
+
+axe checks the copy dialog, the run and the outline.
+
+**e2e support:** `defineTestProtocols()` defines the example, and `e2e:serve` defines it too, so it can be clicked around in. The seed grants the release manager, as well as the developer, work at `test_protocol` and `test_case`.
+
+**Docs:** `requirements.md` (the new field kinds, templates, and the example), `architecture.md` (sections, verdicts, outcomes and copying) and the e2e README.
+
+**Found by the walkthrough, fixed:**
+- Home's "My work" asked to filter by `testers`, which the server refuses for a several-people field. It now leaves such fields out (`work.ts`). A tester's test cases still don't show there: added to G02.
+- A transition opened while an earlier change was still settling lost what was typed, because the settled change resets the editors (`finish` was refused for a missing conclusion). The header's actions are now disabled while a change is in flight.
+
+Lint, `mise run test` (337 Rust, 61 app) and all 29 e2e tests pass. One full run before the fixes had the members test's keyboard reorder fail once; it passed alone twice and in every later full run.
 
 <!-- field: acceptance -->
 - The example defines cleanly and its walkthrough passes in `mise run e2e`.

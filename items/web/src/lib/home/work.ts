@@ -5,14 +5,16 @@
 
 interface TypeShape {
 	key: string;
-	fields: readonly { key: string; kind: string }[];
+	fields: readonly { key: string; kind: string; multiple?: boolean }[];
 }
 
-/** The lists to ask for: each user field and checkbox of each type. */
+/** The lists to ask for: each user field naming one person, and each
+ * checkbox, of each type. A field naming several can't be filtered by
+ * (`akt.filter`). */
 export function workQueries(types: readonly TypeShape[]): { type: string; field: string }[] {
 	return types.flatMap((t) =>
 		t.fields
-			.filter((f) => f.kind === 'USER' || f.kind === 'CHECKBOX')
+			.filter((f) => (f.kind === 'USER' && !f.multiple) || f.kind === 'CHECKBOX')
 			.map((f) => ({ type: t.key, field: f.key }))
 	);
 }
