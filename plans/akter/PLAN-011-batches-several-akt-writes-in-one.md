@@ -222,16 +222,25 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-011-T04 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b3I
-state: todo
+state: done
 in: [PLAN-011]
 links: [Blocked by PLAN-011-T03]
 title: Server tests for batches
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Server tests: a batch refused at its last operation changes nothing and names it; `@<n>` used and refused; each operation authorized as alone; the limit; change events in order after the commit; batches and single writes at once from several connections without a deadlock.
+`items/server/tests/batches.rs`, against Postgres, six tests:
+- **Every write or none:** a plan, two tasks in it through `@1`, a link and a transition commit in one batch; a refusal at operation 2 undoes operation 1.
+- **No trace:** a create, a link and an edit before a stale edit leave nothing, not even the number the create took, which the next create gets. A refusal in the middle stops there.
+- **Checked before running:** `@<n>` naming nothing, or an edit, is refused as `BAD_REQUEST` with its position before any operation runs. 0 or 201 operations are refused without a position. 200 edits of one task, each on the revision the one before left, all commit.
+- **Authorized as alone:** a task editor's batch editing a task and a plan is `FORBIDDEN` at 2, and the task is unchanged.
+- **Revisions and change events:** expected revisions count earlier operations. The change events are the link's two revisions, then the edit's and the transition's, with consecutive `seq`s. A rolled-back batch leaves none.
+- **No deadlocks:** 4 workers sending batches (create, link both ways, move, add to a second plan) and 4 sending single add, move and remove on the same akter, 6 rounds each. Every batch commits, and the only refusals are the expected ALREADY_MEMBER and NOT_MEMBER.
+
+The deadlock test was checked by turning off the batch's up-front row locks: it then failed 5 runs of 5 with INTERNAL, Postgres's deadlock. With them, it passed every run. Lint, `mise run test` (320 Rust tests) and all 27 e2e tests pass.
 
 <!-- field: acceptance -->
 - The tests pass in `mise run test`.
