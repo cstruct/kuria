@@ -33,36 +33,11 @@ impl Akter {
         member: &str,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
-                require_edit(caller, &c).await?;
-                check_unfrozen(&c)?;
-                check_accepts(conn, tenant, &c, &m, None).await?;
-                let now = Utc::now();
-                insert(conn, caller, tenant, &c, &m, now).await?;
-                record(
-                    conn,
-                    caller,
-                    &mut m,
-                    reason.as_deref(),
-                    json!({ "added": [membership_entry(&c.akt)] }),
-                    now,
-                )
-                .await?;
-                record(
-                    conn,
-                    caller,
-                    &mut c,
-                    reason.as_deref(),
-                    json!({ "added_member": [membership_entry(&m.akt)] }),
-                    now,
-                )
-                .await?;
-                Ok(c.akt)
+                add_member_in(conn, caller, container, member, reason.clone()).await
             })
             .await;
         self.committed(result)
@@ -78,35 +53,11 @@ impl Akter {
         member: &str,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
-                require_edit(caller, &c).await?;
-                check_unfrozen(&c)?;
-                end(conn, tenant, &c, &m).await?;
-                let now = Utc::now();
-                record(
-                    conn,
-                    caller,
-                    &mut m,
-                    reason.as_deref(),
-                    json!({ "removed": [membership_entry(&c.akt)] }),
-                    now,
-                )
-                .await?;
-                record(
-                    conn,
-                    caller,
-                    &mut c,
-                    reason.as_deref(),
-                    json!({ "removed_member": [membership_entry(&m.akt)] }),
-                    now,
-                )
-                .await?;
-                Ok(c.akt)
+                remove_member_in(conn, caller, container, member, reason.clone()).await
             })
             .await;
         self.committed(result)
@@ -124,63 +75,145 @@ impl Akter {
         to: &str,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        let tenant: Uuid = caller.actor.tenant.into();
-        if from == to {
-            return Err(AktError::AlreadyMember {
-                container: to.to_owned(),
-                member: member.to_owned(),
-            });
-        }
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let [mut source, mut target, mut m] =
-                    lock(conn, caller, tenant, [from, to, member]).await?;
-                require_edit(caller, &source).await?;
-                require_edit(caller, &target).await?;
-                check_unfrozen(&source)?;
-                check_unfrozen(&target)?;
-                end(conn, tenant, &source, &m).await?;
-                // The membership just ended doesn't count against exclusivity.
-                check_accepts(conn, tenant, &target, &m, Some(source.akt.id)).await?;
-                let now = Utc::now();
-                insert(conn, caller, tenant, &target, &m, now).await?;
-                record(
-                    conn,
-                    caller,
-                    &mut m,
-                    reason.as_deref(),
-                    json!({
-                        "removed": [membership_entry(&source.akt)],
-                        "added": [membership_entry(&target.akt)],
-                    }),
-                    now,
-                )
-                .await?;
-                record(
-                    conn,
-                    caller,
-                    &mut source,
-                    reason.as_deref(),
-                    json!({ "removed_member": [membership_entry(&m.akt)] }),
-                    now,
-                )
-                .await?;
-                record(
-                    conn,
-                    caller,
-                    &mut target,
-                    reason.as_deref(),
-                    json!({ "added_member": [membership_entry(&m.akt)] }),
-                    now,
-                )
-                .await?;
-                Ok(target.akt)
+                transfer_member_in(conn, caller, member, from, to, reason.clone()).await
             })
             .await;
         self.committed(result)
     }
+}
+
+/// The body of [`Akter::add_member`], in the transaction `conn` is in.
+pub(super) async fn add_member_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    container: &str,
+    member: &str,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
+    require_edit(caller, &c).await?;
+    check_unfrozen(&c)?;
+    check_accepts(conn, tenant, &c, &m, None).await?;
+    let now = Utc::now();
+    insert(conn, caller, tenant, &c, &m, now).await?;
+    record(
+        conn,
+        caller,
+        &mut m,
+        reason.as_deref(),
+        json!({ "added": [membership_entry(&c.akt)] }),
+        now,
+    )
+    .await?;
+    record(
+        conn,
+        caller,
+        &mut c,
+        reason.as_deref(),
+        json!({ "added_member": [membership_entry(&m.akt)] }),
+        now,
+    )
+    .await?;
+    Ok(c.akt)
+}
+
+/// The body of [`Akter::remove_member`], in the transaction `conn` is in.
+pub(super) async fn remove_member_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    container: &str,
+    member: &str,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    let [mut c, mut m] = lock(conn, caller, tenant, [container, member]).await?;
+    require_edit(caller, &c).await?;
+    check_unfrozen(&c)?;
+    end(conn, tenant, &c, &m).await?;
+    let now = Utc::now();
+    record(
+        conn,
+        caller,
+        &mut m,
+        reason.as_deref(),
+        json!({ "removed": [membership_entry(&c.akt)] }),
+        now,
+    )
+    .await?;
+    record(
+        conn,
+        caller,
+        &mut c,
+        reason.as_deref(),
+        json!({ "removed_member": [membership_entry(&m.akt)] }),
+        now,
+    )
+    .await?;
+    Ok(c.akt)
+}
+
+/// The body of [`Akter::transfer_member`], in the transaction `conn` is in.
+pub(super) async fn transfer_member_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    member: &str,
+    from: &str,
+    to: &str,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    if from == to {
+        return Err(AktError::AlreadyMember {
+            container: to.to_owned(),
+            member: member.to_owned(),
+        });
+    }
+    let [mut source, mut target, mut m] = lock(conn, caller, tenant, [from, to, member]).await?;
+    require_edit(caller, &source).await?;
+    require_edit(caller, &target).await?;
+    check_unfrozen(&source)?;
+    check_unfrozen(&target)?;
+    end(conn, tenant, &source, &m).await?;
+    // The membership just ended doesn't count against exclusivity.
+    check_accepts(conn, tenant, &target, &m, Some(source.akt.id)).await?;
+    let now = Utc::now();
+    insert(conn, caller, tenant, &target, &m, now).await?;
+    record(
+        conn,
+        caller,
+        &mut m,
+        reason.as_deref(),
+        json!({
+            "removed": [membership_entry(&source.akt)],
+            "added": [membership_entry(&target.akt)],
+        }),
+        now,
+    )
+    .await?;
+    record(
+        conn,
+        caller,
+        &mut source,
+        reason.as_deref(),
+        json!({ "removed_member": [membership_entry(&m.akt)] }),
+        now,
+    )
+    .await?;
+    record(
+        conn,
+        caller,
+        &mut target,
+        reason.as_deref(),
+        json!({ "added_member": [membership_entry(&m.akt)] }),
+        now,
+    )
+    .await?;
+    Ok(target.akt)
 }
 
 /// Locks the akter `numbers`, refusing a missing or unreadable one as not

@@ -274,18 +274,22 @@ impl Akter {
         fields: &Map<String, Json>,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        self.change(
-            caller,
-            number,
-            expected_revision,
-            None,
-            reason,
-            |ty| Permission::Edit {
-                key: ty.key().to_owned(),
-            },
-            |ty, current, change| kuria_engine::edit(ty, current, fields, change),
-        )
-        .await
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                edit_in(
+                    conn,
+                    caller,
+                    number,
+                    expected_revision,
+                    fields,
+                    reason.clone(),
+                )
+                .await
+            })
+            .await;
+        self.committed(result)
     }
 
     /// Performs `transition` on the akt `number`, based on
@@ -301,112 +305,156 @@ impl Akter {
         fields: &Map<String, Json>,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        self.change(
-            caller,
-            number,
-            expected_revision,
-            Some(transition.to_owned()),
-            reason,
-            |ty| Permission::Transition {
-                key: ty.key().to_owned(),
-                action: ty.transition(transition).and_then(|t| t.action.clone()),
-            },
-            |ty, current, change| kuria_engine::transition(ty, current, transition, fields, change),
-        )
-        .await
-    }
-
-    // r[impl akt.revision.concurrency]
-    // r[impl akt.revision.atomic]
-    // r[impl akt.version-pinned]
-    // r[impl authz.read]
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "the one internal path for edits and transitions"
-    )]
-    async fn change(
-        &self,
-        caller: Caller<'_>,
-        number: &str,
-        expected_revision: i32,
-        transition: Option<String>,
-        reason: Option<String>,
-        permission: impl FnOnce(&AktType) -> Permission + Send,
-        decide: impl FnOnce(&AktType, &Current, kuria_engine::Change) -> Result<Outcome, Refusal> + Send,
-    ) -> Result<AktRow, AktError> {
-        let Caller { actor, auth } = caller;
-        let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let mut akt = store::lock_akt_by_number(conn, tenant, number)
-                    .await?
-                    .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
-                // The akt's own version, not the type's latest.
-                let row = store::type_versions_by_id(conn, tenant, &[akt.type_version_id])
-                    .await?
-                    .pop()
-                    .ok_or_else(|| AktError::Internal(format!("akt {number} has no akt type")))?;
-                let stored = StoredType::read(row)?;
-                // An akt the subject can't read doesn't exist for them, so this
-                // comes before anything that would tell them otherwise.
-                if !auth
-                    .allows(&Permission::Read {
-                        key: stored.ty.key().to_owned(),
-                    })
-                    .await?
-                {
-                    return Err(AktError::NotFound(number.to_owned()));
-                }
-                if !auth.allows(&permission(&stored.ty)).await? {
-                    return Err(AktError::Forbidden);
-                }
-                if akt.revision != expected_revision {
-                    return Err(AktError::Stale {
-                        expected: expected_revision,
-                        current: akt.revision,
-                    });
-                }
-                let current = Current {
-                    state: akt.state.clone(),
-                    fields: fields_from_json(
-                        &stored.ty,
-                        akt.fields.as_object().unwrap_or(&Map::new()),
-                    )
-                    .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
-                };
-                let now = Utc::now();
-                let outcome = decide(
-                    &stored.ty,
-                    &current,
-                    kuria_engine::Change {
-                        by: actor.subject.into(),
-                        at: now,
-                    },
-                )?;
-                akt.state = outcome.state.clone();
-                akt.fields = Json::Object(fields_to_json(&outcome.fields));
-                akt.revision = expected_revision + 1;
-                akt.title = title_of(&stored.ty, &outcome.fields);
-                akt.updated_at = now;
-                if !store::update_akt(conn, &akt, expected_revision).await? {
-                    return Err(AktError::Internal(format!(
-                        "akt {number} moved while locked"
-                    )));
-                }
-                check_contacts(conn, tenant, &outcome).await?;
-                hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
-                store::append_revision(
+                transition_in(
                     conn,
-                    &revision(&akt, actor, transition, reason, &outcome, now),
+                    caller,
+                    number,
+                    expected_revision,
+                    transition,
+                    fields,
+                    reason.clone(),
                 )
-                .await?;
-                Ok(akt)
+                .await
             })
             .await;
         self.committed(result)
     }
+}
+
+/// The body of [`Akter::edit`], in the transaction `conn` is in.
+pub(crate) async fn edit_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    number: &str,
+    expected_revision: i32,
+    fields: &Map<String, Json>,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    change_in(
+        conn,
+        caller,
+        number,
+        expected_revision,
+        None,
+        reason,
+        |ty| Permission::Edit {
+            key: ty.key().to_owned(),
+        },
+        |ty, current, change| kuria_engine::edit(ty, current, fields, change),
+    )
+    .await
+}
+
+/// The body of [`Akter::transition`], in the transaction `conn` is in.
+pub(crate) async fn transition_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    number: &str,
+    expected_revision: i32,
+    transition: &str,
+    fields: &Map<String, Json>,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    change_in(
+        conn,
+        caller,
+        number,
+        expected_revision,
+        Some(transition.to_owned()),
+        reason,
+        |ty| Permission::Transition {
+            key: ty.key().to_owned(),
+            action: ty.transition(transition).and_then(|t| t.action.clone()),
+        },
+        |ty, current, change| kuria_engine::transition(ty, current, transition, fields, change),
+    )
+    .await
+}
+
+// r[impl akt.revision.concurrency]
+// r[impl akt.revision.atomic]
+// r[impl akt.version-pinned]
+// r[impl authz.read]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the one internal path for edits and transitions"
+)]
+async fn change_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    number: &str,
+    expected_revision: i32,
+    transition: Option<String>,
+    reason: Option<String>,
+    permission: impl FnOnce(&AktType) -> Permission + Send,
+    decide: impl FnOnce(&AktType, &Current, kuria_engine::Change) -> Result<Outcome, Refusal> + Send,
+) -> Result<AktRow, AktError> {
+    let Caller { actor, auth } = caller;
+    let tenant: Uuid = actor.tenant.into();
+    let mut akt = store::lock_akt_by_number(conn, tenant, number)
+        .await?
+        .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
+    // The akt's own version, not the type's latest.
+    let row = store::type_versions_by_id(conn, tenant, &[akt.type_version_id])
+        .await?
+        .pop()
+        .ok_or_else(|| AktError::Internal(format!("akt {number} has no akt type")))?;
+    let stored = StoredType::read(row)?;
+    // An akt the subject can't read doesn't exist for them, so this
+    // comes before anything that would tell them otherwise.
+    if !auth
+        .allows(&Permission::Read {
+            key: stored.ty.key().to_owned(),
+        })
+        .await?
+    {
+        return Err(AktError::NotFound(number.to_owned()));
+    }
+    if !auth.allows(&permission(&stored.ty)).await? {
+        return Err(AktError::Forbidden);
+    }
+    if akt.revision != expected_revision {
+        return Err(AktError::Stale {
+            expected: expected_revision,
+            current: akt.revision,
+        });
+    }
+    let current = Current {
+        state: akt.state.clone(),
+        fields: fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
+            .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
+    };
+    let now = Utc::now();
+    let outcome = decide(
+        &stored.ty,
+        &current,
+        kuria_engine::Change {
+            by: actor.subject.into(),
+            at: now,
+        },
+    )?;
+    akt.state = outcome.state.clone();
+    akt.fields = Json::Object(fields_to_json(&outcome.fields));
+    akt.revision = expected_revision + 1;
+    akt.title = title_of(&stored.ty, &outcome.fields);
+    akt.updated_at = now;
+    if !store::update_akt(conn, &akt, expected_revision).await? {
+        return Err(AktError::Internal(format!(
+            "akt {number} moved while locked"
+        )));
+    }
+    check_contacts(conn, tenant, &outcome).await?;
+    hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
+    store::append_revision(
+        conn,
+        &revision(&akt, actor, transition, reason, &outcome, now),
+    )
+    .await?;
+    Ok(akt)
 }
 
 /// A rank after every akt of the tenant. The caller holds the tenant's

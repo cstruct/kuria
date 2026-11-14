@@ -36,49 +36,11 @@ impl Akter {
         pin: Option<i32>,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
-                let def =
-                    links::to_add(&akt_ref(&s.ty, &s.akt), kind, &akt_ref(&t.ty, &t.akt), pin)?
-                        .clone();
-                let now = Utc::now();
-                let new = stored::insert(
-                    conn,
-                    &LinkRow {
-                        tenant_id: tenant,
-                        source_id: s.akt.id,
-                        kind: kind.to_owned(),
-                        target_id: t.akt.id,
-                        pinned_revision: pin,
-                        added_at: now,
-                        added_by: caller.actor.subject.into(),
-                    },
-                )
-                .await?;
-                links::check_new(new, source, kind, target)?;
-                record(
-                    conn,
-                    caller,
-                    &mut s,
-                    reason.as_deref(),
-                    json!({ "linked": [entry(&t.akt, &def, &def.name, pin)] }),
-                    now,
-                )
-                .await?;
-                record(
-                    conn,
-                    caller,
-                    &mut t,
-                    reason.as_deref(),
-                    json!({ "linked_from": [entry(&s.akt, &def, &def.inverse, pin)] }),
-                    now,
-                )
-                .await?;
-                Ok(s.akt)
+                add_link_in(conn, caller, source, kind, target, pin, reason.clone()).await
             })
             .await;
         self.committed(result)
@@ -96,39 +58,100 @@ impl Akter {
         target: &str,
         reason: Option<String>,
     ) -> Result<AktRow, AktError> {
-        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
-                let def = links::to_remove(&akt_ref(&s.ty, &s.akt), kind);
-                let existed = stored::delete(conn, tenant, s.akt.id, kind, t.akt.id).await?;
-                links::check_existed(existed, source, kind, target)?;
-                let now = Utc::now();
-                record(
-                    conn,
-                    caller,
-                    &mut s,
-                    reason.as_deref(),
-                    json!({ "unlinked": [entry(&t.akt, &def, &def.name, None)] }),
-                    now,
-                )
-                .await?;
-                record(
-                    conn,
-                    caller,
-                    &mut t,
-                    reason.as_deref(),
-                    json!({ "unlinked_from": [entry(&s.akt, &def, &def.inverse, None)] }),
-                    now,
-                )
-                .await?;
-                Ok(s.akt)
+                remove_link_in(conn, caller, source, kind, target, reason.clone()).await
             })
             .await;
         self.committed(result)
     }
+}
+
+/// The body of [`Akter::add_link`], in the transaction `conn` is in.
+pub(super) async fn add_link_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    source: &str,
+    kind: &str,
+    target: &str,
+    pin: Option<i32>,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
+    let def = links::to_add(&akt_ref(&s.ty, &s.akt), kind, &akt_ref(&t.ty, &t.akt), pin)?.clone();
+    let now = Utc::now();
+    let new = stored::insert(
+        conn,
+        &LinkRow {
+            tenant_id: tenant,
+            source_id: s.akt.id,
+            kind: kind.to_owned(),
+            target_id: t.akt.id,
+            pinned_revision: pin,
+            added_at: now,
+            added_by: caller.actor.subject.into(),
+        },
+    )
+    .await?;
+    links::check_new(new, source, kind, target)?;
+    record(
+        conn,
+        caller,
+        &mut s,
+        reason.as_deref(),
+        json!({ "linked": [entry(&t.akt, &def, &def.name, pin)] }),
+        now,
+    )
+    .await?;
+    record(
+        conn,
+        caller,
+        &mut t,
+        reason.as_deref(),
+        json!({ "linked_from": [entry(&s.akt, &def, &def.inverse, pin)] }),
+        now,
+    )
+    .await?;
+    Ok(s.akt)
+}
+
+/// The body of [`Akter::remove_link`], in the transaction `conn` is in.
+pub(super) async fn remove_link_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    source: &str,
+    kind: &str,
+    target: &str,
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
+    let def = links::to_remove(&akt_ref(&s.ty, &s.akt), kind);
+    let existed = stored::delete(conn, tenant, s.akt.id, kind, t.akt.id).await?;
+    links::check_existed(existed, source, kind, target)?;
+    let now = Utc::now();
+    record(
+        conn,
+        caller,
+        &mut s,
+        reason.as_deref(),
+        json!({ "unlinked": [entry(&t.akt, &def, &def.name, None)] }),
+        now,
+    )
+    .await?;
+    record(
+        conn,
+        caller,
+        &mut t,
+        reason.as_deref(),
+        json!({ "unlinked_from": [entry(&s.akt, &def, &def.inverse, None)] }),
+        now,
+    )
+    .await?;
+    Ok(s.akt)
 }
 
 /// Locks the two akter, refusing a missing or unreadable one as not found,

@@ -33,109 +33,121 @@ impl Akter {
         reason: Option<String>,
         inside: &[String],
     ) -> Result<AktRow, AktError> {
-        let Caller { actor, auth } = caller;
-        let tenant: Uuid = actor.tenant.into();
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                let row = store::latest_type_version(conn, tenant, key)
-                    .await?
-                    .ok_or_else(|| AktError::UnknownType(key.to_owned()))?;
-                if !auth.sees_type(key).await? {
-                    return Err(AktError::UnknownType(key.to_owned()));
-                }
-                require(
-                    auth,
-                    Permission::Create {
-                        key: key.to_owned(),
-                    },
-                )
-                .await?;
-                let stored = StoredType::read(row)?;
-
-                // The order lock first, then the containers' rows, as every
-                // write path takes them.
-                containers::lock_order(conn, tenant).await?;
-                let mut parents = lock_containers(conn, tenant, inside).await?;
-                let mut parent_types = Vec::with_capacity(parents.len());
-                for parent in &parents {
-                    let ty = type_of(conn, tenant, parent).await?;
-                    require_read(auth, &ty, &parent.number).await?;
-                    require(
-                        auth,
-                        Permission::Edit {
-                            key: ty.ty.key().to_owned(),
-                        },
-                    )
-                    .await?;
-                    parent_types.push(ty);
-                }
-                check_parents(&stored, &parents, &parent_types)?;
-
-                let now = Utc::now();
-                let outcome = kuria_engine::create(
-                    &stored.ty,
-                    fields,
-                    Change {
-                        by: actor.subject.into(),
-                        at: now,
-                    },
-                )?;
-                let parent = parents.first().map(|p| p.number.as_str());
-                let number = next_number(conn, tenant, &stored.ty, parent, now).await?;
-                let akt = AktRow {
-                    id: Uuid::now_v7(),
-                    tenant_id: tenant,
-                    number,
-                    type_version_id: stored.row.id,
-                    state: outcome.state.clone(),
-                    fields: Json::Object(fields_to_json(&outcome.fields)),
-                    revision: 1,
-                    created_at: now,
-                    updated_at: now,
-                    rank: rank_after_last(conn, tenant).await?,
-                    title: title_of(&stored.ty, &outcome.fields),
-                };
-                store::insert_akt(conn, &akt).await?;
-                check_contacts(conn, tenant, &outcome).await?;
-                hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
-                let mut first = revision(&akt, actor, None, reason.clone(), &outcome, now);
-                if !parents.is_empty() {
-                    first.membership = Some(json!({
-                        "added": parents.iter().map(membership_entry).collect::<Vec<_>>(),
-                    }));
-                }
-                store::append_revision(conn, &first).await?;
-
-                for (parent, ty) in parents.iter_mut().zip(&parent_types) {
-                    containers::insert_membership(
-                        conn,
-                        &MembershipRow {
-                            tenant_id: tenant,
-                            container_id: parent.id,
-                            member_id: akt.id,
-                            added_at: now,
-                            added_by: actor.subject.into(),
-                        },
-                    )
-                    .await?;
-                    record_membership(
-                        conn,
-                        ty,
-                        parent,
-                        actor,
-                        reason.clone(),
-                        json!({ "added_member": [membership_entry(&akt)] }),
-                        now,
-                    )
-                    .await?;
-                }
-                Ok(akt)
+                create_in(conn, caller, key, fields, reason.clone(), inside).await
             })
             .await;
         self.committed(result)
     }
+}
+
+/// The body of [`Akter::create`], in the transaction `conn` is in.
+pub(super) async fn create_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    key: &str,
+    fields: &Map<String, Json>,
+    reason: Option<String>,
+    inside: &[String],
+) -> Result<AktRow, AktError> {
+    let Caller { actor, auth } = caller;
+    let tenant: Uuid = actor.tenant.into();
+    let row = store::latest_type_version(conn, tenant, key)
+        .await?
+        .ok_or_else(|| AktError::UnknownType(key.to_owned()))?;
+    if !auth.sees_type(key).await? {
+        return Err(AktError::UnknownType(key.to_owned()));
+    }
+    require(
+        auth,
+        Permission::Create {
+            key: key.to_owned(),
+        },
+    )
+    .await?;
+    let stored = StoredType::read(row)?;
+
+    // The order lock first, then the containers' rows, as every
+    // write path takes them.
+    containers::lock_order(conn, tenant).await?;
+    let mut parents = lock_containers(conn, tenant, inside).await?;
+    let mut parent_types = Vec::with_capacity(parents.len());
+    for parent in &parents {
+        let ty = type_of(conn, tenant, parent).await?;
+        require_read(auth, &ty, &parent.number).await?;
+        require(
+            auth,
+            Permission::Edit {
+                key: ty.ty.key().to_owned(),
+            },
+        )
+        .await?;
+        parent_types.push(ty);
+    }
+    check_parents(&stored, &parents, &parent_types)?;
+
+    let now = Utc::now();
+    let outcome = kuria_engine::create(
+        &stored.ty,
+        fields,
+        Change {
+            by: actor.subject.into(),
+            at: now,
+        },
+    )?;
+    let parent = parents.first().map(|p| p.number.as_str());
+    let number = next_number(conn, tenant, &stored.ty, parent, now).await?;
+    let akt = AktRow {
+        id: Uuid::now_v7(),
+        tenant_id: tenant,
+        number,
+        type_version_id: stored.row.id,
+        state: outcome.state.clone(),
+        fields: Json::Object(fields_to_json(&outcome.fields)),
+        revision: 1,
+        created_at: now,
+        updated_at: now,
+        rank: rank_after_last(conn, tenant).await?,
+        title: title_of(&stored.ty, &outcome.fields),
+    };
+    store::insert_akt(conn, &akt).await?;
+    check_contacts(conn, tenant, &outcome).await?;
+    hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
+    let mut first = revision(&akt, actor, None, reason.clone(), &outcome, now);
+    if !parents.is_empty() {
+        first.membership = Some(json!({
+            "added": parents.iter().map(membership_entry).collect::<Vec<_>>(),
+        }));
+    }
+    store::append_revision(conn, &first).await?;
+
+    for (parent, ty) in parents.iter_mut().zip(&parent_types) {
+        containers::insert_membership(
+            conn,
+            &MembershipRow {
+                tenant_id: tenant,
+                container_id: parent.id,
+                member_id: akt.id,
+                added_at: now,
+                added_by: actor.subject.into(),
+            },
+        )
+        .await?;
+        record_membership(
+            conn,
+            ty,
+            parent,
+            actor,
+            reason.clone(),
+            json!({ "added_member": [membership_entry(&akt)] }),
+            now,
+        )
+        .await?;
+    }
+    Ok(akt)
 }
 
 /// The containers `numbers` names, locked and in the order named.

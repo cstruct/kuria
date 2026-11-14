@@ -168,16 +168,25 @@ A "Batches" section in `docs/spec/akter.md`, before "Change events":
 <!-- akt: PLAN-011-T02 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b3G
-state: todo
+state: done
 in: [PLAN-011]
 links: [Blocked by PLAN-011-T01, Blocks PLAN-011-T03]
 title: "Each write's body runs in a transaction it is given"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-In `items/server/src/akter.rs` and `akter/*.rs`, move the body of each write into a function taking a connection in a transaction; the public methods open the transaction around it and wake the relay, as now.
+Each akt write's body now runs in a transaction it is given, as a free function next to its method:
+- `create_in`;
+- `edit_in` and `transition_in`, through the shared `change_in`;
+- `add_member_in`, `remove_member_in` and `transfer_member_in`;
+- `add_link_in` and `remove_link_in`;
+- `move_akt_in`;
+- `draft_field_in`.
+
+Each public method opens the transaction around its body and wakes the relay after the commit, as before. Their locks are unchanged. Checks that came before the transaction, such as a transfer to the same container or a move next to itself, now run first thing inside it. `draft` reads on the given connection instead of one of its own, so in a batch it sees the batch's earlier changes. Seven of the writes were split by a script from one pattern, and `edit`, `transition` and `draft_field` by hand. No test changed: `mise run test` (313 Rust tests), lint and all 27 e2e tests pass.
 
 <!-- field: acceptance -->
 - No behaviour change: every server test passes unchanged.
