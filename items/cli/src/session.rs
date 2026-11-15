@@ -34,6 +34,25 @@ pub enum SignedIn {
     SecretKey { issuer: String },
 }
 
+/// A future an [`Api`] answers.
+pub type Answering<'a, T> =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<T, CliError>> + Send + 'a>>;
+
+/// Kuria's API answered without HTTP: by Kuria itself, which builds a
+/// repository's history and checks its pushes with the remote helper's own
+/// code (`git.repo.seed`, `git.repo.push`).
+pub trait Api: Send + Sync {
+    /// The whole GraphQL response to `query` with `variables`, as JSON.
+    fn graphql<'a>(
+        &'a self,
+        query: &'a str,
+        variables: serde_json::Value,
+    ) -> Answering<'a, serde_json::Value>;
+
+    /// The bytes of the attachment `id`, as `GET /attachments/{id}` answers.
+    fn attachment<'a>(&'a self, id: &'a str) -> Answering<'a, Vec<u8>>;
+}
+
 /// A DPoP-bound session with Kuria.
 pub struct Session {
     pub http: Http,
@@ -41,6 +60,8 @@ pub struct Session {
     pub url: String,
     pub signed_in: SignedIn,
     access_token: String,
+    /// What answers instead of Kuria over HTTP, if anything.
+    pub api: Option<std::sync::Arc<dyn Api>>,
 }
 
 impl Context {
@@ -77,6 +98,7 @@ impl Session {
             url,
             signed_in: SignedIn::Profile(profile.clone()),
             access_token,
+            api: None,
         })
     }
 
@@ -88,6 +110,20 @@ impl Session {
             url,
             signed_in: SignedIn::Profile(profile),
             access_token: tokens.access_token.clone(),
+            api: None,
+        }
+    }
+
+    /// A session answered by `api` instead of over HTTP, for the Kuria at
+    /// `url`.
+    #[must_use]
+    pub fn answered_by(url: String, api: std::sync::Arc<dyn Api>) -> Self {
+        Self {
+            http: Http::new(DpopKey::generate()),
+            url,
+            signed_in: SignedIn::Profile(String::new()),
+            access_token: String::new(),
+            api: Some(api),
         }
     }
 
@@ -107,6 +143,7 @@ impl Session {
                 issuer: discovery.issuer,
             },
             access_token,
+            api: None,
         })
     }
 

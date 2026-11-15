@@ -764,6 +764,22 @@ fn operation(input: OperationInput) -> async_graphql::Result<Operation> {
     })
 }
 
+/// A batch's operations as JSON, as the `batch` mutation takes them, as the
+/// batch's write path takes them: a push's commits, made into operations by
+/// the remote helper's own code (`git.repo.push`).
+pub(crate) fn operations_from_json(operations: Vec<JsonValue>) -> Result<Vec<Operation>, String> {
+    use async_graphql::InputType as _;
+    operations
+        .into_iter()
+        .map(|json| {
+            let value = async_graphql::Value::from_json(json).map_err(|e| e.to_string())?;
+            let input = OperationInput::parse(Some(value))
+                .map_err(|e| e.into_server_error(async_graphql::Pos::default()).message)?;
+            operation(input).map_err(|e| e.message)
+        })
+        .collect()
+}
+
 /// `error`, said of the batch's operation `n`, counting from 1.
 fn at_operation(error: async_graphql::Error, n: usize) -> async_graphql::Error {
     error.extend_with(|_, e| e.set("operation", n))

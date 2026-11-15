@@ -11,6 +11,7 @@ pub mod bundles;
 pub mod contacts;
 pub mod containers;
 pub mod erasure;
+pub mod git;
 pub mod links;
 mod migrate;
 pub mod people;

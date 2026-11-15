@@ -115,6 +115,53 @@ impl Storage {
 }
 
 /// What the attachment routes need.
+/// Objects kept by name, beside attachments: repositories' packfiles
+/// (`git.repo.storage`), under `git/`.
+impl Storage {
+    /// The object at `path`, if there is one.
+    pub(crate) async fn get_named(&self, path: &str) -> Result<Vec<u8>, object_store::Error> {
+        let got = self
+            .store
+            .get(&object_store::path::Path::from(path))
+            .await?;
+        Ok(got.bytes().await?.to_vec())
+    }
+
+    /// Keeps `bytes` at `path`, unless something is already there: a name
+    /// that is its content's hash never changes.
+    pub(crate) async fn put_named(
+        &self,
+        path: &str,
+        bytes: Vec<u8>,
+    ) -> Result<(), object_store::Error> {
+        let location = object_store::path::Path::from(path);
+        match self.store.head(&location).await {
+            Ok(_) => Ok(()),
+            Err(object_store::Error::NotFound { .. }) => self
+                .store
+                .put(&location, PutPayload::from_bytes(bytes.into()))
+                .await
+                .map(drop),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The names of the objects under `prefix`, their last part only.
+    pub(crate) async fn list_named(
+        &self,
+        prefix: &str,
+    ) -> Result<Vec<String>, object_store::Error> {
+        use futures_util::TryStreamExt as _;
+        let prefix = object_store::path::Path::from(prefix);
+        let listed: Vec<object_store::ObjectMeta> =
+            self.store.list(Some(&prefix)).try_collect().await?;
+        Ok(listed
+            .into_iter()
+            .filter_map(|meta| meta.location.filename().map(str::to_owned))
+            .collect())
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct AttachmentState {
     pub pool: Pool,

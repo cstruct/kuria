@@ -59,6 +59,10 @@ pub struct AktTypeDocument {
     /// needs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub versions: Option<VersionsDef>,
+    /// Whether each of this type's akter is a git repository Kuria hosts,
+    /// of it and its members (`git.repo.declare`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub git: bool,
 }
 
 /// That an akt type releases versions (`version.declare`).

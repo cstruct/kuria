@@ -28,6 +28,8 @@ the queries the server runs.
   - [`attachments`](src/attachments.rs): attachments' metadata, which akt
     fields hold which attachment, and the akt types of an attachment's
     holders.
+  - [`git`](src/git.rs): repositories' refs (`git_ref`), each moved only
+    by a compare-and-swap, in the caller's transaction.
   - [`erasure`](src/erasure.rs): deleting what Kuria holds about a subject
     (sessions, their name and email, and those of contacts linked to them),
     and the time erasures are handled up to.
@@ -51,5 +53,8 @@ cargo test -p kuria-store
   finding akter contained through other containers, members in rank order
   by readable type, and the containment migration ranking existing akter in
   creation order (applied step by step with `run_next_migration`).
+
+- [`tests/git.rs`](tests/git.rs): a ref created, moved and deleted only
+  from where it is.
 
 Most queries are also covered by the server's database tests.

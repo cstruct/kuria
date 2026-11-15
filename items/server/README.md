@@ -126,6 +126,18 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Batches: several akt writes run in order in one transaction, all of them
   or none, a later one naming an akt an earlier one created as `@<n>`
   (`akt.batch`).
+- Repositories ([`src/git.rs`](src/git.rs)): a container of a type that
+  says `"git": true` is a git repository served over smart HTTP at
+  `/git/<number>.git` by the `git` binary, which must be on the `PATH`.
+  Packfiles are kept in object storage under `git/<tenant>/<akt>/`, refs in
+  `git_ref`; each server caches each repository as a bare repository
+  under `KURIA_GIT_CACHE` (`src/git/cache.rs`). A repository with no refs
+  starts from the history `git-remote-kuria` builds, by the helper's own
+  code answered in-process (`src/git/history.rs`); a push is checked, its
+  `main` commits made into batches the same way, and kept in one
+  transaction or not at all (`src/git/receive.rs`). git's Basic
+  credentials, as `kuria git-credential` gives them, are taken as a bearer
+  token.
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt
@@ -272,6 +284,7 @@ redirect URI. The end-to-end seed registers it
 | `KURIA_RENDER_CPU_SECONDS` | How much CPU time rendering may use; 20 by default |
 | `KURIA_RENDER_MEMORY_MB` | How much memory rendering may use, on Linux (macOS can't limit it); 1024 by default |
 | `KURIA_WEB_DIR` | The built app (`items/web/build`) to serve; none by default |
+| `KURIA_GIT_CACHE` | Where repositories are cached, a bare repository each; a directory under the system's temporary one by default. It can be emptied at any time |
 | `KURIA_LOGIN_APP` | `true` to be Konklav's login application: proxying its subject-facing surface, with Konklav's issuer this server's public URL and its login URL `<public URL>/login`; `false` by default |
 | `KURIA_DEFAULT_TENANT` | The tenant a sign-in that names none is for; none by default |
 | `KURIA_TRUSTED_PROXIES` | Comma-separated addresses or CIDR networks whose `X-Forwarded-For` names the client; none by default |
@@ -401,6 +414,13 @@ mise run test
   and refusing another list's, and filtering by each kind of field and
   its refusals; `tests/contacts.rs` filters by `me`, contacts linked to
   the viewer included, also a field naming several people.
+- [`tests/repositories.rs`](tests/repositories.rs) drives the real `git`
+  binary against the server on a local port, with storage in memory:
+  cloning a repository that starts from the helper's history (the same
+  commit ids as the helper's own code builds over HTTP), who may fetch and
+  push, a push to `main` becoming revisions and fetched and built again as
+  pushed, refused pushes keeping nothing, racing pushes to one ref, and
+  branches, merges and tags kept as pushed while changing nothing.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
   CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
   left out, cookies and redirects passed back); and discovering the
@@ -432,6 +452,7 @@ against a fake of Konklav's OpenID provider only.
   [`people.md`](../../docs/spec/people.md) (`person.*`) and
   [`attachments.md`](../../docs/spec/attachments.md) (`attachment.*`) and
   [`contacts.md`](../../docs/spec/contacts.md) (`contact.*`),
+  [`git.md`](../../docs/spec/git.md) (`git.repo.*`),
   [`login.md`](../../docs/spec/login.md) (`login.proxy`,
   `login.discovery`, `login.csp`) and
   [`frontend.md`](../../docs/spec/frontend.md) (`app.serve`, `app.csp`).

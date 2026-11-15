@@ -26,6 +26,7 @@ pub mod outcomes;
 mod references;
 pub mod versions;
 
+pub(crate) use batch::batch_in;
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
 pub use ordering::Place;
 
