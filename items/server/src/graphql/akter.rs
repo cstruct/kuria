@@ -16,9 +16,11 @@ use kuria_config::{
     FieldKind as ConfigKind,
 };
 use kuria_engine::board::{UNMAPPED, column_of};
+use kuria_engine::versions::Pin;
 use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow, ChangedAfter, RevisionRow};
 use kuria_store::containers;
+use kuria_store::versions::VersionRow;
 use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
@@ -106,6 +108,13 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
         AktError::SelfMove | AktError::BadRequest(_) => coded(message, "BAD_REQUEST"),
         AktError::InvalidLink(_) => coded(message, "INVALID_LINK"),
+        AktError::BrokenReferences(broken) => {
+            let broken = broken.clone();
+            async_graphql::Error::new(message).extend_with(move |_, e| {
+                e.set("code", "BROKEN_REFERENCES");
+                e.set("references", broken.clone());
+            })
+        }
         AktError::Unavailable(detail) => {
             tracing::warn!("akter: {detail}");
             coded(
@@ -191,7 +200,13 @@ impl AkterQuery {
     }
 
     /// The akt numbered `number`.
-    async fn akt(&self, ctx: &Context<'_>, number: String) -> async_graphql::Result<Option<Akt>> {
+    async fn akt(
+        &self,
+        ctx: &Context<'_>,
+        number: String,
+        #[graphql(desc = "Read it as it was at this version of it (`version.read`).")]
+        version: Option<i32>,
+    ) -> async_graphql::Result<Option<Akt>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
         let Some(row) = store::akt_by_number(&mut conn, tenant, &number)
@@ -202,10 +217,24 @@ impl AkterQuery {
         };
         let akt = with_types(&mut conn, tenant, vec![row]).await?.pop();
         // r[impl authz.read]
-        match akt {
-            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Ok(Some(akt)),
-            _ => Ok(None),
-        }
+        let akt = match akt {
+            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => akt,
+            _ => return Ok(None),
+        };
+        let Some(version) = version else {
+            return Ok(Some(akt));
+        };
+        // r[impl version.read]
+        Ok(
+            crate::akter::versions::at_version(&mut conn, &akt.ty, &akt.row, version)
+                .await
+                .map_err(error)?
+                .map(|(row, version)| Akt {
+                    row,
+                    ty: akt.ty,
+                    version: Some(version),
+                }),
+        )
     }
 
     /// Akter, most recently changed first: of one akt type and in one state,
@@ -515,7 +544,11 @@ async fn with_types(
                 .get(&row.type_version_id)
                 .cloned()
                 .ok_or_else(|| internal(format!("akt {} has no akt type", row.number)))?;
-            Ok(Akt { row, ty })
+            Ok(Akt {
+                row,
+                ty,
+                version: None,
+            })
         })
         .collect()
 }
@@ -782,6 +815,24 @@ impl AkterMutation {
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
+    }
+
+    /// Releases the akt's current revision as its next version
+    /// (`version.release`).
+    async fn release_version(
+        &self,
+        ctx: &Context<'_>,
+        input: ReleaseVersionInput,
+    ) -> async_graphql::Result<Version> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let row = akter(ctx)?
+            .release(caller, &input.number, input.revision, input.label)
+            .await
+            .map_err(error)?;
+        Ok(Version::from(&row))
     }
 
     /// Moves an akt along one of its akt type's transitions.
@@ -1501,10 +1552,12 @@ impl Akt {
     }
 }
 
-/// An akt, with the akt type version it was created with.
+/// An akt, with the akt type version it was created with; read at one of
+/// its versions, if `version` says so.
 pub struct Akt {
     row: AktRow,
     ty: StoredType,
+    version: Option<VersionRow>,
 }
 
 #[Object]
@@ -1559,8 +1612,31 @@ impl Akt {
             .document()
             .fields
             .iter()
-            .filter_map(|def| values.get(&def.key).map(|v| FieldValue::new(def, v)))
+            .filter_map(|def| {
+                values
+                    .get(&def.key)
+                    .map(|v| FieldValue::new(def, v, &self.pins()))
+            })
             .collect())
+    }
+
+    /// The version it is read at, if it is read at one (`version.read`).
+    async fn version(&self) -> Option<Version> {
+        self.version.as_ref().map(Version::from)
+    }
+
+    /// Its versions, latest first (`version.list`).
+    // r[impl version.list]
+    async fn versions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Version>> {
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        Ok(
+            kuria_store::versions::of(&mut conn, self.row.tenant_id, self.row.id)
+                .await
+                .map_err(internal)?
+                .iter()
+                .map(Version::from)
+                .collect(),
+        )
     }
 
     async fn created_at(&self) -> DateTime<Utc> {
@@ -1854,6 +1930,9 @@ pub struct MarkdownValue {
     headings: Vec<MarkdownHeading>,
     #[graphql(skip)]
     found: Vec<kuria_engine::markdown::Reference>,
+    /// What its references meant, if it is read at a version.
+    #[graphql(skip)]
+    pins: Vec<Pin>,
 }
 
 /// A heading of a `markdown` field.
@@ -1876,14 +1955,21 @@ pub struct MarkdownReference {
     heading: Option<String>,
     /// The akt, if it exists and the subject may read it.
     akt: Option<Akt>,
+    /// The version a version read pinned it to, if it names none
+    /// (`version.pins`).
+    pinned_version: Option<i32>,
+    /// The revision a version read pinned it to, for a target that had no
+    /// version then.
+    pinned_revision: Option<i32>,
     /// Why the reference is broken, if it is.
     broken: Option<String>,
 }
 
 impl MarkdownValue {
-    fn new(field: String, text: &str) -> Self {
+    fn new(field: String, text: &str, pins: &[Pin]) -> Self {
         use kuria_engine::markdown;
         Self {
+            pins: pins.to_vec(),
             field,
             markdown: text.to_owned(),
             headings: markdown::headings(text)
@@ -1908,45 +1994,117 @@ impl MarkdownValue {
     // r[impl akt.field.markdown.references]
     async fn references(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownReference>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
+        let auth = authorizer(ctx)?;
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
         let mut answered = Vec::new();
         for reference in &self.found {
-            let akt = match store::akt_by_number(&mut conn, tenant, &reference.number)
+            let target = crate::akter::versions::target(&mut conn, tenant, auth, &reference.number)
                 .await
-                .map_err(internal)?
-            {
-                Some(row) => with_types(&mut conn, tenant, vec![row]).await?.pop(),
+                .map_err(error)?;
+            let akt = match &target {
+                Some(_) => match store::akt_by_number(&mut conn, tenant, &reference.number)
+                    .await
+                    .map_err(internal)?
+                {
+                    Some(row) => with_types(&mut conn, tenant, vec![row]).await?.pop(),
+                    None => None,
+                },
                 None => None,
             };
-            let akt = match akt {
-                Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Some(akt),
-                _ => None,
+            // r[impl version.read]
+            // Read at a version, a reference naming none follows its pin.
+            let (pinned_version, pinned_revision) =
+                kuria_engine::versions::as_pinned(reference, &self.pins);
+            let pinned_version = pinned_version.filter(|_| reference.version.is_none());
+            let as_read = kuria_engine::markdown::Reference {
+                version: reference.version.or(pinned_version),
+                ..reference.clone()
             };
-            let target = match &akt {
-                Some(akt) => Some(kuria_engine::markdown::Target {
-                    headings: kuria_engine::markdown::heading_ids(
-                        &akt.ty.ty,
-                        &fields_from_json(
-                            &akt.ty.ty,
-                            akt.row.fields.as_object().unwrap_or(&Map::new()),
-                        )
-                        .map_err(internal)?,
-                    ),
-                    versions: Vec::new(),
-                }),
-                None => None,
+            let broken = if pinned_revision.is_some() {
+                // Unbroken at release, and a revision never changes.
+                target
+                    .is_none()
+                    .then(|| format!("there is no akt `{}`", reference.number))
+            } else {
+                kuria_engine::markdown::broken(&as_read, target.as_ref())
             };
             answered.push(MarkdownReference {
                 destination: reference.to_string(),
                 number: reference.number.clone(),
                 version: reference.version.and_then(|v| i32::try_from(v).ok()),
                 heading: reference.heading.clone(),
-                broken: kuria_engine::markdown::broken(reference, target.as_ref()),
+                broken,
                 akt,
+                pinned_version: pinned_version.and_then(|v| i32::try_from(v).ok()),
+                pinned_revision,
             });
         }
         Ok(answered)
     }
+}
+
+/// A version of an akt (`version.number`).
+#[derive(SimpleObject)]
+pub struct Version {
+    number: i32,
+    /// The revision it names.
+    revision: i32,
+    label: Option<String>,
+    released_by: User,
+    released_at: DateTime<Utc>,
+    /// What its references naming no version meant (`version.pins`).
+    pins: Vec<VersionPin>,
+}
+
+/// What a reference meant when its akt was released.
+#[derive(SimpleObject)]
+pub struct VersionPin {
+    destination: String,
+    number: String,
+    version: Option<i32>,
+    revision: Option<i32>,
+}
+
+impl From<&VersionRow> for Version {
+    fn from(row: &VersionRow) -> Self {
+        let pins: Vec<Pin> = serde_json::from_value(row.pins.clone()).unwrap_or_default();
+        Self {
+            number: row.number,
+            revision: row.revision,
+            label: row.label.clone(),
+            released_by: User(row.released_by),
+            released_at: row.released_at,
+            pins: pins
+                .into_iter()
+                .map(|p| VersionPin {
+                    destination: p.destination,
+                    number: p.number,
+                    version: p.version.and_then(|v| i32::try_from(v).ok()),
+                    revision: p.revision,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl Akt {
+    /// What its references meant, if it is read at a version.
+    fn pins(&self) -> Vec<Pin> {
+        self.version
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.pins.clone()).ok())
+            .unwrap_or_default()
+    }
+}
+
+/// What releasing a version takes.
+#[derive(InputObject)]
+pub struct ReleaseVersionInput {
+    number: String,
+    /// The revision read, which must be the akt's current one.
+    revision: i32,
+    /// One line, at most 100 characters.
+    label: Option<String>,
 }
 
 /// A `multiple` user field's users and contacts, in order.
@@ -2108,7 +2266,7 @@ pub enum VerdictKind {
 }
 
 impl FieldValue {
-    fn new(def: &FieldDef, value: &Value) -> Self {
+    fn new(def: &FieldDef, value: &Value, pins: &[Pin]) -> Self {
         let field = def.key.clone();
         let option = |key: &str| {
             def.options.iter().find(|o| o.key == key).map_or_else(
@@ -2124,7 +2282,7 @@ impl FieldValue {
                 field,
                 text: text.clone(),
             }),
-            Value::Markdown(text) => Self::Markdown(MarkdownValue::new(field, text)),
+            Value::Markdown(text) => Self::Markdown(MarkdownValue::new(field, text, pins)),
             Value::Choice(key) => Self::Choice(ChoiceValue {
                 field,
                 option: option(key),

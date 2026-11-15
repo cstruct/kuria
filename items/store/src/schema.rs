@@ -151,9 +151,23 @@ diesel::table! {
 
 diesel::joinable!(akt_origin -> akt (origin_id));
 
+diesel::table! {
+    akt_version (akt_id, number) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        number -> Int4,
+        revision -> Int4,
+        label -> Nullable<Text>,
+        released_by -> Uuid,
+        released_at -> Timestamptz,
+        pins -> Jsonb,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
     akt_origin,
+    akt_version,
     akt_type,
     akt_type_version,
     akt_revision,

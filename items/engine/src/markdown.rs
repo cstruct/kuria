@@ -281,8 +281,19 @@ pub fn heading_ids(
 pub struct Target {
     /// Its heading ids, as of its current revision.
     pub headings: Vec<String>,
-    /// Its versions' numbers.
-    pub versions: Vec<u32>,
+    /// Its versions, oldest first, each with its heading ids.
+    pub versions: Vec<TargetVersion>,
+    /// Its current revision.
+    pub revision: i32,
+}
+
+/// One version of a reference's target.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TargetVersion {
+    pub number: u32,
+    pub revision: i32,
+    /// Its heading ids, as of the revision it names.
+    pub headings: Vec<String>,
 }
 
 /// Why `reference` is broken, if it is (`broken reference`): `target` is
@@ -292,18 +303,23 @@ pub fn broken(reference: &Reference, target: Option<&Target>) -> Option<String> 
     let Some(target) = target else {
         return Some(format!("there is no akt `{}`", reference.number));
     };
-    if let Some(version) = reference.version
-        && !target.versions.contains(&version)
+    let headings = match reference.version {
+        Some(version) => match target.versions.iter().find(|v| v.number == version) {
+            Some(v) => &v.headings,
+            None => return Some(format!("`{}` has no version {version}", reference.number)),
+        },
+        None => &target.headings,
+    };
+    if let Some(heading) = &reference.heading
+        && !headings.contains(heading)
     {
-        return Some(format!("`{}` has no version {version}", reference.number));
-    }
-    // A version's headings are checked against that version, by the caller
-    // that reads it; these are the living version's.
-    if reference.version.is_none()
-        && let Some(heading) = &reference.heading
-        && !target.headings.contains(heading)
-    {
-        return Some(format!("`{}` has no heading `{heading}`", reference.number));
+        return Some(match reference.version {
+            Some(version) => format!(
+                "`{}` has no heading `{heading}` in version {version}",
+                reference.number
+            ),
+            None => format!("`{}` has no heading `{heading}`", reference.number),
+        });
     }
     None
 }
@@ -382,10 +398,19 @@ mod tests {
         let reference = |text: &str| Reference::parse(text).unwrap();
         let target = Target {
             headings: vec!["install".to_owned()],
-            versions: vec![1],
+            versions: vec![TargetVersion {
+                number: 1,
+                revision: 3,
+                headings: vec!["setup".to_owned()],
+            }],
+            revision: 5,
         };
         assert_eq!(broken(&reference("kuria:D-1#install"), Some(&target)), None);
-        assert_eq!(broken(&reference("kuria:D-1@1#any"), Some(&target)), None);
+        assert_eq!(broken(&reference("kuria:D-1@1#setup"), Some(&target)), None);
+        assert_eq!(
+            broken(&reference("kuria:D-1@1#install"), Some(&target)).unwrap(),
+            "`D-1` has no heading `install` in version 1"
+        );
         assert_eq!(
             broken(&reference("kuria:D-1#gone"), Some(&target)).unwrap(),
             "`D-1` has no heading `gone`"

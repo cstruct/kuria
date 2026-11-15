@@ -43,6 +43,7 @@ pub mod reads;
 pub mod secret;
 pub mod session;
 pub mod values;
+pub mod versions;
 pub mod writes;
 
 use std::process::ExitCode;
@@ -179,6 +180,8 @@ fn reads_only(command: &Command) -> bool {
             | Command::Cat { .. }
             | Command::Show { .. }
             | Command::History { .. }
+            | Command::Versions { .. }
+            | Command::Diff { .. }
             | Command::Users
             | Command::Contacts
     )
@@ -222,15 +225,24 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             output,
             members,
             all_members,
+            version,
         } => {
             let members = match (all_members, members.is_empty()) {
                 (true, _) => reads::WithMembers::All,
                 (false, false) => reads::WithMembers::Types(&members),
                 (false, true) => reads::WithMembers::None,
             };
-            reads::cat(source, &numbers, output.as_deref(), members).await
+            reads::cat(source, &numbers, output.as_deref(), members, version).await
         }
-        Command::Show { number, history } => reads::show(source, &number, history).await,
+        Command::Show {
+            number,
+            history,
+            version,
+        } => reads::show(source, &number, history, version).await,
+        Command::Versions { number } => crate::versions::list(source, &number).await,
+        Command::Diff { number, from, to } => {
+            crate::versions::diff(source, &number, from, to).await
+        }
         Command::History { number } => reads::history(source, &number).await,
         Command::Users => reads::users(source).await,
         Command::Contacts => reads::contacts(source).await,
@@ -401,6 +413,10 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
         | Command::Unlink { .. }
         | Command::Verdict { .. }
         | Command::Copy { .. }) => local_more(&mut w, command),
+        Command::Release { number, label } => {
+            let times = local::git::Times::of(&w.dir.root);
+            local::versions::release(&mut w, &times, &number, label.as_deref())
+        }
         Command::Types {
             action: Some(TypesCommand::Define { files, .. }),
         } => {
@@ -595,6 +611,9 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
         } => writes::unlink(session, &source, &kind, &target, reason.as_deref()).await,
         command @ (Command::Verdict { .. } | Command::Copy { .. }) => {
             protocol(session, command).await
+        }
+        Command::Release { number, label } => {
+            versions::release(session, &number, label.as_deref()).await
         }
         Command::Draft {
             number,

@@ -199,6 +199,9 @@ pub struct Times {
     tracked: bool,
     changes: HashMap<String, Vec<(Commit, i32)>>,
     head: HashMap<String, i32>,
+    /// Per akt and revision, the text of the file that first held it at
+    /// that revision in a commit, and the file's path.
+    texts: HashMap<(String, i32), (String, String)>,
 }
 
 impl Times {
@@ -235,8 +238,15 @@ impl Times {
             let touched: Vec<(String, i32)> = l
                 .files
                 .iter()
-                .filter_map(|(_, blob)| texts.get(blob.as_ref()?))
-                .flat_map(|t| revisions(t))
+                .filter_map(|(path, blob)| Some((path, texts.get(blob.as_ref()?)?)))
+                .flat_map(|(path, t)| revisions(t).into_iter().map(move |(n, r)| (path, t, n, r)))
+                .map(|(path, t, n, r)| {
+                    times
+                        .texts
+                        .entry((n.clone(), r))
+                        .or_insert_with(|| (path.clone(), t.clone()));
+                    (n, r)
+                })
                 .collect();
             // An akt changed when it reached a revision it hadn't, so that
             // one moved between files, or seen again on a merge, didn't.
@@ -258,8 +268,18 @@ impl Times {
         times
     }
 
+    /// The path and text of the file a commit held `number` at `revision`
+    /// in, if git has it (`cli.local.versions`).
+    #[must_use]
+    pub fn text_at(&self, number: &str, revision: i32) -> Option<(&str, &str)> {
+        self.texts
+            .get(&(number.to_owned(), revision))
+            .map(|(path, text)| (path.as_str(), text.as_str()))
+    }
+
     /// Whether `akt` has changes not committed yet.
-    fn dirty(&self, akt: &LocalAkt) -> bool {
+    #[must_use]
+    pub fn dirty(&self, akt: &LocalAkt) -> bool {
         self.head.get(&akt.number) != Some(&akt.revision)
     }
 

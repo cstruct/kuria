@@ -172,6 +172,13 @@ fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
     if parsed.text("type").is_some_and(|t| t != akt.shape.key) {
         return Err(read_only("type", "an akt keeps its type"));
     }
+    // r[impl cli.file.kinds]
+    if parsed.front.contains_key("version") {
+        return Err(read_only(
+            "version",
+            "a version never changes; edit the living version",
+        ));
+    }
     if parsed.text("state").is_some_and(|s| s != akt.state.key) {
         return Err(read_only("state", "perform a transition with `kuria do`"));
     }
@@ -264,6 +271,20 @@ pub(crate) fn read_akter(
             ..e
         };
         for (number, parsed) in file::parse_all(&text).map_err(in_file)? {
+            // r[impl cli.file.kinds]
+            // A version never changes: refused whatever revision it names.
+            if parsed.front.contains_key("version") {
+                return Err(CliError {
+                    field: Some("version".to_owned()),
+                    ..CliError::refused(
+                        "READ_ONLY",
+                        format!(
+                            "{}: {number} is read at a version, which never changes; edit the living version",
+                            path.display()
+                        ),
+                    )
+                });
+            }
             let revision = parsed
                 .front
                 .get("revision")

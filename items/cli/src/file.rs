@@ -25,8 +25,8 @@ use crate::model::{Shape, State, StateName, TypeName, Value};
 use crate::values::file_value;
 
 /// The keys every file has before its fields, which `apply` doesn't edit.
-pub const READ_ONLY: [&str; 8] = [
-    "number", "type", "revision", "state", "outcome", "in", "links", "rank",
+pub const READ_ONLY: [&str; 10] = [
+    "number", "type", "revision", "version", "state", "outcome", "in", "links", "rank", "versions",
 ];
 
 /// An akt with everything its file and `show` say.
@@ -47,6 +47,25 @@ pub struct Akt {
     /// `PASS`, …, if its type has outcomes (`akt.outcome`).
     #[serde(default)]
     pub outcome: Option<String>,
+    /// The version it is read at, if it is (`version.read`).
+    #[serde(default)]
+    pub version: Option<Released>,
+    /// Its versions, latest first (`version.list`).
+    #[serde(default)]
+    pub versions: Vec<Released>,
+}
+
+/// A version of an akt.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Released {
+    pub number: i64,
+    pub revision: i64,
+    pub label: Option<String>,
+    #[serde(default)]
+    pub released_by: Option<crate::model::User>,
+    #[serde(default)]
+    pub released_at: Option<String>,
 }
 
 /// Another akt, as an akt names it.
@@ -93,6 +112,8 @@ pub struct Pinned {
 
 /// What to ask for an akt's file: its fields and everything around them.
 pub const AKT: &str = "number title revision createdAt updatedAt outcome
+  version { number revision label }
+  versions { number revision label releasedBy { id name email } releasedAt }
   type { ...Shape document }
   state { key name initial final tone }
   fields { ...Values }
@@ -169,8 +190,12 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
     front.extend([
         ("type", Json::from(akt.shape.key.clone())),
         ("revision", akt.revision.into()),
-        ("state", akt.state.key.clone().into()),
     ]);
+    // r[impl cli.file.kinds]
+    if let Some(version) = &akt.version {
+        front.push(("version", version.number.into()));
+    }
+    front.push(("state", akt.state.key.clone().into()));
     // r[impl cli.file.kinds]
     if let Some(outcome) = &akt.outcome {
         front.push(("outcome", outcome.to_lowercase().into()));

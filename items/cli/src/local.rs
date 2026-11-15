@@ -23,6 +23,7 @@ pub mod edits;
 pub mod git;
 pub mod layout;
 pub mod values;
+pub mod versions;
 pub mod write;
 
 pub use dir::{AktDir, init};

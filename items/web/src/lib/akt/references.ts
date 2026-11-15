@@ -20,6 +20,8 @@ export interface Reference {
 export interface ShownReference {
 	destination: string;
 	broken?: string | null;
+	/** The version a version read pins it to, if it names none. */
+	pinnedVersion?: number | null;
 }
 
 const ID = /\s*\{#([a-z][a-z0-9_-]*)\}\s*$/;
@@ -72,7 +74,7 @@ export function renderReferenced(
 	references: readonly ShownReference[],
 	hrefOf: (reference: Reference) => string
 ): string {
-	const broken = new Map(references.map((r) => [r.destination, r.broken ?? null]));
+	const shown = new Map(references.map((r) => [r.destination, r]));
 	const marked = new Marked({
 		gfm: true,
 		breaks: true,
@@ -98,11 +100,13 @@ export function renderReferenced(
 				const reference = parseReference(token.href);
 				if (!reference) return false;
 				const inner = this.parser.parseInline(token.tokens);
-				const why = broken.get(token.href);
-				if (why) {
-					return `<span>${inner} <small>(broken reference: ${escaped(why)})</small></span>`;
+				const known = shown.get(token.href);
+				if (known?.broken) {
+					return `<span>${inner} <small>(broken reference: ${escaped(known.broken)})</small></span>`;
 				}
-				return `<a href="${escaped(hrefOf(reference))}">${inner}</a>`;
+				// Read at a version, a reference naming none goes where its pin says.
+				const to = { ...reference, version: reference.version ?? known?.pinnedVersion ?? null };
+				return `<a href="${escaped(hrefOf(to))}">${inner}</a>`;
 			}
 		}
 	});

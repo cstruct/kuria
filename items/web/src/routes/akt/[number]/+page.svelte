@@ -48,12 +48,15 @@
 		EditAkt,
 		MoveAkt,
 		PerformTransition,
+		ReleaseVersion,
 		RemoveFromContainer,
 		TransferMember
 	} from '#lib/graphql/operations.ts';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
+	import VersionsCard from '#lib/akt/VersionsCard.svelte';
+	import DiffDialog from '#lib/akt/DiffDialog.svelte';
 	import Combobox from '#lib/ui/Combobox.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
@@ -68,7 +71,9 @@
 
 	const client = getClient();
 	const number = $derived(page.params.number ?? '');
-	const view = query(AktPage, () => ({ number }));
+	// r[impl app.versions]: `?version=` reads the akt at one of its versions.
+	const atVersion = $derived(Number(page.url.searchParams.get('version')) || null);
+	const view = query(AktPage, () => ({ number, version: atVersion }));
 	const contacts = query(Contacts, () => ({}));
 	const users = query(Users, () => ({}));
 
@@ -95,10 +100,24 @@
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
+	// A version never changes: read at one, nothing is offered to change.
 	const actions = $derived(
-		actionsOf(akt ? availableTransitions(akt.type.transitions, akt.state) : [])
+		actionsOf(akt && !atVersion ? availableTransitions(akt.type.transitions, akt.state) : [])
 	);
-	const editable = $derived(Boolean(akt && !akt.state.final));
+	const editable = $derived(Boolean(akt && !akt.state.final && !atVersion));
+	const versioned = $derived(
+		Boolean(akt && (akt.type.document as { versions?: unknown } | null)?.versions)
+	);
+	let comparing = $state<{ from: number; to: number | null } | null>(null);
+	let compareOpen = $state(false);
+
+	async function releaseVersion(label: string) {
+		if (!akt) return false;
+		const input = { number: akt.number, revision: akt.revision, label: label.trim() || null };
+		const released = await run(() => mutate(client, ReleaseVersion, { input }));
+		if (released) toast(`${akt.number}: released`, 'success');
+		return released;
+	}
 	const me = $derived(view.data?.viewer.subject);
 
 	// r[impl app.sections]: the members in the akt's sections, and those
@@ -398,6 +417,13 @@
 					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
 						>{/if}
 				</div>
+				{#if akt.version}
+					<p class="origin" role="status">
+						Version {akt.version.number}{akt.version.label ? ` (${akt.version.label})` : ''},
+						released
+						{new Date(akt.version.releasedAt).toLocaleDateString()}: not the living version.
+					</p>
+				{/if}
 				{#if akt.copiedFrom}
 					<p class="origin">
 						Copied from <a href={resolve('/akt/[number]', { number: akt.copiedFrom.number })}
@@ -408,7 +434,7 @@
 			</div>
 			<div class="actions">
 				<Button
-					disabled={busy}
+					disabled={busy || atVersion !== null}
 					onclick={() => {
 						refusal = null;
 						copyOpen = true;
@@ -580,6 +606,21 @@
 					</div>
 				</Card>
 
+				{#if versioned}
+					<VersionsCard
+						number={akt.number}
+						versions={akt.versions}
+						reading={atVersion}
+						releasable={!atVersion}
+						{busy}
+						{refusal}
+						onRelease={releaseVersion}
+						onCompare={(from, to) => {
+							comparing = { from, to };
+							compareOpen = true;
+						}}
+					/>
+				{/if}
 				<LinksCard
 					links={akt.links}
 					kinds={linkKinds(akt.type.document)}
@@ -601,11 +642,25 @@
 					onRemove={removeLink}
 				/>
 				<Card title="History">
-					<HistoryList revisions={akt.revisions} {fieldNames} {transitionNames} />
+					<HistoryList
+						revisions={akt.revisions}
+						{fieldNames}
+						{transitionNames}
+						versions={akt.versions}
+					/>
 				</Card>
 			</aside>
 		</div>
 
+		{#if comparing}
+			<DiffDialog
+				bind:open={compareOpen}
+				number={akt.number}
+				from={comparing.from}
+				to={comparing.to}
+				fields={akt.type.fields}
+			/>
+		{/if}
 		{#if pending}
 			<TransitionDialog
 				bind:open={transitionOpen}

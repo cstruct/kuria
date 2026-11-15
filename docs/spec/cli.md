@@ -150,8 +150,9 @@ with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
 key after `state`. A `markdown` field MUST be a section of its own whose
 body is its value. `links` MUST leave out the links references keep
 (`link.referenced`), to or from the akt: the text says them, and they
-change without a revision of their target. An akt read at a version MUST have a read-only
-`version` key after `revision`, and `apply` of it MUST be refused as
+change without a revision of their target. An akt file MUST NOT list its versions, which change without a
+revision. An akt read at a version MUST have a read-only `version` key
+after `revision`, and `apply` of it MUST be refused as
 `READ_ONLY`.
 
 r[cli.file.multi]
@@ -327,9 +328,10 @@ stored in akt files: they MUST be worked out from the directory's
 `markdown` fields whenever they are read, as a server keeps them.
 
 r[cli.local.versions]
-In local mode an akt's versions MUST be kept in its akt file, as a
-read-only front-matter `versions` list of what `version.number` and
-`version.pins` record. A release MUST be refused as `UNCOMMITTED` while
+In local mode an akt's versions MUST be kept in the directory's file, as
+a front-matter `versions` list of what `version.number` and
+`version.pins` record, which, like `rank`, `cat` leaves out: a release
+makes no revision, so an akt file can't change with one. A release MUST be refused as `UNCOMMITTED` while
 the akt has changes git hasn't committed, and reading an akt at a version
 MUST read it from the latest commit at which it had the version's
 revision (`cli.local.history`).

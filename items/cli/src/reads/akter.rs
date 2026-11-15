@@ -22,21 +22,35 @@ use crate::values::text_of;
 /// How many members `show` lists.
 const MEMBERS: u32 = 200;
 
-async fn akt_data(source: Source<'_>, number: &str, extra: &str) -> Result<Json, CliError> {
+/// The akt `number`, at its version `version` if given (`version.read`).
+pub(crate) async fn akt_data(
+    source: Source<'_>,
+    number: &str,
+    extra: &str,
+    version: Option<i64>,
+) -> Result<Json, CliError> {
+    let missing = || match version {
+        Some(v) => CliError::from_server("NOT_FOUND", format!("{number} has no version {v}"), None),
+        None => not_found(number),
+    };
     let session = match source {
         Source::Server(session) => session,
         Source::Local(l) => {
-            return answers::akt(&l.dir, &l.times, number)?.ok_or_else(|| not_found(number));
+            let found = match version {
+                Some(v) => answers::akt_at(&l.dir, &l.times, number, v)?,
+                None => answers::akt(&l.dir, &l.times, number)?,
+            };
+            return found.ok_or_else(missing);
         }
     };
     let data = session
         .graphql(
-            &format!("query($n: String!) {{ akt(number: $n) {{ {AKT} {extra} }} }} {SHAPE} {VALUES} {SOMEONE}"),
-            json!({ "n": number }),
+            &format!("query($n: String!, $v: Int) {{ akt(number: $n, version: $v) {{ {AKT} {extra} }} }} {SHAPE} {VALUES} {SOMEONE}"),
+            json!({ "n": number, "v": version }),
         )
         .await?;
     if data["akt"].is_null() {
-        return Err(not_found(number));
+        return Err(missing());
     }
     Ok(data["akt"].clone())
 }
@@ -107,7 +121,14 @@ pub async fn cat(
     numbers: &[String],
     output: Option<&Path>,
     with: WithMembers<'_>,
+    version: Option<i64>,
 ) -> Result<Answer, CliError> {
+    if version.is_some() && (numbers.len() > 1 || !matches!(with, WithMembers::None)) {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "`--version` reads one akt, without its members",
+        ));
+    }
     if let WithMembers::Types(keys) = with {
         for key in keys {
             super::shape(source, key).await?;
@@ -116,7 +137,7 @@ pub async fn cat(
     let mut wanted: Vec<String> = Vec::new();
     for number in numbers {
         // Known before its members are asked for, so a missing one says so.
-        let akt: Akt = read(akt_data(source, number, "").await?, "the akt")?;
+        let akt: Akt = read(akt_data(source, number, "", version).await?, "the akt")?;
         wanted.push(akt.number);
         let members = match with {
             WithMembers::None => Vec::new(),
@@ -137,7 +158,7 @@ pub async fn cat(
     for number in wanted {
         if seen.insert(number.clone()) {
             akter.push(read::<Akt>(
-                akt_data(source, &number, "").await?,
+                akt_data(source, &number, "", version).await?,
                 "the akt",
             )?);
         }
@@ -309,6 +330,7 @@ pub async fn show(
     source: Source<'_>,
     number: &str,
     with_history: bool,
+    version: Option<i64>,
 ) -> Result<Answer, CliError> {
     let extra = format!(
         "board(first: {MEMBERS}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} outcome }} }} }}
@@ -316,7 +338,7 @@ pub async fn show(
          {}",
         if with_history { REVISIONS } else { "" }
     );
-    let data = akt_data(source, number, &extra).await?;
+    let data = akt_data(source, number, &extra, version).await?;
     let akt: Akt = read(data.clone(), "the akt")?;
     let around: Around = read(data, "the akt")?;
     let shape = &akt.shape;
@@ -398,11 +420,12 @@ impl Shown<'_> {
             .map(|o| format!(" · {}", o.to_lowercase()))
             .unwrap_or_default();
         text.push_str(&format!(
-            "\n\n{} · {}{outcome} · revision {} · changed {}\n",
+            "\n\n{} · {}{outcome} · revision {} · changed {}\n{}",
             shape.name,
             akt.state.name,
             akt.revision,
-            crate::history::when(&akt.updated_at)
+            crate::history::when(&akt.updated_at),
+            at_version(akt)
         ));
 
         let title_field = shape.presentation.title.as_deref();
@@ -457,6 +480,7 @@ impl Shown<'_> {
             }
         }
         text.push_str(&broken_references(akt));
+        text.push_str(&versions_of(akt));
         if !allowed.is_empty() {
             text.push_str("\n## Transitions\n\n");
             for t in allowed {
@@ -608,6 +632,12 @@ impl Shown<'_> {
                 })
             })
             .collect();
+        json["version"] = akt.version.as_ref().map(|v| v.number).into();
+        json["versions"] = akt
+            .versions
+            .iter()
+            .map(|v| json!({ "number": v.number, "revision": v.revision, "label": v.label }))
+            .collect();
         json["references"] = references(akt)
             .map(|(field, r)| json!({ "field": field, "destination": r.destination, "broken": r.broken }))
             .collect();
@@ -685,7 +715,21 @@ pub async fn history(source: Source<'_>, number: &str) -> Result<Answer, CliErro
     let session = match source {
         Source::Server(session) => session,
         Source::Local(l) => {
-            let (described, dirty) = local_history(l, number)?;
+            let (mut described, dirty) = local_history(l, number)?;
+            if let Some(akt) = l.dir.akt(number) {
+                let versions: Vec<(i64, i64, Option<String>)> = akt
+                    .versions
+                    .iter()
+                    .map(|v| {
+                        (
+                            v["revision"].as_i64().unwrap_or_default(),
+                            v["number"].as_i64().unwrap_or_default(),
+                            v["label"].as_str().map(str::to_owned),
+                        )
+                    })
+                    .collect();
+                released(&mut described, &versions);
+            }
             let mut markdown = format!("# {number} · History\n\n");
             for d in &described {
                 markdown.push_str(&d.markdown());
@@ -711,7 +755,7 @@ pub async fn history(source: Source<'_>, number: &str) -> Result<Answer, CliErro
     };
     let data = session
         .graphql(
-            &format!("query($n: String!) {{ akt(number: $n) {{ number type {{ ...Shape }} {REVISIONS} }} }} {SHAPE}"),
+            &format!("query($n: String!) {{ akt(number: $n) {{ number type {{ ...Shape }} versions {{ number revision label }} {REVISIONS} }} }} {SHAPE}"),
             json!({ "n": number }),
         )
         .await?;
@@ -724,7 +768,14 @@ pub async fn history(source: Source<'_>, number: &str) -> Result<Answer, CliErro
     }
     let shape: crate::model::Shape = read(data["akt"]["type"].clone(), "the akt type")?;
     let revisions: Vec<Revision> = read(data["akt"]["revisions"].clone(), "the revisions")?;
-    let described = described(&revisions, &shape);
+    let mut described = described(&revisions, &shape);
+    let versions: Vec<file::Released> =
+        read(data["akt"]["versions"].clone(), "the versions").unwrap_or_default();
+    let versions: Vec<(i64, i64, Option<String>)> = versions
+        .into_iter()
+        .map(|v| (v.revision, v.number, v.label))
+        .collect();
+    released(&mut described, &versions);
     let mut markdown = format!("# {number} · History\n\n");
     for d in &described {
         markdown.push_str(&d.markdown());
@@ -765,5 +816,63 @@ fn broken_references(akt: &file::Akt) -> String {
         String::new()
     } else {
         format!("\n## Broken references\n\n{}", broken.concat())
+    }
+}
+
+/// That the akt is read at a version, if it is (`version.read`).
+fn at_version(akt: &file::Akt) -> String {
+    akt.version.as_ref().map_or_else(String::new, |v| {
+        format!(
+            "\nAt version {}{}: not the living version.\n",
+            v.number,
+            v.label
+                .as_deref()
+                .map(|l| format!(" ({l})"))
+                .unwrap_or_default()
+        )
+    })
+}
+
+/// An akt's versions, latest first, as `show` lists them.
+// r[impl version.list]
+fn versions_of(akt: &file::Akt) -> String {
+    if akt.versions.is_empty() {
+        return String::new();
+    }
+    let mut text = String::from("\n## Versions\n\n");
+    for v in &akt.versions {
+        text.push_str(&format!(
+            "- {}{} · revision {}{}\n",
+            v.number,
+            v.label
+                .as_deref()
+                .map(|l| format!(" ({l})"))
+                .unwrap_or_default(),
+            v.revision,
+            v.released_at
+                .as_deref()
+                .map(|at| format!(" · released {}", crate::history::when(at)))
+                .unwrap_or_default()
+        ));
+    }
+    text
+}
+
+/// Says, of each revision a version names, that it was released
+/// (`version.history`): `versions` are `(revision, number, label)`.
+// r[impl version.history]
+fn released(described: &mut [Described], versions: &[(i64, i64, Option<String>)]) {
+    for d in described.iter_mut() {
+        for (revision, number, label) in versions {
+            if *revision == d.revision {
+                d.what.push_str(&format!(
+                    ", released as version {number}{}",
+                    label
+                        .as_deref()
+                        .map(|l| format!(" ({l})"))
+                        .unwrap_or_default()
+                ));
+            }
+        }
     }
 }

@@ -1,7 +1,7 @@
 ---
 number: PLAN-014
 type: plan
-revision: 18
+revision: 19
 rank: b3k
 state: active
 title: "Documents: markdown fields, versions, references, PDFs and a git remote"
@@ -419,16 +419,63 @@ Not yet in a browser test: rendering and the textarea. The editor (T04) and the 
 <!-- akt: PLAN-014-T03 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3t
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocked by PLAN-014-T02, Blocks PLAN-014-T06, Blocks PLAN-014-T07]
 title: "Versions: release a revision, check and pin references"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`versions` in akt type documents. `releaseVersion`, `versions`, `akt(version:)` and a version's change event. The release check and pinning of PLAN-014-D05. The CLI's `release`, `versions` and `--version` reads, in local mode too. The app's Release dialog, version picker and diff.
+Versions: a release names the akt's current revision as its next version, once none of its references is broken, and pins what each unversioned reference meant.
+
+- **Config:** `versions` in the akt type document, with an optional `action` checked like a transition's.
+- **Store:** migration `000014_versions`.
+  - `akt_version` is keyed by akt and number, unique by revision, and refers to the revision it names.
+  - Its label is one line of at most 100 characters.
+  - A trigger refuses any update or delete.
+  - Change events gain the kind `version`.
+  - `kuria_store::versions`: `insert` (with its change event), `of`, `one`.
+- **Engine:**
+  - `markdown::Target` holds each version's headings, so a versioned reference's heading is checked in that version.
+  - `versions::check` gives the pins, or every broken reference.
+  - `versions::as_pinned` says how a version reads a reference.
+- **Server:**
+  - `releaseVersion` refuses a stale revision, a type without `versions`, a revision already released and a bad label.
+  - It needs `kuria:akter:edit` plus the type's action (`Permission::Release`).
+  - Broken references are refused as `BROKEN_REFERENCES`, with `extensions.references`.
+  - `Akt.versions` and `Akt.version`. `akt(number:, version:)` reads the revision's fields, state and title, and its references follow the pins (`pinnedVersion`, `pinnedRevision`).
+  - The changes subscription gains `VERSION`.
+- **CLI:**
+  - `release [--label]`, `versions`, `diff <n> <from> [<to>]` (line diff of each changed field), and `cat` and `show` with `--version`.
+  - A file read at a version has `version: <n>`, and `apply` refuses it as `READ_ONLY` before any staleness check.
+  - `show` lists versions; `history` says "released as version n".
+  - `guide` covers `markdown` fields and versions.
+- **Local mode:**
+  - Versions are in the directory file's front matter, with their pins and headings, and `cat` leaves them out.
+  - A release refuses uncommitted changes as `UNCOMMITTED` and makes no revision.
+  - Reading at a version takes the file from the commit that first held that revision (`Times::text_at`).
+- **App:**
+  - The akt cache key includes the version, so an akt read at a version never overwrites the living one.
+  - A Versions card: the list, links to `?version=n`, back to the living version, Release with a label (broken references listed), and Compare.
+  - `DiffDialog` with `lineDiff`.
+  - At a version, the page says so and offers nothing to change.
+  - History says releases. References follow pins.
+- **Spec changes found while building:** an akt file never lists versions, which change without a revision (`cli.file.kinds`). `cli.local.versions` keeps them in the directory file like `rank`.
+- **New gap G04:** versions in bundles and in directory conversion.
+
+**Tests:**
+- Config: `checks_the_action_a_release_needs`.
+- Engine: `a_release_pins_what_its_references_meant`, `a_release_is_refused_while_a_reference_is_broken`, and the version-heading case in `says_why_a_reference_is_broken`.
+- Server (`tests/documents.rs`):
+  - `a_release_names_the_current_revision_once_nothing_is_broken`: broken, stale, forbidden without the action, labelled, pinned at a revision, released once, listed latest first.
+  - `a_version_reads_as_it_was_released`: pinned to a version, still unbroken after the target loses the heading; reading at a missing version; change events; no update or delete.
+- Local: `documents_are_released_and_read_at_their_versions`.
+- App: `diff.test.ts`, `keys.test.ts`.
+
+Lint and `mise run test` (364 Rust, 70 app) pass. The parity, akt-page, links, test-protocols and accessibility e2e tests pass. No browser test of the Versions card yet: T07's walkthrough covers it.
 
 <!-- field: acceptance -->
 - Engine tests for the check and pins.
@@ -548,3 +595,16 @@ title: A document in several indexes
 
 <!-- field: description -->
 A document may be a member of several containers, but sits in one folder per index. Each index's clone shows it in its own sections. Does a push from one clone that moves it need to say which index it moves in, and is that only ever the cloned one?
+
+<!-- akt: PLAN-014-G04 -->
+---
+type: gap
+revision: 1
+rank: b41
+state: open
+in: [PLAN-014]
+title: Versions in bundles and directory conversion
+---
+
+<!-- field: description -->
+Bundles (`bundle.contents`) and converting between a server and an akt directory (`cli.local.convert`) carry akter, revisions, links and pins, but not versions (`akt_version`, or a directory file's `versions`). An exported tenant, or a directory imported to a server, loses its releases. Each format needs versions, with their pins, and an import must keep their numbers and the revisions they name.

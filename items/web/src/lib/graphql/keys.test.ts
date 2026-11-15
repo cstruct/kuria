@@ -13,7 +13,10 @@ describe('keysOf', () => {
 			],
 			['Query']
 		);
-		expect(Object.keys(keys).sort()).toEqual(['AktType', 'TextValue']);
+		expect(Object.keys(keys).sort()).toEqual(['Akt', 'AktType', 'TextValue']);
+		// r[verify version.read]: an akt read at a version is a record of its own.
+		expect(keys.Akt?.({ __typename: 'Akt', id: 'a1' })).toBe('a1');
+		expect(keys.Akt?.({ __typename: 'Akt', id: 'a1', version: { number: 2 } })).toBe('a1@2');
 		expect(keys.TextValue?.({ __typename: 'TextValue' })).toBeNull();
 		expect(keys.AktType?.({ __typename: 'AktType', key: 'release', version: 3 })).toBe('release:3');
 	});

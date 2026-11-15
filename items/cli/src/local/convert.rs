@@ -274,6 +274,7 @@ fn akt_of(
             sections: Vec::new(),
         },
         nested: false,
+        versions: Vec::new(),
     })
 }
 

@@ -163,6 +163,12 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
 
     let contained = containment(&mut problems, &document);
     links(&mut problems, &document);
+    // r[impl version.declare]
+    if let Some(action) = document.versions.as_ref().and_then(|v| v.action.as_ref())
+        && let Err(message) = check_action(action)
+    {
+        problems.add("versions.action", message);
+    }
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
     }
@@ -829,6 +835,22 @@ mod tests {
                 "transitions[1].from: a transition starts from at least one state",
             ]
         );
+    }
+
+    // r[verify version.declare]
+    #[test]
+    fn checks_the_action_a_release_needs() {
+        let mut document = capa();
+        document["versions"] = json!({});
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["versions"] = json!({ "action": "documents:release" });
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["versions"] = json!({ "action": "konklav:anything" });
+        assert_eq!(problems(document.clone()).len(), 1);
+        assert!(problems(document)[0].starts_with("versions.action: "));
+        let mut stray = capa();
+        stray["versions"] = json!({ "label": "x" });
+        assert!(serde_json::from_value::<AktTypeDocument>(stray).is_err());
     }
 
     // r[verify akt.type.validation]

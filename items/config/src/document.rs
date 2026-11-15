@@ -55,6 +55,19 @@ pub struct AktTypeDocument {
     /// The kinds of link this type's akter may have to other akter.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<LinkDef>,
+    /// Whether this type's akter release versions, and what a release
+    /// needs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub versions: Option<VersionsDef>,
+}
+
+/// That an akt type releases versions (`version.declare`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionsDef {
+    /// A Konklav action a release requires, besides `kuria:akter:edit`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
 }
 
 /// A kind of link an akt type's akter may have:

@@ -296,6 +296,12 @@ fn check_read_only(w: &Writer, number: &str, parsed: &Parsed) -> Result<(), CliE
             format!("`{key}` can't be changed in a file of {number}: {how}"),
         )
     };
+    if parsed.front.contains_key("version") {
+        return Err(read_only(
+            "version",
+            "a version never changes; edit the living version",
+        ));
+    }
     if parsed.text("type").is_some_and(|t| t != akt.type_key) {
         return Err(read_only("type", "an akt keeps its type"));
     }

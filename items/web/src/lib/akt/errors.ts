@@ -8,6 +8,8 @@ export interface Refusal {
 	message: string;
 	/** The key of the field whose value was refused, if one was. */
 	field?: string;
+	/** For `BROKEN_REFERENCES`: each broken reference, and why. */
+	references?: string[];
 }
 
 const MESSAGES: Record<string, string> = {
@@ -28,6 +30,7 @@ const MESSAGES: Record<string, string> = {
 	INVALID_CONTACT: 'A contact needs a name, and a real email if any.',
 	DUPLICATE_EMAIL: 'Another contact has that email.',
 	LINKED: 'That contact is linked to a user, so it can’t be edited.',
+	BROKEN_REFERENCES: 'It can’t be released while a reference is broken.',
 	INTERNAL: 'Something went wrong in Kuria. Try again.'
 };
 
@@ -48,6 +51,14 @@ export function refusalOf(error: CombinedError, fieldNames: Record<string, strin
 			code,
 			field: key,
 			message: reason.startsWith('is required') ? `${name} is required.` : `${name}: ${reason}`
+		};
+	}
+	if (code === 'BROKEN_REFERENCES') {
+		const references = first.extensions?.references;
+		return {
+			code,
+			message: MESSAGES[code],
+			references: Array.isArray(references) ? references.map(String) : []
 		};
 	}
 	return { code, message: MESSAGES[code] ?? first.message };

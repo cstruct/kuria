@@ -351,6 +351,7 @@ impl Writer {
                 sections: Vec::new(),
             },
             nested: false,
+            versions: Vec::new(),
         }
     }
 }
@@ -381,6 +382,10 @@ pub fn text_of(dir: &AktDir, akt: &LocalAkt, numbered: bool) -> String {
         ("rank", akt.rank.clone().into()),
         ("state", akt.state.clone().into()),
     ]);
+    // r[impl cli.local.versions]
+    if !akt.versions.is_empty() {
+        front.push(("versions", akt.versions.clone().into()));
+    }
     if !akt.containers.is_empty() {
         front.push(("in", akt.containers.clone().into()));
     }

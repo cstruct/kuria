@@ -100,6 +100,10 @@ Markdown, as long as it needs.
 - `verdict` (each assignee's `pass`, `fail` or `skip`) and `outcome` (what
   verdicts, or members' outcomes, add up to) are read-only: give verdicts
   with `kuria verdict`.
+- A `markdown` field is a section of its own, Markdown whose headings keep
+  ids (`## Install {#install}`) and whose links `kuria:<number>[@<version>][#<heading>]`
+  are references to other akter. A release is refused while one is broken;
+  `kuria show` says which.
 - `revision` is the revision you read. If the akt changed since, `apply`
   is refused as `STALE` (exit 3) and says what changed: `cat` it again,
   merge, and apply again. Never force it.
@@ -132,6 +136,10 @@ kuria link <number> blocks <other>      kuria unlink <number> blocks <other>
 kuria draft <number> <field>
 kuria verdict <test> pass|fail|skip|clear [--for <assignee>]
 kuria copy <template> [--only <number>…] [--in <container>]   # with its members
+kuria release <number> [--label 2.0]   # its current revision as its next version
+kuria versions <number>                # its versions, latest first
+kuria cat <number> --version 2         # as it was at version 2 (read-only)
+kuria diff <number> 1 [2]              # what changed since version 1, or up to 2
 ```
 
 Values: options by key or name; users and contacts by email, name or

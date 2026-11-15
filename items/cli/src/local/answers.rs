@@ -308,7 +308,8 @@ pub fn values(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
 
 /// An akt's `markdown` fields as the engine holds them, read from its file,
 /// leaving out any other field.
-fn markdown_of(dir: &AktDir, akt: &LocalAkt) -> BTreeMap<String, kuria_engine::Value> {
+#[must_use]
+pub fn markdown_of(dir: &AktDir, akt: &LocalAkt) -> BTreeMap<String, kuria_engine::Value> {
     dir.type_of(akt)
         .ty
         .document()
@@ -333,10 +334,7 @@ fn references(dir: &AktDir, text: &str) -> Vec<Json> {
     markdown::references(text)
         .iter()
         .map(|reference| {
-            let target = dir.akt(&reference.number).map(|a| markdown::Target {
-                headings: markdown::heading_ids(&dir.type_of(a).ty, &markdown_of(dir, a)),
-                versions: Vec::new(),
-            });
+            let target = super::versions::target(dir, &reference.number);
             json!({
                 "destination": reference.to_string(),
                 "broken": markdown::broken(reference, target.as_ref()),
@@ -537,6 +535,8 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
         "fields": values(dir, akt)?,
         "containers": containers,
         "links": links(dir, akt)?,
+        "version": null,
+        "versions": super::versions::listed(akt),
         "board": { "columns": columns },
         "members": {
             "nodes": members
@@ -550,4 +550,67 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
             "pageInfo": { "endCursor": null, "hasNextPage": false },
         },
     })))
+}
+
+/// The akt `number` as it was at its version `n`, as the CLI's akt query
+/// answers it with `version:`, its references following the version's
+/// pins; `None` if it has no such version (`version.read`).
+// r[impl version.read]
+pub fn akt_at(dir: &AktDir, times: &Times, number: &str, n: i64) -> Result<Option<Json>, CliError> {
+    let Some((read, version)) = super::versions::at(dir, times, number, n)? else {
+        return Ok(None);
+    };
+    let pins = super::versions::pins_of(&version);
+    let mut at = AktDir {
+        root: dir.root.clone(),
+        types: dir.types.clone(),
+        akter: dir.akter.clone(),
+    };
+    if let Some(slot) = at.akter.iter_mut().find(|a| a.number == number) {
+        *slot = read;
+    }
+    let Some(mut answer) = akt(&at, times, number)? else {
+        return Ok(None);
+    };
+    answer["version"] = super::versions::shown(&version);
+    // Each reference naming no version, as its pin says.
+    if let Some(fields) = answer["fields"].as_array_mut() {
+        for field in fields
+            .iter_mut()
+            .filter(|f| f["__typename"] == "MarkdownValue")
+        {
+            let text = field["markdown"].as_str().unwrap_or_default().to_owned();
+            field["references"] = pinned_references(dir, &text, &pins).into();
+        }
+    }
+    Ok(Some(answer))
+}
+
+/// The references in `text` as a version reads them, following `pins`.
+fn pinned_references(dir: &AktDir, text: &str, pins: &[kuria_engine::versions::Pin]) -> Vec<Json> {
+    use kuria_engine::markdown;
+    markdown::references(text)
+        .iter()
+        .map(|reference| {
+            let (version, revision) = kuria_engine::versions::as_pinned(reference, pins);
+            let target = super::versions::target(dir, &reference.number);
+            let broken = if revision.is_some() {
+                target
+                    .is_none()
+                    .then(|| format!("there is no akt `{}`", reference.number))
+            } else {
+                let as_read = markdown::Reference {
+                    version: reference.version.or(version),
+                    ..reference.clone()
+                };
+                markdown::broken(&as_read, target.as_ref())
+            };
+            json!({
+                "destination": reference.to_string(),
+                "broken": broken,
+                "pinnedVersion": version.filter(|_| reference.version.is_none()),
+                "pinnedRevision": revision,
+            })
+        })
+        .collect()
 }

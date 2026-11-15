@@ -119,6 +119,9 @@ pub enum Command {
         /// order.
         #[arg(long)]
         all_members: bool,
+        /// The akt as it was at this version of it.
+        #[arg(long)]
+        version: Option<i64>,
     },
     /// Everything about one akt: fields, containers, members, links and the
     /// transitions its state allows.
@@ -127,6 +130,19 @@ pub enum Command {
         /// Its revisions too.
         #[arg(long)]
         history: bool,
+        /// The akt as it was at this version of it.
+        #[arg(long)]
+        version: Option<i64>,
+    },
+    /// An akt's versions, latest first.
+    Versions { number: String },
+    /// What changed in an akt between two versions, or since a version.
+    Diff {
+        number: String,
+        /// The version to compare from.
+        from: i64,
+        /// The version to compare to; the living version if left out.
+        to: Option<i64>,
     },
     /// An akt's revisions: who changed what, and when.
     History { number: String },
@@ -242,6 +258,14 @@ pub enum Command {
         for_whom: Option<String>,
         #[arg(long)]
         reason: Option<String>,
+    },
+    /// Release an akt's current revision as its next version, once none
+    /// of its references is broken.
+    Release {
+        number: String,
+        /// A label beside the version's number, such as `2.0`.
+        #[arg(long)]
+        label: Option<String>,
     },
     /// Copy an akt and its members, or the part `--only` names, as new
     /// akter of the same types.

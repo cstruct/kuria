@@ -1948,7 +1948,8 @@ fn documents(dir: &Dir) {
             { "key": "title", "name": "Title", "kind": "text", "required": true },
             { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to" }
         ],
-        "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }]
+        "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }],
+        "versions": {}
     });
     std::fs::write(
         dir.root.join("types/document.json"),
@@ -2038,6 +2039,114 @@ fn markdown_fields_get_heading_ids_and_keep_reference_links() {
     assert!(
         schema.contains("references kept as `refers_to` links"),
         "{schema}"
+    );
+    assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
+}
+
+// r[verify cli.local.versions]
+// r[verify version.release]
+// r[verify version.references]
+// r[verify version.read]
+// r[verify version.diff]
+// r[verify version.history]
+#[test]
+fn documents_are_released_and_read_at_their_versions() {
+    let dir = Dir::new();
+    documents(&dir);
+    let file = dir.root.parent().unwrap().join("body.md");
+    let body = |text: &str| {
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n\nRun it.\n"),
+    ]);
+    // Not committed yet: refused.
+    assert_eq!(dir.refused(&["release", "DOC-1"]).code, "UNCOMMITTED");
+    dir.commit("Setup");
+    let released = dir.ok(&["release", "DOC-1", "--label", "1.0"]);
+    assert_eq!(released.json["version"], 1, "{}", released.markdown);
+    dir.commit("Release DOC-1 1.0");
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("[install](kuria:DOC-1#install) [gone](kuria:DOC-1@1#gone)\n"),
+    ]);
+    dir.commit("Guide");
+    let broken = dir.refused(&["release", "DOC-2"]);
+    assert_eq!(broken.code, "BROKEN_REFERENCES");
+    assert!(
+        broken
+            .message
+            .contains("`DOC-1` has no heading `gone` in version 1"),
+        "{}",
+        broken.message
+    );
+    dir.ok(&["set", "DOC-2", &body("[install](kuria:DOC-1#install)\n")]);
+    dir.commit("Fix the guide");
+    dir.ok(&["release", "DOC-2"]);
+    dir.commit("Release DOC-2");
+    // The living version changes on.
+    dir.ok(&["set", "DOC-1", &body("# Running {#run}\n")]);
+    dir.commit("Rewrite the setup");
+
+    // A file never lists its versions; read at one, it says which.
+    let living = dir.ok(&["cat", "DOC-1"]).markdown;
+    assert!(!living.contains("versions"), "{living}");
+    let at = dir.ok(&["cat", "DOC-1", "--version", "1"]).markdown;
+    assert!(
+        at.contains("revision: 1\nversion: 1\nstate: draft\n"),
+        "{at}"
+    );
+    assert!(at.contains("# Install {#install}"), "{at}");
+    let path = dir.root.parent().unwrap().join("at.md");
+    std::fs::write(&path, &at).unwrap();
+    assert_eq!(
+        dir.refused(&["apply", path.to_str().unwrap()]).code,
+        "READ_ONLY"
+    );
+    // DOC-2's version 1 follows its pin to DOC-1's version 1, where the
+    // heading still is; its living version doesn't.
+    let pinned = dir
+        .ok(&["show", "DOC-2", "--version", "1", "--format", "json"])
+        .json;
+    assert_eq!(
+        pinned["akt"]["references"][0]["broken"],
+        json!(null),
+        "{pinned}"
+    );
+    let now = dir.ok(&["show", "DOC-2", "--format", "json"]).json;
+    assert_eq!(
+        now["akt"]["references"][0]["broken"],
+        "`DOC-1` has no heading `install`"
+    );
+
+    let listed = dir.ok(&["versions", "DOC-1", "--format", "json"]).json;
+    assert_eq!(listed["versions"][0]["number"], 1);
+    assert_eq!(listed["versions"][0]["label"], "1.0");
+    let diff = dir.ok(&["diff", "DOC-1", "1"]).markdown;
+    assert!(
+        diff.contains("-# Install {#install}") && diff.contains("+# Running {#run}"),
+        "{diff}"
+    );
+    let history = dir.ok(&["history", "DOC-1"]).markdown;
+    assert!(history.contains("released as version 1 (1.0)"), "{history}");
+    assert!(
+        dir.ok(&["show", "DOC-1"])
+            .markdown
+            .contains("## Versions\n\n- 1 (1.0) · revision 1")
+    );
+    assert_eq!(
+        dir.refused(&["cat", "DOC-1", "--version", "9"]).code,
+        "NOT_FOUND"
     );
     assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
 }

@@ -9,7 +9,13 @@ interface TypeShape {
 
 /** Types identified by something other than an `id` field. */
 const KEYED: KeyingConfig = {
-	AktType: (data) => `${data.key}:${data.version}`
+	AktType: (data) => `${data.key}:${data.version}`,
+	// An akt read at a version is another record than the living akt
+	// (`version.read`), so the two never overwrite each other.
+	Akt: (data) => {
+		const version = (data.version as { number?: number } | null | undefined)?.number;
+		return version ? `${data.id}@${version}` : ((data.id as string | undefined) ?? null);
+	}
 };
 
 /**

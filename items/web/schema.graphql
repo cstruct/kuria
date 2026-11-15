@@ -23,6 +23,14 @@ type Akt {
 	The fields that hold a value, in the akt type's order.
 	"""
 	fields: [FieldValue!]!
+	"""
+	The version it is read at, if it is read at one (`version.read`).
+	"""
+	version: Version
+	"""
+	Its versions, latest first (`version.list`).
+	"""
+	versions: [Version!]!
 	createdAt: DateTime!
 	updatedAt: DateTime!
 	"""
@@ -294,6 +302,10 @@ enum ChangeKind {
 	The akt moved in its tenant's order.
 	"""
 	RANK
+	"""
+	The akt released a version, of the revision `revision` (`version.history`).
+	"""
+	VERSION
 }
 
 type ChangesSubscription {
@@ -671,6 +683,16 @@ type MarkdownReference {
 	"""
 	akt: Akt
 	"""
+	The version a version read pinned it to, if it names none
+	(`version.pins`).
+	"""
+	pinnedVersion: Int
+	"""
+	The revision a version read pinned it to, for a target that had no
+	version then.
+	"""
+	pinnedRevision: Int
+	"""
 	Why the reference is broken, if it is.
 	"""
 	broken: String
@@ -748,6 +770,11 @@ type Mutation {
 	Edits an akt's field values.
 	"""
 	editAkt(input: EditAktInput!): Akt!
+	"""
+	Releases the akt's current revision as its next version
+	(`version.release`).
+	"""
+	releaseVersion(input: ReleaseVersionInput!): Version!
 	"""
 	Moves an akt along one of its akt type's transitions.
 	"""
@@ -910,7 +937,12 @@ type Query {
 	"""
 	The akt numbered `number`.
 	"""
-	akt(number: String!): Akt
+	akt(		number: String!,
+		"""
+		Read it as it was at this version of it (`version.read`).
+		"""
+		version: Int
+	): Akt
 	"""
 	Akter, most recently changed first: of one akt type and in one state,
 	if given, a page of at most `first` (50 by default, 200 at most)
@@ -943,6 +975,21 @@ type Query {
 type ReferenceValue {
 	field: String!
 	url: String!
+	label: String
+}
+
+"""
+What releasing a version takes.
+"""
+input ReleaseVersionInput {
+	number: String!
+	"""
+	The revision read, which must be the akt's current one.
+	"""
+	revision: Int!
+	"""
+	One line, at most 100 characters.
+	"""
 	label: String
 }
 
@@ -1126,6 +1173,34 @@ Each assignee's verdict.
 type VerdictValue {
 	field: String!
 	verdicts: [GivenVerdict!]!
+}
+
+"""
+A version of an akt (`version.number`).
+"""
+type Version {
+	number: Int!
+	"""
+	The revision it names.
+	"""
+	revision: Int!
+	label: String
+	releasedBy: User!
+	releasedAt: DateTime!
+	"""
+	What its references naming no version meant (`version.pins`).
+	"""
+	pins: [VersionPin!]!
+}
+
+"""
+What a reference meant when its akt was released.
+"""
+type VersionPin {
+	destination: String!
+	number: String!
+	version: Int
+	revision: Int
 }
 
 """

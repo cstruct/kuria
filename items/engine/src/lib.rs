@@ -16,6 +16,7 @@ pub mod sbom;
 pub mod sections;
 mod value;
 pub mod verdicts;
+pub mod versions;
 
 use std::collections::BTreeMap;
 

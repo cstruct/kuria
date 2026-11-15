@@ -13,7 +13,7 @@ mod validate;
 pub use document::{
     AktTypeDocument, AttachmentFormat, BoardDef, ChoiceOption, Colour, ColumnDef, ContainsDef,
     FieldDef, FieldKind, Icon, LinkDef, MAX_CARD_FIELDS, PresentationDef, StateDef, Tone,
-    TransitionDef,
+    TransitionDef, VersionsDef,
 };
 pub use draft::{DraftDef, GroupBy, LineTemplate, LineValues, MAX_DEPTH};
 pub use number::{NumberContext, NumberPattern, PatternError};

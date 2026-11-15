@@ -169,6 +169,7 @@ export const FieldValues = graphql(`
 			references {
 				destination
 				broken
+				pinnedVersion
 			}
 		}
 		... on VerdictValue {
@@ -290,7 +291,7 @@ export const TypeShape = graphql(`
 `);
 
 export const AktPage = graphql(`
-	query AktPage($number: String!) {
+	query AktPage($number: String!, $version: Int) {
 		viewer {
 			subject
 		}
@@ -299,12 +300,18 @@ export const AktPage = graphql(`
 			version
 			name
 		}
-		akt(number: $number) {
+		akt(number: $number, version: $version) {
 			id
 			number
 			title
 			revision
 			outcome
+			version {
+				...VersionShown
+			}
+			versions {
+				...VersionShown
+			}
 			copiedFrom {
 				id
 				number
@@ -668,6 +675,42 @@ export const SearchAkter = graphql(`
 					version
 					name
 				}
+			}
+		}
+	}
+`);
+
+export const VersionShown = graphql(`
+	fragment VersionShown on Version {
+		number
+		revision
+		label
+		releasedAt
+		releasedBy {
+			id
+			name
+		}
+	}
+`);
+
+export const ReleaseVersion = graphql(`
+	mutation ReleaseVersion($input: ReleaseVersionInput!) {
+		releaseVersion(input: $input) {
+			...VersionShown
+		}
+	}
+`);
+
+/** An akt's field values at one of its versions, or now, to compare. */
+export const AktFieldsAt = graphql(`
+	query AktFieldsAt($number: String!, $version: Int) {
+		akt(number: $number, version: $version) {
+			id
+			version {
+				number
+			}
+			fields {
+				...FieldValues
 			}
 		}
 	}
