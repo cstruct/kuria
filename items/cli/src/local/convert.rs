@@ -11,6 +11,10 @@
 //!   that revision holds it, else as at the next revision git has. Every
 //!   hash then matches (`bundle.import.hashes`), pins the files hold name
 //!   revisions the server has, and each version reads as it was released.
+//!
+//! Attachments go both ways as files: a bundle's bytes written under
+//! `attachments/<number>/`, and each file an akt holds, at any revision,
+//! put in the bundle (`cli.local.attachments`).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
@@ -22,6 +26,7 @@ use serde_json::{Map, Value as Json, json};
 use uuid::Uuid;
 
 use super::answers;
+use super::attachments;
 use super::check::{check, said};
 use super::dir::{AktDir, LocalAkt, LocalType, init, read_text};
 use super::git::Times;
@@ -33,6 +38,41 @@ use crate::profile::io_error;
 
 /// The bundle format this client writes.
 const BUNDLE_FORMAT: u32 = 2;
+
+/// A bundle unpacked: its `bundle.json`, and each attachment's bytes by
+/// their SHA-256 in lower-case hex, as `attachments/<sha256>` holds them.
+#[derive(Debug, Default)]
+pub struct Unpacked {
+    pub bundle: Json,
+    pub attachments: Bytes,
+}
+
+impl Unpacked {
+    /// The bundle of the files a tar archive of one holds, by their names.
+    #[must_use]
+    pub fn of(bundle: Json, files: &[(String, Vec<u8>)]) -> Self {
+        let attachments = files
+            .iter()
+            .filter_map(|(name, bytes)| {
+                let sha = name.strip_prefix("attachments/")?;
+                Some((sha.to_ascii_lowercase(), bytes.clone()))
+            })
+            .collect();
+        Self {
+            bundle,
+            attachments,
+        }
+    }
+
+    /// Its files as a tar archive of it holds them, but `bundle.json`.
+    #[must_use]
+    pub fn files(&self) -> Vec<(String, Vec<u8>)> {
+        self.attachments
+            .iter()
+            .map(|(sha, bytes)| (format!("attachments/{sha}"), bytes.clone()))
+            .collect()
+    }
+}
 
 fn doesnt_fit(number: &str, key: &str, why: impl std::fmt::Display) -> CliError {
     CliError::refused(
@@ -87,10 +127,13 @@ fn named(bundle: &Json) -> Ids {
     ids
 }
 
-/// Writes `bundle`, selected akt types with their akter, as a new akt
-/// directory at `root`, and answers what it wrote.
+/// Writes `unpacked`, selected akt types with their akter, as a new akt
+/// directory at `root`, each attachment as its file, and answers what it
+/// wrote.
 // r[impl cli.local.convert]
-pub fn to_dir(bundle: &Json, root: &Path) -> Result<Json, CliError> {
+// r[impl cli.local.attachments]
+pub fn to_dir(unpacked: &Unpacked, root: &Path) -> Result<Json, CliError> {
+    let bundle = &unpacked.bundle;
     if bundle["scope"] != "types" || bundle["holdsAkter"] != true {
         return Err(CliError::unavailable(
             "Kuria's bundle doesn't hold selected akt types with their akter",
@@ -129,9 +172,13 @@ pub fn to_dir(bundle: &Json, root: &Path) -> Result<Json, CliError> {
         );
     }
     let ids = named(bundle);
+    let mut files = Files {
+        unpacked,
+        written: BTreeMap::new(),
+    };
     let mut akter = Vec::new();
     for a in &akter_in {
-        akter.push(akt_of(bundle, a, root, &types, &bundled, &ids)?);
+        akter.push(akt_of(bundle, a, root, &types, &bundled, &ids, &mut files)?);
     }
     akter.sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));
     let dir = AktDir {
@@ -146,6 +193,13 @@ pub fn to_dir(bundle: &Json, root: &Path) -> Result<Json, CliError> {
         let text = serde_json::to_string_pretty(&t.document).expect("serializable") + "\n";
         std::fs::write(&path, text).map_err(|e| io_error(&path, &e))?;
     }
+    for (path, bytes) in &files.written {
+        let path = root.join(path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| io_error(parent, &e))?;
+        }
+        std::fs::write(&path, bytes).map_err(|e| io_error(&path, &e))?;
+    }
     let mut dir = dir;
     let every: BTreeSet<_> = dir.akter.iter().map(|a| a.path.clone()).collect();
     for path in layout::relocate(&mut dir, &every) {
@@ -157,7 +211,58 @@ pub fn to_dir(bundle: &Json, root: &Path) -> Result<Json, CliError> {
         "dir": root,
         "aktTypes": dir.types.len(),
         "akter": dir.akter.len(),
+        "attachments": files.written.len(),
     }))
+}
+
+/// The attachments a directory is written with: a bundle's, and the files
+/// they are written as, by path.
+struct Files<'a> {
+    unpacked: &'a Unpacked,
+    written: BTreeMap<String, Vec<u8>>,
+}
+
+impl Files<'_> {
+    /// The path the bundle's attachment `id`, held by `number`, is written
+    /// at: `attachments/<number>/<name>`, under a name of its own if
+    /// another of the akt's attachments has its name.
+    fn place(&mut self, number: &str, id: Uuid) -> Result<String, CliError> {
+        let missing = || {
+            CliError::unavailable(format!(
+                "Kuria's bundle lacks the attachment {id}, which {number} holds"
+            ))
+        };
+        let meta = self.unpacked.bundle["attachments"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|a| uuid(&a["id"]) == id)
+            .ok_or_else(missing)?;
+        let bytes = meta["sha256"]
+            .as_str()
+            .and_then(|sha| self.unpacked.attachments.get(&sha.to_ascii_lowercase()))
+            .ok_or_else(missing)?;
+        let name = attachments::file_name(
+            meta["name"].as_str().unwrap_or_default(),
+            meta["mediaType"].as_str().unwrap_or_default(),
+        );
+        for n in 1.. {
+            let path = format!(
+                "{}/{number}/{}",
+                attachments::DIRECTORY,
+                attachments::numbered(&name, n)
+            );
+            match self.written.get(&path) {
+                Some(there) if there != bytes => {}
+                Some(_) => return Ok(path),
+                None => {
+                    self.written.insert(path.clone(), bytes.clone());
+                    return Ok(path);
+                }
+            }
+        }
+        unreachable!("a name is found")
+    }
 }
 
 /// What a bundle says of one of its akter.
@@ -175,6 +280,7 @@ fn akt_of(
     types: &BTreeMap<String, LocalType>,
     bundled: &HashMap<Uuid, Bundled>,
     ids: &Ids,
+    files: &mut Files<'_>,
 ) -> Result<LocalAkt, CliError> {
     let id = uuid(&a["id"]);
     let Bundled {
@@ -196,13 +302,11 @@ fn akt_of(
         .map_err(|e| doesnt_fit(&number, key, e))?;
     let mut values = Map::new();
     for (field, value) in &fields {
-        if matches!(value, Value::Attachment(_)) {
-            return Err(super::unsupported(
-                &format!("{number}'s attachment in `{field}`"),
-                "an akt directory holds no attachments",
-            ));
-        }
-        values.insert(field.clone(), file_form(value, ids));
+        let value = match value {
+            Value::Attachment(id) => files.place(&number, *id)?.into(),
+            value => file_form(value, ids),
+        };
+        values.insert(field.clone(), value);
     }
     let containers = bundle["memberships"]
         .as_array()
@@ -291,6 +395,8 @@ fn versions_in(a: &Json, ty: &AktType, ids: &Ids) -> Vec<Json> {
         .collect();
     let mut raw = Map::new();
     let mut headings = HashMap::new();
+    let mut pictures = BTreeSet::new();
+    let image = ty.document().presentation.image.as_ref();
     for r in a["revisions"].as_array().into_iter().flatten() {
         for (key, value) in r["changes"].as_object().into_iter().flatten() {
             if value.is_null() {
@@ -304,12 +410,15 @@ fn versions_in(a: &Json, ty: &AktType, ids: &Ids) -> Vec<Json> {
         };
         let fields = fields_from_json(ty, &raw).unwrap_or_default();
         headings.insert(revision, kuria_engine::markdown::heading_ids(ty, &fields));
+        if image.is_some_and(|key| matches!(fields.get(key), Some(Value::Attachment(_)))) {
+            pictures.insert(revision);
+        }
     }
     versions
         .iter()
         .map(|v| {
             let revision = v["revision"].as_i64().unwrap_or_default();
-            json!({
+            let mut version = json!({
                 "number": v["number"],
                 "revision": revision,
                 "label": v["label"],
@@ -319,7 +428,11 @@ fn versions_in(a: &Json, ty: &AktType, ids: &Ids) -> Vec<Json> {
                     .map(|t| time(t, Utc::now()).to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
                 "pins": v["pins"],
                 "headings": headings.remove(&revision).unwrap_or_default(),
-            })
+            });
+            if pictures.contains(&revision) {
+                version["picture"] = true.into();
+            }
+            version
         })
         .collect()
 }
@@ -488,9 +601,10 @@ fn history_of(
 }
 
 /// The akt directory at `root` as a bundle of its akt types with their
-/// akter, made by `me`, once `kuria check` finds it consistent.
+/// akter and the files they hold, made by `me`, once `kuria check` finds
+/// it consistent.
 // r[impl cli.local.convert]
-pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Json, CliError> {
+pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Unpacked, CliError> {
     check(root)?;
     let dir = AktDir::open(root)?;
     let times = Times::of(root);
@@ -536,6 +650,7 @@ pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Json, CliError> {
             "createdAt": created,
             "updatedAt": updated,
             "revisions": revisions,
+            "attachments": held(&fields),
             "versions": versions,
         }));
         for container in &akt.containers {
@@ -574,7 +689,8 @@ pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Json, CliError> {
             })
         })
         .collect();
-    Ok(json!({
+    let (attachments, bytes) = attachments_of(root, &ids, author, now)?;
+    let bundle = json!({
         "format": BUNDLE_FORMAT,
         "scope": "types",
         "types": dir.types.keys().collect::<Vec<_>>(),
@@ -585,5 +701,66 @@ pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Json, CliError> {
         "memberships": memberships,
         "links": links,
         "people": people,
-    }))
+        "attachments": attachments,
+    });
+    Ok(Unpacked {
+        bundle,
+        attachments: bytes,
+    })
+}
+
+/// The attachments `fields` hold, by field, as a bundle's akt lists them.
+fn held(fields: &BTreeMap<String, Value>) -> Vec<Json> {
+    fields
+        .iter()
+        .filter_map(|(field, value)| match value {
+            Value::Attachment(a) => Some(json!({ "field": field, "attachment": a })),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Attachments' bytes, by their SHA-256 in lower-case hex.
+type Bytes = BTreeMap<String, Vec<u8>>;
+
+/// Every attachment `ids` named, the akter holding it now or at an earlier
+/// revision, as a bundle holds it (`bundle.contents`), and its bytes by
+/// their SHA-256: the directory's file, else, for one since removed, what
+/// git last held there.
+// r[impl cli.local.attachments]
+fn attachments_of(
+    root: &Path,
+    ids: &Ids,
+    author: Uuid,
+    now: DateTime<Utc>,
+) -> Result<(Vec<Json>, Bytes), CliError> {
+    use sha2::{Digest, Sha256};
+    let mut listed = Vec::new();
+    let mut bytes = BTreeMap::new();
+    let mut held: Vec<(Uuid, &str)> = ids.attachments().collect();
+    held.sort_by_key(|(_, path)| *path);
+    for (id, path) in held {
+        let read = std::fs::read(root.join(path))
+            .ok()
+            .or_else(|| super::git::last_bytes(root, path))
+            .ok_or_else(|| {
+                CliError::refused(
+                    "NOT_FOUND",
+                    format!("neither the directory nor git has `{path}`, which an akt holds"),
+                )
+            })?;
+        let sha = hex(&Sha256::digest(&read));
+        listed.push(json!({
+            "id": id,
+            "name": path.rsplit('/').next(),
+            "mediaType": attachments::media_type(path),
+            "size": read.len(),
+            "sha256": sha,
+            "uploadedBy": author,
+            "uploadedAt": now,
+            "sbom": kuria_engine::sbom::detect(&read),
+        }));
+        bytes.insert(sha, read);
+    }
+    Ok((listed, bytes))
 }

@@ -202,18 +202,31 @@ fn value(akt: &LocalAkt, t: &LocalType, key: &str, raw: &Json) -> Result<Option<
                 .ok_or_else(|| bad("a Docker value with a `digest`"))?;
             json!({ "__typename": "DockerValue", "repository": repository, "digest": digest, "tag": raw["tag"] })
         }
-        "attachment" => json!({
-            "__typename": "AttachmentValue",
-            "attachment": {
-                "id": raw["id"].as_str().or_else(|| raw.as_str()).unwrap_or_default(),
-                "name": raw["name"].as_str().unwrap_or_default(),
-                "mediaType": "", "size": 0, "sha256": "", "url": "",
-            },
-        }),
+        // A file of the directory, named by its path (`cli.local.attachments`).
+        "attachment" => text()
+            .ok()
+            .and_then(attachment)
+            .ok_or_else(|| bad("the path of a file under attachments/<number>/"))?,
         other => return Err(bad(&format!("of a kind ({other}) this client knows"))),
     };
     answer["field"] = json!(key);
     Ok(Some(answer))
+}
+
+/// An attachment, the file of the directory at `path`, as
+/// `AttachmentValue`, or `None` if `path` isn't one under
+/// `attachments/<number>/` (`cli.local.attachments`).
+fn attachment(path: &str) -> Option<Json> {
+    super::attachments::holder(path)?;
+    Some(json!({
+        "__typename": "AttachmentValue",
+        "attachment": {
+            "id": path,
+            "name": path.rsplit('/').next(),
+            "mediaType": super::attachments::media_type(path),
+            "size": 0, "sha256": "", "url": path,
+        },
+    }))
 }
 
 /// A multiple user field's value in the file's form as `UsersValue`, or

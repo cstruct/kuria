@@ -167,21 +167,28 @@ pub async fn import(
     }
     let bytes = std::fs::read(&bundle).map_err(|e| io_error(&bundle, &e))?;
     let attachments = dir.join("attachments");
-    post(
-        session,
-        &bytes,
-        attachments.is_dir().then_some(attachments.as_path()),
-        subjects,
-    )
-    .await
+    let mut files = Vec::new();
+    if attachments.is_dir() {
+        for entry in std::fs::read_dir(&attachments).map_err(|e| io_error(&attachments, &e))? {
+            let path = entry.map_err(|e| io_error(&attachments, &e))?.path();
+            if !path.is_file() {
+                continue;
+            }
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            let read = std::fs::read(&path).map_err(|e| io_error(&path, &e))?;
+            files.push((format!("attachments/{name}"), read));
+        }
+    }
+    post(session, &bytes, &files, subjects).await
 }
 
-/// Posts a bundle to Kuria: `bundle` as its `bundle.json`, the files of
-/// `attachments`, and `subjects` as its `subjects.json`.
+/// Posts a bundle to Kuria: `bundle` as its `bundle.json`, `files` by
+/// their names in it, such as `attachments/<sha256>`, and `subjects` as
+/// its `subjects.json`.
 pub async fn post(
     session: &Session,
     bundle: &[u8],
-    attachments: Option<&Path>,
+    files: &[(String, Vec<u8>)],
     subjects: Option<&Path>,
 ) -> Result<Answer, CliError> {
     let tarred = |e: std::io::Error| CliError::refused("IO", format!("packing a bundle: {e}"));
@@ -192,9 +199,12 @@ pub async fn post(
     builder
         .append_data(&mut header, "bundle.json", bundle)
         .map_err(tarred)?;
-    if let Some(attachments) = attachments {
+    for (name, bytes) in files {
+        let mut header = tar::Header::new_ustar();
+        header.set_size(bytes.len() as u64);
+        header.set_mode(0o644);
         builder
-            .append_dir_all("attachments", attachments)
+            .append_data(&mut header, name, bytes.as_slice())
             .map_err(tarred)?;
     }
     if let Some(path) = subjects {

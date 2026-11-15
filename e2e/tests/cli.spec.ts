@@ -499,6 +499,61 @@ test('kuria converts selected akt types to an akt directory and back', async () 
 	expect(JSON.parse(again.stderr).error.code).toBe('CONFLICT');
 });
 
+// r[verify cli.local.attachments]
+// r[verify cli.local.convert]
+test('an akt directory carries its attachments to another tenant', async () => {
+	test.setTimeout(240_000);
+	const { lab, clients } = seeded();
+	const cli = new Cli({ KURIA_KEY: clients.admin.key });
+	const ok = async (args: string[], env: Record<string, string> = {}) => {
+		const ran = await cli.run([...args, '--format', 'json'], env);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return JSON.parse(ran.stdout);
+	};
+	const text = async (args: string[], env: Record<string, string> = {}) => {
+		const ran = await cli.run(args, env);
+		expect(ran.code, `${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return ran.stdout;
+	};
+	const inLab = { KURIA_TENANT: lab };
+	const key = `dir_image_${Date.now()}`;
+	writeFileSync(
+		join(cli.dir, 'image.json'),
+		JSON.stringify({
+			key,
+			name: 'Directory image',
+			number: `DI${Date.now()}-{seq}`,
+			fields: [
+				{ key: 'title', name: 'Title', kind: 'text', required: true },
+				{ key: 'file', name: 'File', kind: 'attachment', media_types: ['image/svg+xml'] }
+			],
+			states: [{ key: 'current', name: 'Current', initial: true }],
+			presentation: { image: 'file' }
+		})
+	);
+	await ok(['types', 'define', join(cli.dir, 'image.json')]);
+	const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>';
+	const { id } = await (await api(clients.admin)).upload('logo.svg', 'image/svg+xml', svg);
+	const number = (await ok(['new', key, '--set', 'title=Logo', '--set', `file=${id}`])).number;
+
+	// Its file in the directory, named by its path.
+	const dir = join(cli.dir, 'pictures');
+	expect(await ok(['export', '--types', key, '--to-dir', dir])).toMatchObject({
+		akter: 1,
+		attachments: 1
+	});
+	const path = `attachments/${number}/logo.svg`;
+	expect(readFileSync(join(dir, path), 'utf8')).toBe(svg);
+	expect(await text(['--dir', dir, 'cat', number])).toContain(`file: ${path}\n`);
+	expect((await ok(['--dir', dir, 'check'])).consistent).toBe(true);
+
+	// And into the lab, with its bytes.
+	expect(await ok(['import', '--from-dir', dir], inLab)).toMatchObject({ akter: 1 });
+	const there = await text(['cat', number], inLab);
+	expect(there).toContain('name: logo.svg');
+	expect(there).not.toContain(id);
+});
+
 // r[verify cli.guide]
 test('an agent works a plan as the guide says, on the planning example', async () => {
 	test.setTimeout(300_000);

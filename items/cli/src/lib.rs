@@ -560,9 +560,9 @@ async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliErro
                 .ok()
                 .filter(|v| !v.is_empty())
                 .or_else(|| local::git::email(&from_dir));
-            let bundle = local::convert::bundle_of(&from_dir, me)?;
-            let bytes = serde_json::to_vec(&bundle).expect("serializable");
-            writes::bundles::post(session, &bytes, None, map_subjects.as_deref()).await
+            let unpacked = local::convert::bundle_of(&from_dir, me)?;
+            let bytes = serde_json::to_vec(&unpacked.bundle).expect("serializable");
+            writes::bundles::post(session, &bytes, &unpacked.files(), map_subjects.as_deref()).await
         }
         Command::Export {
             types,
@@ -597,12 +597,13 @@ async fn to_dir_of(session: &Session, types: &[String], dir: &Path) -> Result<An
     let query = format!("types={}&akter=true", types.join(","));
     let files = writes::bundles::fetch(session, &query).await?;
     let bundle = writes::bundles::bundle_json(&files)?;
-    let wrote = local::convert::to_dir(&bundle, dir)?;
+    let wrote = local::convert::to_dir(&local::convert::Unpacked::of(bundle, &files), dir)?;
     Ok(Answer {
         markdown: format!(
-            "Wrote {} akt types and {} akter to the akt directory {}; commit it to start its history.",
+            "Wrote {} akt types, {} akter and {} attachments to the akt directory {}; commit it to start its history.",
             wrote["aktTypes"],
             wrote["akter"],
+            wrote["attachments"],
             dir.display()
         ),
         json: wrote,

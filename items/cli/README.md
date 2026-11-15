@@ -238,20 +238,34 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   `export --types <key>,… --to-dir <path>` writes the bundle of those types
   and their akter as a new directory (each type's latest document, links
   ordered as the server lists them, people by email or name, versions with
-  the headings they had), then checks it. `import --from-dir <path>` sends
+  the headings they had and whether an image had its picture, each
+  attachment's bytes as `attachments/<number>/<name>`), then checks it.
+  `import --from-dir <path>` sends
   a consistent directory as a `types` bundle: each akt with revisions
   numbered up to its file's `revision`, each as git's latest commit at that
   revision holds it, so that every hash matches, pins hold and each
-  version reads as it was released; its versions; each person as a
-  subject named by their email, which the import maps to a user who has
-  signed in.
+  version reads as it was released; its versions; each file an akt holds,
+  now or at an earlier revision (from git if it was since removed), as an
+  attachment with its bytes, under an identifier new to that bundle; each
+  person as a subject named by their email, which the import maps to a
+  user who has signed in.
+- **Attachments** ([`src/local/attachments.rs`](src/local/attachments.rs),
+  `cli.local.attachments`): files `attachments/<number>/<name>`, an
+  `attachment` field's value being that path (`cat` prints it so). A write
+  takes such a path, or `@<file>`, copied in when the change is saved,
+  under a name of its own (`logo-2.png`) if another file has the name;
+  either is checked: the file is there, its media type by extension one
+  its field takes, an SBOM where the field holds SBOMs (`kuria-engine`'s
+  `sbom`). An attachment's identifier, an upload, is `LOCAL_UNSUPPORTED`.
+  `check` names each that doesn't hold. An image with its file has its
+  picture, for embeds and releases.
 - **People** are text: `@me` is `KURIA_ME`, else git's `user.email`. On
   their way through the engine, each name or email stands in as a subject
   derived from its text ([`src/local/values.rs`](src/local/values.rs)); a
   checkbox records whom it is for (`true`, or `for:<someone>`), not who
   checked it, which git keeps.
 - **Refused** as `LOCAL_UNSUPPORTED`: signing in, `users`, `contacts`,
-  `draft`, attachments and bundles (convert instead).
+  `draft`, uploading attachments, and bundles (convert instead).
 
 ### JSON answers
 
@@ -274,7 +288,7 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
 | `guide` | `{guide}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
-| `export --to-dir` | `{dir, aktTypes, akter}` |
+| `export --to-dir` | `{dir, aktTypes, akter, attachments}` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
 `fields` maps field keys to values in the akt file's form.
@@ -340,8 +354,11 @@ cargo test -p kuria-cli
   transfers, redefining types, and eight writers at once; a protocol of
   tests in sections taking verdicts, its outcome adding up, its file
   applied unchanged and with read-only verdicts and outcome refused, a
-  test leaving its section, and copies of the whole and of a part; and
-  `check`, on a
+  test leaving its section, and copies of the whole and of a part;
+  attachments copied in or named by path, refused when missing, of a
+  media type the field doesn't take or not an SBOM, a document embedding
+  a picture released, and attachments through a bundle and back, one
+  since removed read from git; and `check`, on a
   consistent directory and on one with eight kinds of problem, each named
   with its file.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the

@@ -3,7 +3,10 @@
 //! An akt directory names people as text (`cli.local.people`), but the
 //! engine's values name users by subject identifier. Each name or email is
 //! given a stable stand-in identifier, derived from its text, on the way
-//! in, and written back as that text on the way out.
+//! in, and written back as that text on the way out. An attachment, a file
+//! the directory names by its path (`cli.local.attachments`), is given one
+//! too, new to each client, so that a bundle made from the directory never
+//! names an attachment a server already holds (`bundle.import.ids`).
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -22,10 +25,12 @@ use crate::values::{People, input_of};
 /// The namespace stand-in identifiers are derived in.
 pub(crate) const NAMESPACE: Uuid = Uuid::from_u128(0x6b75_7269_612d_6c6f_6361_6c2d_7065_6f70);
 
-/// People as text, and their stand-in identifiers.
+/// People as text, attachments as paths, and their stand-in identifiers.
 #[derive(Debug, Default)]
 pub struct Ids {
     texts: HashMap<Uuid, String>,
+    /// Each attachment's path, by its stand-in identifier.
+    paths: HashMap<Uuid, String>,
     /// Who `@me` is.
     pub me: Option<String>,
 }
@@ -35,8 +40,32 @@ impl Ids {
     pub fn new(me: Option<String>) -> Self {
         Self {
             texts: HashMap::new(),
+            paths: HashMap::new(),
             me,
         }
+    }
+
+    /// The stand-in identifier of the attachment at `path`.
+    pub fn attachment(&mut self, path: &str) -> Uuid {
+        if let Some((id, _)) = self.paths.iter().find(|(_, p)| *p == path) {
+            return *id;
+        }
+        let mut bytes = [0; 16];
+        getrandom::fill(&mut bytes).expect("system randomness");
+        let id = uuid::Builder::from_random_bytes(bytes).into_uuid();
+        self.paths.insert(id, path.to_owned());
+        id
+    }
+
+    /// The path of the attachment `id` stands in for.
+    #[must_use]
+    pub fn path(&self, id: Uuid) -> Option<&str> {
+        self.paths.get(&id).map(String::as_str)
+    }
+
+    /// Every attachment named so far, with its path.
+    pub fn attachments(&self) -> impl Iterator<Item = (Uuid, &str)> {
+        self.paths.iter().map(|(id, path)| (*id, path.as_str()))
     }
 
     /// The stand-in identifier of the person `text` names.
@@ -138,9 +167,11 @@ pub fn input(field: &FieldDef, raw: &Json, ids: &mut Ids) -> Result<Json, CliErr
             Some(who) => Ok(json!({ "for": ids.person(who).map_err(in_field)?.to_string() })),
             None => input_of(field, raw, &People::default()),
         },
-        ("ATTACHMENT", _) => Err(in_field(super::unsupported(
-            "Attaching a file",
-            "an akt directory holds no attachments",
+        // A path the writer checked (`Writer::attachment`).
+        ("ATTACHMENT", Json::String(path)) => Ok(ids.attachment(path).to_string().into()),
+        ("ATTACHMENT", _) => Err(in_field(CliError::refused(
+            "BAD_REQUEST",
+            format!("{} takes a file's path under attachments/", field.name),
         ))),
         ("TEXT", Json::String(text)) if field.multiline => Ok(text.trim_end_matches('\n').into()),
         ("MARKDOWN", Json::String(text)) => Ok(text.trim_end_matches('\n').into()),
@@ -200,14 +231,15 @@ pub fn current(
                 at: DateTime::<Utc>::UNIX_EPOCH,
                 on_behalf_of: Some(Someone::User(ids.id(&text["for:".len()..]))),
             },
-            ("attachment", raw) => {
-                let id = raw["id"]
-                    .as_str()
-                    .or_else(|| raw.as_str())
-                    .and_then(|s| Uuid::parse_str(s).ok());
-                Value::Attachment(
-                    id.ok_or_else(|| bad(key, "isn't an attachment's id".to_owned()))?,
-                )
+            // r[impl cli.local.attachments]
+            ("attachment", Json::String(path)) if super::attachments::holder(path).is_some() => {
+                Value::Attachment(ids.attachment(path))
+            }
+            ("attachment", _) => {
+                return Err(bad(
+                    key,
+                    "isn't the path of a file under attachments/<number>/".to_owned(),
+                ));
             }
             _ => Value::from_json(field, raw).map_err(|e| bad(key, e))?,
         };
@@ -232,7 +264,10 @@ pub fn file_form(value: &Value, ids: &Ids) -> Json {
             on_behalf_of: Some(s),
             ..
         } => format!("for:{}", someone(s)).into(),
-        Value::Attachment(id) => json!({ "id": id.to_string() }),
+        Value::Attachment(id) => ids
+            .path(*id)
+            .map_or_else(|| id.to_string(), str::to_owned)
+            .into(),
         Value::Users(people) => people.iter().map(|s| Json::from(someone(s))).collect(),
         Value::Verdicts(given) => given
             .iter()
