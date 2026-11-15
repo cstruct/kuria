@@ -115,8 +115,6 @@ impl World {
                 login_proxy: None,
                 cli_relay: None,
                 renderer: support::renderer(),
-                git_cache: None,
-                git_timing: kuria_server::GitTiming::default(),
             },
         )
         .unwrap();

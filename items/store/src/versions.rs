@@ -76,8 +76,8 @@ pub async fn one(
         .optional()
 }
 
-/// Keeps `commit` with each revision a batch made: those whose change
-/// events came after `after` (`git.identity`).
+/// Keeps `commit`, a git commit, with each revision made since: those whose
+/// change events came after `after`.
 pub async fn keep_commit(
     conn: &mut Connection,
     tenant: Uuid,

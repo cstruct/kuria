@@ -27,7 +27,7 @@
 
 pub mod account;
 pub mod args;
-pub mod credential;
+pub mod clone;
 pub mod dpop;
 pub mod error;
 pub mod file;
@@ -39,10 +39,8 @@ pub mod local;
 pub mod md;
 pub mod model;
 pub mod output;
-pub mod pictures;
 pub mod profile;
 pub mod reads;
-pub mod remote;
 pub mod secret;
 pub mod session;
 pub mod values;
@@ -73,52 +71,6 @@ pub async fn run(cli: Cli) -> ExitCode {
             error.exit_code()
         }
     }
-}
-
-/// The context a command runs in: its target from `url` and `tenant` if
-/// given, else the environment and the profile.
-fn context_for(
-    profile: Option<String>,
-    url: Option<String>,
-    tenant: Option<uuid::Uuid>,
-) -> Result<Context, CliError> {
-    let dir = config_dir()?;
-    let config = Config::load(&dir)?;
-    let env = |var: &str| std::env::var(var).ok().filter(|v| !v.is_empty());
-    let env_tenant = env("KURIA_TENANT")
-        .map(|t| {
-            t.parse()
-                .map_err(|_| CliError::refused("BAD_TENANT", "KURIA_TENANT isn't a tenant id"))
-        })
-        .transpose()?;
-    let target = Asked {
-        profile,
-        url,
-        tenant,
-        env_url: env("KURIA_URL"),
-        env_tenant,
-    }
-    .resolve(&config);
-    Ok(Context {
-        target,
-        store: Store::new(&dir),
-        dir,
-        secret_key: env("KURIA_KEY"),
-    })
-}
-
-/// The remote `name` at `url`, `kuria::<Kuria>/<number>`, signed in as
-/// `kuria` is (`git.remote`).
-pub async fn open_remote(name: &str, url: &str) -> Result<remote::Remote, CliError> {
-    let (base, number) = remote::split_url(url)?;
-    let context = context_for(None, Some(base), None)?;
-    let session = session::Session::open(&context).await?;
-    Ok(remote::Remote {
-        session,
-        number,
-        name: name.to_owned(),
-        git_dir: remote::git_dir(),
-    })
 }
 
 /// What `cli` answers, or why it was refused, without printing it.
@@ -175,32 +127,13 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
             "an akt directory has no sign-in; git says who changed what",
         )),
         (Command::Whoami, Some(root)) => whoami_local(&root),
-        // r[impl git.repo.serve]
-        (Command::GitCredential { action }, _) => credential::run(&context, &action).await,
-        // r[impl git.fmt]
-        (Command::Fmt { remote }, _) => {
-            let url = std::process::Command::new("git")
-                .args(["config", "--get", &format!("remote.{remote}.url")])
-                .output()
-                .ok()
-                .filter(|o| o.status.success())
-                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
-                .ok_or_else(|| {
-                    CliError::refused(
-                        "BAD_REQUEST",
-                        format!("`kuria fmt` runs in a clone, whose remote `{remote}` is `kuria::<url>/<number>`"),
-                    )
-                })?;
-            let opened = open_remote(&remote, &url).await?;
-            let root = std::env::current_dir().map_err(|e| CliError::unavailable(e.to_string()))?;
-            let top = std::process::Command::new("git")
-                .args(["rev-parse", "--show-toplevel"])
-                .output()
-                .ok()
-                .map_or(root, |o| {
-                    PathBuf::from(String::from_utf8_lossy(&o.stdout).trim())
-                });
-            remote::fmt(&opened, &top).await
+        // r[impl clone.normal]
+        (Command::Fmt, _) => {
+            let here = std::env::current_dir().map_err(|e| CliError::unavailable(e.to_string()))?;
+            let session = Session::open(&context).await?;
+            let answer = clone::fmt::fmt(&session, &here).await;
+            session.close().await;
+            answer
         }
         (
             Command::Types {

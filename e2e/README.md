@@ -138,8 +138,7 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   - the developer writes a document in the rich-text editor, with a reference to another document's heading;
   - a picture is uploaded as an image akt and a diagram written as code is toggled to its picture, and the image type sits under "Show more";
   - the release manager's release is refused while another reference is broken, and taken once it isn't;
-  - version 1 reads as released, its links pinned and its picture and diagram shown, and is downloaded as a PDF with the picture in it and compared with the living version;
-  - the index is cloned with git, rebased onto a change made in the app and pushed, and the app shows the pushed revision.
+  - version 1 reads as released, its links pinned and its picture and diagram shown, and is downloaded as a PDF with the picture in it and compared with the living version.
   
   axe checks the diagram as code, the body with its picture and diagram, the refused release, the version and the comparison.
 - [`tests/markdown-editor.spec.ts`](tests/markdown-editor.spec.ts): a
@@ -149,11 +148,6 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   from the Image dialog, shown as a figure and on its own page; a diagram
   written as code, previewed through a compile error and back, toggled to
   its picture and saved; axe on each dialog and view.
-- [`tests/git-remote.spec.ts`](tests/git-remote.spec.ts): `git-remote-kuria` against the stack:
-  - two clones have the same commits;
-  - a push becomes a revision, and the other clone fetches the very same commit;
-  - a push is refused until `git pull --rebase`, and another until `kuria fmt`;
-  - a version becomes a tag.
 - [`tests/test-protocols.spec.ts`](tests/test-protocols.spec.ts): the
   [test-protocols example](../docs/examples/test-protocols/README.md):
   a template of three sections copied with two of them from the copy

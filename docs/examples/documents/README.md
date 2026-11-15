@@ -6,8 +6,8 @@ versions released by hand that never change. Nothing in Kuria knows these
 names: they are ordinary akt type documents, using `markdown` fields,
 `sections`, versions, references, image akter and diagram blocks, which any
 akt type can use ([spec](../../spec/akter.md),
-[versions](../../spec/versions.md), [PDFs](../../spec/pdf.md), [the git
-remote](../../spec/git.md)).
+[versions](../../spec/versions.md), [PDFs](../../spec/pdf.md),
+[clones](../../spec/clones.md)).
 
 | Akt type | Number | Contains | Created in |
 |---|---|---|---|
@@ -61,8 +61,8 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
   naming no version meant, so its links keep their meaning.
 - **PDFs:** a document's body, of the living version or a version, its
   pictures and diagrams drawn in it.
-- **Git:** an index is cloned with git, its folders as directories, each
-  document a Markdown file, edited, committed, rebased and pushed back.
+- **Clones:** an index as files, its folders as directories, each document
+  a Markdown file, to edit with any editor (coming with `kuria clone`).
 
 ## In the app
 
@@ -88,35 +88,22 @@ kuria diff DOCS-1-D02 1               # what changed since version 1
 kuria pdf DOCS-1-D02 --version 1 -o guide.pdf
 ```
 
-## With git
+## With kuria clone
 
-`git-remote-kuria` is installed with `kuria`, and signs in as it does:
-
-```sh
-git clone kuria::https://kuria.example/DOCS-1 handbook
-cd handbook
-$EDITOR guides/DOCS-1-D02-guide.md
-git commit -am "Explain the checks"
-git pull --rebase                     # onto what changed in Kuria
-git push                              # each commit, one batch of revisions
-```
-
-The index's file is at the root, and each document's file is in the
-directories its folders give. A file is the akt file without `revision`,
-`in`, `links` and `outcome`. Every clone has the same commits, the ones
-pushed included, and each version is a tag `DOCS-1-D02/v1`. A push is
-refused unless it is on top of Kuria's latest, and unless its files are as
-Kuria writes them: `kuria fmt` gives headings their ids and puts each file
-where its index's folders say. Move a document by editing the index's
-`folders` section; a new document is made with `kuria new`, then fetched.
-
-The pictures of the images the documents embed are in `attachments/`, as
+`kuria clone`, `status`, `diff`, `add`, `pull` and `push` are coming
+([clones](../../spec/clones.md)): an index and its documents as files,
+synced with Kuria, live drafts included. The index's file is at the root,
+and each document's file is in the directories its folders give; a file is
+the akt file without `revision`, `in`, `links` and `outcome`. The pictures
+of the images the documents embed are in `attachments/`, as
 `attachments/IMG-1.png`, and a document links to its pictures relatively,
 `![The flow at a glance](../attachments/IMG-1.png)`, so editors and git
-hosts show them. A push turns those links back into `kuria:IMG-1`. Pictures
-are uploaded in Kuria: a push that changes one is refused, and `kuria fmt`
-fetches the pictures of images newly embedded and puts back any changed.
-Diagrams stay as their code.
+hosts show them. Diagrams stay as their code.
+
+`kuria fmt`, run in such a directory, already puts its files as Kuria
+writes them: it gives headings their ids, puts each file where its index's
+folders say, and fetches the pictures of images newly embedded, putting
+back any changed.
 
 Exported as an akt directory, `kuria export --types
 document_index,document,image --to-dir handbook`, each image keeps its

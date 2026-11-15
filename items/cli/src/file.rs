@@ -512,10 +512,10 @@ fn plain(text: &str) -> bool {
         && !words.iter().any(|w| w.eq_ignore_ascii_case(text))
 }
 
-/// An akt as a clone's file (`git.tree`): its akt file without `revision`,
+/// An akt as a clone's file (`clone.tree`): its akt file without `revision`,
 /// `in`, `links` and `outcome`, from its number, state and field values in
 /// the file's form, a `sections` field's as its value (not its YAML).
-// r[impl git.tree]
+// r[impl clone.tree]
 #[must_use]
 pub fn clone_text(shape: &Shape, number: &str, state: &str, values: &Map<String, Json>) -> String {
     let front = [

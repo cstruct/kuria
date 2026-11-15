@@ -4,18 +4,12 @@
 // code to its picture, its release refused while the link is broken and
 // taken once it isn't,
 // read at its version with the link pinned there, compared with the
-// living version and downloaded as a PDF; then the index cloned with git,
-// rebased onto a change made in the app, and pushed, the app showing the
-// pushed revision. Each view is checked by axe.
+// living version and downloaded as a PDF. Each view is checked by axe.
 import AxeBuilder from '@axe-core/playwright';
-import { join } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
 import { open, pick } from '../support/app.ts';
-import { Cli } from '../support/cli.ts';
 import { defineDocuments } from '../support/example.ts';
-import { cloneUrl, gitIn } from '../support/git.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
@@ -53,8 +47,7 @@ async function editBody(page: Page, write: () => Promise<void>) {
 // r[verify version.references]
 // r[verify version.read]
 // r[verify version.pins]
-// r[verify git.push]
-test('a document is written, released at its version, and edited through git', async ({ browser }) => {
+test('a document is written and released at its version', async ({ browser }) => {
 	test.setTimeout(240_000);
 	const stamp = Date.now();
 	await defineDocuments();
@@ -183,22 +176,5 @@ test('a document is written, released at its version, and edited through git', a
 	expect(await violations(dev), 'the comparison').toEqual([]);
 	await dev.keyboard.press('Escape');
 
-	// Cloned with git, rebased onto a change made in the app, and pushed.
-	const cli = new Cli();
-	const key = seeded().clients.admin.key;
-	const clone = join(cli.dir, 'handbook');
-	await gitIn(cli, key, cli.dir, 'clone', '-q', cloneUrl(index), 'handbook');
-	const file = join(clone, `${guide}-guide.md`);
-	writeFileSync(file, readFileSync(file, 'utf8').replace('More soon.', 'More from git.'));
-	await gitIn(cli, key, clone, 'commit', '-qam', 'Say where more comes from');
-	await open(dev, setup);
-	await editBody(dev, async () => {
-		await dev.keyboard.press('Control+Home');
-		await dev.keyboard.type('Read first. ');
-	});
-	await gitIn(cli, key, clone, 'pull', '-q', '--rebase');
-	await gitIn(cli, key, clone, 'push', '-q', 'origin', 'main');
-	await open(dev, guide);
-	await expect(body).toContainText('More from git.');
-	await expect(dev.getByRole('list', { name: 'Revisions' })).toContainText('Say where more comes from');
+	// The clone workflow is walked through with kuria clone/pull/push (PLAN-016-T13).
 });

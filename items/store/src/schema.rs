@@ -184,25 +184,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    git_ref (tenant_id, akt_id, name) {
-        tenant_id -> Uuid,
-        akt_id -> Uuid,
-        name -> Text,
-        target -> Text,
-    }
-}
-
-diesel::table! {
-    git_mark (tenant_id, repository_id, akt_id) {
-        tenant_id -> Uuid,
-        repository_id -> Uuid,
-        akt_id -> Uuid,
-        revision -> Int4,
-        draft_seq -> Int8,
-    }
-}
-
-diesel::table! {
     akt_held (akt_id, attachment_id) {
         tenant_id -> Uuid,
         akt_id -> Uuid,
@@ -239,8 +220,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     akt_diagram,
     akt_draft,
     akt_draft_update,
-    git_ref,
-    git_mark,
     akt_held,
     akt_origin,
     akt_commit,

@@ -149,7 +149,7 @@ pub struct BundleRevision {
     pub hash: String,
     pub created_at: DateTime<Utc>,
     pub membership: Option<Json>,
-    /// The git commit a pushed batch made it from (`git.identity`).
+    /// The git commit it was pushed in, if it was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit: Option<Json>,
 }

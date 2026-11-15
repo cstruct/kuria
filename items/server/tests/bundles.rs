@@ -664,7 +664,8 @@ const RELEASED: &str = "query($n: String!) { akt(number: $n) {
     revisions { revision commit } } }";
 
 /// Two documents, the second referring to the first; each released, and
-/// the second then edited by a pushed commit.
+/// the second then edited, its revision kept with the commit it was pushed
+/// in.
 async fn released(kuria: &Kuria) -> (String, String) {
     kuria.define("tenant", document()).await;
     let setup = kuria
@@ -692,16 +693,24 @@ async fn released(kuria: &Kuria) -> (String, String) {
             )
             .await;
     }
+    let tenant: Uuid = support::TENANT.parse().unwrap();
+    let mut conn = kuria.db.pool().get().await.unwrap();
+    let before = kuria_store::akter::last_change_seq(&mut conn, tenant)
+        .await
+        .unwrap();
     kuria
         .ok(
             "tenant",
-            "mutation($o: [OperationInput!]!, $c: JSON) { batch(input: { operations: $o, commit: $c }) { number } }",
+            "mutation($o: [OperationInput!]!) { batch(input: { operations: $o }) { number } }",
             json!({
                 "o": [{ "editAkt": { "number": guide, "revision": 1, "fields": { "body": "Rewritten.\n" } } }],
-                "c": { "author": "A <a@example.com> 1700000000 +0000", "committer": "A <a@example.com> 1700000000 +0000", "message": "Rewrite\n" }
             }),
         )
         .await;
+    let commit = json!({ "author": "A <a@example.com> 1700000000 +0000", "committer": "A <a@example.com> 1700000000 +0000", "message": "Rewrite\n" });
+    kuria_store::versions::keep_commit(&mut conn, tenant, before, &commit)
+        .await
+        .unwrap();
     (setup, guide)
 }
 

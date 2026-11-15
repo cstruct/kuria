@@ -111,22 +111,19 @@ type.
     `cat`/`show --version` ([`src/versions.rs`](src/versions.rs));
     `release` and version reads work in local mode too, from git
     ([`src/local/versions.rs`](src/local/versions.rs));
-  - `fmt`, in a clone made with `git-remote-kuria`, the crate's second
-    binary ([`src/remote.rs`](src/remote.rs), docs/spec/git.md): `git clone
-    kuria::<url>/<container>` builds the container's history from its
-    revisions, the same commits in every clone, asking for many akter to a
-    request and keeping each file it read in `.git/kuria/`, so a fetch reads
-    only new revisions; embedded images' pictures are files in
-    `attachments/`, linked relatively ([`src/pictures.rs`](src/pictures.rs));
-    `git push` applies each commit as a batch that keeps the commit. The
-    server runs the same code, through an in-process `session::Api`, to
-    seed the repositories it hosts and check pushes to their `main`;
-  - `git-credential get|store|erase` ([`src/credential.rs`](src/credential.rs)):
-    a git credential helper answering `get` for the signed-in Kuria with the
-    session's access token as the password, so `git -c
-    credential.helper='!kuria git-credential' clone
-    https://kuria.example/git/DOCS-1.git` works; `store` and `erase` do
-    nothing;
+  - `fmt`, in a clone ([`src/clone/fmt.rs`](src/clone/fmt.rs),
+    docs/spec/clones.md): the clone's files, every file under it but those
+    in `.git/` and `.kuria/`, put in normal form, each where its
+    container's sections put it, and the pictures of the images they embed
+    as files in `attachments/`, linked relatively
+    ([`src/clone/pictures.rs`](src/clone/pictures.rs)). The clone is the
+    nearest directory holding `.kuria/`, else the current one; its
+    container is the one `.kuria/clone.json` names (`{"number": …}`), else
+    the akt of the root's file that no other file there is a member of. The
+    layout ([`src/clone/layout.rs`](src/clone/layout.rs): where each file
+    goes, an akt as its clone file, normal form) and the batched reads of
+    [`src/clone.rs`](src/clone.rs) are what `kuria clone`, `pull` and
+    `push` will build on;
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
     <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;

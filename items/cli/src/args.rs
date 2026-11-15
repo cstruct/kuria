@@ -272,20 +272,10 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// A git credential helper giving git the sign-in for the repositories
-    /// Kuria hosts: `git config credential.helper '!kuria
-    /// git-credential'`.
-    GitCredential {
-        /// What git asks: `get`, `store` or `erase`.
-        action: String,
-    },
-    /// In a clone (`git clone kuria::<url>/<number>`): its files as Kuria
-    /// writes them, each where its container's sections put it.
-    Fmt {
-        /// The clone's remote.
-        #[arg(long, default_value = "origin")]
-        remote: String,
-    },
+    /// In a clone: its files as Kuria writes them, each where its
+    /// container's sections put it, with the pictures of the images they
+    /// embed.
+    Fmt,
     /// Release an akt's current revision as its next version, once none
     /// of its references is broken.
     Release {

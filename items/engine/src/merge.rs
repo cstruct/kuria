@@ -1,4 +1,4 @@
-//! Three-way merges of text (`git.repo.main`): a change made from a base,
+//! Three-way merges of text: a change made from a base,
 //! merged into a text that changed from the same base meanwhile, so that
 //! both changes are kept.
 //!
@@ -18,7 +18,6 @@ const DIFF_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// `ours` with the change from `base` to `theirs` merged in, keeping what
 /// `ours` changed from `base`.
-// r[impl git.repo.main]
 #[must_use]
 pub fn merge_text(base: &str, ours: &str, theirs: &str) -> String {
     if ours == base || ours == theirs {
@@ -194,7 +193,6 @@ fn merge<T: Clone + Eq + Hash>(
 mod tests {
     use super::*;
 
-    // r[verify git.repo.main]
     #[test]
     fn keeps_changes_to_different_lines() {
         let base = "# Title\n\nOne.\n\nTwo.\n\nThree.\n";
@@ -206,7 +204,6 @@ mod tests {
         );
     }
 
-    // r[verify git.repo.main]
     #[test]
     fn keeps_changes_to_one_line_by_characters() {
         let base = "The quick brown fox jumps.\n";
@@ -217,7 +214,6 @@ mod tests {
         assert_eq!(merge_text("a\nb\n", "A\nb\n", "a\nB\n"), "A\nB\n",);
     }
 
-    // r[verify git.repo.main]
     #[test]
     fn the_change_merged_in_wins_where_both_changed_alike_places() {
         assert_eq!(merge_text("cat\n", "dog\n", "cow\n"), "cow\n");
@@ -227,7 +223,6 @@ mod tests {
         assert_eq!(merge_text("a\nb\n", "a\nc\n", "a\nc\n"), "a\nc\n");
     }
 
-    // r[verify git.repo.main]
     #[test]
     fn takes_either_side_alone() {
         assert_eq!(merge_text("a\n", "a\n", "b\n"), "b\n");

@@ -225,7 +225,7 @@ pub fn file_value(value: &Value) -> Json {
         Value::AttachmentValue { attachment, .. }
             if attachment
                 .id
-                .starts_with(&format!("{}/", crate::pictures::DIRECTORY)) =>
+                .starts_with(&format!("{}/", crate::clone::pictures::DIRECTORY)) =>
         {
             attachment.id.clone().into()
         }

@@ -157,7 +157,7 @@ pub fn references(text: &str) -> Vec<Reference> {
 
 /// Every inline image's destination in `text`, as written, with where it
 /// is in `text`, in order: so that a clone can write it otherwise
-/// (`git.pictures`).
+/// (`clone.pictures`).
 #[must_use]
 pub fn image_destinations(text: &str) -> Vec<(Range<usize>, String)> {
     let mut found = Vec::new();

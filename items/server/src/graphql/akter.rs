@@ -689,10 +689,6 @@ pub enum OperationInput {
 #[derive(InputObject)]
 pub struct BatchInput {
     operations: Vec<OperationInput>,
-    /// The git commit the batch came from, kept with each revision it makes,
-    /// so every clone builds that very commit (`git.identity`): `{author,
-    /// committer, message}`, as `git fast-export` gives them.
-    commit: Option<Json<JsonValue>>,
 }
 
 /// `operation` as the batch's write path takes it.
@@ -772,22 +768,6 @@ fn operation(input: OperationInput) -> async_graphql::Result<Operation> {
     })
 }
 
-/// A batch's operations as JSON, as the `batch` mutation takes them, as the
-/// batch's write path takes them: a push's commits, made into operations by
-/// the remote helper's own code (`git.repo.push`).
-pub(crate) fn operations_from_json(operations: Vec<JsonValue>) -> Result<Vec<Operation>, String> {
-    use async_graphql::InputType as _;
-    operations
-        .into_iter()
-        .map(|json| {
-            let value = async_graphql::Value::from_json(json).map_err(|e| e.to_string())?;
-            let input = OperationInput::parse(Some(value))
-                .map_err(|e| e.into_server_error(async_graphql::Pos::default()).message)?;
-            operation(input).map_err(|e| e.message)
-        })
-        .collect()
-}
-
 /// `error`, said of the batch's operation `n`, counting from 1.
 fn at_operation(error: async_graphql::Error, n: usize) -> async_graphql::Error {
     error.extend_with(|_, e| e.set("operation", n))
@@ -812,17 +792,13 @@ impl AkterMutation {
             operations.push(operation(op).map_err(|e| at_operation(e, i + 1))?);
         }
         let akter = akter(ctx)?;
-        let commit = input.commit.map(|c| c.0);
-        let rows = akter
-            .batch_from(caller, operations, commit)
-            .await
-            .map_err(|refused| {
-                let e = error(refused.error);
-                match refused.operation {
-                    Some(n) => at_operation(e, n),
-                    None => e,
-                }
-            })?;
+        let rows = akter.batch(caller, operations).await.map_err(|refused| {
+            let e = error(refused.error);
+            match refused.operation {
+                Some(n) => at_operation(e, n),
+                None => e,
+            }
+        })?;
         let mut answered = Vec::with_capacity(rows.len());
         for row in rows {
             answered.push(reload(ctx, akter, row).await?);
@@ -1299,13 +1275,6 @@ impl AktType {
     /// releases make revisions of (`live.declare`).
     async fn live_drafts(&self) -> bool {
         self.0.ty.document().live_drafts
-    }
-
-    /// Whether each of its akter is a git repository Kuria hosts, at
-    /// `/git/<number>.git` (`git.repo.declare`).
-    // r[impl git.repo.declare]
-    async fn git(&self) -> bool {
-        self.0.ty.git()
     }
 
     async fn created_at(&self) -> DateTime<Utc> {
@@ -2783,8 +2752,8 @@ impl AktRevision {
         self.row.revision
     }
 
-    /// The git commit the revision was pushed in, if it was: `{author,
-    /// committer, message}` (`git.identity`).
+    /// The git commit the revision was pushed in, if it was, as bundles
+    /// carry it: `{author, committer, message}`.
     async fn commit(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Json<JsonValue>>> {
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
         Ok(

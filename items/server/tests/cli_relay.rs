@@ -50,8 +50,6 @@ async fn router_with(windows: &[RateLimitWindow], hold: Duration) -> Router {
             login_proxy: None,
             cli_relay: Some(Arc::new(relay)),
             renderer: support::renderer(),
-            git_cache: None,
-            git_timing: kuria_server::GitTiming::default(),
         },
     )
     .unwrap()

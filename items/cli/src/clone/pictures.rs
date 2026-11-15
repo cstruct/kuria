@@ -1,9 +1,9 @@
-//! Pictures in a clone (`git.pictures`): each image a document embeds is a
+//! Pictures in a clone (`clone.pictures`): each image a document embeds is a
 //! file `attachments/<number>.<extension>`, and the document links to it by
 //! a path relative to its own file, so that editors and git hosts show it.
 //! Kuria keeps `kuria:<number>`; these turn one into the other.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use kuria_engine::markdown::{Reference, image_destinations, images};
 
@@ -21,6 +21,12 @@ pub fn path_of(number: &str, media_type: &str) -> String {
         _ => "bin",
     };
     format!("{DIRECTORY}/{number}.{extension}")
+}
+
+/// Whether `path`, from the clone's root, is in its pictures' directory.
+#[must_use]
+pub fn is_picture(path: &str) -> bool {
+    path.starts_with(&format!("{DIRECTORY}/"))
 }
 
 /// The image a path in the clone is the picture of, if it is one.
@@ -70,6 +76,7 @@ pub fn embedded(text: &str) -> Vec<String> {
 
 /// `text`, the file at `path`, with each embedded image that has a picture
 /// in `pictures` (image number to picture path) linked to it relatively.
+// r[impl clone.pictures]
 #[must_use]
 pub fn linked_relatively<S: std::hash::BuildHasher>(
     text: &str,
@@ -107,11 +114,20 @@ pub fn linked_to_kuria(text: &str, path: &str) -> String {
     out
 }
 
+/// `tree`'s files, by path, with their images linked to Kuria, as Kuria
+/// keeps them.
+#[must_use]
+pub fn kept(tree: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    tree.iter()
+        .map(|(path, text)| (path.clone(), linked_to_kuria(text, path)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // r[verify git.pictures]
+    // r[verify clone.pictures]
     #[test]
     fn links_pictures_relatively_and_back() {
         let pictures = HashMap::from([("IMG-1".to_owned(), "attachments/IMG-1.png".to_owned())]);
@@ -137,6 +153,8 @@ mod tests {
         assert_eq!(number_of("attachments/IMG-1.svg").as_deref(), Some("IMG-1"));
         assert_eq!(number_of("attachments/x/IMG-1.svg"), None);
         assert_eq!(number_of("guides/IMG-1.svg"), None);
+        assert!(is_picture("attachments/IMG-1.svg"));
+        assert!(!is_picture("guides/IMG-1.svg"));
         assert_eq!(resolve("a/b.md", "../c/d.png").as_deref(), Some("c/d.png"));
         assert_eq!(resolve("b.md", "../d.png"), None);
         assert_eq!(embedded("![a](kuria:IMG-1) ![b](kuria:IMG-2#x)"), ["IMG-1"]);

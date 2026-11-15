@@ -67,13 +67,6 @@ pub struct Options {
     pub cli_relay: Option<Arc<crate::cli_relay::CliRelay>>,
     /// What renders PDFs and diagrams, each in a process of its own.
     pub renderer: kuria_typst::Renderer,
-    /// Where the repositories Kuria hosts are cached (`git.repo.storage`);
-    /// a directory under the system's temporary one if not given.
-    pub git_cache: Option<std::path::PathBuf>,
-    /// When Kuria's own changes become commits on repositories' `main`
-    /// (`git.repo.commits`), and how often they are looked at in the
-    /// background.
-    pub git_timing: crate::git::Timing,
 }
 
 /// What delivers change events: the hub subscriptions join, and what wakes
@@ -153,11 +146,8 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         login_proxy,
         cli_relay,
         renderer,
-        git_cache,
-        git_timing,
     } = options;
     let pdf_base = public_url.clone();
-    let git_base = public_url.clone();
     let konklav = Konklav::builder(host.clone())
         // r[impl auth.dpop]
         .public_url(move |parts: &Parts| format!("{public_url}{}", parts.uri.path()))
@@ -199,15 +189,6 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         decider.clone(),
     )?;
     let schema = schema(akter.clone(), changes.map(|c| c.hub));
-    let git_state =
-        crate::git::GitState::new(pool, storage, decider.clone(), schema.clone(), akter)
-            .caching_in(git_cache)
-            .named(git_base)
-            .timed(git_timing);
-    if let Some(every) = git_timing.every {
-        crate::git::commit_every(git_state.clone(), every);
-    }
-    let git_routes = crate::git::router(&api, git_state)?;
 
     let mut router = Router::new()
         // r[impl auth.health]
@@ -226,8 +207,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         .with_state(GraphqlState { schema, decider })
         .merge(file_routes)
         .merge(live_routes)
-        .merge(bundle_routes)
-        .merge(git_routes);
+        .merge(bundle_routes);
     if let Some(relay) = cli_relay {
         router = router.merge(crate::cli_relay::router(relay)?);
     }
@@ -249,8 +229,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     } else {
         router = router.layer(konklav.layer());
     }
-    // Outside Konklav's layer: git's credentials, as a bearer token.
-    Ok(router.layer(middleware::from_fn(crate::git::basic_credentials)))
+    Ok(router)
 }
 
 /// What the GraphQL endpoint needs.

@@ -17,7 +17,6 @@ base64 = "0.22"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
 diesel = { version = "2.3", default-features = false, features = ["postgres_backend"] }
 diesel-async = { version = "0.9", features = ["postgres"] }
-flate2 = "1.1"
 futures-util = { version = "0.3", default-features = false }
 getrandom = "0.3"
 konklav-authz = "=1.8.0"
@@ -26,7 +25,6 @@ konklav-core = "=1.8.0"
 konklav-relying = "=1.8.0"
 konklav-relying-client = { version = "=1.8.0", features = ["redis"] }
 konklav-token = "=1.8.0"
-kuria-cli = { path = "../cli" }
 kuria-config = { path = "../config" }
 kuria-engine = { path = "../engine" }
 kuria-store = { path = "../store" }
@@ -40,7 +38,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.10"
 thiserror = "2.0.21"
-tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "process", "io-util", "fs"] }
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2"
@@ -56,7 +54,6 @@ konklav-authz = "=1.8.0"
 kuria-test-support = { path = "../test-support" }
 lopdf = "0.47.0"
 serde_json = "1.0.154"
-tempfile = "3"
 tokio-tungstenite = "0.30.0"
 tower = { version = "0.5.3", features = ["util"] }
 

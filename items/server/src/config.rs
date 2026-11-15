@@ -68,9 +68,6 @@ pub struct Config {
     /// The built app, to serve from the server's own origin
     /// (`KURIA_WEB_DIR`).
     pub web_dir: Option<std::path::PathBuf>,
-    /// Where the repositories Kuria hosts are cached (`KURIA_GIT_CACHE`,
-    /// a directory under the system's temporary one by default).
-    pub git_cache: Option<std::path::PathBuf>,
     /// Whether the server is Konklav's login application, proxying its
     /// subject-facing surface (`KURIA_LOGIN_APP`, `false` by default).
     pub login_app: bool,
@@ -203,9 +200,6 @@ impl Config {
             render_limits,
             default_tenant,
             web_dir: lookup("KURIA_WEB_DIR")
-                .filter(|d| !d.is_empty())
-                .map(std::path::PathBuf::from),
-            git_cache: lookup("KURIA_GIT_CACHE")
                 .filter(|d| !d.is_empty())
                 .map(std::path::PathBuf::from),
             login_app,

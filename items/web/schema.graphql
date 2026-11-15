@@ -107,8 +107,8 @@ type AktConnection {
 type AktRevision {
 	revision: Int!
 	"""
-	The git commit the revision was pushed in, if it was: `{author,
-	committer, message}` (`git.identity`).
+	The git commit the revision was pushed in, if it was, as bundles
+	carry it: `{author, committer, message}`.
 	"""
 	commit: JSON
 	"""
@@ -173,11 +173,6 @@ type AktType {
 	releases make revisions of (`live.declare`).
 	"""
 	liveDrafts: Boolean!
-	"""
-	Whether each of its akter is a git repository Kuria hosts, at
-	`/git/<number>.git` (`git.repo.declare`).
-	"""
-	git: Boolean!
 	createdAt: DateTime!
 	"""
 	How many akter of this type the tenant has, to a subject who may
@@ -281,12 +276,6 @@ What a batch takes: its operations, run in order, all or none.
 """
 input BatchInput {
 	operations: [OperationInput!]!
-	"""
-	The git commit the batch came from, kept with each revision it makes,
-	so every clone builds that very commit (`git.identity`): `{author,
-	committer, message}`, as `git fast-export` gives them.
-	"""
-	commit: JSON
 }
 
 """

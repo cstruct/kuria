@@ -51,8 +51,6 @@ fn router(web: Option<Web>, login_proxy: Option<LoginProxy>) -> Router {
             login_proxy,
             cli_relay: None,
             renderer: support::renderer(),
-            git_cache: None,
-            git_timing: kuria_server::GitTiming::default(),
         },
     )
     .unwrap()
