@@ -10,6 +10,7 @@ pub mod draft;
 mod hash;
 pub mod live;
 pub mod markdown;
+pub mod merge;
 pub mod outcomes;
 mod rank;
 pub mod rules;

@@ -144,10 +144,14 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   under `KURIA_GIT_CACHE` (`src/git/cache.rs`). A repository with no refs
   starts from the history `git-remote-kuria` builds, by the helper's own
   code answered in-process (`src/git/history.rs`); a push is checked, its
-  `main` commits made into batches the same way, and kept in one
-  transaction or not at all (`src/git/receive.rs`). git's Basic
-  credentials, as `kuria git-credential` gives them, are taken as a bearer
-  token.
+  `main` commits made into batches the same way, edits of live drafts
+  merged into them as text, and kept in one transaction or not at all
+  (`src/git/receive.rs`). Kuria's own changes become commits on `main`
+  (`src/git/commits.rs`), by whoever made them, tracked by `git_mark`: a
+  live draft's after a minute without changes, the rest and releases at
+  once, each release tagged; before every request a repository answers and
+  every five seconds in the background. git's Basic credentials, as
+  `kuria git-credential` gives them, are taken as a bearer token.
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt

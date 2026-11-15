@@ -1301,6 +1301,13 @@ impl AktType {
         self.0.ty.document().live_drafts
     }
 
+    /// Whether each of its akter is a git repository Kuria hosts, at
+    /// `/git/<number>.git` (`git.repo.declare`).
+    // r[impl git.repo.declare]
+    async fn git(&self) -> bool {
+        self.0.ty.git()
+    }
+
     async fn created_at(&self) -> DateTime<Utc> {
         self.0.row.created_at
     }

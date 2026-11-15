@@ -345,7 +345,11 @@ async fn kept(
     let result = conn
         .transaction::<_, Refused, _>(async |conn| {
             if let Some(planned) = &planned {
+                let now = super::commits::now;
+                let before = now(conn, opened, None).await.map_err(Refused)?;
                 run_batches(conn, caller, opened.tenant, planned).await?;
+                let after = now(conn, opened, None).await.map_err(Refused)?;
+                super::commits::advance(conn, opened, &before, &after).await?;
             }
             for update in &asked.updates {
                 let moved = kuria_store::git::move_ref(
@@ -373,39 +377,43 @@ async fn kept(
     cache::install_packs(objects, &opened.dir).await
 }
 
-/// Runs a push's batches, each its commit's, after locking every akt they
-/// were checked against and refusing if one changed since.
+/// Runs a push's batches, each its commit's. An edit of an akt with a live
+/// draft is merged into it (`git.repo.main`).
 async fn run_batches(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
     tenant: uuid::Uuid,
     planned: &Planned,
 ) -> Result<(), Refused> {
-    let numbers: Vec<&str> = planned.seen.keys().map(String::as_str).collect();
-    let rows = kuria_store::containers::lock_akter(conn, tenant, &numbers).await?;
-    for row in &rows {
-        if planned.seen.get(&row.number) != Some(&i64::from(row.revision)) {
-            return Err(Refused(format!(
-                "Kuria changed {} during the push: fetch and push again",
-                row.number
-            )));
-        }
-    }
     // Each akt's revision as the push's commits leave it.
     let mut revisions: HashMap<String, i32> = HashMap::new();
-    for (id, operations, commit) in &planned.batches {
-        let mut operations = crate::graphql::operations_from_json(operations.clone())
+    for batch in &planned.batches {
+        let id = &batch.id;
+        let mut operations = crate::graphql::operations_from_json(batch.operations.clone())
             .map_err(|e| Refused(format!("commit {id}: {e}")))?;
         for operation in &mut operations {
             if let Operation::Edit {
-                number, revision, ..
+                number,
+                revision,
+                fields,
+                ..
             } = operation
-                && let Some(now) = revisions.get(number.as_str())
             {
-                *revision = *now;
+                if let Some(now) = revisions.get(number.as_str()) {
+                    *revision = *now;
+                }
+                if let Some(base) = batch.bases.get(number.as_str()) {
+                    merged_into_draft(conn, tenant, number, base, fields)
+                        .await
+                        .map_err(|e| Refused(format!("commit {id}: {e}")))?;
+                }
             }
         }
-        let rows = crate::akter::batch_in(conn, caller, operations, Some(commit))
+        operations.retain(|op| !matches!(op, Operation::Edit { fields, .. } if fields.is_empty()));
+        if operations.is_empty() {
+            continue;
+        }
+        let rows = crate::akter::batch_in(conn, caller, operations, Some(&batch.commit))
             .await
             .map_err(|refused| {
                 let at = refused
@@ -417,6 +425,64 @@ async fn run_batches(
         for row in rows {
             revisions.insert(row.number, row.revision);
         }
+    }
+    Ok(())
+}
+
+/// Makes an edit's `fields` of the akt `number`, if it has a live draft,
+/// the commit's change merged into its live draft as it is now: only the
+/// fields the commit changed, each text the three-way merge of the
+/// commit's change from its parent's text, `base`, into the draft's,
+/// so that edits made meanwhile are kept; any other field as the commit
+/// has it, the last write winning (`git.repo.main`, `live.edit`).
+// r[impl git.repo.main]
+async fn merged_into_draft(
+    conn: &mut kuria_store::Connection,
+    tenant: uuid::Uuid,
+    number: &str,
+    base: &serde_json::Map<String, serde_json::Value>,
+    fields: &mut serde_json::Map<String, serde_json::Value>,
+) -> Result<(), String> {
+    use crate::akter::live;
+    let Some(akt) = kuria_store::akter::lock_akt_by_number(conn, tenant, number)
+        .await
+        .map_err(|e| e.to_string())?
+    else {
+        return Ok(());
+    };
+    let ty = crate::akter::versions::type_of_akt(conn, tenant, &akt)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !live::has_live_draft(&ty) {
+        return Ok(());
+    }
+    let draft = live::load(conn, &ty, &akt)
+        .await
+        .map_err(|e| e.to_string())?;
+    fields.retain(|key, _| base.contains_key(key));
+    for (key, theirs) in fields.iter_mut() {
+        let Some(field) = ty.ty.field(key) else {
+            continue;
+        };
+        if !kuria_engine::live::is_text(field) {
+            continue;
+        }
+        let ours = match draft.fields.get(key) {
+            Some(kuria_engine::Value::Markdown(s) | kuria_engine::Value::Text(s)) => s.as_str(),
+            _ => "",
+        };
+        let text = |v: Option<&serde_json::Value>| {
+            v.and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let merged =
+            kuria_engine::merge::merge_text(&text(base.get(key)), ours, &text(Some(theirs)));
+        *theirs = if merged.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::Value::String(merged)
+        };
     }
     Ok(())
 }

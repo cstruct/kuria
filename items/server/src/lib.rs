@@ -21,5 +21,6 @@ pub mod session;
 pub mod web;
 
 pub use config::{Config, ConfigError, StorageConfig};
+pub use git::Timing as GitTiming;
 pub use graphql::{KuriaSchema, schema, schema_sdl};
 pub use http::{AppError, Changes, Options, app};

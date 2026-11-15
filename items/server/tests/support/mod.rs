@@ -200,6 +200,24 @@ pub fn router_storing(
     decider: Arc<decider::FakeDecider>,
     storage: kuria_server::attachments::Storage,
 ) -> Router {
+    router_timed(
+        host,
+        pool,
+        decider,
+        storage,
+        kuria_server::GitTiming::default(),
+    )
+}
+
+/// Like [`router_storing`], committing Kuria's changes to repositories
+/// as `git_timing` says.
+pub fn router_timed(
+    host: &Arc<FakeHost>,
+    pool: kuria_store::Pool,
+    decider: Arc<decider::FakeDecider>,
+    storage: kuria_server::attachments::Storage,
+    git_timing: kuria_server::GitTiming,
+) -> Router {
     *host.decider.lock().unwrap() = Some(decider.clone());
     kuria_server::app(
         host.clone(),
@@ -216,6 +234,7 @@ pub fn router_storing(
             cli_relay: None,
             renderer: renderer(),
             git_cache: None,
+            git_timing,
         },
     )
     .unwrap()

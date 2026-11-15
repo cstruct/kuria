@@ -7,17 +7,23 @@
 //!   written from the database before each request.
 //! - [`history`]: the remote helper's history of the container, built in
 //!   the server by the helper's own code, answered by the server's GraphQL
-//!   schema in-process: what a repository starts from (`git.repo.seed`),
-//!   and what a push to `main` is checked against and applied as.
+//!   schema in-process: what a repository starts from (`git.repo.seed`);
+//!   and a push to `main` made into batches by the same code.
 //! - [`receive`]: pushes, checked before any of them is kept, their pack
 //!   stored and their refs moved by compare-and-swap in the transaction
-//!   that writes what they change (`git.repo.push`).
+//!   that writes what they change, merging into live drafts
+//!   (`git.repo.push`, `git.repo.main`).
+//! - [`commits`]: Kuria's own changes as commits on `main`
+//!   (`git.repo.commits`).
 //! - [`pkt`]: git's pkt-lines.
 
 mod cache;
+mod commits;
 mod history;
 mod pkt;
 mod receive;
+
+pub use commits::Timing;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -57,6 +63,8 @@ pub(crate) struct GitState {
     pub caches: Arc<cache::Caches>,
     /// Kuria's public URL, as the helper's code names Kuria.
     pub public_url: String,
+    /// When Kuria's changes become commits.
+    pub timing: Timing,
 }
 
 impl GitState {
@@ -75,7 +83,14 @@ impl GitState {
             akter,
             caches: Arc::new(cache::Caches::new(std::env::temp_dir().join("kuria-git"))),
             public_url: String::new(),
+            timing: Timing::default(),
         }
+    }
+
+    /// The same, committing Kuria's changes as `timing` says.
+    pub(crate) fn timed(mut self, timing: Timing) -> Self {
+        self.timing = timing;
+        self
     }
 
     /// The same, caching repositories under `root`, if given.
@@ -246,9 +261,17 @@ fn failed(what: &str) -> Response {
     (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
 }
 
+/// Looks at every repository every `every`, committing Kuria's changes that
+/// are due (`git.repo.commits`).
+pub(crate) fn commit_every(state: GitState, every: std::time::Duration) {
+    commits::spawn(state, every);
+}
+
 /// Who asks, and the repository, ready: its cache filled and its refs
-/// written, seeded first if it has none (`git.repo.seed`). Answers it with
-/// its cache locked, for the request.
+/// written, seeded first if it has none (`git.repo.seed`), and Kuria's
+/// changes that are due committed on `main`, so that a fetch has them and
+/// a push must build on them (`git.repo.commits`). Answers it with its
+/// cache locked, for the request.
 async fn ready(
     state: &GitState,
     token: &TenantToken,
@@ -265,6 +288,12 @@ async fn ready(
     if refs.is_empty() {
         history::seed(state, &opened).await.map_err(failed)?;
         cache::fill(state, &opened).await.map_err(failed)?;
+    }
+    let kuria = commits::as_kuria(state, opened.tenant, opened.akt, &opened.number);
+    // Kuria's changes not committed yet are committed later: the request is
+    // answered by the repository as it is.
+    if let Err(e) = commits::commit_pending(state, &kuria).await {
+        tracing::warn!("committing to {}: {e}", opened.number);
     }
     Ok((opened, guard))
 }

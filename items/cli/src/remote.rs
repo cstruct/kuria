@@ -1313,6 +1313,75 @@ impl Remote {
     }
 }
 
+impl Remote {
+    /// Each of `asked`, an akt by number, as Kuria has it now or at a
+    /// revision, as its file in a clone says it, with its images linked to
+    /// Kuria, as Kuria keeps them (`git.repo.commits`).
+    pub async fn files_of(&self, asked: &[(String, Option<i64>)]) -> Result<Vec<String>, CliError> {
+        let fragments = format!("{SHAPE} {VALUES} {SOMEONE}");
+        let answers = self
+            .akter(asked, AT_REVISION, &fragments, FILES_PER_REQUEST)
+            .await?;
+        asked
+            .iter()
+            .zip(&answers)
+            .map(|((number, _), akt)| filed(number, akt).map(|f| f.text))
+            .collect()
+    }
+
+    /// For each akt whose file a commit changed, from `before`, its
+    /// parent's files, to `after`, its own, as Kuria keeps them: the fields
+    /// it changed, each with its value in the parent, as the `editAkt`
+    /// mutation takes it. What a merge into a live draft starts from
+    /// (`git.repo.main`).
+    pub async fn bases(
+        &self,
+        before: &BTreeMap<String, String>,
+        after: &BTreeMap<String, String>,
+    ) -> Result<BTreeMap<String, Map<String, Json>>, CliError> {
+        let numbers =
+            |tree: &BTreeMap<String, String>| -> Result<BTreeMap<String, String>, CliError> {
+                tree.values()
+                    .map(|t| read_file(t).map(|(n, _)| (n, t.clone())))
+                    .collect()
+            };
+        let (old, new) = (numbers(before)?, numbers(after)?);
+        let mut bases = BTreeMap::new();
+        for (number, text) in &new {
+            let Some(was) = old.get(number).filter(|was| *was != text) else {
+                continue;
+            };
+            let akt = crate::writes::akt(&self.session, number).await?;
+            let (was, now) = (file::parse(was)?.values()?, file::parse(text)?.values()?);
+            let changed: Vec<&String> = was
+                .keys()
+                .chain(now.keys())
+                .filter(|k| was.get(*k) != now.get(*k))
+                .collect();
+            let people =
+                crate::writes::people_for(&self.session, &akt.shape, changed.iter().copied())
+                    .await?;
+            let mut base = Map::new();
+            for key in changed {
+                let field = akt.shape.fields.iter().find(|f| &f.key == key);
+                let Some(field) = field.filter(|f| f.kind != "VERDICT") else {
+                    continue;
+                };
+                let value = was.get(key).unwrap_or(&Json::Null);
+                base.insert(key.clone(), crate::values::input_of(field, value, &people)?);
+            }
+            bases.insert(number.clone(), base);
+        }
+        Ok(bases)
+    }
+}
+
+/// The number a clone's file names, if it is an akt file.
+#[must_use]
+pub fn number_of_file(text: &str) -> Option<String> {
+    read_file(text).ok().map(|(number, _)| number)
+}
+
 /// The commit a batch came from, as Kuria keeps it with each revision it
 /// makes (`git.identity`).
 #[must_use]
@@ -1345,6 +1414,7 @@ fn write_seen(path: &Path, seen: &BTreeMap<String, i64>) -> Result<(), CliError>
 // r[impl git.remote]
 // r[impl git.fetch]
 pub async fn serve(remote: &Remote) -> Result<(), CliError> {
+    remote.refuse_repository().await?;
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
     let mut out = std::io::stdout();
@@ -1406,6 +1476,34 @@ pub async fn serve(remote: &Remote) -> Result<(), CliError> {
         out.write_all(said.as_bytes())
             .map_err(|e| CliError::unavailable(e.to_string()))?;
         out.flush().ok();
+    }
+}
+
+impl Remote {
+    /// Refuses a container that is a repository Kuria hosts
+    /// (`git.repo.declare`): its history is the repository's, which the
+    /// helper can't build, so a clone moves to the repository instead.
+    // r[impl git.remote]
+    pub async fn refuse_repository(&self) -> Result<(), CliError> {
+        let asked = self
+            .session
+            .graphql(
+                "query($n: String!) { akt(number: $n) { type { git } } }",
+                json!({ "n": self.number }),
+            )
+            .await;
+        // A Kuria that doesn't say is one without repositories.
+        if asked.is_ok_and(|data| data["akt"]["type"]["git"] == true) {
+            let url = format!("{}/git/{}.git", self.session.url, self.number);
+            return Err(CliError::refused(
+                "REFUSED",
+                format!(
+                    "{} is a repository Kuria hosts: clone {url} with plain git, or move this clone to it with `git remote set-url {} {url}` and fetch",
+                    self.number, self.name
+                ),
+            ));
+        }
+        Ok(())
     }
 }
 
