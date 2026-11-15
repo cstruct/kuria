@@ -143,7 +143,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         });
 
     // r[impl pdf.route]
-    let pdf_state = crate::pdf::state(pool.clone(), storage, decider.clone(), pdf_base);
+    let pdf_state = crate::pdf::state(pool.clone(), storage.clone(), decider.clone(), pdf_base);
     let pdf_routes = Router::new()
         .route(
             "/akter/{number}/pdf",
@@ -167,7 +167,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         )
         .with_state(GraphqlState {
             schema: schema(
-                Akter::new(pool, changes.as_ref().map(|c| c.waker.clone())),
+                Akter::new(pool, changes.as_ref().map(|c| c.waker.clone())).with_storage(storage),
                 changes.map(|c| c.hub),
             ),
             decider,

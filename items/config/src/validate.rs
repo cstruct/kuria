@@ -227,6 +227,13 @@ fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSe
                 "only attachment fields have a format",
             );
         }
+        // r[impl akt.field.markdown.diagrams]
+        if field.diagrams && field.kind != FieldKind::Markdown {
+            problems.add(
+                &format!("{path}.diagrams"),
+                "only markdown fields have diagrams",
+            );
+        }
         if !field.media_types.is_empty() && field.kind != FieldKind::Attachment {
             problems.add(
                 &format!("{path}.media_types"),
@@ -1221,6 +1228,12 @@ mod tests {
                 "{expected} not in {found:?}"
             );
         }
+        let mut drawn = capa();
+        drawn["fields"][2]["diagrams"] = json!(true);
+        assert!(
+            problems(drawn)
+                .contains(&"fields[2].diagrams: only markdown fields have diagrams".to_owned())
+        );
         image["presentation"] = json!({ "image": "title" });
         assert!(
             problems(image)

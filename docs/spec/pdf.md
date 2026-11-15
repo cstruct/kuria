@@ -15,8 +15,8 @@ A diagram block MUST be drawn from its source, as a vector drawing.
 
 r[pdf.packages]
 typst MUST be run with Kuria's bundled fonts and packages only: fletcher
-0.5.8, cetz 0.3.4 and 0.5.2, and cetz-plot 0.1.4, vendored unmodified
-with their licenses. It MUST NOT read any other package, the network or
+0.5.8, cetz 0.3.4 and 0.5.2, cetz-plot 0.1.4, and oxifmt 0.2.1 and
+1.0.0, which cetz imports, vendored unmodified with their licenses. It MUST NOT read any other package, the network or
 the file system; the only files it reads are the pictures Kuria gives
 it.
 

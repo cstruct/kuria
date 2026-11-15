@@ -16,8 +16,8 @@ use super::BundleError;
 use super::archive;
 use super::format::{
     Bundle, BundleAkt, BundleAktVersion, BundleAttachment, BundleContact, BundleCounter,
-    BundleHeld, BundleLink, BundleMembership, BundlePerson, BundleRevision, BundleSignedIn,
-    BundleType, BundleVersion, FORMAT, Scope,
+    BundleDiagram, BundleHeld, BundleLink, BundleMembership, BundlePerson, BundleRevision,
+    BundleSignedIn, BundleType, BundleVersion, FORMAT, Scope,
 };
 use crate::akter::StoredType;
 use crate::attachments::{Storage, hex};
@@ -297,6 +297,15 @@ async fn gather_akter(
             attachment: h.attachment_id,
         });
     }
+    let mut diagrams: HashMap<Uuid, Vec<BundleDiagram>> = HashMap::new();
+    for d in kuria_store::attachments::diagrams_of(conn, &ids).await? {
+        named.attachments.insert(d.attachment_id);
+        diagrams.entry(d.akt_id).or_default().push(BundleDiagram {
+            field: d.field,
+            source_sha256: hex(&d.source_sha256),
+            attachment: d.attachment_id,
+        });
+    }
     let origins = origins_within(conn, tenant, &ids).await?;
     for akt in akter {
         let ty = &types[&akt.type_version_id];
@@ -319,6 +328,7 @@ async fn gather_akter(
             attachments: held.remove(&akt.id).unwrap_or_default(),
             copied_from: origins.get(&akt.id).copied(),
             versions: released.remove(&akt.id).unwrap_or_default(),
+            diagrams: diagrams.remove(&akt.id).unwrap_or_default(),
         });
     }
     for m in memberships {

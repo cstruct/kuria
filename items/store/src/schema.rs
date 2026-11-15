@@ -174,6 +174,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    akt_diagram (akt_id, field, source_sha256) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        field -> Text,
+        source_sha256 -> Bytea,
+        attachment_id -> Uuid,
+    }
+}
+
+diesel::table! {
     akt_held (akt_id, attachment_id) {
         tenant_id -> Uuid,
         akt_id -> Uuid,
@@ -183,6 +193,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
+    akt_diagram,
     akt_held,
     akt_origin,
     akt_commit,

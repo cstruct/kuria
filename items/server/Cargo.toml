@@ -44,9 +44,7 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2"
 uuid = { version = "1", features = ["v7", "serde"] }
 tar = "0.4.46"
-typst = "0.14.0"
-typst-pdf = "0.14.0"
-typst-assets = { version = "0.14.0", features = ["fonts"] }
+kuria-typst = { path = "../typst" }
 
 [dev-dependencies]
 futures-util = "0.3"

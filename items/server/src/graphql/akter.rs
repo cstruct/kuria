@@ -122,6 +122,12 @@ fn error(error: AktError) -> async_graphql::Error {
                 "UNAVAILABLE",
             )
         }
+        AktError::InvalidDiagram { field, block, .. } => async_graphql::Error::new(message)
+            .extend_with(move |_, e| {
+                e.set("code", "INVALID_DIAGRAM");
+                e.set("field", field.clone());
+                e.set("block", i32::try_from(block).unwrap_or(i32::MAX));
+            }),
         AktError::Stale { current, .. } => {
             async_graphql::Error::new(message).extend_with(|_, e| {
                 e.set("code", "STALE");
@@ -197,6 +203,38 @@ impl AkterQuery {
             }
             _ => Ok(None),
         }
+    }
+
+    /// A diagram block's `source` rendered to SVG, or typst's message if it
+    /// doesn't compile, storing nothing (`diagram.preview`).
+    // r[impl diagram.preview]
+    async fn render_diagram(
+        &self,
+        ctx: &Context<'_>,
+        source: String,
+    ) -> async_graphql::Result<RenderedDiagram> {
+        principal(ctx)?;
+        if source.len() > 64 * 1024 {
+            return Ok(RenderedDiagram {
+                svg: None,
+                error: Some("a diagram is at most 64 KiB of typst".to_owned()),
+            });
+        }
+        Ok(
+            match crate::akter::diagrams::render(source)
+                .await
+                .map_err(error)?
+            {
+                Ok(svg) => RenderedDiagram {
+                    svg: Some(svg),
+                    error: None,
+                },
+                Err(message) => RenderedDiagram {
+                    svg: None,
+                    error: Some(message),
+                },
+            },
+        )
     }
 
     /// The akt numbered `number`.
@@ -742,6 +780,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let mut operations = Vec::with_capacity(input.operations.len());
         for (i, op) in input.operations.into_iter().enumerate() {
@@ -775,6 +814,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         akter(ctx)?
             .define_type(caller, document.0)
@@ -792,6 +832,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
@@ -809,6 +850,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -829,6 +871,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let fields = field_values(Some(input.fields))?;
         let akter = akter(ctx)?;
@@ -849,6 +892,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let row = akter(ctx)?
             .release(caller, &input.number, input.revision, input.label)
@@ -866,6 +910,7 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
@@ -964,6 +1009,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -979,6 +1025,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1004,6 +1051,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1028,6 +1076,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1047,6 +1096,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1065,6 +1115,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1095,6 +1146,7 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1268,6 +1320,10 @@ impl From<ConfigKind> for FieldKind {
     }
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a field's document, as GraphQL answers it"
+)]
 #[derive(SimpleObject)]
 pub struct Field {
     key: String,
@@ -1288,6 +1344,10 @@ pub struct Field {
     assignees: Option<String>,
     /// For markdown fields: the link kind its references are kept as.
     references: Option<String>,
+    /// For markdown fields: whether its `diagram` blocks are diagrams.
+    diagrams: bool,
+    /// For attachment fields: the media types it takes, any if none.
+    media_types: Vec<String>,
 }
 
 /// What files an attachment field holds.
@@ -1315,6 +1375,8 @@ impl From<&FieldDef> for Field {
             of: def.of.clone(),
             assignees: def.assignees.clone(),
             references: def.references.clone(),
+            diagrams: def.diagrams,
+            media_types: def.media_types.clone(),
         }
     }
 }
@@ -1651,7 +1713,7 @@ impl Akt {
             .filter_map(|def| {
                 values
                     .get(&def.key)
-                    .map(|v| FieldValue::new(def, v, &self.pins()))
+                    .map(|v| FieldValue::new(def, v, &self.pins(), self.row.id))
             })
             .collect())
     }
@@ -1968,6 +2030,9 @@ pub struct MarkdownValue {
     found: Vec<kuria_engine::markdown::Reference>,
     #[graphql(skip)]
     embedded: Vec<kuria_engine::markdown::Reference>,
+    /// The akt, if the field allows diagrams, whose renderings it holds.
+    #[graphql(skip)]
+    drawn_by: Option<Uuid>,
     /// What its references meant, if it is read at a version.
     #[graphql(skip)]
     pins: Vec<Pin>,
@@ -2004,9 +2069,15 @@ pub struct MarkdownReference {
 }
 
 impl MarkdownValue {
-    fn new(field: String, text: &str, pins: &[Pin]) -> Self {
+    /// `text`, the value of the `markdown` field `def` of the akt `akt`.
+    fn of(def: &FieldDef, text: &str, pins: &[Pin], akt: Uuid) -> Self {
+        Self::new(def.key.clone(), text, pins, def.diagrams.then_some(akt))
+    }
+
+    fn new(field: String, text: &str, pins: &[Pin], drawn_by: Option<Uuid>) -> Self {
         use kuria_engine::markdown;
         Self {
+            drawn_by,
             pins: pins.to_vec(),
             field,
             markdown: text.to_owned(),
@@ -2081,6 +2152,30 @@ impl MarkdownValue {
         Ok(answered)
     }
 
+    /// The diagram blocks of the text, in order, each with its rendering,
+    /// in a field that allows them; none in any other.
+    // r[impl akt.field.markdown.diagrams]
+    async fn diagrams(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownDiagram>> {
+        let Some(akt) = self.drawn_by else {
+            return Ok(Vec::new());
+        };
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let held = kuria_store::attachments::diagrams_of(&mut conn, &[akt])
+            .await
+            .map_err(internal)?;
+        Ok(kuria_engine::markdown::diagrams(&self.markdown)
+            .into_iter()
+            .map(|source| {
+                let hash = crate::akter::diagrams::source_hash(&source);
+                let attachment = held
+                    .iter()
+                    .find(|d| d.field == self.field && d.source_sha256 == hash)
+                    .map(|d| Attachment(d.attachment_id));
+                MarkdownDiagram { source, attachment }
+            })
+            .collect())
+    }
+
     /// The images the text embeds, in order, each once, each with the
     /// picture it shows or why it is broken.
     // r[impl akt.field.markdown.images]
@@ -2131,6 +2226,23 @@ impl MarkdownValue {
         }
         Ok(answered)
     }
+}
+
+/// A diagram block of a `markdown` field that allows them
+/// (`akt.field.markdown.diagrams`).
+#[derive(SimpleObject)]
+pub struct MarkdownDiagram {
+    /// The block's typst, as the text has it.
+    source: String,
+    /// Its rendering, an SVG.
+    attachment: Option<Attachment>,
+}
+
+/// What `renderDiagram` answers: the SVG, or why it didn't compile.
+#[derive(SimpleObject)]
+pub struct RenderedDiagram {
+    svg: Option<String>,
+    error: Option<String>,
 }
 
 /// An image a `markdown` field embeds (`akt.field.markdown.images`).
@@ -2370,7 +2482,7 @@ pub enum VerdictKind {
 }
 
 impl FieldValue {
-    fn new(def: &FieldDef, value: &Value, pins: &[Pin]) -> Self {
+    fn new(def: &FieldDef, value: &Value, pins: &[Pin], akt: Uuid) -> Self {
         let field = def.key.clone();
         let option = |key: &str| {
             def.options.iter().find(|o| o.key == key).map_or_else(
@@ -2386,7 +2498,7 @@ impl FieldValue {
                 field,
                 text: text.clone(),
             }),
-            Value::Markdown(text) => Self::Markdown(MarkdownValue::new(field, text, pins)),
+            Value::Markdown(text) => Self::Markdown(MarkdownValue::of(def, text, pins, akt)),
             Value::Choice(key) => Self::Choice(ChoiceValue {
                 field,
                 option: option(key),

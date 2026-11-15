@@ -106,6 +106,19 @@ pub struct BundleAkt {
     /// Its versions, oldest first (`version.*`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub versions: Vec<BundleAktVersion>,
+    /// The diagrams it holds (`akt.field.markdown.diagrams`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diagrams: Vec<BundleDiagram>,
+}
+
+/// A diagram an akt holds: its field, the hash of the source rendered, in
+/// hexadecimal, and the attachment of its SVG.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleDiagram {
+    pub field: String,
+    pub source_sha256: String,
+    pub attachment: Uuid,
 }
 
 /// A version of an akt: a revision it named by releasing it.

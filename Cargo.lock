@@ -3195,6 +3195,7 @@ dependencies = [
  "kuria-engine",
  "kuria-store",
  "kuria-test-support",
+ "kuria-typst",
  "lopdf",
  "object_store",
  "percent-encoding",
@@ -3211,9 +3212,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "typst",
- "typst-assets",
- "typst-pdf",
  "url",
  "uuid",
 ]
@@ -3243,6 +3241,16 @@ dependencies = [
  "kuria-store",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "kuria-typst"
+version = "0.1.0"
+dependencies = [
+ "typst",
+ "typst-assets",
+ "typst-pdf",
+ "typst-svg",
 ]
 
 [[package]]

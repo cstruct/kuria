@@ -159,7 +159,7 @@ Attachments are already content-addressed, immutable, access-checked, carried by
 <!-- akt: PLAN-015-D05 -->
 ---
 type: decision
-revision: 2
+revision: 3
 rank: b4C
 state: decided
 in: [PLAN-015]
@@ -168,10 +168,10 @@ decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
-Diagrams need fletcher and cetz-plot. typst fetches packages from the network, which the server must not do. fletcher 0.5.8 imports cetz 0.3.4; cetz-plot 0.1.4 imports cetz 0.5.2. cetz and cetz-plot are LGPL-3.0-or-later, fletcher MIT; Kuria is MIT.
+Diagrams need fletcher and cetz-plot. typst fetches packages from the network, which the server must not do. fletcher 0.5.8 imports cetz 0.3.4; cetz-plot 0.1.4 imports cetz 0.5.2; cetz 0.3.4 and 0.5.2 import oxifmt 0.2.1 and 1.0.0. cetz and cetz-plot are LGPL-3.0-or-later, fletcher MIT, oxifmt MIT-0 and MIT or Apache-2.0; Kuria is MIT.
 
 <!-- field: decision -->
-The four packages are vendored unmodified, with their license files, under `items/typst/packages/preview/<name>/<version>/`, compiled into the binary, and resolved by the `World` alone. Updating one is a change to the repository.
+The six packages are vendored unmodified, with their license files, under `items/typst/packages/preview/<name>/<version>/`, compiled into the binary, and resolved by the `World` alone. Updating one is a change to the repository.
 
 <!-- field: why -->
 Vendoring keeps rendering offline and every server rendering the same diagram the same way, which the content-addressed SVGs and PDFs rely on. Keeping the LGPL packages unmodified, as their own files with their licenses, in a directory of their own, keeps them separable from Kuria's code, as the LGPL asks. That reading should be confirmed before a release that ships them.
@@ -286,22 +286,27 @@ Tests: the editor's round trip with images and a picture test; engine typst case
 <!-- akt: PLAN-015-T05 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b4H
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocked by PLAN-015-T01, Blocks PLAN-015-T06]
 title: "kuria-typst, bundled packages and diagrams rendered on write"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 `kuria-typst`, bundled packages and diagrams rendered on write.
 
-- A new crate: the `World` with fonts, the vendored packages (fletcher 0.5.8, cetz 0.3.4 and 0.5.2, cetz-plot 0.1.4, with their licenses) and files given to it; `render_pdf` and `render_diagram`. The server's `pdf` uses it.
-- `"diagrams": true` on `markdown` fields, validated.
-- On write, each new block rendered to SVG, stored as an attachment and recorded in `akt_diagram`; a failure refuses the write as `INVALID_DIAGRAM`.
-- `MarkdownValue.diagrams`; `renderDiagram(source)`, compiling without storing; `attachment.download` covering diagrams; bundles carrying `akt_diagram`.
-- First: check that fletcher on cetz 0.3.4 compiles on typst 0.14, and cetz 0.5.2's WASM plugin runs.
+- **The crate** (`items/typst`): a `World` with typst's fonts, the bundled packages and the files it is given, reading no network or file system; `pdf(markup, files)` and `diagram(source)` (SVG sized to the diagram, `typst-svg`), and `IMPORTS`. `build.rs` embeds every package file. The server's PDFs now go through it, and the server no longer depends on typst directly.
+- **The packages:** fletcher 0.5.8, cetz 0.3.4 and 0.5.2, cetz-plot 0.1.4, and oxifmt 0.2.1 and 1.0.0, which cetz imports and the plan hadn't foreseen (D05 updated), vendored unmodified with their licenses, `packages/README.md` saying where each came from and why. Checked first: fletcher on cetz 0.3.4 compiles on typst 0.14, and cetz 0.5.2's WASM plugin runs.
+- **Config:** `diagrams` on `markdown` fields only.
+- **Engine:** `markdown::diagrams` reads the `diagram` blocks.
+- **On write** (`akter/diagrams.rs`, from `create_in` and `change_in`): each changed field allowing diagrams has each block whose source hash (with the imports) the akt doesn't hold rendered off the runtime, stored as an SVG attachment and recorded in `akt_diagram` (migration `000017`, immutable) and `akt_held`. A block that doesn't compile refuses the write as `INVALID_DIAGRAM`, with `field` and `block`. `Caller` and `Akter` carry the storage.
+- **GraphQL:** `MarkdownValue.diagrams` (source and attachment, in fields that allow them); `renderDiagram(source)` (SVG or error, at most 64 KiB of source, storing nothing); `Field.diagrams` and `Field.mediaTypes`.
+- **Bundles:** each akt's diagrams, their attachments included, exported and imported.
+
+Tests: `kuria-typst` (every package imports; a fletcher diagram and a plot render, the same each time; another package, a file, a URL and broken source are refused; a PDF reads only what it is given), the engine's `reads_diagram_blocks`, config, and the server's `tests/diagrams.rs` (rendering and download, code in a field without diagrams, `INVALID_DIAGRAM`, a version's diagrams after an edit, the preview, a bundle round trip). Lint, 391 Rust and 90 app tests pass.
 
 <!-- field: acceptance -->
 - Unit tests: each package imports, a fletcher diagram and a plot render, another package and any file are refused.

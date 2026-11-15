@@ -17,6 +17,7 @@
 mod batch;
 mod copy;
 mod create;
+pub mod diagrams;
 mod draft;
 mod links;
 mod membership;
@@ -60,6 +61,10 @@ pub struct Actor {
 pub struct Caller<'a> {
     pub actor: Actor,
     pub auth: &'a Authorizer,
+    /// Where a write keeps the diagrams it renders
+    /// (`akt.field.markdown.diagrams`); without it, a write that renders
+    /// one is refused.
+    pub storage: Option<&'a crate::attachments::Storage>,
 }
 
 /// Why a change to akt types or akter failed.
@@ -77,6 +82,12 @@ pub enum AktError {
     Refused(#[from] Refusal),
     #[error("the akt is at revision {current}, not {expected}")]
     Stale { expected: i32, current: i32 },
+    #[error("diagram {block} in `{field}` doesn't compile: {message}")]
+    InvalidDiagram {
+        field: String,
+        block: usize,
+        message: String,
+    },
     #[error("not permitted")]
     Forbidden,
     #[error("`{container}` can't contain akter of the type `{member}`")]
@@ -225,6 +236,8 @@ impl StoredType {
 #[derive(Clone)]
 pub struct Akter {
     pool: Pool,
+    /// Where rendered diagrams are kept.
+    storage: Option<crate::attachments::Storage>,
     /// Woken after a change commits, so its change event is published at
     /// once.
     published: Option<Arc<Notify>>,
@@ -233,7 +246,24 @@ pub struct Akter {
 impl Akter {
     #[must_use]
     pub fn new(pool: Pool, published: Option<Arc<Notify>>) -> Self {
-        Self { pool, published }
+        Self {
+            pool,
+            storage: None,
+            published,
+        }
+    }
+
+    /// The same, keeping rendered diagrams in `storage`.
+    #[must_use]
+    pub fn with_storage(mut self, storage: crate::attachments::Storage) -> Self {
+        self.storage = Some(storage);
+        self
+    }
+
+    /// Where rendered diagrams are kept, if anywhere.
+    #[must_use]
+    pub fn storage(&self) -> Option<&crate::attachments::Storage> {
+        self.storage.as_ref()
     }
 
     /// Wakes the relay: a change has committed.
@@ -260,7 +290,7 @@ impl Akter {
         caller: Caller<'_>,
         document: Json,
     ) -> Result<StoredType, AktError> {
-        let Caller { actor, auth } = caller;
+        let Caller { actor, auth, .. } = caller;
         if !auth.allows(&Permission::DefineTypes).await? {
             return Err(AktError::Forbidden);
         }
@@ -412,7 +442,7 @@ async fn change_in(
     ) -> Result<Outcome, Refusal>
     + Send,
 ) -> Result<AktRow, AktError> {
-    let Caller { actor, auth } = caller;
+    let Caller { actor, auth, .. } = caller;
     let tenant: Uuid = actor.tenant.into();
     let mut akt = store::lock_akt_by_number(conn, tenant, number)
         .await?
@@ -477,6 +507,7 @@ async fn change_in(
     check_sections(conn, tenant, &stored.ty, Some(akt.id), &outcome).await?;
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
+    diagrams::render_written(conn, caller, &stored.ty, &akt, &outcome).await?;
     let mut recorded = revision(&akt, actor, transition, reason, &outcome, now);
     references::record(conn, &stored.ty, &akt, &outcome.fields, &mut recorded).await?;
     store::append_revision(conn, &recorded).await?;

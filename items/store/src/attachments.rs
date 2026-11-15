@@ -7,7 +7,7 @@ use serde_json::Value as Json;
 use uuid::Uuid;
 
 use crate::Connection;
-use crate::schema::{akt, akt_attachment, akt_held, akt_type_version, attachment};
+use crate::schema::{akt, akt_attachment, akt_diagram, akt_held, akt_type_version, attachment};
 
 /// An attachment, as stored.
 #[derive(Clone, Debug, PartialEq, Eq, Insertable, Queryable, Selectable)]
@@ -112,4 +112,39 @@ pub async fn set_held(
     }
     let ids: Vec<Uuid> = held.iter().map(|(_, id)| *id).collect();
     keep_held(conn, tenant, akt, &ids).await
+}
+
+/// A diagram an akt holds: the field and the hash of the source rendered,
+/// and the attachment of its SVG (`akt.field.markdown.diagrams`).
+#[derive(Clone, Debug, PartialEq, Eq, Insertable, Queryable, Selectable)]
+#[diesel(table_name = akt_diagram)]
+pub struct DiagramRow {
+    pub tenant_id: Uuid,
+    pub akt_id: Uuid,
+    pub field: String,
+    pub source_sha256: Vec<u8>,
+    pub attachment_id: Uuid,
+}
+
+/// The diagrams `akter` hold, by akt.
+pub async fn diagrams_of(conn: &mut Connection, akter: &[Uuid]) -> QueryResult<Vec<DiagramRow>> {
+    akt_diagram::table
+        .filter(akt_diagram::akt_id.eq_any(akter))
+        .order((akt_diagram::akt_id, akt_diagram::field))
+        .select(DiagramRow::as_select())
+        .load(conn)
+        .await
+}
+
+/// Records diagrams as held, and their attachments as held for good.
+pub async fn insert_diagrams(conn: &mut Connection, rows: &[DiagramRow]) -> QueryResult<()> {
+    for row in rows {
+        diesel::insert_into(akt_diagram::table)
+            .values(row)
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .await?;
+        keep_held(conn, row.tenant_id, row.akt_id, &[row.attachment_id]).await?;
+    }
+    Ok(())
 }

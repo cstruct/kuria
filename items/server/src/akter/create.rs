@@ -53,7 +53,7 @@ pub(super) async fn create_in(
     reason: Option<String>,
     inside: &[String],
 ) -> Result<AktRow, AktError> {
-    let Caller { actor, auth } = caller;
+    let Caller { actor, auth, .. } = caller;
     let tenant: Uuid = actor.tenant.into();
     let row = store::latest_type_version(conn, tenant, key)
         .await?
@@ -117,6 +117,7 @@ pub(super) async fn create_in(
     store::insert_akt(conn, &akt).await?;
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
+    super::diagrams::render_written(conn, caller, &stored.ty, &akt, &outcome).await?;
     let mut first = revision(&akt, actor, None, reason.clone(), &outcome, now);
     if !parents.is_empty() {
         first.membership = Some(json!({

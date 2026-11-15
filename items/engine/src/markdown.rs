@@ -172,6 +172,36 @@ pub fn images(text: &str) -> Vec<Reference> {
     found
 }
 
+/// The sources of `text`'s diagram blocks, fenced code blocks whose
+/// language is `diagram`, in order (`akt.field.markdown.diagrams`).
+// r[impl akt.field.markdown.diagrams]
+#[must_use]
+pub fn diagrams(text: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut open: Option<String> = None;
+    for event in Parser::new_ext(text, options()) {
+        match event {
+            Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(lang)))
+                if lang.split_whitespace().next() == Some("diagram") =>
+            {
+                open = Some(String::new());
+            }
+            Event::Text(t) => {
+                if let Some(source) = open.as_mut() {
+                    source.push_str(&t);
+                }
+            }
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some(source) = open.take() {
+                    found.push(source);
+                }
+            }
+            _ => {}
+        }
+    }
+    found
+}
+
 /// Whether `id` may be a heading id: lowercase ASCII letters, digits, `-`
 /// and `_`, starting with a letter.
 #[must_use]
@@ -536,6 +566,16 @@ mod tests {
         assert_eq!(
             numbers(references(text)),
             ["kuria:IMG-1", "kuria:D-1", "kuria:IMG-1@2"]
+        );
+    }
+
+    // r[verify akt.field.markdown.diagrams]
+    #[test]
+    fn reads_diagram_blocks() {
+        let text = "```diagram\n#diagram(node((0, 0), [A]))\n```\n\n```rust\nfn x() {}\n```\n\n```diagram\n#canvas({})\n```\n";
+        assert_eq!(
+            diagrams(text),
+            ["#diagram(node((0, 0), [A]))\n", "#canvas({})\n"]
         );
     }
 }

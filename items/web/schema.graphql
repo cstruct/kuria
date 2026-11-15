@@ -539,6 +539,14 @@ type Field {
 	For markdown fields: the link kind its references are kept as.
 	"""
 	references: String
+	"""
+	For markdown fields: whether its `diagram` blocks are diagrams.
+	"""
+	diagrams: Boolean!
+	"""
+	For attachment fields: the media types it takes, any if none.
+	"""
+	mediaTypes: [String!]!
 }
 
 """
@@ -674,6 +682,21 @@ input LinkInput {
 }
 
 """
+A diagram block of a `markdown` field that allows them
+(`akt.field.markdown.diagrams`).
+"""
+type MarkdownDiagram {
+	"""
+	The block's typst, as the text has it.
+	"""
+	source: String!
+	"""
+	Its rendering, an SVG.
+	"""
+	attachment: Attachment
+}
+
+"""
 A heading of a `markdown` field.
 """
 type MarkdownHeading {
@@ -754,6 +777,11 @@ type MarkdownValue {
 	or why it is broken.
 	"""
 	references: [MarkdownReference!]!
+	"""
+	The diagram blocks of the text, in order, each with its rendering,
+	in a field that allows them; none in any other.
+	"""
+	diagrams: [MarkdownDiagram!]!
 	"""
 	The images the text embeds, in order, each once, each with the
 	picture it shows or why it is broken.
@@ -989,6 +1017,11 @@ type Query {
 	"""
 	aktType(key: String!, version: Int): AktType
 	"""
+	A diagram block's `source` rendered to SVG, or typst's message if it
+	doesn't compile, storing nothing (`diagram.preview`).
+	"""
+	renderDiagram(source: String!): RenderedDiagram!
+	"""
 	The akt numbered `number`.
 	"""
 	akt(		number: String!,
@@ -1049,6 +1082,14 @@ input ReleaseVersionInput {
 	One line, at most 100 characters.
 	"""
 	label: String
+}
+
+"""
+What `renderDiagram` answers: the SVG, or why it didn't compile.
+"""
+type RenderedDiagram {
+	svg: String
+	error: String
 }
 
 """

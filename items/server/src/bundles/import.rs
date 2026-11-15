@@ -152,16 +152,7 @@ fn check(bundle: &Bundle, unpacked: &Unpacked) -> Result<HashMap<Uuid, AktType>,
         };
         replay(akt, ty)?;
         check_versions(akt)?;
-        if let Some(held) = akt
-            .attachments
-            .iter()
-            .find(|h| !attachments.contains(&h.attachment))
-        {
-            return invalid(format!(
-                "{} holds the attachment {}, which the bundle lacks",
-                akt.number, held.attachment
-            ));
-        }
+        check_held(akt, &attachments)?;
     }
     if let Some(akt) = bundle
         .akter
@@ -296,6 +287,27 @@ fn replay(akt: &super::format::BundleAkt, ty: &AktType) -> Result<(), BundleErro
     Ok(())
 }
 
+/// Every attachment `akt` holds, in a field or as a diagram, is one the
+/// bundle holds.
+fn check_held(
+    akt: &super::format::BundleAkt,
+    attachments: &HashSet<Uuid>,
+) -> Result<(), BundleError> {
+    match akt
+        .attachments
+        .iter()
+        .map(|h| h.attachment)
+        .chain(akt.diagrams.iter().map(|d| d.attachment))
+        .find(|a| !attachments.contains(a))
+    {
+        Some(held) => Err(BundleError::Invalid(format!(
+            "{} holds the attachment {held}, which the bundle lacks",
+            akt.number
+        ))),
+        None => Ok(()),
+    }
+}
+
 /// `akt`'s versions: numbered from 1 on, in order, each naming a revision
 /// of its own that the akt has, with its pins as `version.pins` keeps them.
 // r[impl bundle.import.history]
@@ -376,6 +388,18 @@ async fn keep_held(
             }
         }
         kuria_store::attachments::keep_held(conn, tenant, akt_ids[&a.id], &ids).await?;
+        let diagrams: Vec<kuria_store::attachments::DiagramRow> = a
+            .diagrams
+            .iter()
+            .map(|d| kuria_store::attachments::DiagramRow {
+                tenant_id: tenant,
+                akt_id: akt_ids[&a.id],
+                field: d.field.clone(),
+                source_sha256: unhex(&d.source_sha256).unwrap_or_default(),
+                attachment_id: d.attachment,
+            })
+            .collect();
+        kuria_store::attachments::insert_diagrams(conn, &diagrams).await?;
     }
     Ok(())
 }

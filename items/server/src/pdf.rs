@@ -1,8 +1,8 @@
 //! `markdown` fields as PDFs (`pdf.*`): of the living version or of a
-//! version, rendered with typst and its bundled fonts.
+//! version, rendered by `kuria-typst`.
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
@@ -16,13 +16,6 @@ use kuria_store::Pool;
 use kuria_store::akter as store;
 use serde::Deserialize;
 use serde_json::Map;
-use typst::diag::{FileError, FileResult};
-use typst::foundations::{Bytes, Datetime};
-use typst::layout::PagedDocument;
-use typst::syntax::{FileId, Source, VirtualPath};
-use typst::text::{Font, FontBook};
-use typst::utils::LazyHash;
-use typst::{Library, LibraryExt, World};
 use uuid::Uuid;
 
 use crate::akter::AktError;
@@ -63,86 +56,6 @@ type Picture = (String, String, Vec<u8>);
 pub(crate) struct Asked {
     field: Option<String>,
     version: Option<i32>,
-}
-
-/// typst's fonts, read once.
-fn fonts() -> &'static (LazyHash<FontBook>, Vec<Font>) {
-    static FONTS: OnceLock<(LazyHash<FontBook>, Vec<Font>)> = OnceLock::new();
-    FONTS.get_or_init(|| {
-        let fonts: Vec<Font> = typst_assets::fonts()
-            .flat_map(|data| Font::iter(Bytes::new(data)))
-            .collect();
-        (LazyHash::new(FontBook::from_fonts(&fonts)), fonts)
-    })
-}
-
-/// One typst document, with nothing to read but itself and the pictures
-/// it is given (`pdf.packages`).
-struct Doc {
-    library: LazyHash<Library>,
-    main: Source,
-    files: HashMap<FileId, Bytes>,
-}
-
-impl World for Doc {
-    fn library(&self) -> &LazyHash<Library> {
-        &self.library
-    }
-
-    fn book(&self) -> &LazyHash<FontBook> {
-        &fonts().0
-    }
-
-    fn main(&self) -> FileId {
-        self.main.id()
-    }
-
-    fn source(&self, id: FileId) -> FileResult<Source> {
-        if id == self.main.id() {
-            Ok(self.main.clone())
-        } else {
-            Err(FileError::AccessDenied)
-        }
-    }
-
-    fn file(&self, id: FileId) -> FileResult<Bytes> {
-        self.files.get(&id).cloned().ok_or(FileError::AccessDenied)
-    }
-
-    fn font(&self, index: usize) -> Option<Font> {
-        fonts().1.get(index).cloned()
-    }
-
-    fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
-        None
-    }
-}
-
-/// `markup`, typst, as a PDF, reading only `files`, by path.
-// r[impl pdf.repeatable]
-pub fn render(markup: String, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
-    let doc = Doc {
-        library: LazyHash::new(Library::default()),
-        main: Source::new(FileId::new(None, VirtualPath::new("/main.typ")), markup),
-        files: files
-            .into_iter()
-            .map(|(path, bytes)| {
-                (
-                    FileId::new(None, VirtualPath::new(&path)),
-                    Bytes::new(bytes),
-                )
-            })
-            .collect(),
-    };
-    let said = |errors: &[typst::diag::SourceDiagnostic]| {
-        errors
-            .iter()
-            .map(|e| e.message.to_string())
-            .collect::<Vec<_>>()
-            .join("; ")
-    };
-    let document: PagedDocument = typst::compile(&doc).output.map_err(|e| said(&e))?;
-    typst_pdf::pdf(&document, &typst_pdf::PdfOptions::default()).map_err(|e| said(&e))
 }
 
 /// `GET /akter/{number}/pdf?field=&version=`: a `markdown` field as a PDF,
@@ -201,7 +114,7 @@ pub(crate) async fn pdf(
         .into_iter()
         .map(|(_, path, bytes)| (path, bytes))
         .collect();
-    let rendered = tokio::task::spawn_blocking(move || render(markup, files)).await;
+    let rendered = tokio::task::spawn_blocking(move || kuria_typst::pdf(markup, files)).await;
     let bytes = match rendered {
         Ok(Ok(bytes)) => bytes,
         Ok(Err(e)) => {

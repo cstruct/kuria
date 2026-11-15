@@ -251,6 +251,10 @@ pub struct ColumnDef {
 /// One field.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each is a member of the field's document, as its author writes it"
+)]
 pub struct FieldDef {
     pub key: String,
     pub name: String,
@@ -290,6 +294,10 @@ pub struct FieldDef {
     /// as, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub references: Option<String>,
+    /// For `markdown`: whether its `diagram` code blocks are diagrams,
+    /// rendered when it is written (`akt.field.markdown.diagrams`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub diagrams: bool,
 }
 
 /// What files an `attachment` field holds.
