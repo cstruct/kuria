@@ -3,7 +3,9 @@ rust = { version = "1.99.0", components = "rustfmt,clippy,rust-analyzer,rust-src
 # The app in items/web, and the end-to-end tests.
 node = "24.20.0"
 # Tracks the spec in docs/spec against the code, from its GitHub releases.
-"github:bearcove/tracey" = "1.4.0"
+# 1.1.5: later releases refuse `.svelte` files, where the app's components
+# carry their spec references.
+"github:bearcove/tracey" = "1.1.5"
 
 [env]
 # Below the ephemeral port ranges, and apart from Konklav's development
