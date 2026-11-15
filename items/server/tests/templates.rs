@@ -20,7 +20,7 @@ struct World {
     other: String,
 }
 
-fn types() -> [Value; 3] {
+fn types() -> [Value; 4] {
     let states = json!([
         { "key": "template", "name": "Template" },
         { "key": "draft", "name": "Draft", "initial": true },
@@ -55,6 +55,12 @@ fn types() -> [Value; 3] {
                 { "key": "finish", "name": "Finish", "from": ["draft"], "to": "done", "outcomes": ["pass", "fail", "skip"] }
             ],
             "contains": [{ "type": "test", "exclusive": true }]
+        }),
+        json!({
+            "key": "suite", "name": "Suite", "number": "S-{seq}",
+            "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+            "states": [{ "key": "open", "name": "Open", "initial": true }],
+            "contains": [{ "type": "protocol" }]
         }),
     ]
 }
@@ -393,6 +399,139 @@ async fn a_finish_waits_for_a_verdict_in_its_tree() {
             .ends_with("it is pending"),
         "{answer}"
     );
+}
+
+impl World {
+    /// The numbers of every page of `list`, a page of `first` at a time:
+    /// `list` is an `akter` or `members` field taking `$after`, under
+    /// `at`.
+    async fn pages(&self, query: &str, at: &[&str], first: usize) -> Vec<String> {
+        let mut numbers = Vec::new();
+        let mut after = Value::Null;
+        loop {
+            let answer = self
+                .run(query, json!({ "first": first, "after": after }))
+                .await;
+            assert!(answer.get("errors").is_none(), "{answer}");
+            let mut list = &answer["data"];
+            for key in at {
+                list = &list[*key];
+            }
+            let nodes = list["nodes"].as_array().unwrap();
+            assert!(nodes.len() <= first, "{answer}");
+            numbers.extend(
+                nodes
+                    .iter()
+                    .map(|n| n["number"].as_str().unwrap().to_owned()),
+            );
+            if list["pageInfo"]["hasNextPage"] != true {
+                return numbers;
+            }
+            after = list["pageInfo"]["endCursor"].clone();
+        }
+    }
+}
+
+fn sorted(mut numbers: Vec<String>) -> Vec<String> {
+    numbers.sort();
+    numbers
+}
+
+// r[verify akt.filter.outcome]
+// r[verify akt.page]
+#[tokio::test(flavor = "multi_thread")]
+async fn tests_and_protocols_filter_by_outcome_a_page_at_a_time() {
+    let world = World::new().await;
+    let suite = world
+        .create("suite", &[], json!({ "title": "Nightly" }))
+        .await;
+    let (tp, tests, _) = protocol(&world).await;
+    let (other, other_tests, _) = protocol(&world).await;
+    for member in [&tp, &other] {
+        world
+            .ok(
+                "mutation($c: String!, $m: String!) { addToContainer(input: { container: $c, member: $m }) { number } }",
+                json!({ "c": suite, "m": member }),
+            )
+            .await;
+    }
+    world.pass_all(&tests).await;
+    world.edit(&tests[1], json!({ "verdict": "fail" })).await;
+    world.pass_all(&other_tests[..2]).await;
+
+    // Tests, by their own verdicts, tenant-wide and as a protocol's members.
+    let tenant_wide = |outcome: &str| {
+        format!(
+            "query($first: Int, $after: String) {{ akter(type: \"test\", outcome: {outcome}, first: $first, after: $after) {{ nodes {{ number }} pageInfo {{ hasNextPage endCursor }} }} }}"
+        )
+    };
+    let pending = world.pages(&tenant_wide("PENDING"), &["akter"], 1).await;
+    assert_eq!(sorted(pending), sorted(other_tests[2..].to_vec()));
+    let failed = world.pages(&tenant_wide("FAIL"), &["akter"], 2).await;
+    assert_eq!(failed, std::slice::from_ref(&tests[1]));
+    let mut passed = tests.clone();
+    passed.remove(1);
+    passed.extend(other_tests[..2].iter().cloned());
+    let passing = world.pages(&tenant_wide("PASS"), &["akter"], 2).await;
+    assert_eq!(sorted(passing), sorted(passed));
+    let members = format!(
+        "query($first: Int, $after: String) {{ akt(number: \"{other}\") {{ members(type: \"test\", outcome: PASS, first: $first, after: $after) {{ nodes {{ number }} pageInfo {{ hasNextPage endCursor }} }} }} }}"
+    );
+    assert_eq!(
+        world.pages(&members, &["akt", "members"], 1).await,
+        other_tests[..2]
+    );
+
+    // Protocols, by their members', only as a suite's members.
+    let suite_of = |outcome: &str| {
+        format!(
+            "query($first: Int, $after: String) {{ akt(number: \"{suite}\") {{ members(type: \"protocol\", outcome: {outcome}, first: $first, after: $after) {{ nodes {{ number }} pageInfo {{ hasNextPage endCursor }} }} }} }}"
+        )
+    };
+    assert_eq!(
+        world.pages(&suite_of("FAIL"), &["akt", "members"], 1).await,
+        std::slice::from_ref(&tp)
+    );
+    assert_eq!(
+        world
+            .pages(&suite_of("PENDING"), &["akt", "members"], 1)
+            .await,
+        std::slice::from_ref(&other)
+    );
+    assert_eq!(
+        world.pages(&suite_of("PASS"), &["akt", "members"], 1).await,
+        Vec::<String>::new()
+    );
+    world.pass_all(&other_tests[2..]).await;
+    world.edit(&tests[1], json!({ "verdict": "pass" })).await;
+    assert_eq!(
+        world.pages(&suite_of("PASS"), &["akt", "members"], 1).await,
+        [tp.clone(), other.clone()]
+    );
+}
+
+// r[verify akt.filter.outcome]
+#[tokio::test(flavor = "multi_thread")]
+async fn other_lists_refuse_an_outcome() {
+    let world = World::new().await;
+    let suite = world
+        .create("suite", &[], json!({ "title": "Nightly" }))
+        .await;
+    for query in [
+        "{ akter(type: \"protocol\", outcome: PASS) { nodes { number } } }",
+        "{ akter(type: \"requirement\", outcome: PASS) { nodes { number } } }",
+        "{ akter(outcome: PASS) { nodes { number } } }",
+    ] {
+        let answer = world.run(query, json!({})).await;
+        assert_eq!(code(&answer), "BAD_REQUEST", "{query}: {answer}");
+    }
+    let unfiltered = world
+        .run(
+            &format!("{{ akt(number: \"{suite}\") {{ members(outcome: PASS) {{ nodes {{ number }} }} }} }}"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(code(&unfiltered), "BAD_REQUEST", "{unfiltered}");
 }
 
 const SUPPORT_STRANGER: &str = "01900000-0000-7000-8000-0000000000ee";

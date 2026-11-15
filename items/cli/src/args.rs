@@ -74,6 +74,10 @@ pub enum Command {
         /// `@me` for yourself. Needs TYPE. May be given more than once.
         #[arg(long = "where", value_name = "FIELD=VALUE")]
         conditions: Vec<String>,
+        /// Only those with this outcome. Needs TYPE, with a verdict field,
+        /// or `--in` for a type whose outcome comes from its members.
+        #[arg(long, value_parser = ["pass", "fail", "skip", "pending"], ignore_case = true)]
+        outcome: Option<String>,
         /// Only those whose number starts with this, or whose title holds
         /// each of its words.
         #[arg(long)]

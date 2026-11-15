@@ -156,7 +156,14 @@ Not yet: signatures.
   on `akt.fields`: choices by key, users and checkboxes by `me` (and the
   contacts linked to the viewer), a subject or `contact:<id>`, a field
   naming several people by any one of them, dates and single-line text
-  exactly.
+  exactly. `outcome` filters by outcome (`akt.filter.outcome`): a type
+  with its own `verdict` field through a SQL expression over its verdicts
+  and assignees (`Match::Outcome` in `kuria-store`, held to the engine by
+  `tests/outcomes.rs`); a container's members of a type whose outcome
+  comes from its members by working each one's out, a chunk at a time,
+  until the page is full. Any other is `BAD_REQUEST`. A transition naming
+  `outcomes` share-locks the akt's member tree before working out its
+  outcome (`akter::outcomes::held_locked`).
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,

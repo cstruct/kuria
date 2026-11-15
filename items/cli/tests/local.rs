@@ -1587,6 +1587,60 @@ fn a_protocol_finishes_only_with_an_outcome_it_allows() {
     assert_eq!(done.json["state"], "done", "{}", done.markdown);
 }
 
+// r[verify akt.filter.outcome]
+#[test]
+fn tests_and_protocols_filter_by_outcome() {
+    let dir = Dir::new();
+    released(&dir);
+    let suite = json!({
+        "key": "suite", "name": "Suite", "number": "S-{seq}",
+        "states": [{ "key": "open", "name": "Open", "initial": true }],
+        "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+        "contains": [{ "type": "protocol" }]
+    });
+    std::fs::write(dir.root.join("types/suite.json"), suite.to_string()).unwrap();
+    dir.ok(&["new", "suite", "--set", "title=Nightly"]);
+    dir.ok(&["new", "protocol", "--in", "S-1", "--set", "title=Smoke"]);
+    dir.ok(&["add", "S-1", "PROT-001"]);
+    dir.ok(&["verdict", "PROT-001-T2", "fail"]);
+    let ls = |args: &[&str]| {
+        let mut all = vec!["ls"];
+        all.extend_from_slice(args);
+        all.extend(["--format", "json"]);
+        let mut found = numbers(&dir.ok(&all));
+        found.sort();
+        found
+    };
+    assert_eq!(
+        ls(&["test", "--outcome", "pending"]),
+        ["PROT-001-T1", "PROT-001-T3"]
+    );
+    assert_eq!(
+        ls(&["test", "--outcome", "FAIL", "--limit", "1"]),
+        ["PROT-001-T2"]
+    );
+    assert_eq!(
+        ls(&["test", "--in", "PROT-001", "--outcome", "fail"]),
+        ["PROT-001-T2"]
+    );
+    // A protocol's outcome comes from its tests: only within a container.
+    assert_eq!(
+        ls(&["protocol", "--in", "S-1", "--outcome", "fail"]),
+        ["PROT-001"]
+    );
+    assert_eq!(
+        ls(&["protocol", "--in", "S-1", "--outcome", "pending"]),
+        ["PROT-002"]
+    );
+    for args in [
+        &["ls", "protocol", "--outcome", "fail"][..],
+        &["ls", "suite", "--outcome", "fail"][..],
+        &["ls", "--outcome", "fail"][..],
+    ] {
+        assert_eq!(dir.refused(args).code, "BAD_REQUEST", "{args:?}");
+    }
+}
+
 /// The outcome `show --format json` gives `number`.
 fn outcome(dir: &Dir, number: &str) -> Value {
     dir.ok(&["show", number, "--format", "json"]).json["akt"]["outcome"].clone()

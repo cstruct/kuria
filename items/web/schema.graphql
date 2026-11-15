@@ -39,7 +39,11 @@ type Akt {
 		"""
 		Conditions on field values, all of which a member must meet; `type` must be given.
 		"""
-		where: [FieldCondition!]
+		where: [FieldCondition!],
+		"""
+		Only members with this outcome, as it is now; `type` must be given, and have outcomes.
+		"""
+		outcome: Outcome
 	): AktConnection!
 	"""
 	The akt as a board: its members that the subject may read, in the
@@ -858,7 +862,11 @@ type Query {
 		"""
 		Conditions on field values, all of which an akt must meet; `type` must be given.
 		"""
-		where: [FieldCondition!]
+		where: [FieldCondition!],
+		"""
+		Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field.
+		"""
+		outcome: Outcome
 	): AktConnection!
 	"""
 	The tenant's contacts, by name.

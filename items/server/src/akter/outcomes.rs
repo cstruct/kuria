@@ -25,7 +25,8 @@ impl Types {
         Ok(Self(types))
     }
 
-    fn has_outcomes(&self, ty: &AktType) -> bool {
+    #[must_use]
+    pub fn has_outcomes(&self, ty: &AktType) -> bool {
         // The akt's own version first: it is what the akt is held to.
         let lookup = |key: &str| {
             if key == ty.key() {

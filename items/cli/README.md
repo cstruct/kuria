@@ -49,14 +49,17 @@ type.
 
 - **Reads** (`cli.read`):
   - `types`; `schema <type>` (fields with kinds, required and options,
-    states and tones, transitions with what they require, and from the
+    states and tones, transitions with what they require and the outcomes
+    they allow, and from the
     type's document what it contains and links to, its board and
     presentation);
   - `ls [<type>]` with `--state` (key or name), `--in <container>` (its
     members; a state is then filtered here, since members have no state
     to ask for), `--where <field>=<value>` (`cli.values`: options by key
     or name, people by email, name or `@me`, dates as `YYYY-MM-DD`,
-    single-line text whole), `--search`, `--limit` and `--after`, or
+    single-line text whole), `--outcome` (a type with a verdict field, or
+    with `--in` one whose outcome comes from its members), `--search`,
+    `--limit` and `--after`, or
     `--all` pages. With a type, its list fields are the columns;
   - `find <text>`; `cat <number>… [--members <type>,… | --all-members]
     [-o <dir>]` (`cli.file`, `cli.members`): several akter, or an akt with
@@ -166,7 +169,7 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 - **The same answers** ([`src/local/answers.rs`](src/local/answers.rs)): the
   directory answers what Kuria's GraphQL would for each of the CLI's
   queries, so every read renders through the same code: `types`, `schema`,
-  `types export`, `ls` (by state, container, `--where`, search; pages with
+  `types export`, `ls` (by state, container, `--where`, `--outcome`, search; pages with
   `local:<offset>` cursors), `find`, `cat` (the file, without `rank`),
   `show` (board columns through `kuria-engine`, links read back by name)
   and `whoami` (the directory and who `@me` is).

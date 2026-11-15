@@ -46,7 +46,13 @@ export const Home = graphql(`
 `);
 
 export const AkterOfType = graphql(`
-	query AkterOfType($type: String!, $state: String, $after: String, $where: [FieldCondition!]) {
+	query AkterOfType(
+		$type: String!
+		$state: String
+		$after: String
+		$where: [FieldCondition!]
+		$outcome: Outcome
+	) {
 		aktType(key: $type) {
 			...ShownType
 			states {
@@ -54,13 +60,14 @@ export const AkterOfType = graphql(`
 				name
 			}
 		}
-		akter(type: $type, state: $state, first: 50, after: $after, where: $where) {
+		akter(type: $type, state: $state, first: 50, after: $after, where: $where, outcome: $outcome) {
 			nodes {
 				id
 				number
 				title
 				rank
 				updatedAt
+				outcome
 				state {
 					key
 					name

@@ -233,6 +233,10 @@ impl AkterQuery {
             desc = "Conditions on field values, all of which an akt must meet; `type` must be given."
         )]
         conditions: Option<Vec<FieldCondition>>,
+        #[graphql(
+            desc = "Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field."
+        )]
+        outcome: Option<OutcomeKind>,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
@@ -245,6 +249,7 @@ impl AkterQuery {
                 state.as_deref(),
                 search.as_deref(),
                 Some(&where_key),
+                outcome.map(OutcomeKind::key),
             ],
         );
         let after = match list.after(after.as_deref())? {
@@ -265,7 +270,7 @@ impl AkterQuery {
                 readable.push(ty.key);
             }
         }
-        let conditions = match key.as_deref() {
+        let mut conditions = match key.as_deref() {
             _ if conditions.is_empty() => Vec::new(),
             Some(key) => matching(ctx, &mut conn, tenant, key, &conditions).await?,
             None => {
@@ -275,6 +280,17 @@ impl AkterQuery {
                 ));
             }
         };
+        if let Some(outcome) = outcome {
+            match by_outcome(&mut conn, tenant, key.as_deref(), outcome).await? {
+                ByOutcome::Verdicts(condition) => conditions.push(condition),
+                ByOutcome::Members(..) => {
+                    return Err(coded(
+                        "this type's outcome comes from its members, so only a container's members filter by it".to_owned(),
+                        "BAD_REQUEST",
+                    ));
+                }
+            }
+        }
         let listing = store::Listing {
             keys: &readable,
             state: state.as_deref(),
@@ -358,6 +374,116 @@ async fn matching(
         matches.push(filter::condition(field, &condition.equals, named.as_ref())?);
     }
     Ok(matches)
+}
+
+/// A container's members of some akt types, meeting some conditions.
+struct Members<'a> {
+    container: Uuid,
+    keys: &'a [String],
+    conditions: &'a [store::Condition],
+}
+
+impl Members<'_> {
+    /// Up to `limit` of them, in rank order after `after`, whose outcome,
+    /// from their own members, is `wanted`. They are read a chunk at a time
+    /// until the page is full.
+    // r[impl akt.filter.outcome]
+    // r[impl akt.page]
+    async fn held(
+        &self,
+        conn: &mut kuria_store::Connection,
+        tenant: Uuid,
+        types: &outcomes::Types,
+        wanted: kuria_engine::outcomes::Outcome,
+        mut after: Option<String>,
+        limit: i64,
+    ) -> async_graphql::Result<Vec<AktRow>> {
+        const CHUNK: i64 = 200;
+        let mut found = Vec::new();
+        loop {
+            let chunk = containers::member_page(
+                conn,
+                tenant,
+                self.container,
+                self.keys,
+                self.conditions,
+                after.as_deref(),
+                CHUNK,
+            )
+            .await
+            .map_err(internal)?;
+            let last = chunk.len() < usize::try_from(CHUNK).unwrap_or(usize::MAX);
+            for row in chunk {
+                after = Some(row.rank.clone());
+                if outcomes::of(conn, tenant, types, &row)
+                    .await
+                    .map_err(error)?
+                    == Some(wanted)
+                {
+                    found.push(row);
+                    if i64::try_from(found.len()).unwrap_or(i64::MAX) >= limit {
+                        return Ok(found);
+                    }
+                }
+            }
+            if last {
+                return Ok(found);
+            }
+        }
+    }
+}
+
+/// How a list of the akt type `key` filters by `outcome`
+/// (`akt.filter.outcome`).
+enum ByOutcome {
+    /// By a condition on its own verdicts, which the store pages.
+    Verdicts(store::Condition),
+    /// By its members' outcomes, worked out for each akt listed.
+    Members(kuria_engine::outcomes::Outcome, outcomes::Types),
+}
+
+// r[impl akt.filter.outcome]
+async fn by_outcome(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    key: Option<&str>,
+    outcome: OutcomeKind,
+) -> async_graphql::Result<ByOutcome> {
+    let refused = |message: String| Err(coded(message, "BAD_REQUEST"));
+    let Some(key) = key else {
+        return refused("filtering by outcome needs `type`".to_owned());
+    };
+    let types = outcomes::Types::of(conn, tenant).await.map_err(error)?;
+    let Some(row) = store::latest_type_versions(conn, tenant)
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .find(|row| row.key == key)
+    else {
+        return refused(format!("there is no akt type `{key}`"));
+    };
+    let ty = StoredType::read(row).map_err(error)?;
+    if !types.has_outcomes(&ty.ty) {
+        return refused(format!("akter of `{key}` have no outcome"));
+    }
+    let wanted = kuria_engine::outcomes::Outcome::parse(outcome.key())
+        .ok_or_else(|| internal("an outcome"))?;
+    Ok(
+        match ty
+            .ty
+            .document()
+            .fields
+            .iter()
+            .find(|f| f.kind == ConfigKind::Verdict)
+        {
+            Some(field) => ByOutcome::Verdicts(store::Condition(vec![store::Match::Outcome {
+                verdict: field.key.clone(),
+                assignees: field.assignees.clone(),
+                outcome: wanted.as_str().to_owned(),
+            }])),
+            None => ByOutcome::Members(wanted, types),
+        },
+    )
 }
 
 fn bad_cursor() -> async_graphql::Error {
@@ -1455,6 +1581,10 @@ impl Akt {
             desc = "Conditions on field values, all of which a member must meet; `type` must be given."
         )]
         conditions: Option<Vec<FieldCondition>>,
+        #[graphql(
+            desc = "Only members with this outcome, as it is now; `type` must be given, and have outcomes."
+        )]
+        outcome: Option<OutcomeKind>,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
@@ -1463,7 +1593,12 @@ impl Akt {
         let where_key = serde_json::to_string(&conditions).map_err(internal)?;
         let list = List::new(
             "members",
-            &[Some(&container), key.as_deref(), Some(&where_key)],
+            &[
+                Some(&container),
+                key.as_deref(),
+                Some(&where_key),
+                outcome.map(OutcomeKind::key),
+            ],
         );
         let after = match list.after(after.as_deref())? {
             Some(After::Ranked(rank)) => Some(rank),
@@ -1477,7 +1612,7 @@ impl Akt {
             }
         }
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
-        let conditions = match key.as_deref() {
+        let mut conditions = match key.as_deref() {
             _ if conditions.is_empty() => Vec::new(),
             Some(key) => matching(ctx, &mut conn, tenant, key, &conditions).await?,
             None => {
@@ -1487,17 +1622,37 @@ impl Akt {
                 ));
             }
         };
-        let rows = containers::member_page(
-            &mut conn,
-            tenant,
-            self.row.id,
-            &readable,
-            &conditions,
-            after.as_deref(),
-            size + 1,
-        )
-        .await
-        .map_err(internal)?;
+        let by = match outcome {
+            Some(outcome) => Some(by_outcome(&mut conn, tenant, key.as_deref(), outcome).await?),
+            None => None,
+        };
+        let rows = match by {
+            Some(ByOutcome::Members(wanted, types)) => {
+                let page = Members {
+                    container: self.row.id,
+                    keys: &readable,
+                    conditions: &conditions,
+                };
+                page.held(&mut conn, tenant, &types, wanted, after, size + 1)
+                    .await?
+            }
+            by => {
+                if let Some(ByOutcome::Verdicts(condition)) = by {
+                    conditions.push(condition);
+                }
+                containers::member_page(
+                    &mut conn,
+                    tenant,
+                    self.row.id,
+                    &readable,
+                    &conditions,
+                    after.as_deref(),
+                    size + 1,
+                )
+                .await
+                .map_err(internal)?
+            }
+        };
         let (rows, page_info) = list.page(
             rows,
             size,
@@ -1774,6 +1929,18 @@ pub enum OutcomeKind {
     Fail,
     Skip,
     Pending,
+}
+
+impl OutcomeKind {
+    /// As the engine names it.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+            Self::Skip => "skip",
+            Self::Pending => "pending",
+        }
+    }
 }
 
 impl From<kuria_engine::outcomes::Outcome> for OutcomeKind {

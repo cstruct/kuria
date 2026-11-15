@@ -290,6 +290,15 @@ pub enum Match {
     /// The checkbox `field` was checked by `subject` for themself: its
     /// `checked_by` is the subject and it says no `for`.
     CheckedForSelf { field: String, subject: String },
+    /// The outcome of an akt with a `verdict` field of its own is
+    /// `outcome` (`pass`, `fail`, `skip` or `pending`), from its verdicts in
+    /// `verdict` and its assignees in `assignees` as
+    /// `kuria_engine::outcomes::of_verdicts` works it out.
+    Outcome {
+        verdict: String,
+        assignees: Option<String>,
+        outcome: String,
+    },
 }
 
 type AktFilter =
@@ -309,6 +318,40 @@ fn matched(m: &Match) -> AktFilter {
                 .bind::<Text, _>(field.clone())
                 .sql(") ? 'for'))"),
         ),
+        // r[impl akt.filter.outcome]
+        // Per assignee, the verdict given for them, if any; then `fail` if
+        // any failed, `pending` if none are assigned or one hasn't
+        // answered, `skip` if all skipped, else `pass`. An array in place
+        // of a missing or other value, as the engine reads one.
+        Match::Outcome {
+            verdict,
+            assignees,
+            outcome,
+        } => {
+            let assignees = assignees.clone().unwrap_or_default();
+            Box::new(
+                sql::<diesel::sql_types::Bool>(
+                    "((SELECT CASE WHEN bool_or(v = 'fail') THEN 'fail' \
+                       WHEN count(*) = 0 OR bool_or(v IS NULL) THEN 'pending' \
+                       WHEN bool_and(v = 'skip') THEN 'skip' ELSE 'pass' END \
+                     FROM (SELECT (SELECT g ->> 'verdict' FROM jsonb_array_elements(\
+                         CASE WHEN jsonb_typeof(akt.fields -> ",
+                )
+                .bind::<Text, _>(verdict.clone())
+                .sql(") = 'array' THEN akt.fields -> ")
+                .bind::<Text, _>(verdict.clone())
+                .sql(
+                    " ELSE '[]'::jsonb END) g WHERE g -> 'assignee' = a LIMIT 1) AS v \
+                     FROM jsonb_array_elements(CASE WHEN jsonb_typeof(akt.fields -> ",
+                )
+                .bind::<Text, _>(assignees.clone())
+                .sql(") = 'array' THEN akt.fields -> ")
+                .bind::<Text, _>(assignees)
+                .sql(" ELSE '[]'::jsonb END) a) t) = ")
+                .bind::<Text, _>(outcome.clone())
+                .sql(")"),
+            )
+        }
     }
 }
 

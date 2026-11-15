@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { conditionsOf, filterable, withCondition } from './filters';
+import { conditionsOf, filterable, filtersByOutcome, outcomeOf, withCondition } from './filters';
 
 const fields = [
 	{ key: 'kind', name: 'Kind', kind: 'CHOICE', options: [{ key: 'fix', name: 'Fix' }] },
@@ -27,5 +27,17 @@ describe('filters', () => {
 			{ field: 'assignee', equals: 'me' }
 		]);
 		expect(withCondition(params, 'kind', '').has('where.kind')).toBe(false);
+	});
+});
+
+// r[verify app.filters]
+describe('the outcome filter', () => {
+	const tests = [{ key: 'verdict', name: 'Verdict', kind: 'VERDICT' }];
+	it('is read from the address for a type with a verdict field only', () => {
+		const params = new URLSearchParams('outcome=pending');
+		expect(filtersByOutcome(tests)).toBe(true);
+		expect(outcomeOf(params, tests)).toBe('PENDING');
+		expect(outcomeOf(params, fields)).toBeNull();
+		expect(outcomeOf(new URLSearchParams('outcome=maybe'), tests)).toBeNull();
 	});
 });

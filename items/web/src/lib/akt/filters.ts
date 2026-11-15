@@ -51,3 +51,25 @@ export function withCondition(
 	else next.delete(`${PREFIX}${field}`);
 	return next;
 }
+
+/** The outcomes a list filters by, as GraphQL names them. */
+export const OUTCOMES = ['PASS', 'FAIL', 'SKIP', 'PENDING'] as const;
+export type FilterOutcome = (typeof OUTCOMES)[number];
+
+/** Whether a list of a type with `fields` filters by outcome: it has a
+ * `verdict` field (`akt.filter.outcome`). */
+export function filtersByOutcome(fields: readonly FilterField[]): boolean {
+	return fields.some((f) => f.kind === 'VERDICT');
+}
+
+/** The outcome an address asks for as `outcome=pass`, if the list filters
+ * by one. */
+export function outcomeOf(
+	params: { get(name: string): string | null },
+	fields: readonly FilterField[]
+): FilterOutcome | null {
+	const asked = params.get('outcome')?.toUpperCase();
+	return filtersByOutcome(fields) && OUTCOMES.some((o) => o === asked)
+		? (asked as FilterOutcome)
+		: null;
+}

@@ -200,16 +200,31 @@ Lint, `mise run test` (63 app tests and every Rust suite) and the parity and tes
 <!-- akt: PLAN-013-T04 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3g
-state: todo
+state: done
 in: [PLAN-013]
 links: [Blocked by PLAN-013-T01, Blocks PLAN-013-T05, Resolves PLAN-012-G02]
 title: Filter by outcome
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`outcome:` on `akter` and `members` in GraphQL, `kuria ls --outcome`, and the app's list filter. A SQL expression over `fields` for types with their own verdict field, held to `outcomes::of_verdicts` by a store test over the engine's cases. In-memory filtering of one container's members. A tenant-wide filter on a container type refused (PLAN-013-D01). Local mode filters the same.
+Lists filter by outcome, as PLAN-013-D01 decided.
+
+- **Store** (`akter.rs`): `Match::Outcome` is a SQL condition over an akt's own verdicts and assignees. For each assignee it takes the verdict given for them, then applies `of_verdicts`' rules. It composes like any other condition, so tenant-wide lists, search and members page in SQL. `tests/outcomes.rs` holds it to `outcomes::of_verdicts` on the engine's cases, with a contact assignee, a missing assignee list and a verdict from someone no longer assigned.
+- **Server** (`graphql/akter.rs`): `outcome:` on `akter` and `members`, part of the cursor's list. `by_outcome` picks the store condition for a type with a `verdict` field. A container's members of a type whose outcome comes from its members are filtered in memory, read 200 at a time in rank order until the page is full (`Members::held`). Refused as `BAD_REQUEST`: no `type`, a type without outcomes, and a tenant-wide list of a type whose outcome comes from its members.
+- **CLI:** `ls --outcome pass|fail|skip|pending`, any case, against the server. Local mode filters with `answers::outcome` and refuses the same lists as the server (`local_outcome`).
+- **App:** a type's list with a `verdict` field has an Outcome filter, kept in the address as `outcome=`, and an Outcome column (`filters.ts`: `filtersByOutcome`, `outcomeOf`).
+- **Docs:** the server and CLI READMEs.
+
+**Tests:**
+- Store: `the_outcome_filter_agrees_with_the_engine`.
+- Server (`tests/templates.rs`): `tests_and_protocols_filter_by_outcome_a_page_at_a_time` pages tenant-wide test lists, a protocol's tests and a suite's protocols one or two at a time. `other_lists_refuse_an_outcome`.
+- Local: `tests_and_protocols_filter_by_outcome`, including the refusals.
+- App: `filters.test.ts`.
+
+Lint, `mise run test` (348 Rust tests, 64 app tests) and the e2e tests for parity, test protocols, shell, accessibility, members and the release flow pass. Parity of `--outcome` and the list filter in the browser come with the example in T05.
 
 <!-- field: acceptance -->
 - The SQL expression agrees with the engine on every case; paging stays correct; local and server answer alike.
