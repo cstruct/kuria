@@ -79,7 +79,18 @@
 	const contacts = query(Contacts, () => ({}));
 	const users = query(Users, () => ({}));
 
-	const akt = $derived(view.data?.akt ?? undefined);
+	// While a refetch is under way the query has no data: the akt shown
+	// stays until it answers, so nothing on the page, such as an editor
+	// someone is typing in, is taken down and put back.
+	let shown: { number: string; version: number | null; akt: Akt } | undefined;
+	const akt = $derived.by(() => {
+		const read = view.data?.akt ?? undefined;
+		if (read) {
+			shown = { number, version: atVersion, akt: read };
+			return read;
+		}
+		return shown && shown.number === number && shown.version === atVersion ? shown.akt : undefined;
+	});
 	setCrumbs(() =>
 		akt
 			? [
@@ -108,7 +119,12 @@
 	);
 	// r[impl app.live]: an akt with a live draft is its live draft, edited
 	// together with everyone else who has it open.
-	const liveFor = $derived(akt?.type.liveDrafts && !atVersion ? akt.number : null);
+	// Kept while a refetch has no akt yet, so that refreshing the page's data
+	// doesn't drop the connection and the editor bound to it.
+	let liveFor = $state<string | null>(null);
+	$effect(() => {
+		if (akt) liveFor = akt.type.liveDrafts && !atVersion ? akt.number : null;
+	});
 	let live = $state<LiveDraft | null>(null);
 	$effect(() => {
 		if (!liveFor) return;

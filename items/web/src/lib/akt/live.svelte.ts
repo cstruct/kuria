@@ -76,6 +76,10 @@ export class LiveDraft {
 
 	constructor(number: string) {
 		this.awareness = new Awareness(this.doc);
+		// An awareness state's first clock is 0, which others ignore from a
+		// client they haven't seen (y-protocols takes only a later clock), so
+		// say something at once: the server stamps who this is.
+		this.awareness.setLocalStateField('present', true);
 		const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
 		this.#provider = new WebsocketProvider(
 			`${scheme}://${location.host}/akter`,

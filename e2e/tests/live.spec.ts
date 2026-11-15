@@ -64,8 +64,11 @@ test('two people edit one document together, and release it as it is', async ({ 
 	await expect(rm.getByTestId('caret')).toHaveCount(1);
 
 	// The release manager starts a new paragraph before it; both have both.
-	await rmEditor.locator('p').first().click();
-	await rm.keyboard.press('Home');
+	// At the paragraph's very start: Home doesn't move the caret on macOS.
+	await rmEditor
+		.locator('p')
+		.first()
+		.click({ position: { x: 1, y: 4 } });
 	await rm.keyboard.type('Intro.');
 	await rm.keyboard.press('Enter');
 	await expect(devEditor).toContainText('Intro.');
@@ -104,7 +107,7 @@ test('two people edit one document together, and release it as it is', async ({ 
 		'query($n: String!) { akt(number: $n, version: 1) { fields { ... on MarkdownValue { markdown } } } }',
 		{ n: guide }
 	);
-	expect(released.akt.fields.map((f) => f.markdown).filter(Boolean)).toEqual([
+	expect(released.akt.fields.map((f) => f?.markdown).filter(Boolean)).toEqual([
 		'Intro.\n\nHello. Written together. Still here. Read live.'
 	]);
 });
