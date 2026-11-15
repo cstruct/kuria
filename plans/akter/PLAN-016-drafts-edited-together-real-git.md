@@ -221,16 +221,24 @@ The spec says what PLAN-016 builds. No implementation yet.
 <!-- akt: PLAN-016-T02 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b4W
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T01, Blocks PLAN-016-T08]
 title: Attachments in akt directories
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Every attachment field in akt directories (D01): local mode reads, checks and releases with them; `export --to-dir` writes them; `import --from-dir` uploads them.
+Attachments in akt directories (D01), built in a worktree (`e50c08a`).
+
+- **Files:** an attachment is `attachments/<number>/<name>`, named by that path in the akt file (`local/attachments.rs`: path rules, media types by extension, SBOMs through the engine's `sbom::detect`). `Ids` maps paths to stand-in identifiers, random per client, since imported attachment identifiers must be unique across a server.
+- **Writing:** `@<file>` is checked and copied into `attachments/<number>/` on save, numbered rather than overwriting; a path in the directory is accepted; an upload's identifier is `LOCAL_UNSUPPORTED`. `kuria check` names a missing file, a wrong type or a missing SBOM.
+- **Releases:** a local target is an image with a picture when its file exists; a release keeps `picture` per version.
+- **Conversion:** `to_dir` writes each attachment's bytes; `bundle_of` carries each file's metadata and bytes, and every attachment any revision names, reading one since deleted from git (`git::last_bytes`).
+- **Differences:** `cat` shows an attachment as its path in a directory and `{id, name}` on a server; diagram renderings aren't carried to directories; a file's changed bytes at one path aren't followed through history.
+- **Tests:** `attachments_are_files_of_the_directory`, `a_document_embedding_a_picture_in_the_directory_releases`, `attachments_go_to_a_bundle_and_back`; an e2e test in `cli.spec.ts` (export to a directory and import into another tenant), run after merging.
 
 <!-- field: acceptance -->
 - Local tests: a directory with an image and an SBOM checks, releases a document embedding the image, and round-trips through a bundle.
@@ -263,16 +271,27 @@ Sheets, page breaks and releases' PDFs in new tabs (D06), built in a worktree (`
 <!-- akt: PLAN-016-T04 -->
 ---
 type: task
-revision: 4
+revision: 7
 rank: b4Y
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T01, Blocks PLAN-016-T05, Blocks PLAN-016-T07]
 title: Drafts that only releases make revisions of
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Drafts (D02, D03): `"drafts": true`, validated; `akt_draft` and `akt_draft_update`; `yrs` reading and writing the draft's fields; edits to such akter change the draft; a release records it as a revision and version, with its checks; reading answers the draft; history shows the draft's changes by author.
+Live drafts on the server (D02, D03), built in a worktree (`4f9247e`).
+
+- **Config:** `live_drafts`, requiring `versions`; a text field keyed `fields` is refused, as it would clash with the map.
+- **Yjs** (`kuria_engine::live`, `yrs` 0.28): text fields as `Y.Text`, others in the `fields` map as GraphQL answers them (`Value::to_json`), not their input form, which can't carry who checked a checkbox or a verdict (`live.fields` says so). Edits are character diffs (`similar`) applied as Yjs operations.
+- **Storage:** `akt_draft` (state, the fields it reads as, compaction and release marks) and `akt_draft_update` (each update, who and when, the fields changed; immutable), migration `000018`; compaction on release and every 64 updates.
+- **Writes:** `editAkt`, batches and `draftField` on a live akt run the engine's checks on the draft's values, then sections, contacts, attachments and diagrams, and write one update; no revision. An edit doesn't check the revision it names; transitions and releases do (`live.edit`, `akt.revision.concurrency`). Creating makes revision 1 and the draft; copying copies it. A transition records the last revision's fields, and one that would set fields is refused.
+- **Reading:** every read overlays the draft's fields and title; versions and revisions as before; a PDF without a version is of the draft.
+- **Releasing:** checks references and pins on the draft, records it as a revision with a write's checks and its reference links, names it as the next version; refused when the draft equals the latest version.
+- **GraphQL:** `AktType.liveDrafts`, `Akt.draftChanges(all)` (`DraftChange`: seq, by, at, fields).
+- **Left for later:** no change events for draft edits (T05); bundles carry the latest revision, not the draft; `editAkt` sends whole values, so it overwrites another's concurrent change to that field, as only Yjs clients merge.
+- **Tests:** `tests/live_drafts.rs` (6), engine Yjs tests (6), config (2).
 
 <!-- field: acceptance -->
 - Server tests: edits leave revisions alone, a release makes one, transitions carry the last release, references are checked on the draft, the draft's history.
