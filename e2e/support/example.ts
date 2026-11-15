@@ -46,3 +46,15 @@ export async function defineTestProtocols(): Promise<void> {
 		});
 	}
 }
+
+const DOCUMENTS = join(import.meta.dirname, '..', '..', 'docs', 'examples', 'documents');
+
+/** Defines the documents example's akt types (docs/examples/documents). */
+export async function defineDocuments(): Promise<void> {
+	const admin = await api(seeded().clients.admin);
+	for (const key of ['document', 'document_index']) {
+		await admin.graphql('mutation($d: JSON!) { defineAktType(document: $d) { key } }', {
+			d: JSON.parse(readFileSync(join(DOCUMENTS, `${key}.json`), 'utf8'))
+		});
+	}
+}

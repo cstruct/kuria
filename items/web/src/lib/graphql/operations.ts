@@ -715,3 +715,28 @@ export const AktFieldsAt = graphql(`
 		}
 	}
 `);
+
+/** What a reference to an akt can name: its headings and versions. */
+export const AktReferable = graphql(`
+	query AktReferable($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			versions {
+				number
+				label
+			}
+			fields {
+				... on MarkdownValue {
+					field
+					headings {
+						id
+						level
+						text
+					}
+				}
+			}
+		}
+	}
+`);

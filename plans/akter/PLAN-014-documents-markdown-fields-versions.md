@@ -486,16 +486,49 @@ Lint and `mise run test` (364 Rust, 70 app) pass. The parity, akt-page, links, t
 <!-- akt: PLAN-014-T04 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3u
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocked by PLAN-014-T02, Blocks PLAN-014-T07, Resolves PLAN-014-G02]
 title: Edit markdown fields with Lexical
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-A Svelte component around Lexical's core with the nodes Markdown holds, `@lexical/markdown` transformers with custom ones for heading ids and references, and an Insert link picker (akt, heading, living or released version). It replaces the textarea for `markdown` fields.
+A `markdown` field is edited in a rich-text editor on Lexical 0.53.0 (core, no React), which offers only what the field's Markdown holds.
+
+- **`editor/markdown.ts`:**
+  - **Nodes:** headings, quotes, lists and task lists, code, links, tables and horizontal rules.
+  - **Transformers:**
+    - Lexical's own, with a heading transformer that writes `{#id}`.
+    - Ours for horizontal rules.
+    - Ours for GitHub tables: the header row, the divider, `\|` in cells.
+  - **Heading ids:** kept in Lexical node state (`headingId`), taken off the heading's text on import, so the editor keeps them through edits.
+  - **Setext headings:** made ATX before import (`atx`, through `marked`'s lexer).
+- **`editor/MarkdownEditor.svelte`:**
+  - Registers rich text, history, lists, check lists, tables, Markdown shortcuts and horizontal rules.
+  - **Toolbar:** block type, Bold, Italic, Strikethrough, Code, the three lists, Table, Rule, Link, Reference.
+  - **Reference dialog:** finds an akt through `pickable`, then lists its headings and versions (`AktReferable`).
+  - A link inserted where nothing is selected is its target's heading or title, and typing goes on after it.
+  - **Unchanged value:** if what the editor would write is what it wrote on opening, the field keeps its original text, so opening and saving changes nothing.
+  - `FieldEditor` uses it for `markdown` fields.
+- **Example:** the documents example's akt types are written early (`docs/examples/documents/document_index.json`, `document.json`), since the e2e tests' grants are per akt type key.
+  - `e2e/scripts/setup.ts`: the `documents:release` action, a `document-release` role, and grants for the developer and release manager.
+  - `e2e/support/example.ts`: `defineDocuments`.
+  - T07 adds the README and the walkthrough.
+
+**Tests:**
+- `editor/markdown.test.ts`, in a headless editor: every construct the editor offers round-trips unchanged (headings with ids, emphasis, lists, task lists, quotes, code, links and references, tables, rules); setext headings are read.
+- `e2e/tests/markdown-editor.spec.ts`:
+  - writes in the editor, inserts a reference to another document's heading through the picker, formats bold, and saves;
+  - checks the saved Markdown (`First steps. See [Installing](kuria:…#installing)**Now.**`) and the rendered link to the heading;
+  - follows the link to the heading;
+  - axe passes on the picker and the editor.
+
+Lint and `mise run test` (364 Rust, 80 app) pass.
+
+G02 (images, footnotes, merged cells) stays open: none of them is offered.
 
 <!-- field: acceptance -->
 - Round-trip unit tests for every construct the editor offers.
