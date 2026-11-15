@@ -206,6 +206,8 @@ impl AkterQuery {
         number: String,
         #[graphql(desc = "Read it as it was at this version of it (`version.read`).")]
         version: Option<i32>,
+        #[graphql(desc = "Read it as it was at this revision, its fields, state and title.")]
+        revision: Option<i32>,
     ) -> async_graphql::Result<Option<Akt>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
@@ -221,6 +223,18 @@ impl AkterQuery {
             Some(akt) if reads(ctx, akt.ty.ty.key()).await? => akt,
             _ => return Ok(None),
         };
+        if let Some(revision) = revision.filter(|_| version.is_none()) {
+            return Ok(
+                crate::akter::versions::at(&mut conn, &akt.ty, &akt.row, revision)
+                    .await
+                    .map_err(error)?
+                    .map(|row| Akt {
+                        row,
+                        ty: akt.ty,
+                        version: None,
+                    }),
+            );
+        }
         let Some(version) = version else {
             return Ok(Some(akt));
         };
@@ -629,6 +643,10 @@ pub enum OperationInput {
 #[derive(InputObject)]
 pub struct BatchInput {
     operations: Vec<OperationInput>,
+    /// The git commit the batch came from, kept with each revision it makes,
+    /// so every clone builds that very commit (`git.identity`): `{author,
+    /// committer, message}`, as `git fast-export` gives them.
+    commit: Option<Json<JsonValue>>,
 }
 
 /// `operation` as the batch's write path takes it.
@@ -730,13 +748,17 @@ impl AkterMutation {
             operations.push(operation(op).map_err(|e| at_operation(e, i + 1))?);
         }
         let akter = akter(ctx)?;
-        let rows = akter.batch(caller, operations).await.map_err(|refused| {
-            let e = error(refused.error);
-            match refused.operation {
-                Some(n) => at_operation(e, n),
-                None => e,
-            }
-        })?;
+        let commit = input.commit.map(|c| c.0);
+        let rows = akter
+            .batch_from(caller, operations, commit)
+            .await
+            .map_err(|refused| {
+                let e = error(refused.error);
+                match refused.operation {
+                    Some(n) => at_operation(e, n),
+                    None => e,
+                }
+            })?;
         let mut answered = Vec::with_capacity(rows.len());
         for row in rows {
             answered.push(reload(ctx, akter, row).await?);
@@ -2461,6 +2483,20 @@ pub struct AktRevision {
 impl AktRevision {
     async fn revision(&self) -> i32 {
         self.row.revision
+    }
+
+    /// The git commit the revision was pushed in, if it was: `{author,
+    /// committer, message}` (`git.identity`).
+    async fn commit(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Json<JsonValue>>> {
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        Ok(
+            kuria_store::versions::commits_of(&mut conn, self.row.tenant_id, self.row.akt_id)
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .find(|(revision, _)| *revision == self.row.revision)
+                .map(|(_, commit)| Json(commit)),
+        )
     }
 
     /// The subject who made the change.

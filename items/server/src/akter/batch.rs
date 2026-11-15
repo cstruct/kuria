@@ -185,7 +185,18 @@ impl Akter {
     pub async fn batch(
         &self,
         caller: Caller<'_>,
+        operations: Vec<Operation>,
+    ) -> Result<Vec<AktRow>, BatchError> {
+        self.batch_from(caller, operations, None).await
+    }
+
+    /// Runs `operations` as [`Akter::batch`] does, keeping `commit`, the git
+    /// commit they came from, with each revision they make (`git.identity`).
+    pub async fn batch_from(
+        &self,
+        caller: Caller<'_>,
         mut operations: Vec<Operation>,
+        commit: Option<serde_json::Value>,
     ) -> Result<Vec<AktRow>, BatchError> {
         check(&mut operations)?;
         let tenant: Uuid = caller.actor.tenant.into();
@@ -194,6 +205,9 @@ impl Akter {
         let result = conn
             .transaction::<_, BatchError, _>(async |conn| {
                 lock(conn, tenant, &mut operations).await?;
+                let before = kuria_store::akter::last_change_seq(conn, tenant)
+                    .await
+                    .map_err(AktError::from)?;
                 // Each operation's akt, by position, for `@<n>`.
                 let mut created: Vec<String> = Vec::with_capacity(operations.len());
                 let mut rows = Vec::with_capacity(operations.len());
@@ -217,6 +231,12 @@ impl Akter {
                         })?;
                     created.push(row.number.clone());
                     rows.push(row);
+                }
+                // r[impl git.identity]
+                if let Some(commit) = &commit {
+                    kuria_store::versions::keep_commit(conn, tenant, before, commit)
+                        .await
+                        .map_err(AktError::from)?;
                 }
                 Ok(rows)
             })

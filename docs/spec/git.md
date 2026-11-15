@@ -14,13 +14,17 @@ the Kuria at `url`, signed in as `kuria` is (`cli.profile`,
 fail the clone, saying why.
 
 r[git.tree]
-A clone's tree MUST hold the container's akt file (`cli.file`) at its
-root, and each member's akt file in directories that mirror the
-container's `sections` field: one directory per section, named by its
-title as `cli.local.names` names files, with `section` for one without a
-title, and `-2`, `-3`, … for siblings named alike. Members in no section,
-and every member of a container without a `sections` field, MUST be at
-the root. Files MUST be named as `cli.local.names` says.
+A clone's tree MUST hold the container's file at its root, and each
+member's file in directories that mirror the container's `sections`
+field: one directory per section, named by its title as
+`cli.local.names` names files, with `section` for one without a title,
+and `-2`, `-3`, … for siblings named alike. Members in no section, and
+every member of a container without a `sections` field, MUST be at the
+root. Files MUST be named as `cli.local.names` says. A clone's file MUST
+be an akt file (`cli.file`) without `revision`, `in`, `links` and
+`outcome`, which change without the akt's revision changing, or, for
+`revision`, are git's own history: an akt's file changes in a commit
+exactly when the akt has a revision.
 
 r[git.history]
 A clone's history MUST be one commit per akt revision of the container or
@@ -48,10 +52,12 @@ r[git.push]
 A push MUST apply each new commit, in order, as one batch (`akt.batch`)
 with the commit's message as its reason:
 
-- a changed akt file, as an edit (`cli.apply`);
-- a file moved to another directory, as moving the member between
-  sections, and a directory renamed, as changing its section's title;
+- a changed file, as an edit of the fields it changed (`cli.apply`), the
+  container's `sections` field included, which says where its members'
+  files go;
 - a file removed, as removing the member from the container.
+
+A new file MUST be refused: an akt's number comes from Kuria.
 
 A refusal of any commit's batch MUST stop the push there, saying which
 commit and why; the commits before it stay pushed.
@@ -64,9 +70,10 @@ them, such as every heading with an id (`akt.field.markdown`).
 r[git.push.fast-forward]
 A push MUST be refused as not a fast-forward unless its first new
 commit's parent is the clone's latest commit from Kuria and Kuria has no
-change event for the container or its members since, so that `git pull
+revision of the container or its members since, so that `git pull
 --rebase` resolves it. A merge commit MUST be refused.
 
 r[git.fmt]
 `kuria fmt` in a clone MUST put its files in normal form, changing no
-value but the heading ids it gives.
+value but the heading ids it gives, and moving each file to where the
+container's `sections` field puts it.

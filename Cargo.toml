@@ -13,6 +13,9 @@ publish = false
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+# The linker's notes, such as macOS's on large unwind tables in binaries
+# that include typst, are about the platform's linker, not the code.
+linker_messages = "allow"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

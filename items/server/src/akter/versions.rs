@@ -42,6 +42,27 @@ pub async fn at_revision(
     Ok(state.map(|state| (fields, state)))
 }
 
+/// `akt`'s row as it was at `revision`: its fields, state and title then;
+/// `None` if it never reached it.
+pub async fn at(
+    conn: &mut kuria_store::Connection,
+    ty: &StoredType,
+    akt: &AktRow,
+    revision: i32,
+) -> Result<Option<AktRow>, AktError> {
+    let Some((fields, state)) = at_revision(conn, akt.tenant_id, akt.id, revision).await? else {
+        return Ok(None);
+    };
+    let values = kuria_engine::fields_from_json(&ty.ty, &fields)
+        .map_err(|e| AktError::Internal(format!("akt {}: {e}", akt.number)))?;
+    let mut row = akt.clone();
+    row.title = super::title_of(&ty.ty, &values);
+    row.fields = Json::Object(fields);
+    row.state = state;
+    row.revision = revision;
+    Ok(Some(row))
+}
+
 /// `akt` as it was at its version `number`: its row with the fields, state
 /// and title of that revision, and the version; `None` if it has no such
 /// version (`version.read`).

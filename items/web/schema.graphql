@@ -100,6 +100,11 @@ type AktConnection {
 type AktRevision {
 	revision: Int!
 	"""
+	The git commit the revision was pushed in, if it was: `{author,
+	committer, message}` (`git.identity`).
+	"""
+	commit: JSON
+	"""
 	The subject who made the change.
 	"""
 	author: ID!
@@ -251,6 +256,12 @@ What a batch takes: its operations, run in order, all or none.
 """
 input BatchInput {
 	operations: [OperationInput!]!
+	"""
+	The git commit the batch came from, kept with each revision it makes,
+	so every clone builds that very commit (`git.identity`): `{author,
+	committer, message}`, as `git fast-export` gives them.
+	"""
+	commit: JSON
 }
 
 """
@@ -941,7 +952,11 @@ type Query {
 		"""
 		Read it as it was at this version of it (`version.read`).
 		"""
-		version: Int
+		version: Int,
+		"""
+		Read it as it was at this revision, its fields, state and title.
+		"""
+		revision: Int
 	): Akt
 	"""
 	Akter, most recently changed first: of one akt type and in one state,

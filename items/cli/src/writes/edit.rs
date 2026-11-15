@@ -82,7 +82,7 @@ pub async fn create(session: &Session, asked: &Created<'_>) -> Result<Answer, Cl
 
 /// What a file changes of `akt`: each field whose value differs from the
 /// akt's, by its input; a field the file leaves out is cleared.
-async fn changes(
+pub(crate) async fn changes(
     session: &Session,
     akt: &Akt,
     parsed: &Parsed,
@@ -158,7 +158,7 @@ pub(crate) fn outcome_unchanged(
 }
 
 /// Refuses a file whose read-only keys differ from the akt's.
-fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
+pub(crate) fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
     let read_only = |key: &str, how: &str| CliError {
         field: Some(key.to_owned()),
         ..CliError::refused(

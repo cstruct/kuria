@@ -152,6 +152,15 @@ diesel::table! {
 diesel::joinable!(akt_origin -> akt (origin_id));
 
 diesel::table! {
+    akt_commit (akt_id, revision) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        revision -> Int4,
+        commit -> Jsonb,
+    }
+}
+
+diesel::table! {
     akt_version (akt_id, number) {
         tenant_id -> Uuid,
         akt_id -> Uuid,
@@ -167,6 +176,7 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
     akt_origin,
+    akt_commit,
     akt_version,
     akt_type,
     akt_type_version,

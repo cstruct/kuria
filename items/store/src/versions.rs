@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::Connection;
 use crate::akter::next_counter;
-use crate::schema::{akt_version, change_event};
+use crate::schema::{akt_commit, akt_version, change_event};
 
 /// One version, as stored.
 #[derive(Clone, Debug, Insertable, Queryable, Selectable)]
@@ -74,4 +74,48 @@ pub async fn one(
         .first(conn)
         .await
         .optional()
+}
+
+/// Keeps `commit` with each revision a batch made: those whose change
+/// events came after `after` (`git.identity`).
+pub async fn keep_commit(
+    conn: &mut Connection,
+    tenant: Uuid,
+    after: i64,
+    commit: &Json,
+) -> QueryResult<()> {
+    let made: Vec<(Uuid, Option<i32>)> = change_event::table
+        .filter(change_event::tenant_id.eq(tenant))
+        .filter(change_event::seq.gt(after))
+        .filter(change_event::kind.eq("revision"))
+        .select((change_event::akt_id, change_event::revision))
+        .load(conn)
+        .await?;
+    for (akt_id, revision) in made {
+        let Some(revision) = revision else { continue };
+        diesel::insert_into(akt_commit::table)
+            .values((
+                akt_commit::tenant_id.eq(tenant),
+                akt_commit::akt_id.eq(akt_id),
+                akt_commit::revision.eq(revision),
+                akt_commit::commit.eq(commit),
+            ))
+            .execute(conn)
+            .await?;
+    }
+    Ok(())
+}
+
+/// The commits kept with `akt`'s revisions, by revision.
+pub async fn commits_of(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+) -> QueryResult<Vec<(i32, Json)>> {
+    akt_commit::table
+        .filter(akt_commit::tenant_id.eq(tenant))
+        .filter(akt_commit::akt_id.eq(akt))
+        .select((akt_commit::revision, akt_commit::commit))
+        .load(conn)
+        .await
 }

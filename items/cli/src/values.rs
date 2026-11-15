@@ -424,7 +424,7 @@ pub fn input_of(field: &FieldDef, value: &Json, people: &People) -> Result<Json,
         });
     }
     match field.kind.as_str() {
-        "TEXT" => text()
+        "TEXT" | "MARKDOWN" => text()
             .map(Json::from)
             .ok_or_else(|| refused(format!("{} takes text", field.name))),
         "CHOICE" => {

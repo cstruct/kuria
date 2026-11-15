@@ -272,6 +272,13 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
+    /// In a clone (`git clone kuria::<url>/<number>`): its files as Kuria
+    /// writes them, each where its container's sections put it.
+    Fmt {
+        /// The clone's remote.
+        #[arg(long, default_value = "origin")]
+        remote: String,
+    },
     /// Release an akt's current revision as its next version, once none
     /// of its references is broken.
     Release {

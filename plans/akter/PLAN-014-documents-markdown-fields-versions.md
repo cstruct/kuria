@@ -1,7 +1,7 @@
 ---
 number: PLAN-014
 type: plan
-revision: 19
+revision: 20
 rank: b3k
 state: active
 title: "Documents: markdown fields, versions, references, PDFs and a git remote"
@@ -583,16 +583,47 @@ Lint and `mise run test` (366 Rust, 80 app) pass.
 <!-- akt: PLAN-014-T06 -->
 ---
 type: task
-revision: 6
+revision: 10
 rank: b3w
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocked by PLAN-014-T03, Blocked by PLAN-014-T02, Blocks PLAN-014-T07, Resolves PLAN-014-G01, Resolves PLAN-014-G03]
 title: "git-remote-kuria: clone, fetch and push a container"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The helper binary: the tree from sections, commits from revisions in change-event order, tags for versions, pushed commits' metadata kept with their revisions, pushes as batches, the normal-form and fast-forward checks, and `kuria fmt`.
+`git-remote-kuria` makes `kuria::<url>/<number>` a git remote: a container and its members are cloned, fetched, diffed, rebased and pushed with git, and Kuria serves no git protocol.
+
+- **Spec changes found while building (`docs/spec/git.md`):**
+  - A clone's file is the akt file without `revision`, `in`, `links` and `outcome`. A pushed file can't know the revision its push makes, and the others change without the akt's revision. Fast-forward-only pushes take over staleness.
+  - Folders follow the container's `sections` field: a move is an edit of the sections, which `kuria fmt` then follows. A new file is refused.
+- **Server:**
+  - Migration `000015_akt_commits`: `akt_commit` keeps a pushed commit's `{author, committer, message}` beside each revision its batch made. Revisions are append-only; the table refuses updates and deletes.
+  - `batch(input: { commit })`; `AktRevision.commit`; `akt(number:, revision:)` reads an akt at a revision.
+- **CLI:**
+  - `src/remote.rs`, and the binary `src/bin/git-remote-kuria.rs` (`default-run = "kuria"`). It speaks git's remote-helper protocol with `import`, `export` and a refspec onto `refs/kuria/<remote>/heads/*`.
+  - **History:** from the container's and every member's revisions, sorted by time. One commit per pushed commit (its kept metadata), else per change: one author, one second, one reason.
+  - **Trees:** whole each commit, the container's file at the root and members in their sections' directories (`tree_of`). Versions are tags `<number>/v<n>`.
+  - **Pushes:**
+    - Each commit is refused unless Kuria is unchanged since the last fetch and the commit is a fast-forward of the private ref, with no merges.
+    - Its tree must equal its normal form: every file re-rendered, heading ids given, in place.
+    - Then it is applied as one batch with the commit kept: edits of the fields it changed, through `apply`'s `changes`, and removals for deleted files.
+  - `kuria fmt` puts a clone's files in normal form.
+  - `open_remote` signs in as `kuria` does. `values::input_of` now takes `markdown` fields: before, `kuria apply` of a document's file was refused.
+- **Workspace:** `linker_messages` allowed. macOS's linker notes the size of the unwind tables in binaries that include typst, which `-D warnings` made an error.
+- **Gaps:** G01 and G03 closed. New G05: fetching rebuilds the whole history.
+
+**Tests:**
+- Unit (`remote.rs`): `reads_a_remote_s_url`; `places_members_where_the_sections_put_them` (nested, untitled and repeated titles); `reads_what_git_exports`. That last one found that the optional newline after data was read as a commit's end.
+- e2e (`git-remote.spec.ts`), against the real stack:
+  - two clones have the same tree and commits;
+  - a push becomes a revision, and the other clone fetches the very same commit;
+  - a push after a change in Kuria is refused until `pull --rebase`;
+  - a heading without an id is refused, fixed by `kuria fmt` and an amend;
+  - a version becomes a tag, and both clones end on the same commit.
+
+Lint and `mise run test` (369 Rust, 80 app) pass.
 
 <!-- field: acceptance -->
 - Tests against a server: clone tree and commits; two clones agree on commit ids; a push becomes revisions; a non-fast-forward push is refused and works after `pull --rebase`; a push not in normal form is refused; versions are tags.
@@ -617,9 +648,9 @@ title: The documents example and its walkthrough
 <!-- akt: PLAN-014-G01 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b3y
-state: open
+state: closed
 in: [PLAN-014]
 links: [Resolved by PLAN-014-T06]
 title: New documents made in a clone
@@ -627,6 +658,9 @@ title: New documents made in a clone
 
 <!-- field: description -->
 A file added in a clone has no number, and the server names files by number, so the pushed tree wouldn't be in normal form. Should `kuria new` in a clone reserve a number on the server first, or should a push allow new files and answer with a commit that renames them?
+
+<!-- field: resolution -->
+Refused (T06, `git.push`). A new file in a clone has no number, and only Kuria gives one. Create the document with `kuria new document --in <index>` (or in the app), fetch, then edit it in the clone.
 
 <!-- akt: PLAN-014-G02 -->
 ---
@@ -645,9 +679,9 @@ Images and other files in a body need attachments, which local mode refuses (`cl
 <!-- akt: PLAN-014-G03 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b40
-state: open
+state: closed
 in: [PLAN-014]
 links: [Resolved by PLAN-014-T06]
 title: A document in several indexes
@@ -655,6 +689,9 @@ title: A document in several indexes
 
 <!-- field: description -->
 A document may be a member of several containers, but sits in one folder per index. Each index's clone shows it in its own sections. Does a push from one clone that moves it need to say which index it moves in, and is that only ever the cloned one?
+
+<!-- field: resolution -->
+A clone is of one container: a document shows in the directories that container's sections put it in, and a push edits its fields or removes it from that container only (T06). In the example, an index contains its documents exclusively, so a document is in one index.
 
 <!-- akt: PLAN-014-G04 -->
 ---
@@ -668,3 +705,16 @@ title: Versions in bundles and directory conversion
 
 <!-- field: description -->
 Bundles (`bundle.contents`) and converting between a server and an akt directory (`cli.local.convert`) carry akter, revisions, links and pins, but not versions (`akt_version`, or a directory file's `versions`). An exported tenant, or a directory imported to a server, loses its releases. Each format needs versions, with their pins, and an import must keep their numbers and the revisions they name.
+
+<!-- akt: PLAN-014-G05 -->
+---
+type: gap
+revision: 1
+rank: b42
+state: open
+in: [PLAN-014]
+title: Fetching rebuilds the whole history
+---
+
+<!-- field: description -->
+`git-remote-kuria` rebuilds a container's whole history on every fetch and every push check. It reads each akt's revisions, and each akt at each revision, one GraphQL query apiece. That is fine for an index of tens of documents with hundreds of revisions, and slow beyond. Building only the commits after the last fetch needs the clone to keep where it got to (the change events seen, and the files at the tip), and a way to ask Kuria for the revisions of many akter at once.

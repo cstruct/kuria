@@ -512,6 +512,34 @@ fn plain(text: &str) -> bool {
         && !words.iter().any(|w| w.eq_ignore_ascii_case(text))
 }
 
+/// An akt as a clone's file (`git.tree`): its akt file without `revision`,
+/// `in`, `links` and `outcome`, from its number, state and field values in
+/// the file's form, a `sections` field's as its value (not its YAML).
+// r[impl git.tree]
+#[must_use]
+pub fn clone_text(shape: &Shape, number: &str, state: &str, values: &Map<String, Json>) -> String {
+    let front = [
+        ("number", Json::from(number)),
+        ("type", Json::from(shape.key.clone())),
+        ("state", Json::from(state)),
+    ];
+    let mut single = Vec::new();
+    let mut sections = Vec::new();
+    for field in &shape.fields {
+        let Some(value) = values.get(&field.key).filter(|v| !v.is_null()) else {
+            continue;
+        };
+        if !field.sectioned() {
+            single.push((field.key.clone(), value.clone()));
+        } else if field.kind == "SECTIONS" {
+            sections.push((field.key.clone(), crate::values::sections_yaml(value)));
+        } else if let Some(text) = value.as_str() {
+            sections.push((field.key.clone(), text.to_owned()));
+        }
+    }
+    write_parts(&front, &single, &sections)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
