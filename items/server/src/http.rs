@@ -88,6 +88,27 @@ pub struct Changes {
 /// with connect info (`into_make_service_with_connect_info::<SocketAddr>()`),
 /// so client addresses are known.
 // r[impl auth.relying-system]
+/// Exporting and importing bundles.
+// r[impl bundle.export.snapshot]
+// r[impl bundle.import.request]
+fn bundle_routes(
+    api: &RouterPolicy,
+    state: crate::bundles::BundleState,
+) -> Result<Router, AppError> {
+    Ok(Router::new()
+        .route(
+            "/export",
+            get(crate::bundles::export_route).route_layer(api.route(&Policy::new())?),
+        )
+        .route(
+            "/import",
+            post(crate::bundles::import_route)
+                .layer(DefaultBodyLimit::max(crate::bundles::IMPORT_LIMIT))
+                .route_layer(api.route(&Policy::new())?),
+        )
+        .with_state(state))
+}
+
 /// Attachments' upload and download, and PDFs, which read them.
 fn file_routes(api: &RouterPolicy, state: crate::pdf::PdfState) -> Result<Router, AppError> {
     let attachment_routes = Router::new()
@@ -149,24 +170,14 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     // r[impl auth.unavailable]
     let api = RouterPolicy::new(Policy::new().token_kinds([TokenKind::Tenant]));
 
-    // r[impl bundle.export.snapshot]
-    // r[impl bundle.import.request]
-    let bundle_routes = Router::new()
-        .route(
-            "/export",
-            get(crate::bundles::export_route).route_layer(api.route(&Policy::new())?),
-        )
-        .route(
-            "/import",
-            post(crate::bundles::import_route)
-                .layer(DefaultBodyLimit::max(crate::bundles::IMPORT_LIMIT))
-                .route_layer(api.route(&Policy::new())?),
-        )
-        .with_state(crate::bundles::BundleState {
+    let bundle_routes = bundle_routes(
+        &api,
+        crate::bundles::BundleState {
             pool: pool.clone(),
             storage: storage.clone(),
             decider: decider.clone(),
-        });
+        },
+    )?;
 
     let file_routes = file_routes(
         &api,

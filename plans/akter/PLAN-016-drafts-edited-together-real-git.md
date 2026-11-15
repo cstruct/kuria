@@ -299,16 +299,23 @@ Live drafts on the server (D02, D03), built in a worktree (`4f9247e`).
 <!-- akt: PLAN-016-T05 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b4Z
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T04, Blocks PLAN-016-T08]
 title: Editing a draft together with Yjs
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Editing together: the y-websocket sync and awareness protocols at `/akter/{number}/draft`, read-only to readers, across instances through Valkey; the editor bound to `Y.Text` both ways, other fields to the map; presence.
+Editing a live draft together (`live.sync`, `live.instances`, `live.presence`, `app.live`), built in a worktree (`85bdcde`, `2305b7c`).
+
+- **Server** (`live.rs`, `live/{room,socket,presence}.rs`): `GET /akter/{number}/live` speaks y-websocket's sync and awareness protocols, authenticated as `/graphql/ws`; 404 for an akt without a live draft or one the subject can't read; readers are told they may read only. An update is taken under the akt's lock and checked (`kuria_engine::live::check`, then sections, contacts and attachments in a savepoint); accepted ones are stored by author, with a follow-up stamping checkboxes; a refused one is stored with the update undoing it (`LiveDraft::restore`), both sent to every client and the reason to the sender. One room per open draft per instance sends stored updates after the last it sent, woken by its own clients, a Valkey message (`kuria:live:<tenant>:<akt>`, identifiers only) or a one-second poll. Awareness stamped with the subject's `{id, name}`; a new change kind `draft` (migration `000021`).
+- **App:** `editor/live.ts` binds Lexical to a `Y.Text` (local changes as the one differing span; remote ones re-import the changed top-level blocks, the selection mapped through Markdown offsets and the Yjs delta); `bindTextarea` for multiline text; `live.svelte.ts` wraps the y-websocket provider (cross-tab broadcast off) with saved/saving, refusals and read-only; `LivePresence.svelte`; remote carets with names. Text fields edited live with Done; other fields saved to the map; checkboxes and verdicts through `editAkt`. `yjs` 13.6.33, `y-protocols` 1.0.7, `y-websocket` 3.1.0, `lib0` 0.2.119.
+- **Differences:** live updates check heading ids but don't add them (inserting while someone types breaks their typing), the next `editAkt` does; diagrams aren't rendered on live updates, a release still does; a verdict through the map is refused; edits through `editAkt` or a push reach live clients within about a second.
+- **G01:** lists and tables are one block each, so a remote edit in one re-reads it and the caret is mapped by text offset; carets can drift where markup matches text; Markdown not in the editor's normal form is rewritten by the next local edit as one larger change.
+- **Tests:** `tests/live_sync.rs` (6, two instances sharing a database and Valkey), engine (3 more), presence, the app's `editor/live.test.ts` (7) and `live.test.ts` (3); `e2e/tests/live.spec.ts` written, run with T08.
 
 <!-- field: acceptance -->
 - Unit tests of the binding: local edits as minimal text operations, remote edits re-imported with the selection kept.
