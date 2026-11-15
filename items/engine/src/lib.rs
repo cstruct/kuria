@@ -192,7 +192,7 @@ pub fn transition(
     Ok(outcome(def.to.clone(), fields, changes))
 }
 
-fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {
+pub(crate) fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {
     if ty.state(&current.state).is_some_and(|s| s.is_final) {
         return Err(Refusal::Final);
     }
@@ -340,14 +340,17 @@ fn give_heading_ids(
     Ok(())
 }
 
-fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {
+pub(crate) fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {
     match fields.get(key) {
         Some(Value::Verdicts(given)) => given.clone(),
         _ => Vec::new(),
     }
 }
 
-fn assignees_of(fields: &BTreeMap<String, Value>, def: &kuria_config::FieldDef) -> Vec<Someone> {
+pub(crate) fn assignees_of(
+    fields: &BTreeMap<String, Value>,
+    def: &kuria_config::FieldDef,
+) -> Vec<Someone> {
     match def.assignees.as_ref().and_then(|key| fields.get(key)) {
         Some(Value::Users(people)) => people.clone(),
         _ => Vec::new(),
@@ -375,7 +378,7 @@ fn set_verdicts(
     }
 }
 
-fn outcome(
+pub(crate) fn outcome(
     state: String,
     fields: BTreeMap<String, Value>,
     changes: BTreeMap<String, Option<Value>>,

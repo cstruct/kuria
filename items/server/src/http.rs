@@ -182,6 +182,11 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     let akter = Akter::new(pool.clone(), changes.as_ref().map(|c| c.waker.clone()))
         .with_storage(storage.clone())
         .with_renderer(renderer);
+    let live_routes = crate::live::router(
+        &api,
+        crate::live::Rooms::new(akter.clone(), changes.as_ref().map(|c| c.hub.valkey())),
+        decider.clone(),
+    )?;
     let schema = schema(akter.clone(), changes.map(|c| c.hub));
     let git_state =
         crate::git::GitState::new(pool, storage, decider.clone(), schema.clone(), akter)
@@ -209,6 +214,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         )
         .with_state(GraphqlState { schema, decider })
         .merge(file_routes)
+        .merge(live_routes)
         .merge(bundle_routes)
         .merge(git_routes);
     if let Some(relay) = cli_relay {

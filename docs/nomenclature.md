@@ -90,7 +90,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A change of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
 
 - `change event`
-  - The record that an akt changed, numbered per tenant: either a new akt revision, or a new rank. Change events are what subscriptions and catching up deliver.
+  - The record that an akt changed, numbered per tenant: a new akt revision, a new rank, a released version, or a change to its live draft (at most one a second per server for edits made live). Change events are what subscriptions and catching up deliver.
 
 ## Documents and versions
 

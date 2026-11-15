@@ -14,7 +14,7 @@ mod changes;
 mod contacts;
 mod filter;
 mod page;
-mod people;
+pub(crate) mod people;
 
 pub(crate) use akter::operations_from_json;
 pub(crate) use people::someone_name;

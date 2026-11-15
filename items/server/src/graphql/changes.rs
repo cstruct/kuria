@@ -26,6 +26,9 @@ pub enum ChangeKind {
     Rank,
     /// The akt released a version, of the revision `revision` (`version.history`).
     Version,
+    /// The akt's live draft changed; `revision` is its latest revision,
+    /// unchanged (`live.sync`).
+    Draft,
 }
 
 /// That an akt changed. Fetch what you need about it with a query.
@@ -48,6 +51,7 @@ impl From<&Change> for ChangeEvent {
             kind: match change.kind.as_str() {
                 "rank" => ChangeKind::Rank,
                 "version" => ChangeKind::Version,
+                "draft" => ChangeKind::Draft,
                 _ => ChangeKind::Revision,
             },
             akt: ID(change.akt_id.to_string()),

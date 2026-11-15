@@ -2067,6 +2067,9 @@ impl Akt {
                     at: row.at,
                     fields: serde_json::from_value(row.fields).unwrap_or_default(),
                 })
+                // A refused update, kept with what undid it, changed
+                // nothing.
+                .filter(|change| !change.fields.is_empty())
                 .collect(),
         )
     }

@@ -74,6 +74,13 @@ impl Hub {
         }
     }
 
+    /// The Valkey server the hub is woken through, which live drafts reach
+    /// other instances through too (`live.instances`).
+    #[must_use]
+    pub fn valkey(&self) -> redis::Client {
+        self.inner.client.clone()
+    }
+
     /// Joins `tenant`'s hub.
     pub async fn subscribe(&self, tenant: Uuid) -> Result<Subscription, String> {
         if let Some(subscription) = self.join(tenant) {

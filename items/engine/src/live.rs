@@ -21,7 +21,7 @@ use yrs::types::ToJson;
 use yrs::updates::decoder::Decode;
 use yrs::{Any, Doc, GetString, Map, MapRef, ReadTxn, StateVector, Text, TextRef, Transact};
 
-use crate::Value;
+use crate::{Change, Current, Outcome, Refusal, Value};
 
 /// The name of the `Y.Map` holding every field that isn't a text.
 pub const FIELDS: &str = "fields";
@@ -181,6 +181,53 @@ impl LiveDraft {
         changed.then(|| txn.encode_update_v1())
     }
 
+    /// The draft's state vector, as a Yjs v1 sync step 1 carries it.
+    #[must_use]
+    pub fn state_vector(&self) -> Vec<u8> {
+        use yrs::updates::encoder::Encode;
+        self.doc.transact().state_vector().encode_v1()
+    }
+
+    /// What a client whose state vector is `remote` lacks of the draft, as
+    /// one Yjs v1 update: a sync step 2.
+    pub fn missing_from(&self, remote: &[u8]) -> Result<Vec<u8>, String> {
+        let remote = StateVector::decode_v1(remote).map_err(|e| e.to_string())?;
+        Ok(self.doc.transact().encode_state_as_update_v1(&remote))
+    }
+
+    /// The keys of the draft's map that aren't fields of `ty` kept there.
+    #[must_use]
+    pub fn stray_keys(&self, ty: &AktType) -> Vec<String> {
+        let (texts, map) = self.roots(ty);
+        let txn = self.doc.transact();
+        map.keys(&txn)
+            .filter(|key| ty.field(key).is_none() || texts.contains_key(*key))
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    /// Makes the draft hold `fields` of `ty` again, as [`LiveDraft::write`]
+    /// does, also taking out of its map what isn't a field kept there: the
+    /// update that undoes a refused one, `None` if nothing differed.
+    pub fn restore(&mut self, ty: &AktType, fields: &BTreeMap<String, Value>) -> Option<Vec<u8>> {
+        let stray = self.stray_keys(ty);
+        let mut updates: Vec<Vec<u8>> = Vec::new();
+        if !stray.is_empty() {
+            let map = self.doc.get_or_insert_map(FIELDS);
+            let mut txn = self.doc.transact_mut();
+            for key in &stray {
+                map.remove(&mut txn, key);
+            }
+            updates.push(txn.encode_update_v1());
+        }
+        updates.extend(self.write(ty, fields));
+        match updates.len() {
+            0 => None,
+            1 => updates.pop(),
+            _ => merge(&updates).ok(),
+        }
+    }
+
     /// The draft's text roots of `ty`, by field key, and its map.
     fn roots(&self, ty: &AktType) -> (BTreeMap<String, TextRef>, MapRef) {
         let texts = ty
@@ -209,6 +256,136 @@ pub fn changed_keys(
     keys.sort();
     keys.dedup();
     keys
+}
+
+/// Whether `update`, a Yjs v1 update, holds nothing: what a client in step
+/// with its server sends as its sync step 2. One that can't be read isn't.
+#[must_use]
+pub fn is_empty(update: &[u8]) -> bool {
+    yrs::Update::decode_v1(update).is_ok_and(|u| u.is_empty())
+}
+
+/// `updates`, Yjs v1 updates, as one.
+pub fn merge(updates: &[Vec<u8>]) -> Result<Vec<u8>, String> {
+    yrs::merge_updates_v1(updates.iter().map(Vec::as_slice)).map_err(|e| e.to_string())
+}
+
+/// Checks `after`, the fields an update to the live draft of `current`
+/// leaves, as a write would check them (`live.edit`), and answers the
+/// outcome: `after` with each box it newly checks checked by `change`, a
+/// box checked before kept as it was, and the verdicts of assignees it
+/// removed taken back. A verdict is given by a write, which checks who
+/// gives it, never by an update. Headings keep the ids they have, the next
+/// write giving them theirs, so that typing a heading isn't interrupted
+/// (`akt.field.markdown`).
+// r[impl live.edit]
+pub fn check(
+    ty: &AktType,
+    current: &Current,
+    after: &BTreeMap<String, Value>,
+    change: Change,
+) -> Result<Outcome, Refusal> {
+    crate::refuse_final(ty, current)?;
+    let before = &current.fields;
+    let mut fields = after.clone();
+    for field in &ty.document().fields {
+        let key = &field.key;
+        let was = before.get(key);
+        let now = fields.get(key);
+        if was == now {
+            continue;
+        }
+        match field.kind {
+            // r[impl akt.field.checkbox]
+            FieldKind::Checkbox => match (was, now) {
+                (Some(was @ Value::Checkbox { .. }), Some(_)) => {
+                    let was = was.clone();
+                    fields.insert(key.clone(), was);
+                }
+                (_, Some(Value::Checkbox { on_behalf_of, .. })) => {
+                    let on_behalf_of =
+                        (*on_behalf_of).filter(|s| *s != crate::Someone::User(change.by));
+                    fields.insert(
+                        key.clone(),
+                        Value::Checkbox {
+                            by: change.by,
+                            at: change.at,
+                            on_behalf_of,
+                        },
+                    );
+                }
+                _ => {}
+            },
+            // r[impl akt.field.verdict]
+            FieldKind::Verdict => {
+                return Err(Refusal::InvalidValue {
+                    field: key.clone(),
+                    reason: "a verdict is given by editing the akt, not its live draft".to_owned(),
+                });
+            }
+            _ => {}
+        }
+    }
+    // r[impl akt.field.required]
+    if let Some(missing) = ty
+        .document()
+        .fields
+        .iter()
+        .find(|f| f.required && !fields.contains_key(&f.key))
+    {
+        return Err(Refusal::Required(missing.key.clone()));
+    }
+    // An assignee removed loses their verdict in the same change.
+    for def in ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Verdict)
+    {
+        let given = crate::verdicts_of(&fields, &def.key);
+        let kept = crate::verdicts::only_of(&given, &crate::assignees_of(&fields, def));
+        if kept != given {
+            if kept.is_empty() {
+                fields.remove(&def.key);
+            } else {
+                fields.insert(def.key.clone(), Value::Verdicts(kept));
+            }
+        }
+    }
+    check_heading_ids(ty, &fields)?;
+    let changes = changed_keys(before, &fields)
+        .into_iter()
+        .map(|key| {
+            let value = fields.get(&key).cloned();
+            (key, value)
+        })
+        .collect();
+    Ok(crate::outcome(current.state.clone(), fields, changes))
+}
+
+/// Refuses headings of `fields` with ids that aren't ids, or that two of
+/// them share, saying which field (`akt.field.markdown`).
+// r[impl akt.field.markdown]
+fn check_heading_ids(ty: &AktType, fields: &BTreeMap<String, Value>) -> Result<(), Refusal> {
+    let mut texts: Vec<(String, String)> = ty
+        .document()
+        .fields
+        .iter()
+        .filter_map(|f| match fields.get(&f.key) {
+            Some(Value::Markdown(text)) => Some((f.key.clone(), text.clone())),
+            _ => None,
+        })
+        .collect();
+    let invalid = |field: &str| {
+        let field = field.to_owned();
+        move |reason| Refusal::InvalidValue { field, reason }
+    };
+    for (key, text) in &texts {
+        crate::markdown::give_ids(&mut [&mut text.clone()]).map_err(invalid(key))?;
+    }
+    let last = texts.last().map(|(key, _)| key.clone()).unwrap_or_default();
+    let mut all: Vec<&mut String> = texts.iter_mut().map(|(_, text)| text).collect();
+    crate::markdown::give_ids(&mut all).map_err(invalid(&last))
 }
 
 /// A Yjs value as JSON.
@@ -466,5 +643,106 @@ mod tests {
             map.insert(&mut txn, "tags", Any::from(vec!["c".to_owned()]));
         }
         assert!(draft.fields(&ty).unwrap_err().starts_with("`tags`: "));
+    }
+
+    fn current() -> Current {
+        Current {
+            state: "draft".to_owned(),
+            fields: fields(),
+        }
+    }
+
+    fn change() -> Change {
+        Change {
+            by: Uuid::from_u128(9),
+            at: Utc.with_ymd_and_hms(2026, 11, 16, 9, 0, 0).unwrap(),
+        }
+    }
+
+    // r[verify live.edit]
+    #[test]
+    fn an_update_is_checked_as_a_write_would_be() {
+        let ty = document();
+        let mut after = fields();
+        after.remove("title");
+        assert_eq!(
+            check(&ty, &current(), &after, change()),
+            Err(Refusal::Required("title".to_owned()))
+        );
+        let mut after = fields();
+        after.insert(
+            "body".to_owned(),
+            Value::Markdown("# A {#x}\n\n# B {#x}\n".to_owned()),
+        );
+        assert!(matches!(
+            check(&ty, &current(), &after, change()),
+            Err(Refusal::InvalidValue { field, .. }) if field == "body"
+        ));
+        // Headings without ids keep none until a write gives them.
+        let mut after = fields();
+        after.insert("body".to_owned(), Value::Markdown("# New\n".to_owned()));
+        let outcome = check(&ty, &current(), &after, change()).unwrap();
+        assert_eq!(outcome.fields, after);
+        assert_eq!(outcome.changes.keys().collect::<Vec<_>>(), ["body"]);
+    }
+
+    // r[verify live.edit]
+    #[test]
+    fn a_box_an_update_checks_is_checked_by_whoever_sent_it() {
+        let ty = document();
+        let mut before = current();
+        before.fields.remove("approved");
+        let posed = Value::Checkbox {
+            by: Uuid::from_u128(1),
+            at: Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap(),
+            on_behalf_of: None,
+        };
+        let mut after = before.fields.clone();
+        after.insert("approved".to_owned(), posed.clone());
+        let outcome = check(&ty, &before, &after, change()).unwrap();
+        assert_eq!(
+            outcome.fields["approved"],
+            Value::Checkbox {
+                by: change().by,
+                at: change().at,
+                on_behalf_of: None
+            }
+        );
+        // One checked before stays as it was checked.
+        let mut after = fields();
+        after.insert("approved".to_owned(), posed);
+        let outcome = check(&ty, &current(), &after, change()).unwrap();
+        assert_eq!(outcome.fields, fields());
+        assert!(outcome.changes.is_empty());
+    }
+
+    // r[verify live.edit]
+    #[test]
+    fn restoring_undoes_a_refused_update_for_everyone() {
+        let ty = document();
+        let (mut server, mut client) = two(&ty, &fields());
+        let mut bad = fields();
+        bad.remove("title");
+        let refused = client.write(&ty, &bad).unwrap();
+        {
+            let map = client.doc.get_or_insert_map(FIELDS);
+            let mut txn = client.doc.transact_mut();
+            map.insert(&mut txn, "stray", Any::from(1));
+        }
+        let refused = merge(&[refused, client.state()]).unwrap();
+        server.apply(&refused).unwrap();
+        assert_eq!(server.stray_keys(&ty), ["stray"]);
+        let undo = server.restore(&ty, &fields()).unwrap();
+        assert_eq!(server.fields(&ty).unwrap(), fields());
+        assert_eq!(server.stray_keys(&ty), Vec::<String>::new());
+        client.apply(&undo).unwrap();
+        assert_eq!(client.fields(&ty).unwrap(), fields());
+        assert_eq!(client.stray_keys(&ty), Vec::<String>::new());
+        // What a client lacks is what brings it level.
+        let mut fresh = LiveDraft::new();
+        fresh
+            .apply(&server.missing_from(&fresh.state_vector()).unwrap())
+            .unwrap();
+        assert_eq!(fresh.fields(&ty).unwrap(), fields());
     }
 }

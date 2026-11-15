@@ -85,6 +85,18 @@ pub async fn fields_of(conn: &mut Connection, akter: &[Uuid]) -> QueryResult<Vec
         .await
 }
 
+/// The sequence number of `akt`'s live draft's last update, 0 if it has
+/// none.
+pub async fn last_seq(conn: &mut Connection, tenant: Uuid, akt: Uuid) -> QueryResult<i64> {
+    let last: Option<i64> = akt_draft_update::table
+        .filter(akt_draft_update::tenant_id.eq(tenant))
+        .filter(akt_draft_update::akt_id.eq(akt))
+        .select(diesel::dsl::max(akt_draft_update::seq))
+        .first(conn)
+        .await?;
+    Ok(last.unwrap_or(0))
+}
+
 /// `akt`'s live draft's updates after `seq`, oldest first.
 pub async fn updates_after(
     conn: &mut Connection,

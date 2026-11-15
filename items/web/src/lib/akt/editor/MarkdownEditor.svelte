@@ -70,6 +70,8 @@
 		NODES,
 		TRANSFORMERS
 	} from './markdown';
+	import { bindText, cursorIn, selectionIn } from './live';
+	import type { LiveDraft } from '../live.svelte';
 
 	/** What a reference can name in an akt. */
 	export interface Referable {
@@ -88,6 +90,9 @@
 		drawings?: [string, string][];
 		/** Whether the field's `diagram` blocks are diagrams. */
 		diagrams?: boolean;
+		/** The live draft whose text `field` the editor edits, instead of
+		 * `text` (`app.live`). */
+		live?: { draft: LiveDraft; field: string } | null;
 	}
 
 	let {
@@ -95,8 +100,52 @@
 		label,
 		pictures = [],
 		drawings = [],
-		diagrams = false
+		diagrams = false,
+		live = null
 	}: Props = $props();
+
+	// r[impl app.live]: where everyone else's cursor is in the text.
+	let carets = $state<
+		{ client: number; name: string; color: string; top: number; left: number; height: number }[]
+	>([]);
+	function placeCarets() {
+		if (!editor || !live || !paper) return;
+		const field = live.field;
+		const ytext = live.draft.text(field);
+		const origin = paper.getBoundingClientRect();
+		const placed: typeof carets = [];
+		for (const peer of live.draft.peers) {
+			if (peer.cursor?.field !== field) continue;
+			const at = cursorIn(editor, ytext, peer.cursor.head);
+			const element = at ? editor.getElementByKey(at.key) : null;
+			if (!at || !element) continue;
+			let rect: DOMRect;
+			const node = element.firstChild;
+			if (at.type === 'text' && node?.nodeType === Node.TEXT_NODE) {
+				const range = document.createRange();
+				const offset = Math.min(at.offset, node.textContent?.length ?? 0);
+				range.setStart(node, offset);
+				range.setEnd(node, offset);
+				rect = range.getBoundingClientRect();
+			} else {
+				rect = element.getBoundingClientRect();
+			}
+			placed.push({
+				client: peer.client,
+				name: peer.name,
+				color: peer.color,
+				top: rect.top - origin.top,
+				left: rect.left - origin.left,
+				height: rect.height || 18
+			});
+		}
+		carets = placed;
+	}
+	$effect(() => {
+		// Again whenever someone moves.
+		void live?.draft.peers;
+		placeCarets();
+	});
 
 	// r[impl app.editor]: diagrams shown as their pictures, rendered without
 	// being stored (`diagram.preview`), each source once.
@@ -208,6 +257,7 @@
 	}
 
 	let root: HTMLDivElement;
+	let paper: HTMLDivElement | undefined = $state();
 	/** Where the guides are, from the top of the sheets, and how tall. */
 	let guides = $state<{ tops: number[]; height: number }>({ tops: [], height: 0 });
 	let editor: LexicalEditor | undefined;
@@ -274,6 +324,35 @@
 				COMMAND_PRIORITY_EDITOR
 			)
 		);
+		if (live) {
+			// r[impl app.live]: bound to the live draft's text both ways, and
+			// saying where the cursor is.
+			const { draft, field } = live;
+			const ytext = draft.text(field);
+			const unbind = bindText(instance, ytext, {
+				origin: draft.origin,
+				pictures: new Map(pictures),
+				diagrams,
+				onRemote: placeCarets
+			});
+			const stop = instance.registerUpdateListener(() => {
+				const selection = instance.getRootElement()?.contains(document.activeElement)
+					? selectionIn(instance, ytext)
+					: null;
+				draft.setCursor(selection ? { field, ...selection } : null);
+				if (diagrams) followDiagramCode();
+				placeGuides();
+				placeCarets();
+			});
+			return () => {
+				draft.setCursor(null);
+				resized.disconnect();
+				stop();
+				unbind();
+				unregister();
+				instance.setRootElement(null);
+			};
+		}
 		instance.update(() => fromMarkdown(original, new Map(pictures), { diagrams }), {
 			discrete: true
 		});
@@ -582,7 +661,18 @@
 		{/if}
 	</div>
 	<div class="sheets">
-		<div class="paper">
+		<div class="paper" bind:this={paper}>
+			{#each carets as caret (caret.client)}
+				<span
+					class="caret"
+					style:top="{caret.top}px"
+					style:left="{caret.left}px"
+					style:height="{caret.height}px"
+					style:--caret={caret.color}
+					data-testid="caret"
+					aria-hidden="true"><span class="caret-name">{caret.name}</span></span
+				>
+			{/each}
 			<div
 				class="content sheet edited"
 				bind:this={root}
@@ -779,6 +869,29 @@
 	.guides line {
 		stroke: var(--sheet-guide);
 		stroke-dasharray: 4 4;
+	}
+
+	/* Someone else's cursor, and their name above it. */
+	.caret {
+		position: absolute;
+		z-index: 1;
+		width: 2px;
+		margin-left: -1px;
+		background: var(--caret);
+		pointer-events: none;
+	}
+
+	.caret-name {
+		position: absolute;
+		bottom: 100%;
+		left: 0;
+		padding: 0 var(--space-1);
+		border-radius: var(--radius-sm);
+		background: var(--caret);
+		color: #fff;
+		font-size: var(--text-xs, 0.75rem);
+		line-height: 1.4;
+		white-space: nowrap;
 	}
 
 	/* A page break: the end of one sheet, a gap, and the start of the next. */

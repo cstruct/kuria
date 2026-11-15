@@ -16,6 +16,7 @@ import { LinkNode } from '@lexical/link';
 import { ListItemNode, ListNode } from '@lexical/list';
 import {
 	$convertFromMarkdownString,
+	$generateNodesFromMarkdownString,
 	$convertToMarkdownString,
 	BOLD_ITALIC_STAR,
 	BOLD_STAR,
@@ -744,6 +745,23 @@ export function $fromMarkdown(
 	{ diagrams = false } = {}
 ): void {
 	$convertFromMarkdownString(atx(markdown), TRANSFORMERS, undefined, false);
+	$finish($getRoot().getChildren(), pictures, { diagrams });
+}
+
+/** The top-level blocks `markdown` makes, not yet in the editor's root,
+ * as $fromMarkdown reads them; $finish them once they are in it. */
+export function $blocksFrom(markdown: string): LexicalNode[] {
+	return $generateNodesFromMarkdownString(atx(markdown), TRANSFORMERS, false);
+}
+
+/** Finishes `blocks`, top-level blocks just read from Markdown into the
+ * editor's root, as $fromMarkdown does: each heading's id onto its node,
+ * images showing their pictures, diagrams as theirs. */
+export function $finish(
+	blocks: readonly LexicalNode[],
+	pictures: ReadonlyMap<string, string> = new Map(),
+	{ diagrams = false } = {}
+): void {
 	// Each heading's id, from its last text, onto its node.
 	const headings = (node: LexicalNode): LexicalNode[] =>
 		$isHeadingNode(node)
@@ -751,7 +769,7 @@ export function $fromMarkdown(
 			: 'getChildren' in node
 				? (node as ElementNode).getChildren().flatMap(headings)
 				: [];
-	for (const heading of headings($getRoot())) {
+	for (const heading of blocks.flatMap(headings)) {
 		const last = (heading as ElementNode).getLastDescendant();
 		if (!$isTextNode(last)) continue;
 		const match = last.getTextContent().match(ID);
@@ -762,7 +780,7 @@ export function $fromMarkdown(
 		else last.remove();
 	}
 	$showPictures(pictures);
-	if (diagrams) $getRoot().getChildren().forEach($toDiagram);
+	if (diagrams) blocks.forEach($toDiagram);
 	// Somewhere to type after a picture or diagram that ends the text.
 	const last = $getRoot().getLastChild();
 	if ($isDiagramNode(last) || $isPageBreakNode(last)) $getRoot().append($createParagraphNode());

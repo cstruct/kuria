@@ -246,6 +246,30 @@ pub async fn append_revision(conn: &mut Connection, row: &RevisionRow) -> QueryR
     Ok(seq)
 }
 
+/// Appends the change event that `akt`'s live draft changed, at its latest
+/// revision `revision`, and returns its sequence number.
+pub async fn append_draft_change(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+    revision: i32,
+    at: DateTime<Utc>,
+) -> QueryResult<i64> {
+    let seq = next_counter(conn, tenant, "change_event").await?;
+    diesel::insert_into(change_event::table)
+        .values((
+            change_event::tenant_id.eq(tenant),
+            change_event::seq.eq(seq),
+            change_event::akt_id.eq(akt),
+            change_event::revision.eq(revision),
+            change_event::created_at.eq(at),
+            change_event::kind.eq("draft"),
+        ))
+        .execute(conn)
+        .await?;
+    Ok(seq)
+}
+
 /// The akt numbered `number`.
 pub async fn akt_by_number(
     conn: &mut Connection,

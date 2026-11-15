@@ -354,6 +354,57 @@ impl Akter {
         self.committed(result)
     }
 
+    /// The akt `number`, opened for a client of its live draft
+    /// (`live.sync`).
+    pub async fn open_live(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+    ) -> Result<live::Opened, AktError> {
+        let mut conn = self.pool.get().await?;
+        live::open_in(&mut conn, caller, number).await
+    }
+
+    /// The live draft of the akt `number` of `tenant`, as stored now.
+    pub async fn live_draft(
+        &self,
+        tenant: Uuid,
+        number: &str,
+    ) -> Result<kuria_engine::live::LiveDraft, AktError> {
+        let mut conn = self.pool.get().await?;
+        live::draft_in(&mut conn, tenant, number).await
+    }
+
+    /// Takes `update`, which `caller` sent to the live draft of the akt
+    /// `number` (`live.sync`).
+    // r[impl live.sync]
+    pub async fn take_live_update(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+        update: &[u8],
+    ) -> Result<live::Taken, AktError> {
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        conn.transaction::<_, AktError, _>(async |conn| {
+            live::take_in(conn, caller, number, update).await
+        })
+        .await
+    }
+
+    /// Records that the live draft of the akt `number` of `tenant` changed,
+    /// as a change event.
+    pub async fn live_draft_changed(&self, tenant: Uuid, number: &str) -> Result<(), AktError> {
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                live::changed_in(conn, tenant, number).await
+            })
+            .await;
+        self.committed(result)
+    }
+
     /// Performs `transition` on the akt `number`, based on
     /// `expected_revision`.
     // r[impl akt.transition]
@@ -603,6 +654,8 @@ async fn write_draft(
             akt.number
         )));
     }
+    // r[impl live.sync]
+    store::append_draft_change(conn, tenant, akt.id, akt.revision, now).await?;
     Ok(live::with_fields(ty, &akt, &fields))
 }
 
