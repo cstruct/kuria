@@ -63,8 +63,10 @@ all with `all`, each with who made it, when and the fields it changed.
 
 r[live.state]
 Reading an akt with a live draft MUST also answer, to a subject who may
-read it, its live draft's state, encoded as a Yjs update, and its state
-vector, so that a clone can make updates against it (`clone.server`).
+read it, its live draft's state, encoded as a Yjs update, its state
+vector, and its base, its Yjs snapshot, which also changes with a change
+that only deletes, so that a clone can make updates against it and name
+what it made them against (`clone.server`).
 
 ## Editing together
 

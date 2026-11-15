@@ -231,6 +231,7 @@ diesel::table! {
         by -> Uuid,
         at -> Timestamptz,
         fields -> Jsonb,
+        message -> Nullable<Text>,
     }
 }
 

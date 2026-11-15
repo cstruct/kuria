@@ -148,6 +148,7 @@ pub(crate) async fn write(
         now,
         &keys,
         &Json::Object(kuria_engine::fields_to_json(&after)),
+        None,
     )
     .await?;
     if loaded.pending + 1 >= COMPACT_AFTER {
@@ -299,6 +300,7 @@ pub(crate) async fn take_in(
         now,
         &keys,
         &Json::Object(kuria_engine::fields_to_json(&fields)),
+        None,
     )
     .await?;
     if loaded.pending + 1 >= COMPACT_AFTER {
@@ -317,6 +319,108 @@ pub(crate) async fn take_in(
         }
         Err(reason) => Ok(Taken::Refused { seq, reason }),
     }
+}
+
+/// Takes `update`, which `caller` made against `base`, the live draft of
+/// the akt `number` as their clone read it ([`LiveDraft::base`]), and
+/// pushes with `message` (`clone.server`): refused as stale unless `base`
+/// is the draft's now; applied, checked as a live edit, its diagrams
+/// rendered as a write's are, and kept as one change by the caller with
+/// the message. A refusal leaves the caller's transaction to undo
+/// everything. Answers the akt as reading it then does.
+// r[impl clone.server]
+// r[impl live.edit]
+// r[impl live.history]
+pub(crate) async fn push_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    number: &str,
+    base: &[u8],
+    update: &[u8],
+    message: &str,
+) -> Result<AktRow, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    let mut akt = kuria_store::akter::lock_akt_by_number(conn, tenant, number)
+        .await?
+        .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
+    let ty = super::type_of(conn, tenant, &akt).await?;
+    let key = ty.ty.key().to_owned();
+    if !caller
+        .auth
+        .allows(&Permission::Read { key: key.clone() })
+        .await?
+    {
+        return Err(AktError::NotFound(number.to_owned()));
+    }
+    if !has_live_draft(&ty) {
+        return Err(AktError::BadRequest(format!(
+            "{number} has no live draft: push its edits as operations"
+        )));
+    }
+    if !caller.auth.allows(&Permission::Edit { key }).await? {
+        return Err(AktError::Forbidden);
+    }
+    let now = Utc::now();
+    let mut loaded = load(conn, &ty, &akt).await?;
+    let current = loaded
+        .draft
+        .is_at(base)
+        .map_err(|e| AktError::BadRequest(format!("{number}'s base isn't a Yjs snapshot: {e}")))?;
+    if !current {
+        return Err(AktError::StaleDraft {
+            number: number.to_owned(),
+            base: loaded.draft.base(),
+            state_vector: loaded.draft.state_vector(),
+        });
+    }
+    if !loaded.stored {
+        store_new(conn, &ty, &akt, &loaded.draft, now).await?;
+    }
+    let before = loaded.fields.clone();
+    let state = loaded.draft.state();
+    loaded
+        .draft
+        .apply(update)
+        .map_err(|e| AktError::BadRequest(format!("{number}'s update isn't a Yjs update: {e}")))?;
+    if loaded.draft.state() == state {
+        return Ok(with_fields(&ty, &akt, &before));
+    }
+    let outcome = checked(conn, caller, &ty, &akt, &loaded, now).await?;
+    super::diagrams::render_written(conn, caller, &ty.ty, &akt, &outcome).await?;
+    let mut kept = vec![update.to_vec()];
+    // What the checks changed, such as who checked a box, follows.
+    kept.extend(loaded.draft.write(&ty.ty, &outcome.fields));
+    let kept = kuria_engine::live::merge(&kept).map_err(AktError::Internal)?;
+    let after = loaded
+        .draft
+        .fields(&ty.ty)
+        .map_err(|e| AktError::Internal(format!("akt {number}'s live draft: {e}")))?;
+    let keys = changed_keys(&before, &after);
+    let seq = stored::append(
+        conn,
+        tenant,
+        akt.id,
+        &kept,
+        caller.actor.subject.into(),
+        now,
+        &keys,
+        &Json::Object(kuria_engine::fields_to_json(&after)),
+        Some(message),
+    )
+    .await?;
+    if loaded.pending + 1 >= COMPACT_AFTER {
+        stored::compact(conn, tenant, akt.id, &loaded.draft.state(), seq).await?;
+    }
+    akt.title = super::title_of(&ty.ty, &after);
+    akt.updated_at = now;
+    if !kuria_store::akter::update_akt(conn, &akt, akt.revision).await? {
+        return Err(AktError::Internal(format!(
+            "akt {number} moved while locked"
+        )));
+    }
+    // r[impl live.sync]
+    kuria_store::akter::append_draft_change(conn, tenant, akt.id, akt.revision, now).await?;
+    Ok(with_fields(&ty, &akt, &after))
 }
 
 /// The outcome of the live draft `loaded` of `akt` as an update left it,

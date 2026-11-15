@@ -134,6 +134,21 @@ fn error(error: AktError) -> async_graphql::Error {
                 e.set("currentRevision", current);
             })
         }
+        AktError::StaleDraft {
+            number,
+            base,
+            state_vector,
+        } => {
+            use base64::Engine as _;
+            let base64 = base64::engine::general_purpose::STANDARD;
+            let (base, state_vector) = (base64.encode(base), base64.encode(state_vector));
+            async_graphql::Error::new(message).extend_with(move |_, e| {
+                e.set("code", "STALE");
+                e.set("number", number.clone());
+                e.set("base", base.clone());
+                e.set("stateVector", state_vector.clone());
+            })
+        }
         AktError::Internal(detail) => {
             tracing::error!("akter: {detail}");
             coded("internal error".to_owned(), "INTERNAL")
@@ -270,6 +285,7 @@ impl AkterQuery {
                         row,
                         ty: akt.ty,
                         version: None,
+                        at_revision: true,
                     }),
             );
         }
@@ -285,6 +301,7 @@ impl AkterQuery {
                     row,
                     ty: akt.ty,
                     version: Some(version),
+                    at_revision: false,
                 }),
         )
     }
@@ -609,6 +626,7 @@ async fn with_types(
             row,
             ty: ty.clone(),
             version: None,
+            at_revision: false,
         })
         .collect())
 }
@@ -788,6 +806,59 @@ pub(crate) fn operations_from_json(operations: Vec<JsonValue>) -> Result<Vec<Ope
         .collect()
 }
 
+/// One live draft's part of a push from a clone (`clone.server`).
+#[derive(InputObject)]
+pub struct DraftPushInput {
+    /// The akt's number.
+    number: String,
+    /// The live draft's `base` as the clone read it (`liveState`),
+    /// base64-encoded: the push is refused as `STALE` unless it is the
+    /// draft's now.
+    base: String,
+    /// What the clone changed, as one Yjs v1 update made against `base`,
+    /// base64-encoded.
+    update: String,
+}
+
+/// What a push from a clone takes (`clone.server`).
+#[derive(InputObject)]
+pub struct PushCloneInput {
+    /// One line of at most 200 characters, kept with each live draft's
+    /// change and as each revision's reason.
+    message: String,
+    /// Each live draft's update.
+    #[graphql(default)]
+    drafts: Vec<DraftPushInput>,
+    /// The writes to akter without a live draft, as a batch's, each at the
+    /// revision the clone read; their reasons are the message.
+    #[graphql(default)]
+    operations: Vec<OperationInput>,
+}
+
+/// What a push from a clone wrote, as reading answers it.
+#[derive(SimpleObject)]
+pub struct PushedClone {
+    /// Each akt whose live draft the push changed, in the order of its
+    /// drafts.
+    drafts: Vec<Akt>,
+    /// The akt each operation answers, in order.
+    operations: Vec<Akt>,
+}
+
+/// `text`, base64-decoded, or a `BAD_REQUEST` naming `what`, said of the
+/// push's draft `n`, counting from 1.
+fn base64_of(text: &str, what: &str, n: usize) -> async_graphql::Result<Vec<u8>> {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(text)
+        .map_err(|e| at_draft(coded(format!("{what} isn't base64: {e}"), "BAD_REQUEST"), n))
+}
+
+/// `error`, said of the push's draft `n`, counting from 1.
+fn at_draft(error: async_graphql::Error, n: usize) -> async_graphql::Error {
+    error.extend_with(|_, e| e.set("draft", n))
+}
+
 /// `error`, said of the batch's operation `n`, counting from 1.
 fn at_operation(error: async_graphql::Error, n: usize) -> async_graphql::Error {
     error.extend_with(|_, e| e.set("operation", n))
@@ -826,6 +897,64 @@ impl AkterMutation {
         let mut answered = Vec::with_capacity(rows.len());
         for row in rows {
             answered.push(reload(ctx, akter, row).await?);
+        }
+        Ok(answered)
+    }
+
+    /// Pushes from a clone, all of it or none (`clone.server`): each live
+    /// draft's update made against the base the clone read, refused as
+    /// `STALE`, with the draft's `number`, current `base` and
+    /// `stateVector`, unless the base is the draft's now, and checked as a
+    /// live edit; then the
+    /// operations, as a batch runs them, with the message as each one's
+    /// reason. Each draft's update is kept as one change, by the subject,
+    /// with the message. A refusal carries the draft's position, from 1, as
+    /// `draft`, or the operation's as `operation`.
+    // r[impl clone.server]
+    async fn push_clone(
+        &self,
+        ctx: &Context<'_>,
+        input: PushCloneInput,
+    ) -> async_graphql::Result<PushedClone> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let mut drafts = Vec::with_capacity(input.drafts.len());
+        for (i, draft) in input.drafts.into_iter().enumerate() {
+            drafts.push(crate::akter::DraftPush {
+                base: base64_of(&draft.base, "base", i + 1)?,
+                update: base64_of(&draft.update, "update", i + 1)?,
+                number: draft.number,
+            });
+        }
+        let mut operations = Vec::with_capacity(input.operations.len());
+        for (i, op) in input.operations.into_iter().enumerate() {
+            operations.push(operation(op).map_err(|e| at_operation(e, i + 1))?);
+        }
+        let akter = akter(ctx)?;
+        let pushed = akter
+            .push_clone(caller, &input.message, drafts, operations)
+            .await
+            .map_err(|refused| {
+                let e = error(refused.error);
+                match refused.part {
+                    Some(crate::akter::PushPart::Draft(n)) => at_draft(e, n),
+                    Some(crate::akter::PushPart::Operation(n)) => at_operation(e, n),
+                    None => e,
+                }
+            })?;
+        let mut answered = PushedClone {
+            drafts: Vec::with_capacity(pushed.drafts.len()),
+            operations: Vec::with_capacity(pushed.operations.len()),
+        };
+        for row in pushed.drafts {
+            answered.drafts.push(reload(ctx, akter, row).await?);
+        }
+        for row in pushed.operations {
+            answered.operations.push(reload(ctx, akter, row).await?);
         }
         Ok(answered)
     }
@@ -1669,6 +1798,11 @@ pub struct BoardColumn {
 }
 
 impl Akt {
+    /// Whether it is read as it was, at a version or a revision.
+    fn is_past(&self) -> bool {
+        self.version.is_some() || self.at_revision
+    }
+
     /// Up to `limit` members that the subject may read, of the akt type
     /// `key` if given, in rank order, in a fixed number of queries.
     async fn readable_members(
@@ -1707,6 +1841,8 @@ pub struct Akt {
     row: AktRow,
     ty: StoredType,
     version: Option<VersionRow>,
+    /// Whether it is read at a revision: as it was, not as it is.
+    at_revision: bool,
 }
 
 #[Object]
@@ -2043,7 +2179,7 @@ impl Akt {
         ctx: &Context<'_>,
         #[graphql(default)] all: bool,
     ) -> async_graphql::Result<Vec<DraftChange>> {
-        if !crate::akter::live::has_live_draft(&self.ty) || self.version.is_some() {
+        if !crate::akter::live::has_live_draft(&self.ty) || self.is_past() {
             return Ok(Vec::new());
         }
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
@@ -2066,12 +2202,34 @@ impl Akt {
                     by: User(row.by),
                     at: row.at,
                     fields: serde_json::from_value(row.fields).unwrap_or_default(),
+                    message: row.message,
                 })
                 // A refused update, kept with what undid it, changed
                 // nothing.
                 .filter(|change| !change.fields.is_empty())
                 .collect(),
         )
+    }
+
+    /// Its live draft's state, for a clone to make updates against
+    /// (`live.state`, `clone.server`). None for an akt without a live
+    /// draft, or read at a version or revision.
+    // r[impl live.state]
+    async fn live_state(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<LiveState>> {
+        use base64::Engine as _;
+        if !crate::akter::live::has_live_draft(&self.ty) || self.is_past() {
+            return Ok(None);
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let loaded = crate::akter::live::load(&mut conn, &self.ty, &self.row)
+            .await
+            .map_err(error)?;
+        let base64 = base64::engine::general_purpose::STANDARD;
+        Ok(Some(LiveState {
+            state: base64.encode(loaded.draft.state()),
+            state_vector: base64.encode(loaded.draft.state_vector()),
+            base: base64.encode(loaded.draft.base()),
+        }))
     }
 
     /// Every revision, oldest first.
@@ -2100,6 +2258,23 @@ pub struct DraftChange {
     at: DateTime<Utc>,
     /// The keys of the fields it changed.
     fields: Vec<String>,
+    /// Its message, if it was pushed from a clone (`clone.server`); none
+    /// for live typing and other writes.
+    message: Option<String>,
+}
+
+/// An akt's live draft, as a clone makes updates against it
+/// (`live.state`).
+#[derive(SimpleObject)]
+pub struct LiveState {
+    /// The whole draft, as one Yjs v1 update, base64-encoded.
+    state: String,
+    /// Its state vector, Yjs v1, base64-encoded.
+    state_vector: String,
+    /// What a push made against it names as its base, base64-encoded: its
+    /// Yjs v1 snapshot, its state vector and what it deleted, which moves
+    /// with every change, also one that only deletes.
+    base: String,
 }
 
 /// A field's value, by its kind.

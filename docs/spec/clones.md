@@ -82,10 +82,11 @@ state, and anything staged MUST be staged again against it, or unstaged
 where it conflicts.
 
 r[clone.server]
-`pushClone` MUST take a message and, all or nothing: for each akt with a
-live draft, an update made against a base, refused as `STALE` unless the
-base is the live draft's current state, applied and checked as a live edit
-(`live.edit`); and for other akter, edits at the revision the clone read
-(`akt.revision.concurrency`). Each live draft's update MUST be kept as one
+`pushClone` MUST take a message, one line of 1 to 200 characters, and, all
+or nothing: for each akt with a live draft, an update made against a base,
+refused as `STALE` unless the base is the live draft's current base
+(`live.state`), the refusal naming the akt and that base, applied and
+checked as a live edit (`live.edit`); and for other akter, edits at the
+revision the clone read (`akt.revision.concurrency`). Each live draft's update MUST be kept as one
 change, by the subject, with the message (`live.history`); other akter's
 edits MUST be revisions with the message as their reason.

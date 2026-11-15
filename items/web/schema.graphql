@@ -88,6 +88,12 @@ type Akt {
 	"""
 	draftChanges(all: Boolean! = false): [DraftChange!]!
 	"""
+	Its live draft's state, for a clone to make updates against
+	(`live.state`, `clone.server`). None for an akt without a live
+	draft, or read at a version or revision.
+	"""
+	liveState: LiveState
+	"""
 	Every revision, oldest first.
 	"""
 	revisions: [AktRevision!]!
@@ -511,6 +517,11 @@ type DraftChange {
 	The keys of the fields it changed.
 	"""
 	fields: [String!]!
+	"""
+	Its message, if it was pushed from a clone (`clone.server`); none
+	for live typing and other writes.
+	"""
+	message: String
 }
 
 """
@@ -527,6 +538,27 @@ input DraftFieldInput {
 	"""
 	field: String!
 	reason: String
+}
+
+"""
+One live draft's part of a push from a clone (`clone.server`).
+"""
+input DraftPushInput {
+	"""
+	The akt's number.
+	"""
+	number: String!
+	"""
+	The live draft's `base` as the clone read it (`liveState`),
+	base64-encoded: the push is refused as `STALE` unless it is the
+	draft's now.
+	"""
+	base: String!
+	"""
+	What the clone changed, as one Yjs v1 update made against `base`,
+	base64-encoded.
+	"""
+	update: String!
 }
 
 """
@@ -723,6 +755,27 @@ input LinkInput {
 }
 
 """
+An akt's live draft, as a clone makes updates against it
+(`live.state`).
+"""
+type LiveState {
+	"""
+	The whole draft, as one Yjs v1 update, base64-encoded.
+	"""
+	state: String!
+	"""
+	Its state vector, Yjs v1, base64-encoded.
+	"""
+	stateVector: String!
+	"""
+	What a push made against it names as its base, base64-encoded: its
+	Yjs v1 snapshot, its state vector and what it deleted, which moves
+	with every change, also one that only deletes.
+	"""
+	base: String!
+}
+
+"""
 A diagram block of a `markdown` field that allows them
 (`akt.field.markdown.diagrams`).
 """
@@ -867,6 +920,18 @@ type Mutation {
 	carries the operation's position, from 1, as `operation`.
 	"""
 	batch(input: BatchInput!): [Akt!]!
+	"""
+	Pushes from a clone, all of it or none (`clone.server`): each live
+	draft's update made against the base the clone read, refused as
+	`STALE`, with the draft's `number`, current `base` and
+	`stateVector`, unless the base is the draft's now, and checked as a
+	live edit; then the
+	operations, as a batch runs them, with the message as each one's
+	reason. Each draft's update is kept as one change, by the subject,
+	with the message. A refusal carries the draft's position, from 1, as
+	`draft`, or the operation's as `operation`.
+	"""
+	pushClone(input: PushCloneInput!): PushedClone!
 	"""
 	Submits an akt type document, creating the next version of its key.
 	"""
@@ -1042,6 +1107,41 @@ type Presentation {
 	images (`akt.field.markdown.images`).
 	"""
 	image: String
+}
+
+"""
+What a push from a clone takes (`clone.server`).
+"""
+input PushCloneInput {
+	"""
+	One line of at most 200 characters, kept with each live draft's
+	change and as each revision's reason.
+	"""
+	message: String!
+	"""
+	Each live draft's update.
+	"""
+	drafts: [DraftPushInput!]! = []
+	"""
+	The writes to akter without a live draft, as a batch's, each at the
+	revision the clone read; their reasons are the message.
+	"""
+	operations: [OperationInput!]! = []
+}
+
+"""
+What a push from a clone wrote, as reading answers it.
+"""
+type PushedClone {
+	"""
+	Each akt whose live draft the push changed, in the order of its
+	drafts.
+	"""
+	drafts: [Akt!]!
+	"""
+	The akt each operation answers, in order.
+	"""
+	operations: [Akt!]!
 }
 
 type Query {

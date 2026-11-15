@@ -24,12 +24,14 @@ pub mod live;
 mod membership;
 mod ordering;
 pub mod outcomes;
+mod push;
 mod references;
 pub mod versions;
 
 pub(crate) use batch::batch_in;
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
 pub use ordering::Place;
+pub use push::{DraftPush, MESSAGE_MOST, Part as PushPart, PushError, Pushed};
 
 use std::sync::Arc;
 
@@ -87,6 +89,15 @@ pub enum AktError {
     Refused(#[from] Refusal),
     #[error("the akt is at revision {current}, not {expected}")]
     Stale { expected: i32, current: i32 },
+    /// A push's update was made against a base that isn't `number`'s live
+    /// draft now, whose base is `base` and state vector `state_vector`
+    /// (`clone.server`).
+    #[error("{number}'s live draft has changed since the clone's base: pull, then push again")]
+    StaleDraft {
+        number: String,
+        base: Vec<u8>,
+        state_vector: Vec<u8>,
+    },
     #[error("diagram {block} in `{field}` doesn't compile: {message}")]
     InvalidDiagram {
         field: String,
