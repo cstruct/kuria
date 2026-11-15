@@ -74,6 +74,11 @@
 		text-decoration: underline;
 	}
 
+	.markdown :global(section[aria-label='Footnotes']) {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
 	.markdown :global(small) {
 		color: var(--tone-danger-fg);
 	}

@@ -138,7 +138,9 @@ field.
 
 r[akt.field.markdown]
 A `markdown` field MUST hold CommonMark text, with GitHub's tables, task
-lists and strikethrough, and is without a value when empty. A heading MAY
+lists, strikethrough and footnotes, and is without a value when empty. A
+footnote is referred to as `[^<label>]` and defined, anywhere in the text,
+as `[^<label>]: …`; one referred to but never defined is its text. A heading MAY
 end with an id, `{#<id>}`, of lowercase ASCII letters, digits, `-` and
 `_`, starting with a letter. Writing the field MUST give every heading
 without an id one, the heading's text in lower case with every run of

@@ -442,7 +442,7 @@ async fn a_markdown_field_is_read_as_a_pdf() {
         .create(
             "Guide",
             &format!(
-                "# Getting started\n\nRead the [setup](kuria:{setup}#install) first.\n\n## Steps\n\n- one\n- two\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n"
+                "# Getting started\n\nRead the [setup](kuria:{setup}#install) first.[^why]\n\n## Steps\n\n- one\n- two[^why]\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n[^why]: It installs Kuria.\n"
             ),
         )
         .await;
@@ -463,6 +463,7 @@ async fn a_markdown_field_is_read_as_a_pdf() {
         "Steps",
         "one",
         "two",
+        "It installs Kuria.",
     ] {
         assert!(text.contains(words), "{words:?} in {text:?}");
     }

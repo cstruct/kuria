@@ -28,7 +28,8 @@ kuria types define docs/examples/documents/{document,document_index}.json
 - **A document's body** is a `markdown` field: Markdown whose headings keep
   ids (`## Installing {#install}`), given from the heading's text when it is
   first written and kept when the text changes, so links to it survive
-  renaming. In the app it is written in a rich-text editor.
+  renaming, and footnotes (`[^1]` and `[^1]: …`). In the app it is written
+  in a rich-text editor. Images aren't supported yet.
 - **References:** a link `kuria:DOCS-1-D04#install` names another document
   and one of its headings; `kuria:DOCS-1-D04@2#install`, that document as it
   was at version 2. Each referenced document is linked as "Refers to", and

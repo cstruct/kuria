@@ -29,6 +29,7 @@
 	import {
 		$createParagraphNode as createParagraph,
 		$createTextNode as createText,
+		$getRoot as getRoot,
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
 		$setSelection as setSelection,
@@ -47,7 +48,10 @@
 	import { pickable } from '../pickers';
 	import { destinationOf } from '../references';
 	import {
+		$createFootnoteDefinitionNode as createFootnoteDefinition,
+		$createFootnoteReferenceNode as createFootnoteReference,
 		$fromMarkdown as fromMarkdown,
+		$nextFootnoteLabel as nextFootnoteLabel,
 		$toMarkdown as toMarkdown,
 		NODES,
 		TRANSFORMERS
@@ -191,6 +195,27 @@
 		editor?.focus();
 	}
 
+	/** A footnote: the next number at the cursor, and its definition at the
+	 * end, where typing goes on. */
+	function footnote() {
+		editor?.update(() => {
+			const selection = getSelection();
+			if (!isRangeSelection(selection)) return;
+			const label = nextFootnoteLabel();
+			selection.insertNodes([createFootnoteReference(label)]);
+			const definition = createFootnoteDefinition(label);
+			getRoot().append(definition);
+			definition.select();
+			// The note starts plain, whatever the text before it was.
+			const inNote = getSelection();
+			if (isRangeSelection(inNote)) {
+				inNote.format = 0;
+				inNote.style = '';
+			}
+		});
+		editor?.focus();
+	}
+
 	let linkOpen = $state(false);
 	let url = $state('https://');
 
@@ -293,6 +318,7 @@
 				referenceOpen = true;
 			}}>Reference</Button
 		>
+		<Button size="sm" variant="ghost" onclick={footnote}>Footnote</Button>
 	</div>
 	<div
 		class="content markdown"
@@ -443,6 +469,22 @@
 	.content :global(.header) {
 		font-weight: 600;
 		background: var(--bg-muted);
+	}
+
+	.content :global(.footnote-reference) {
+		font-size: var(--text-sm);
+		vertical-align: super;
+		color: var(--accent);
+	}
+
+	.content :global(.footnote-definition) {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
+	.content :global(.footnote-definition)::before {
+		content: '[^' attr(data-label) ']: ';
+		font-family: var(--font-mono);
 	}
 
 	.content :global(.checked) {

@@ -1,6 +1,7 @@
 // A `markdown` field in the rich-text editor: text written and formatted,
-// a reference to another akt's heading inserted through the picker, saved
-// as Markdown, and rendered as a link to that heading. Checked by axe.
+// a reference to another akt's heading inserted through the picker, and a
+// footnote, saved as Markdown, and rendered as a link to that heading and a
+// numbered note. Checked by axe.
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
@@ -52,6 +53,9 @@ test('a markdown field is written in the editor, with a reference to a heading',
 	await expect(editor.getByRole('link', { name: 'Installing' })).toBeVisible();
 	await page.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Bold' }).click();
 	await page.keyboard.type('Now.');
+	await page.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Footnote' }).click();
+	await page.keyboard.type('Ran it once.');
+	await expect(editor).toContainText('[^1]');
 	expect(
 		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
 		'the editor'
@@ -68,8 +72,21 @@ test('a markdown field is written in the editor, with a reference to a heading',
 		{ n: guide }
 	);
 	expect(saved.akt.fields.find((f) => f?.markdown)?.markdown).toBe(
-		`First steps. See [Installing](kuria:${setup}#installing)**Now.**`
+		`First steps. See [Installing](kuria:${setup}#installing)**Now.**[^1]\n\n[^1]: Ran it once.`
 	);
+	// The footnote, numbered, linking to its note at the end and back.
+	const note = shown.getByRole('link', { name: 'Footnote 1', exact: true });
+	await expect(note).toHaveAttribute('href', '#fn:1');
+	const notes = shown.getByRole('region', { name: 'Footnotes' });
+	await expect(notes).toContainText('Ran it once.');
+	await expect(notes.getByRole('link', { name: 'Back to the reference to footnote 1' })).toHaveAttribute(
+		'href',
+		'#fnref:1'
+	);
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the rendered body'
+	).toEqual([]);
 	// Following it opens the setup at its heading.
 	await link.click();
 	await expect(page.getByTestId('number')).toHaveText(setup);

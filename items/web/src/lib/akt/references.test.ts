@@ -50,3 +50,27 @@ describe('references', () => {
 		expect(html).not.toContain('<script');
 	});
 });
+
+// r[verify app.references]
+describe('footnotes', () => {
+	it('are numbered as first referred to, listed at the end and linked both ways', () => {
+		const html = renderReferenced(
+			'Second[^b], first[^a]... no: [^b] again, and [^none].\n\n[^a]: Note *a*.\n\n[^b]: See [setup](kuria:D-4#run).\n\n[^unused]: Never shown.\n',
+			[{ destination: 'kuria:D-4#run', broken: null }],
+			href
+		);
+		expect(html).toContain(
+			'Second<sup><a href="#fn:1" id="fnref:1" aria-label="Footnote 1">1</a></sup>'
+		);
+		expect(html).toContain(
+			'first<sup><a href="#fn:2" id="fnref:2" aria-label="Footnote 2">2</a></sup>'
+		);
+		expect(html).toContain('no: <sup><a href="#fn:1" aria-label="Footnote 1">1</a></sup> again');
+		expect(html).toContain('[^none]');
+		expect(html).not.toContain('Never shown');
+		expect(html).toContain('<li id="fn:1"><p>See <a href="/akt/D-4#run">setup</a>.</p>');
+		expect(html).toContain('<li id="fn:2"><p>Note <em>a</em>.</p>');
+		expect(html).toContain('href="#fnref:2"');
+		expect(html.indexOf('id="fn:1"')).toBeLessThan(html.indexOf('id="fn:2"'));
+	});
+});

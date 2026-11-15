@@ -11,6 +11,9 @@ const LINK = /^(?:https?:|mailto:)/i;
 /** A page of the app, as a reference links to it (`app.references`). */
 const IN_APP = /^\/akt\//;
 const HEADING = /^H[1-6]$/;
+/** A footnote and the reference to it, as `app.references` numbers them. */
+const NOTE_ID = /^fn(?:ref)?:\d+$/;
+const NOTE_HREF = /^#fn(?:ref)?:\d+$/;
 
 let hooked = false;
 
@@ -19,8 +22,8 @@ function purifier() {
 		DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 			if (node.tagName === 'A') {
 				const href = node.getAttribute('href') ?? '';
-				if (IN_APP.test(href)) {
-					// A page of the app, opened in place.
+				if (IN_APP.test(href) || NOTE_HREF.test(href)) {
+					// A page of the app, or a footnote, opened in place.
 				} else if (!LINK.test(href)) {
 					node.removeAttribute('href');
 				} else {
@@ -28,8 +31,13 @@ function purifier() {
 					node.setAttribute('target', '_blank');
 				}
 			}
-			// Ids only on headings, where a document's heading ids go.
-			if (node.hasAttribute?.('id') && !HEADING.test(node.tagName)) {
+			// Ids only on headings, where a document's heading ids go, and on
+			// footnotes and the references to them.
+			if (
+				node.hasAttribute?.('id') &&
+				!HEADING.test(node.tagName) &&
+				!NOTE_ID.test(node.getAttribute('id') ?? '')
+			) {
 				node.removeAttribute('id');
 			}
 		});
@@ -40,7 +48,8 @@ function purifier() {
 
 /** `html` sanitized: no scripts, styles, frames, forms or event handlers,
  * links only to http, https and mailto addresses, or with `headingIds` to
- * the app's akt pages and with ids on headings. */
+ * the app's akt pages and footnotes, and with ids on headings and
+ * footnotes. */
 export function sanitized(html: string, { headingIds = false } = {}): string {
 	return purifier().sanitize(html, {
 		FORBID_TAGS: [
@@ -61,7 +70,7 @@ export function sanitized(html: string, { headingIds = false } = {}): string {
 		],
 		FORBID_ATTR: headingIds ? ['style', 'class'] : ['style', 'class', 'id'],
 		ALLOW_DATA_ATTR: false,
-		ALLOWED_URI_REGEXP: headingIds ? /^(?:https?:|mailto:|\/akt\/)/i : LINK
+		ALLOWED_URI_REGEXP: headingIds ? /^(?:https?:|mailto:|\/akt\/|#fn(?:ref)?:\d+$)/i : LINK
 	});
 }
 

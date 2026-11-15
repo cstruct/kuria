@@ -5,8 +5,9 @@ of its versions. A PDF holds the field's body only, with no title page.
 
 r[pdf.render]
 A PDF of a `markdown` field MUST hold its value rendered: headings,
-paragraphs, emphasis, lists, task lists, quotes, code, tables and
-horizontal rules, in the field's order. Each heading MUST be a bookmark,
+paragraphs, emphasis, lists, task lists, quotes, code, tables,
+horizontal rules and footnotes, in the field's order, each footnote at
+the foot of the page that first refers to it, numbered in that order. Each heading MUST be a bookmark,
 nested by level. A reference MUST be shown by its text, as a link to the
 akt in the app (`app.references`).
 

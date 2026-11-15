@@ -12,11 +12,12 @@ use std::ops::Range;
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 /// The Markdown a `markdown` field holds: `CommonMark` with GitHub's
-/// tables, task lists and strikethrough, and heading ids.
+/// tables, task lists, strikethrough and footnotes, and heading ids.
 pub(crate) fn options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_FOOTNOTES
         | Options::ENABLE_HEADING_ATTRIBUTES
 }
 
@@ -448,6 +449,21 @@ mod tests {
         assert_eq!(
             references(text)[1].to_string(),
             "kuria:DOCS-1-D04@2#install"
+        );
+    }
+
+    // r[verify akt.field.markdown]
+    // r[verify akt.field.markdown.references]
+    #[test]
+    fn reads_references_in_footnotes() {
+        let text = "Said[^1].\n\n[^1]: See [setup](kuria:D-4#install).\n";
+        assert_eq!(
+            references(text),
+            [Reference {
+                number: "D-4".to_owned(),
+                version: None,
+                heading: Some("install".to_owned()),
+            }]
         );
     }
 }

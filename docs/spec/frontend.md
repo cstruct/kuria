@@ -62,8 +62,10 @@ scripts, styles, frames, forms or event handlers, and links only to
 r[app.editor]
 The app MUST edit a `markdown` field in a rich-text editor offering
 headings, paragraphs, emphasis, strikethrough, lists, task lists, quotes,
-code, tables, horizontal rules, links and references, and nothing the
-field's Markdown can't hold. Saving MUST give the field as Markdown, and
+code, tables, horizontal rules, links, references and footnotes of one
+paragraph each, and nothing the field's Markdown can't hold. Inserting a
+footnote MUST put the next unused number at the cursor and its
+definition at the end, starting plain, where typing goes on. Saving MUST give the field as Markdown, and
 opening and saving an unchanged value MUST change nothing, its heading ids
 included. Inserting a reference MUST let a person find an akt
 (`app.pickers`), then choose one of its headings or none, and its living
@@ -74,7 +76,10 @@ The app MUST render a `markdown` field's headings with their ids as
 anchors, and each reference as a link to the akt's page, at its version if
 it names one or a version read pins it (`version.read`), and to its
 heading if it names one. A broken reference MUST be shown as broken,
-saying why.
+saying why. Each reference to a footnote MUST be its number, in the order
+first referred to, linking to the note, and the notes MUST be listed after
+the text, each linking back; a definition nothing refers to MUST NOT be
+shown.
 
 r[app.versions]
 An akt's page MUST list its versions, if its type declares them, and let a

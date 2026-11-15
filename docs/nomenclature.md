@@ -106,6 +106,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `deep link`
   - A reference to a heading of another akt.
 
+- `footnote`
+  - A note in a `markdown` field, referred to in its text as `[^label]` and defined anywhere in it as `[^label]: …`, as GitHub writes them. Numbered in the order it is first referred to, and shown at the end of the text, or at the foot of the page in a PDF. Not to be confused with a `reference`, which links to an akt.
+
 - `broken reference`
   - A reference to an akt that doesn't exist or the reader can't read, a version it doesn't have, or a heading it doesn't have.
 

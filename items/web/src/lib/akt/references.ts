@@ -5,7 +5,7 @@
  * type.
  */
 // r[impl app.references]
-import { Lexer, Marked, type Tokens } from 'marked';
+import { Lexer, Marked, type MarkedExtension, type Token, type Tokens } from 'marked';
 import { sanitized } from './markdown';
 
 /** A reference, as `kuria:<number>[@<version>][#<heading>]` names it. */
@@ -64,6 +64,80 @@ function escaped(text: string): string {
 		.replaceAll('"', '&quot;');
 }
 
+/** A footnote's definition: `[^label]: text`, and lines indented under it. */
+const DEFINITION = /^\[\^([^\]\n]+)\]:[ \t]?([^\n]*(?:\n(?:[ \t]*\n)*(?: {4}|\t)[^\n]*)*)(?:\n+|$)/;
+/** A reference to a footnote, `[^label]`, unless it starts a definition. */
+const NOTE = /^\[\^([^\]\n]+)\](?!:)/;
+
+/**
+ * GitHub's footnotes: each reference to a defined one a superscript number
+ * linking to it, numbered in the order first referred to, and the notes
+ * listed at the end, each linking back. A definition nothing refers to
+ * isn't shown, and a reference to none is its text, as the engine reads
+ * them (`akt.field.markdown`).
+ */
+function footnotes(): { extension: MarkedExtension; notes: () => string } {
+	const defined = new Map<string, Token[]>();
+	const numbers = new Map<string, number>();
+	const rendered = new Map<number, string>();
+	const extension: MarkedExtension = {
+		extensions: [
+			{
+				name: 'footnoteDefinition',
+				level: 'block',
+				start: (src) => src.match(/^\[\^/m)?.index,
+				tokenizer(src) {
+					const match = DEFINITION.exec(src);
+					if (!match) return undefined;
+					const text = match[2].replace(/^(?: {4}|\t)/gm, '');
+					const token = {
+						type: 'footnoteDefinition',
+						raw: match[0],
+						label: match[1],
+						tokens: this.lexer.blockTokens(text, [])
+					};
+					if (!defined.has(match[1])) defined.set(match[1], token.tokens);
+					return token;
+				},
+				renderer: () => ''
+			},
+			{
+				name: 'footnoteReference',
+				level: 'inline',
+				start: (src) => (src.indexOf('[^') >= 0 ? src.indexOf('[^') : undefined),
+				tokenizer(src) {
+					const match = NOTE.exec(src);
+					if (!match || !defined.has(match[1])) return undefined;
+					return { type: 'footnoteReference', raw: match[0], label: match[1] };
+				},
+				renderer(token) {
+					const label = token.label as string;
+					let n = numbers.get(label);
+					const first = n === undefined;
+					if (n === undefined) {
+						n = numbers.size + 1;
+						numbers.set(label, n);
+						rendered.set(n, this.parser.parse(defined.get(label) ?? []));
+					}
+					const id = first ? ` id="fnref:${n}"` : '';
+					return `<sup><a href="#fn:${n}"${id} aria-label="Footnote ${n}">${n}</a></sup>`;
+				}
+			}
+		]
+	};
+	const notes = () => {
+		if (rendered.size === 0) return '';
+		const items = [...rendered.entries()]
+			.sort(([a], [b]) => a - b)
+			.map(
+				([n, html]) =>
+					`<li id="fn:${n}">${html.trim()} <a href="#fnref:${n}" aria-label="Back to the reference to footnote ${n}">↩</a></li>`
+			);
+		return `<section aria-label="Footnotes"><hr><ol>${items.join('')}</ol></section>`;
+	};
+	return { extension, notes };
+}
+
 /**
  * `text` as sanitized HTML: each heading with its id, each reference a
  * link to `hrefOf` it, unless `references` says it is broken, when it is
@@ -75,7 +149,8 @@ export function renderReferenced(
 	hrefOf: (reference: Reference) => string
 ): string {
 	const shown = new Map(references.map((r) => [r.destination, r]));
-	const marked = new Marked({
+	const notes = footnotes();
+	const marked = new Marked(notes.extension, {
 		gfm: true,
 		breaks: true,
 		walkTokens(token) {
@@ -110,5 +185,6 @@ export function renderReferenced(
 			}
 		}
 	});
-	return sanitized(marked.parse(text, { async: false }) as string, { headingIds: true });
+	const html = marked.parse(text, { async: false }) as string;
+	return sanitized(html + notes.notes(), { headingIds: true });
 }

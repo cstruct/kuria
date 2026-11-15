@@ -23,6 +23,7 @@ import {
 	CODE,
 	type ElementTransformer,
 	HEADING,
+	type TextMatchTransformer,
 	INLINE_CODE,
 	ITALIC_STAR,
 	ITALIC_UNDERSCORE,
@@ -47,6 +48,7 @@ import {
 	TableRowNode
 } from '@lexical/table';
 import {
+	$applyNodeReplacement,
 	$createParagraphNode,
 	$createTextNode,
 	$getRoot,
@@ -54,14 +56,144 @@ import {
 	$isTextNode,
 	$setState,
 	createState,
-	type ElementNode,
+	ElementNode,
+	type EditorConfig,
 	type Klass,
-	type LexicalNode
+	type LexicalNode,
+	type LexicalUpdateJSON,
+	type NodeKey,
+	type RangeSelection,
+	type SerializedElementNode,
+	type SerializedTextNode,
+	TextNode
 } from 'lexical';
 import { Lexer } from 'marked';
 
+type SerializedFootnoteReference = SerializedTextNode & { label: string };
+
+/** A reference to a footnote, `[^label]`: one token, shown as it is
+ * written. */
+export class FootnoteReferenceNode extends TextNode {
+	__label: string;
+
+	static getType(): string {
+		return 'kuria-footnote-reference';
+	}
+
+	static clone(node: FootnoteReferenceNode): FootnoteReferenceNode {
+		return new FootnoteReferenceNode(node.__label, node.__key);
+	}
+
+	constructor(label: string, key?: NodeKey) {
+		super(`[^${label}]`, key);
+		this.__label = label;
+	}
+
+	static importJSON(json: SerializedFootnoteReference): FootnoteReferenceNode {
+		return $createFootnoteReferenceNode(json.label).updateFromJSON(json);
+	}
+
+	exportJSON(): SerializedFootnoteReference {
+		return { ...super.exportJSON(), label: this.getLabel() };
+	}
+
+	createDOM(config: EditorConfig): HTMLElement {
+		const dom = super.createDOM(config);
+		dom.classList.add('footnote-reference');
+		return dom;
+	}
+
+	getLabel(): string {
+		return this.getLatest().__label;
+	}
+}
+
+export function $createFootnoteReferenceNode(label: string): FootnoteReferenceNode {
+	return $applyNodeReplacement(new FootnoteReferenceNode(label)).setMode('token');
+}
+
+export function $isFootnoteReferenceNode(
+	node: LexicalNode | null | undefined
+): node is FootnoteReferenceNode {
+	return node instanceof FootnoteReferenceNode;
+}
+
+type SerializedFootnoteDefinition = SerializedElementNode & { label: string };
+
+/** A footnote's definition, `[^label]: text`: a paragraph that says its
+ * label. */
+export class FootnoteDefinitionNode extends ElementNode {
+	__label: string;
+
+	static getType(): string {
+		return 'kuria-footnote-definition';
+	}
+
+	static clone(node: FootnoteDefinitionNode): FootnoteDefinitionNode {
+		return new FootnoteDefinitionNode(node.__label, node.__key);
+	}
+
+	constructor(label: string, key?: NodeKey) {
+		super(key);
+		this.__label = label;
+	}
+
+	static importJSON(json: SerializedFootnoteDefinition): FootnoteDefinitionNode {
+		return $createFootnoteDefinitionNode(json.label).updateFromJSON(
+			json as LexicalUpdateJSON<SerializedFootnoteDefinition>
+		);
+	}
+
+	exportJSON(): SerializedFootnoteDefinition {
+		return { ...super.exportJSON(), label: this.getLabel() };
+	}
+
+	createDOM(): HTMLElement {
+		const dom = document.createElement('p');
+		dom.className = 'footnote-definition';
+		dom.dataset.label = this.__label;
+		return dom;
+	}
+
+	updateDOM(previous: FootnoteDefinitionNode, dom: HTMLElement): boolean {
+		if (previous.__label !== this.__label) dom.dataset.label = this.__label;
+		return false;
+	}
+
+	getLabel(): string {
+		return this.getLatest().__label;
+	}
+
+	/** Enter at its end goes on in a paragraph. */
+	insertNewAfter(_: RangeSelection, restoreSelection = true): ElementNode {
+		const paragraph = $createParagraphNode();
+		this.insertAfter(paragraph, restoreSelection);
+		return paragraph;
+	}
+
+	/** Backspace at its start makes it a paragraph. */
+	collapseAtStart(): boolean {
+		const paragraph = $createParagraphNode();
+		paragraph.append(...this.getChildren());
+		this.replace(paragraph);
+		return true;
+	}
+}
+
+export function $createFootnoteDefinitionNode(label: string): FootnoteDefinitionNode {
+	return $applyNodeReplacement(new FootnoteDefinitionNode(label));
+}
+
+export function $isFootnoteDefinitionNode(
+	node: LexicalNode | null | undefined
+): node is FootnoteDefinitionNode {
+	return node instanceof FootnoteDefinitionNode;
+}
+
 /** The nodes the editor offers. */
 export const NODES: Klass<LexicalNode>[] = [
+	FootnoteReferenceNode,
+	FootnoteDefinitionNode,
 	HeadingNode,
 	QuoteNode,
 	ListNode,
@@ -170,9 +302,48 @@ const TABLE: ElementTransformer = {
 	type: 'element'
 };
 
+const FOOTNOTE_DEFINITION: ElementTransformer = {
+	dependencies: [FootnoteDefinitionNode],
+	export: (node, exportChildren) =>
+		$isFootnoteDefinitionNode(node) ? `[^${node.getLabel()}]: ${exportChildren(node)}` : null,
+	regExp: /^\[\^([^\]\n]+)\]:\s?/,
+	replace: (parent, children, match) => {
+		const definition = $createFootnoteDefinitionNode(match[1]);
+		definition.append(...children);
+		parent.replace(definition);
+	},
+	type: 'element'
+};
+
+const FOOTNOTE_REFERENCE: TextMatchTransformer = {
+	dependencies: [FootnoteReferenceNode],
+	export: (node) => ($isFootnoteReferenceNode(node) ? `[^${node.getLabel()}]` : null),
+	importRegExp: /\[\^([^\]\n]+)\](?!:)/,
+	regExp: /\[\^([^\]\n]+)\]$/,
+	replace: (node, match) => {
+		node.replace($createFootnoteReferenceNode(match[1]));
+	},
+	trigger: ']',
+	type: 'text-match'
+};
+
+/** The next footnote label, a number after any the editor holds. */
+export function $nextFootnoteLabel(): string {
+	const labels: string[] = [];
+	const visit = (node: LexicalNode) => {
+		if ($isFootnoteReferenceNode(node) || $isFootnoteDefinitionNode(node))
+			labels.push(node.getLabel());
+		if (node instanceof ElementNode) node.getChildren().forEach(visit);
+	};
+	visit($getRoot());
+	const numbers = labels.filter((l) => /^\d+$/.test(l)).map(Number);
+	return String(Math.max(0, ...numbers) + 1);
+}
+
 /** The transformers between the editor and Markdown, in the order they
  * are tried. */
 export const TRANSFORMERS: Transformer[] = [
+	FOOTNOTE_DEFINITION,
 	TABLE,
 	HORIZONTAL_RULE,
 	HEADING_WITH_ID,
@@ -187,6 +358,7 @@ export const TRANSFORMERS: Transformer[] = [
 	ITALIC_STAR,
 	ITALIC_UNDERSCORE,
 	STRIKETHROUGH,
+	FOOTNOTE_REFERENCE,
 	LINK
 ];
 

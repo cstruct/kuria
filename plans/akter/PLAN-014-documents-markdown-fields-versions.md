@@ -1,7 +1,7 @@
 ---
 number: PLAN-014
 type: plan
-revision: 22
+revision: 24
 rank: b3k
 state: active
 title: "Documents: markdown fields, versions, references, PDFs and a git remote"
@@ -684,16 +684,19 @@ Refused (T06, `git.push`). A new file in a clone has no number, and only Kuria g
 <!-- akt: PLAN-014-G02 -->
 ---
 type: gap
-revision: 2
+revision: 4
 rank: b3z
-state: open
+state: closed
 in: [PLAN-014]
-links: [Resolved by PLAN-014-T04]
+links: [Resolved by PLAN-014-T04, Resolved by PLAN-014-T10]
 title: What Markdown and the editor leave out
 ---
 
 <!-- field: description -->
 Images and other files in a body need attachments, which local mode refuses (`cli.local.unsupported`). Footnotes, merged table cells and comments aren't in the Markdown chosen. Which of these do documents need, and how?
+
+<!-- field: resolution -->
+Resolved (T10). Footnotes are in: the Markdown, the app, the editor and PDFs. Images need attachments a document holds, which local mode and clones can't carry yet; that is G06. Merged table cells and comments have no Markdown, so documents don't have them.
 
 <!-- akt: PLAN-014-G03 -->
 ---
@@ -794,3 +797,41 @@ assignee: albin@mattsson.io
 - **Tests:** `keeps_files_for_the_client_and_kuria_that_read_them`, `knows_a_request_kuria_finds_too_big` (unit), and `git-remote.spec.ts` now clones afresh at the end and checks the commit matches that of a clone that kept its files over several fetches.
 
 Lint, 374 Rust, 80 app and 33 browser tests pass.
+
+<!-- akt: PLAN-014-T10 -->
+---
+type: task
+revision: 6
+rank: b45
+state: done
+in: [PLAN-014]
+links: [Resolves PLAN-014-G02]
+title: Footnotes in markdown fields
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+Footnotes in `markdown` fields, everywhere a field is read or written (PLAN-014-G02).
+
+- **Markdown:** GitHub's footnotes, `text[^note]` and a definition `[^note]: …` anywhere in the field (`pulldown-cmark`'s `ENABLE_FOOTNOTES`). Numbered in the order first referred to; a definition nothing refers to isn't shown, and a reference to none is its text. A reference inside a footnote is a reference like any other.
+- **App (`app.references`):** each reference to a footnote a superscript number linking to `#fn:<n>`, the first with the id `fnref:<n>`, and the notes listed after the text in a "Footnotes" region, each linking back. A marked extension in `references.ts`; the sanitizer lets through those ids and in-page links, and only those.
+- **Editor (`app.editor`):** `FootnoteReferenceNode` (a token text node, `[^label]`) and `FootnoteDefinitionNode` (a paragraph saying its label), with their transformers. The Footnote button puts the next unused number at the cursor and its definition at the end, where typing goes on, starting plain: the browser test caught bold carrying over into the note. One-paragraph footnotes come back unchanged.
+- **PDF (`pdf.render`):** the typst writer reads the footnotes first, then writes each as `#footnote[…]` where first referred to and repeats its number with `#footnote(<label>)` after.
+- **Left out:** images need attachments in documents, local mode and clones (G06). Merged table cells and comments have no Markdown.
+- **Spec:** `akt.field.markdown`, `pdf.render`, `app.editor`, `app.references`; `footnote` in the nomenclature. Docs: `docs/architecture.md`, the documents example's README.
+- **Tests:** engine (typst footnotes, references in footnotes), the server's PDF test, `references.test.ts`, the editor's round trip, and `markdown-editor.spec.ts`, which inserts a footnote with the button and checks it rendered and with axe.
+
+Lint, 375 Rust, 83 app and 33 browser tests pass.
+
+<!-- akt: PLAN-014-G06 -->
+---
+type: gap
+revision: 1
+rank: b46
+state: open
+in: [PLAN-014]
+title: Images in documents
+---
+
+<!-- field: description -->
+Images in a document's body need it to hold attachments by reference, `![alt](attachment:<id>)`: kept as held by the akt (so bundles and erasure see them), uploaded from the editor, shown in the app through the download route, and given to typst for the PDF. Local mode and clones refuse attachments (`cli.local.unsupported`), so a directory and a clone would need the image files beside the akt files, and a push would need to upload them. Is that worth it, or do documents link to images kept elsewhere?
