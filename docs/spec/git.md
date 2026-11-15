@@ -2,8 +2,9 @@
 
 `git-remote-kuria` is a git remote helper, installed with `kuria`. It
 makes `kuria::<url>` a git remote, so that a container and its members
-can be cloned, fetched, diffed, rebased and pushed with git. Kuria serves
-no git protocol: the helper speaks GraphQL to Kuria.
+can be cloned, fetched, diffed, rebased and pushed with git. The helper
+speaks GraphQL to Kuria. A container that is a repository Kuria hosts
+([Repositories](#repositories)) is cloned with plain git instead.
 
 ## Cloning
 
@@ -11,7 +12,10 @@ r[git.remote]
 `git clone kuria::<url>/<number>` MUST clone the container `number` on
 the Kuria at `url`, signed in as `kuria` is (`cli.profile`,
 `cli.secret`). A number that isn't a container the subject may read MUST
-fail the clone, saying why.
+fail the clone, saying why. A container that is a repository Kuria hosts
+(`git.repo.declare`) MUST be refused, by every fetch and push too, naming
+the repository's URL to clone, or to move the clone to: its history is
+the repository's, not one the helper builds.
 
 r[git.tree]
 A clone's tree MUST hold the container's file at its root, and each
@@ -132,10 +136,12 @@ refused push MUST keep nothing.
 r[git.repo.main]
 `main` MUST hold the container and its members as `git.tree` and
 `git.pictures` lay them out, in normal form (`git.push.normal`). A push to
-`main` MUST change in Kuria what its commits changed: an akt with a live
-draft by merging into its live draft, as text, the change from each
-commit's parent to it, so that edits made meanwhile are kept; any other
-akt as `git.push` does. Merge commits MUST be taken.
+`main` MUST be a fast-forward of it, and MUST change in Kuria what its
+commits changed, each commit along its first parents from that parent: an
+akt with a live draft by merging into its live draft, as text, the change
+from the parent's text to the commit's, so that edits made meanwhile are
+kept, any other field of it as the commit has it; any other akt as
+`git.push` does. Merge commits MUST be taken.
 
 r[git.repo.commits]
 Changes made in Kuria to a repository's akter, through the app or the
@@ -150,4 +156,4 @@ change nothing in Kuria.
 r[git.repo.seed]
 A repository MUST start from the history `git-remote-kuria` builds for its
 container (`git.history`), so that clones made through the helper have the
-same commits.
+same commits and can move to it. From then on its history is its own.

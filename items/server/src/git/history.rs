@@ -169,7 +169,9 @@ fn unread(e: &CliError) -> String {
 /// Starts the repository, which has no refs, from the history the remote
 /// helper builds for its container: its objects packed and stored, then
 /// `main` and the versions' tags created, unless a racing request created
-/// them first (`git.repo.seed`).
+/// them first (`git.repo.seed`). From then on the repository is the
+/// history: `main` holds each akt as its latest revision, and Kuria's
+/// changes after that become commits (`git.repo.commits`).
 // r[impl git.repo.seed]
 pub(crate) async fn seed(state: &GitState, opened: &Opened) -> Result<(), String> {
     let history = remote(state, opened)
@@ -177,12 +179,17 @@ pub(crate) async fn seed(state: &GitState, opened: &Opened) -> Result<(), String
         .await
         .map_err(|e| unread(&e))?;
     let built = build(&opened.dir, &history).await?;
-    let kept = keep_seed(state, opened, &built).await;
+    let kept = keep_seed(state, opened, &built, &history.seen).await;
     cache::forget(&built.scratch).await;
     kept
 }
 
-async fn keep_seed(state: &GitState, opened: &Opened, built: &Built) -> Result<(), String> {
+async fn keep_seed(
+    state: &GitState,
+    opened: &Opened,
+    built: &Built,
+    seen: &BTreeMap<String, i64>,
+) -> Result<(), String> {
     use diesel_async::AsyncConnection as _;
     let Some(main) = &built.main else {
         return Ok(());
@@ -192,6 +199,8 @@ async fn keep_seed(state: &GitState, opened: &Opened, built: &Built) -> Result<(
     let mut refs = vec![("refs/heads/main".to_owned(), main.clone())];
     refs.extend(built.tags.iter().cloned());
     let mut conn = state.pool.get().await.map_err(|e| e.to_string())?;
+    let marks = super::commits::now(&mut conn, opened, Some(seen)).await?;
+    let akter: Vec<Uuid> = marks.iter().map(|m| m.akt_id).collect();
     let seeded = conn
         .transaction::<_, diesel::result::Error, _>(async |conn| {
             for (name, target) in &refs {
@@ -209,7 +218,7 @@ async fn keep_seed(state: &GitState, opened: &Opened, built: &Built) -> Result<(
                     return Err(diesel::result::Error::RollbackTransaction);
                 }
             }
-            Ok(())
+            kuria_store::git::set_marks(conn, opened.tenant, opened.akt, &marks, &akter).await
         })
         .await;
     match seeded {
@@ -219,14 +228,23 @@ async fn keep_seed(state: &GitState, opened: &Opened, built: &Built) -> Result<(
     }
 }
 
-/// The batches a push to `main` makes, each a commit's, and the akter's
-/// revisions it was checked against.
+/// The batches a push to `main` makes, each a commit's.
 pub(crate) struct Planned {
-    /// Each commit's id, its batch's operations as the `batch` mutation
-    /// takes them, and the commit Kuria keeps with its revisions.
-    pub batches: Vec<(String, Vec<Json>, Json)>,
-    /// Each akt of the container's history, by number, at its revision.
-    pub seen: BTreeMap<String, i64>,
+    pub batches: Vec<Batch>,
+}
+
+/// One commit's batch.
+pub(crate) struct Batch {
+    /// The commit's id.
+    pub id: String,
+    /// Its operations, as the `batch` mutation takes them.
+    pub operations: Vec<Json>,
+    /// The commit, as Kuria keeps it with the revisions it makes.
+    pub commit: Json,
+    /// For each akt whose file it changed, by number, the fields it
+    /// changed, at its parent: what a merge into a live draft starts from
+    /// (`git.repo.main`).
+    pub bases: BTreeMap<String, serde_json::Map<String, Json>>,
 }
 
 /// A commit's tree: each file's path, to its text as git shows it.
@@ -258,17 +276,16 @@ pub(crate) async fn files(
     Ok(tree)
 }
 
-/// The commit `id`, as `git fast-export` would give it, refusing one Kuria
-/// can't keep as it is: one with headers besides its tree, parent, author
-/// and committer, such as a signature, which every clone built again
-/// wouldn't have (`git.identity`).
+/// The commit `id`, as `git fast-export` would give it: its first parent,
+/// how many others it merges, its author, committer and message. The
+/// repository keeps the commit itself, signature and all.
 pub(crate) async fn exported(
     dir: &Path,
     env: &[(&str, String)],
     id: &str,
 ) -> Result<Exported, String> {
     let raw = git(dir, &["cat-file", "commit", id], env, None).await?;
-    let raw = String::from_utf8(raw).map_err(|_| format!("commit {id} isn't UTF-8"))?;
+    let raw = String::from_utf8_lossy(&raw).into_owned();
     let (head, message) = raw.split_once("\n\n").unwrap_or((&raw, ""));
     let mut commit = Exported {
         message: message.to_owned(),
@@ -277,15 +294,12 @@ pub(crate) async fn exported(
     for line in head.lines() {
         let (key, value) = line.split_once(' ').unwrap_or((line, ""));
         match key {
-            "tree" => {}
-            "parent" => commit.from = Some(value.to_owned()),
+            "parent" if commit.from.is_none() => commit.from = Some(value.to_owned()),
+            "parent" => commit.merges += 1,
             "author" => value.clone_into(&mut commit.author),
             "committer" => value.clone_into(&mut commit.committer),
-            _ => {
-                return Err(format!(
-                    "commit {id} has a `{key}` header, which Kuria can't keep: push it without (unsigned, in UTF-8)"
-                ));
-            }
+            // The tree, a signature and its lines, and the rest.
+            _ => {}
         }
     }
     Ok(commit)
@@ -298,12 +312,12 @@ fn split(tree: BTreeMap<String, String>) -> (BTreeMap<String, String>, BTreeMap<
 }
 
 /// Checks a push moving `main` from `old` to `new`, whose objects `env`
-/// finds, as the remote helper checks a push, and makes each new commit a
-/// batch, as it applies them (`git.repo.push`, `git.push`): a fast-forward
-/// of `main` as Kuria has it, linear, each commit in normal form and
-/// changing something in Kuria.
+/// finds, and makes each new commit along `new`'s first parents a batch of
+/// what it changed from its first parent, by the remote helper's own code
+/// (`git.repo.push`, `git.repo.main`): a fast-forward of `main` as the
+/// repository has it, merges taken, each such commit in normal form.
 // r[impl git.repo.push]
-// r[impl git.push.fast-forward]
+// r[impl git.repo.main]
 pub(crate) async fn plan_main(
     state: &GitState,
     opened: &Opened,
@@ -316,14 +330,14 @@ pub(crate) async fn plan_main(
         .await
         .is_err()
     {
-        return Err("not a fast-forward: pull and push again".to_owned());
+        return Err("not a fast-forward: fetch, merge or rebase, and push again".to_owned());
     }
     let listed = git(
         dir,
         &[
             "rev-list",
             "--reverse",
-            "--topo-order",
+            "--first-parent",
             "--parents",
             &format!("{old}..{new}"),
         ],
@@ -334,40 +348,32 @@ pub(crate) async fn plan_main(
     let mut commits = Vec::new();
     for line in String::from_utf8_lossy(&listed).lines() {
         let ids: Vec<&str> = line.split(' ').collect();
-        if ids.len() != 2 {
-            return Err("a merge commit can't be pushed to main yet: rebase instead".to_owned());
-        }
-        commits.push(ids[0].to_owned());
+        let (Some(id), Some(parent)) = (ids.first(), ids.get(1)) else {
+            return Err("a root commit can't be pushed to main".to_owned());
+        };
+        commits.push(((*id).to_owned(), (*parent).to_owned()));
     }
     let remote = remote(state, opened);
-    let history = remote.history().await.map_err(|e| unread(&e))?;
-    let built = build(dir, &history).await?;
-    cache::forget(&built.scratch).await;
-    if built.main.as_deref() != Some(old) {
-        return Err(
-            "Kuria has changes main doesn't have yet: they can't be pushed over".to_owned(),
-        );
-    }
+    let kept = kuria_cli::remote::kept_files;
     let mut batches = Vec::new();
-    let (mut before, _) = split(files(dir, env, old).await?);
-    for id in commits {
+    for (id, parent) in commits {
         let commit = exported(dir, env, &id).await?;
+        let (before, _) = split(files(dir, env, &parent).await?);
         let (tree, pictures) = split(files(dir, env, &id).await?);
         let said = |e: CliError| format!("commit {id}: {}", e.message);
         remote.check_normal(&tree, &pictures).await.map_err(said)?;
-        let kept = kuria_cli::remote::kept_files;
+        let (before, after) = (kept(&before), kept(&tree));
         let operations = remote
-            .operations(&kept(&before), &kept(&tree), &commit)
+            .operations(&before, &after, &commit)
             .await
             .map_err(said)?;
-        if operations.is_empty() {
-            return Err(format!("commit {id} changes nothing in Kuria"));
-        }
-        batches.push((id, operations, kuria_cli::remote::commit_of(&commit)));
-        before = tree;
+        let bases = remote.bases(&before, &after).await.map_err(said)?;
+        batches.push(Batch {
+            id,
+            operations,
+            commit: kuria_cli::remote::commit_of(&commit),
+            bases,
+        });
     }
-    Ok(Planned {
-        batches,
-        seen: history.seen,
-    })
+    Ok(Planned { batches })
 }

@@ -173,6 +173,11 @@ type AktType {
 	releases make revisions of (`live.declare`).
 	"""
 	liveDrafts: Boolean!
+	"""
+	Whether each of its akter is a git repository Kuria hosts, at
+	`/git/<number>.git` (`git.repo.declare`).
+	"""
+	git: Boolean!
 	createdAt: DateTime!
 	"""
 	How many akter of this type the tenant has, to a subject who may

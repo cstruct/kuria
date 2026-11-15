@@ -130,6 +130,10 @@ enum Source {
     /// The presentation the route policy accepted, whose DPoP proof isn't
     /// checked again (`authz.sender-constrained`).
     Request(RequestDecider),
+    /// Kuria itself, reading to commit its own changes to repositories
+    /// (`git.repo.commits`): it may read akter and contacts, and nothing
+    /// else. Never given to a request.
+    Kuria,
 }
 
 /// Decides permissions for one request's token.
@@ -158,6 +162,16 @@ impl Authorizer {
         }
     }
 
+    /// Kuria's own reads, of every akter and contact, to commit its own
+    /// changes to repositories (`git.repo.commits`).
+    #[must_use]
+    pub(crate) fn kuria() -> Self {
+        Self {
+            source: Source::Kuria,
+            decided: Mutex::default(),
+        }
+    }
+
     /// Whether the request's subject has `permission`. Fails closed.
     // r[impl authz.decide]
     pub async fn allows(&self, permission: &Permission) -> Result<bool, Unavailable> {
@@ -179,6 +193,12 @@ impl Authorizer {
                 .decide(&requirements)
                 .await
                 .map_err(|e| Unavailable(e.to_string()))?,
+            Source::Kuria => {
+                return Ok(matches!(
+                    permission,
+                    Permission::Read { .. } | Permission::ReadContacts
+                ));
+            }
         };
         // A step-up is a refusal here: nothing Kuria asks for requires one.
         let allowed = matches!(decision, Decision::Allow { .. });

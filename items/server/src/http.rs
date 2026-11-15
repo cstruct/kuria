@@ -70,6 +70,10 @@ pub struct Options {
     /// Where the repositories Kuria hosts are cached (`git.repo.storage`);
     /// a directory under the system's temporary one if not given.
     pub git_cache: Option<std::path::PathBuf>,
+    /// When Kuria's own changes become commits on repositories' `main`
+    /// (`git.repo.commits`), and how often they are looked at in the
+    /// background.
+    pub git_timing: crate::git::Timing,
 }
 
 /// What delivers change events: the hub subscriptions join, and what wakes
@@ -129,6 +133,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         cli_relay,
         renderer,
         git_cache,
+        git_timing,
     } = options;
     let pdf_base = public_url.clone();
     let git_base = public_url.clone();
@@ -178,12 +183,15 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         .with_storage(storage.clone())
         .with_renderer(renderer);
     let schema = schema(akter.clone(), changes.map(|c| c.hub));
-    let git_routes = crate::git::router(
-        &api,
+    let git_state =
         crate::git::GitState::new(pool, storage, decider.clone(), schema.clone(), akter)
             .caching_in(git_cache)
-            .named(git_base),
-    )?;
+            .named(git_base)
+            .timed(git_timing);
+    if let Some(every) = git_timing.every {
+        crate::git::commit_every(git_state.clone(), every);
+    }
+    let git_routes = crate::git::router(&api, git_state)?;
 
     let mut router = Router::new()
         // r[impl auth.health]
