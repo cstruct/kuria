@@ -536,16 +536,22 @@ Code still references the removed `git.*` rules until T10.
 <!-- akt: PLAN-016-T10 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b4l
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T09, Blocks PLAN-016-T12]
 title: Remove hosted repositories and git-remote-kuria
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Remove hosted repositories and `git-remote-kuria` (D08): the server's git module, routes, timing and options, the `git` flag, `git_ref` and `git_mark` (dropped by a new migration), the credential helper, the helper binary and its history builder; the server no longer depends on `kuria-cli`. The layout code moves to the CLI's `clone` module, annotated with the new `clone.*` rules.
+Hosted repositories and `git-remote-kuria` removed (D08), built in a worktree (`28f332c`).
+
+- **Gone:** the server's git module, routes, Basic-credential middleware, cache, timing and committer; `Authorizer::kuria()`; named storage; the server's dependency on `kuria-cli`; `AktType.git`; the `git` flag; `kuria_store::git`; `git_ref` and `git_mark` (dropped by migration `000023`, the old migrations kept); the helper binary, its history builder, cache and push; `kuria git-credential`; `Session::answered_by`; the batch's `commit` input; `git-remote.spec.ts` and the git part of the documents walkthrough.
+- **Kept, moved to `items/cli/src/clone/`:** `CloneOf` (batched reads, pictures, normal tree), `layout.rs` (`tree_of`, `place`, `filed`, `normal`, `title_in`), `pictures.rs`, and `fmt.rs`: `kuria fmt` finds the clone's root by `.kuria/`, lists files without git, and reads the container's number from `.kuria/clone.json`, else the root's single akt file, else asks Kuria. Annotated `clone.tree`, `clone.pictures`, `clone.normal`.
+- **Note:** stored type documents with `"git": true` no longer read (`deny_unknown_fields`).
+- Lint (tracey with no `git.*` reference), 430 Rust and 110 app tests pass in its worktree.
 
 <!-- field: acceptance -->
 - Lint and tests pass with no `git.*` rule referenced and nothing left of the removed parts.
@@ -553,16 +559,23 @@ Remove hosted repositories and `git-remote-kuria` (D08): the server's git module
 <!-- akt: PLAN-016-T11 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b4m
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T09, Blocks PLAN-016-T12]
 title: Pull and push on the server
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The server side of clones: an akt with a live draft answers its draft's Yjs state and state vector; `pushClone` takes, all or nothing, each live draft's update made against a base (refused as `STALE` unless the base is the draft's current state), checked as a live edit, and other akter's edits with their revisions, under one message; a push is a change set with its author and message in the draft's history.
+Pull and push on the server (`clone.server`, `live.state`), built in a worktree (`6e7bc9f`).
+
+- **`Akt.liveState`:** `state` (the draft as a Yjs v1 update), `stateVector` and `base`, base64; null without a live draft or read at a version or revision.
+- **The base is a Yjs snapshot, not a state vector:** a delete-only change doesn't move a state vector, so comparing vectors would let a push slip past it; a snapshot (vector and delete set) moves with every change, compared decoded. The spec says so.
+- **`pushClone(input: { message, drafts: [{ number, base, update }], operations })`:** a one-line message of 1 to 200 characters; all locks first, then each draft refused as `STALE` (naming `number`, `base`, `stateVector`, `draft`) unless its base is current, applied and checked as a WebSocket update is, diagrams rendered, kept as one `akt_draft_update` with the message (migration `000024`) and a `draft` change event; operations as a batch's with the message as reason. Any refusal names its `draft` or `operation` and keeps nothing. Answers `PushedClone { drafts, operations }`.
+- **`DraftChange.message`.** `LiveDraft::of` builds with a fixed client so an update made against one read applies to the next; `base()`, `is_at()`.
+- **Tests:** `tests/clones.rs` (5: a change set with author and message; stale bases, a delete-only one included; all or nothing across two drafts and an operation; operations' revisions and stale revisions; `liveState` round trip), engine and push unit tests.
 
 <!-- field: acceptance -->
 - Server tests: a push from a base merged with a concurrent live edit; a stale base refused; a refused field keeps nothing; the change set listed with its message.
