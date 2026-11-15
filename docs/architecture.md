@@ -172,7 +172,7 @@ Containment is the one link kind Kuria builds in ([containers](spec/containers.m
 - **The editor** is Lexical's core in a Svelte component, offering only what the field's Markdown holds. Its transformers write heading ids from node state. An unchanged value saves as it was.
 - **PDFs** are rendered by the server: the engine turns the Markdown into typst markup, and typst 0.14 compiles it with its bundled fonts.
 - **The git remote** (`git-remote-kuria`, in the CLI crate) speaks git's remote-helper protocol with fast-import and fast-export.
-  - It rebuilds a container's history from revisions, the same way in every clone.
+  - It rebuilds a container's history from revisions, the same way in every clone. Each fetch asks for every akt's revisions again, several akter to a request, but an akt's file at a revision never changes, so the clone keeps the ones it read in `.git/kuria/` and reads only new ones.
   - A pushed commit's author, committer and message are kept in `akt_commit` beside the revisions its batch made, so the commit is rebuilt exactly.
   - A clone's files leave out `revision`, which only git's history needs. Pushes are fast-forward only, and must be in normal form.
 

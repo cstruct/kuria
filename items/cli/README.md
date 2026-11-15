@@ -114,8 +114,10 @@ type.
   - `fmt`, in a clone made with `git-remote-kuria`, the crate's second
     binary ([`src/remote.rs`](src/remote.rs), docs/spec/git.md): `git clone
     kuria::<url>/<container>` builds the container's history from its
-    revisions, the same commits in every clone, and `git push` applies each
-    commit as a batch that keeps the commit;
+    revisions, the same commits in every clone, asking for many akter to a
+    request and keeping each file it read in `.git/kuria/`, so a fetch reads
+    only new revisions; `git push` applies each commit as a batch that keeps
+    the commit;
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
     <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;

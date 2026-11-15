@@ -42,9 +42,20 @@ was pushed: Kuria MUST keep its author, committer, times, message and
 parent with the revisions it made.
 
 r[git.fetch]
-A fetch MUST ask Kuria for the change events after the last one the
-clone has, and add a commit for each revision of the container and its
-members among them.
+A fetch MUST build the container's history from Kuria's revisions of it
+and its members (`git.history`), so that the commits the clone has stay
+as they were and those after them are added.
+
+r[git.fetch.cache]
+A revision never changes, so the clone MUST keep each akt's file at each
+revision it read, in its git directory, and a later fetch or push MUST NOT
+ask Kuria for one it kept. What it keeps MUST be for the client version and
+the Kuria that wrote it, and read afresh by any other.
+
+r[git.fetch.batched]
+The helper MUST ask for the revisions of many akter, and for many akter at
+revisions, in one request, and split a request Kuria refuses as too
+complex until it is taken.
 
 ## Pushing
 

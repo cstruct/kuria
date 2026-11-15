@@ -732,9 +732,9 @@ Resolved (T08). Bundles are format 2: each akt carries its versions with their p
 <!-- akt: PLAN-014-G05 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b42
-state: open
+state: closed
 in: [PLAN-014]
 links: [Resolved by PLAN-014-T09]
 title: Fetching rebuilds the whole history
@@ -742,6 +742,9 @@ title: Fetching rebuilds the whole history
 
 <!-- field: description -->
 `git-remote-kuria` rebuilds a container's whole history on every fetch and every push check. It reads each akt's revisions, and each akt at each revision, one GraphQL query apiece. That is fine for an index of tens of documents with hundreds of revisions, and slow beyond. Building only the commits after the last fetch needs the clone to keep where it got to (the change events seen, and the files at the tip), and a way to ask Kuria for the revisions of many akter at once.
+
+<!-- field: resolution -->
+Resolved for now (T09). A clone keeps every file it read, by number and revision, so a fetch reads only new revisions, and the helper asks for many akter to a request. Each fetch still lists every akt's revisions, in 1 + members/25 requests; building only the commits after the last fetch waits until an index is big enough to need it.
 
 <!-- akt: PLAN-014-T08 -->
 ---
@@ -770,17 +773,24 @@ Lint, 372 Rust and 80 app tests pass.
 <!-- akt: PLAN-014-T09 -->
 ---
 type: task
-revision: 2
+revision: 7
 rank: b44
-state: todo
+state: done
 in: [PLAN-014]
 links: [Resolves PLAN-014-G05]
 title: Fetch with a cache of files and batched queries
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 `git-remote-kuria` fetches faster without changing the server (PLAN-014-G05, a first step).
 
-- **A cache in the clone:** an akt at a revision never changes, so its clone file, title and sections are kept under `.git/kuria/`, keyed by number and revision. A later fetch reads only revisions it hasn't seen.
-- **Batched queries:** the revisions of many akter, and akter at revisions, are asked for several to a GraphQL request, by aliases, within the server's complexity limit.
-- The history built is the same, commit for commit; only the queries change.
+- **A cache in the clone (`git.fetch.cache`):** an akt's file at a revision never changes, so the helper keeps each one it read (its file, title and sections) in `.git/kuria/<remote>.files.json`, by `<number>@<revision>`, and a later fetch or push reads only the ones it lacks. The cache is for the client version and the Kuria URL that wrote it; any other starts afresh, since another client might write files otherwise.
+- **Batched queries (`git.fetch.batched`):** revisions are asked for 25 akter to a request, and akter at revisions 10 to a request, by GraphQL aliases. Measured against the server's complexity limit of 2,000: 10 akter at revisions fit and 25 don't, while 25 revision lists fit. A request Kuria refuses as too complex is split in half until it is taken.
+- **The same history:** the builder first works out each commit's revisions and members, reads the files it lacks, then builds the commits as before.
+- **What stays:** each fetch still asks for every akt's revisions, now in 1 + members/25 requests rather than one per akt. Building only the commits after the last fetch would need a server query for change events of many akter, and isn't needed at this size.
+- **Code:** `items/cli/src/remote.rs` (`Filed`, `Kept`, `Remote::akter`, `events_of`, `filed`, `moments`).
+- **Spec:** `git.fetch` reworded to what it does; `git.fetch.cache`, `git.fetch.batched` new. Docs: the CLI README, `docs/architecture.md`.
+- **Tests:** `keeps_files_for_the_client_and_kuria_that_read_them`, `knows_a_request_kuria_finds_too_big` (unit), and `git-remote.spec.ts` now clones afresh at the end and checks the commit matches that of a clone that kept its files over several fetches.
+
+Lint, 374 Rust, 80 app and 33 browser tests pass.

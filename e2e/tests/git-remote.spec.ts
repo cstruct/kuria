@@ -1,7 +1,8 @@
 // `git-remote-kuria` against the end-to-end Kuria (docs/spec/git.md): a
 // document index cloned twice with the same commits, a commit pushed back
 // as a revision, a push refused until `git pull --rebase`, one refused
-// until `kuria fmt`, and a version as a tag.
+// until `kuria fmt`, a version as a tag, and a fresh clone matching one
+// that kept its files between fetches.
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -16,6 +17,8 @@ import { seeded } from '../support/stack.ts';
 // r[verify git.history]
 // r[verify git.identity]
 // r[verify git.fetch]
+// r[verify git.fetch.cache]
+// r[verify git.fetch.batched]
 // r[verify git.push]
 // r[verify git.push.fast-forward]
 // r[verify git.push.normal]
@@ -109,4 +112,10 @@ test('a document index is cloned, pushed to and rebased with git', async () => {
 	expect(await git(a, 'tag', '--list')).toContain(`${guide}/v1`);
 	expect(await git(a, 'rev-parse', 'HEAD')).toBe(await git(b, 'rev-parse', 'HEAD'));
 	expect(existsSync(join(a, 'guides'))).toBe(true);
+
+	// Each clone kept the files it read; one that reads them all afresh
+	// builds the very same commits.
+	expect(existsSync(join(a, '.git', 'kuria', 'origin.files.json'))).toBe(true);
+	await git(cli.dir, 'clone', url, 'c');
+	expect(await git(join(cli.dir, 'c'), 'rev-parse', 'HEAD')).toBe(await git(a, 'rev-parse', 'HEAD'));
 });

@@ -80,128 +80,250 @@ pub struct History {
     pub seen: BTreeMap<String, i64>,
 }
 
-/// An akt at a revision: its shape, its clone file, its title, and its
-/// value of a `sections` field, if any.
-type AtRevision = (Shape, String, Option<String>, Option<Json>);
+/// An akt at a revision, as a clone holds it: its file, its title, and its
+/// value of a `sections` field, if any. A revision never changes, so the
+/// clone keeps what it read between fetches (`git.fetch.cache`).
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct Filed {
+    text: String,
+    title: Option<String>,
+    sections: Option<Json>,
+}
 
-const REVISIONS: &str =
-    "revisions { revision createdAt reason commit membership by { id name email } }
-  versions { number revision }";
+/// What a clone keeps between fetches: each akt's file at each revision
+/// the helper read, by `<number>@<revision>`. It is for the client and the
+/// Kuria that wrote it; another, or another version of the client, which
+/// might write files otherwise, starts afresh.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+struct Kept {
+    client: String,
+    url: String,
+    files: BTreeMap<String, Filed>,
+}
 
-impl Remote {
-    async fn revisions_of(&self, number: &str) -> Result<(Vec<Event>, Vec<(i64, i64)>), CliError> {
-        let data = self
-            .session
-            .graphql(
-                &format!("query($n: String!) {{ akt(number: $n) {{ number {REVISIONS} }} }}"),
-                json!({ "n": number }),
-            )
-            .await?;
-        if data["akt"].is_null() {
-            return Err(CliError::from_server(
-                "NOT_FOUND",
-                format!("No akt `{number}`"),
-                None,
-            ));
-        }
-        let entries = |r: &Json, key: &str| -> Vec<String> {
-            r["membership"][key]
-                .as_array()
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|e| e["number"].as_str().map(str::to_owned))
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        let events = data["akt"]["revisions"]
-            .as_array()
-            .map(|revisions| {
-                revisions
-                    .iter()
-                    .map(|r| Event {
-                        at: r["createdAt"]
-                            .as_str()
-                            .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
-                            .map(|t| t.with_timezone(&chrono::Utc))
-                            .unwrap_or_default(),
-                        number: number.to_owned(),
-                        revision: r["revision"].as_i64().unwrap_or_default(),
-                        by: format!(
-                            "{} <{}>",
-                            r["by"]["name"].as_str().unwrap_or("Kuria"),
-                            r["by"]["email"].as_str().map_or_else(
-                                || format!("{}@kuria", r["by"]["id"].as_str().unwrap_or("someone")),
-                                str::to_owned
-                            )
-                        ),
-                        reason: r["reason"].as_str().map(str::to_owned),
-                        commit: r.get("commit").filter(|c| !c.is_null()).cloned(),
-                        added: entries(r, "added_member"),
-                        removed: entries(r, "removed_member"),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        let versions = data["akt"]["versions"]
-            .as_array()
-            .map(|v| {
-                v.iter()
-                    .map(|v| {
-                        (
-                            v["number"].as_i64().unwrap_or_default(),
-                            v["revision"].as_i64().unwrap_or_default(),
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        Ok((events, versions))
+impl Kept {
+    fn path(remote: &str) -> PathBuf {
+        seen_path(remote).with_extension("files.json")
     }
 
-    /// The akt `number` at `revision`, as its clone file says it, with its
-    /// shape, and its title and its value of its `sections` field, if any.
-    async fn file_at(&self, number: &str, revision: i64) -> Result<AtRevision, CliError> {
-        let data = self
-            .session
-            .graphql(
-                &format!(
-                    "query($n: String!, $r: Int) {{ akt(number: $n, revision: $r) {{ number title state {{ key }} type {{ ...Shape }} fields {{ ...Values }} }} }} {SHAPE} {VALUES} {SOMEONE}"
-                ),
-                json!({ "n": number, "r": revision }),
+    /// What a clone kept at `path` for `url`, or nothing.
+    fn read(path: &Path, url: &str) -> Self {
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Self>(&text).ok())
+            .filter(|kept| kept.client == env!("CARGO_PKG_VERSION") && kept.url == url)
+            .unwrap_or_else(|| Self {
+                client: env!("CARGO_PKG_VERSION").to_owned(),
+                url: url.to_owned(),
+                files: BTreeMap::new(),
+            })
+    }
+
+    /// Writes it, if the clone has a git directory to hold it; a clone that
+    /// can't keep it reads everything again next time.
+    fn write(&self, path: &Path) {
+        if let Some(dir) = path.parent()
+            && std::fs::create_dir_all(dir).is_ok()
+            && let Ok(text) = serde_json::to_string(self)
+        {
+            let _ = std::fs::write(path, text);
+        }
+    }
+}
+
+fn key(number: &str, revision: i64) -> String {
+    format!("{number}@{revision}")
+}
+
+const REVISIONS: &str =
+    "number revisions { revision createdAt reason commit membership by { id name email } }
+  versions { number revision }";
+
+const AT_REVISION: &str = "number title state { key } type { ...Shape } fields { ...Values }";
+
+/// How many akter one request asks for at most: few enough to stay within
+/// the server's complexity limit, which splits a request that doesn't.
+const REVISIONS_PER_REQUEST: usize = 25;
+const FILES_PER_REQUEST: usize = 10;
+
+/// Whether Kuria refused a request for being too big.
+fn too_big(e: &CliError) -> bool {
+    let message = e.message.to_lowercase();
+    message.contains("too complex") || message.contains("nested too deep")
+}
+
+/// An akt's revisions as the history needs them, and its versions as
+/// `(number, revision)`, from what `akt { REVISIONS }` answered.
+fn events_of(number: &str, akt: &Json) -> (Vec<Event>, Vec<(i64, i64)>) {
+    let entries = |r: &Json, key: &str| -> Vec<String> {
+        r["membership"][key]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|e| e["number"].as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let events = akt["revisions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|r| Event {
+            at: r["createdAt"]
+                .as_str()
+                .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok())
+                .map(|t| t.with_timezone(&chrono::Utc))
+                .unwrap_or_default(),
+            number: number.to_owned(),
+            revision: r["revision"].as_i64().unwrap_or_default(),
+            by: format!(
+                "{} <{}>",
+                r["by"]["name"].as_str().unwrap_or("Kuria"),
+                r["by"]["email"].as_str().map_or_else(
+                    || format!("{}@kuria", r["by"]["id"].as_str().unwrap_or("someone")),
+                    str::to_owned
+                )
+            ),
+            reason: r["reason"].as_str().map(str::to_owned),
+            commit: r.get("commit").filter(|c| !c.is_null()).cloned(),
+            added: entries(r, "added_member"),
+            removed: entries(r, "removed_member"),
+        })
+        .collect();
+    let versions = akt["versions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|v| {
+            (
+                v["number"].as_i64().unwrap_or_default(),
+                v["revision"].as_i64().unwrap_or_default(),
             )
-            .await?;
-        let akt = &data["akt"];
-        let shape: Shape = read(akt["type"].clone(), "the akt type")?;
-        let fields: Vec<Value> = read(akt["fields"].clone(), "the fields")?;
-        let values: Map<String, Json> = fields
-            .iter()
-            .map(|v| (v.field().to_owned(), file_value(v)))
-            .collect();
-        let sections = fields.iter().find_map(|v| match v {
-            Value::SectionsValue { value, .. } => Some(value.clone()),
-            _ => None,
-        });
-        let text = file::clone_text(
+        })
+        .collect();
+    (events, versions)
+}
+
+/// The akt `number` at a revision, from what `akt { AT_REVISION }`
+/// answered, as its clone file says it.
+fn filed(number: &str, akt: &Json) -> Result<Filed, CliError> {
+    let shape: Shape = read(akt["type"].clone(), "the akt type")?;
+    let fields: Vec<Value> = read(akt["fields"].clone(), "the fields")?;
+    let values: Map<String, Json> = fields
+        .iter()
+        .map(|v| (v.field().to_owned(), file_value(v)))
+        .collect();
+    let sections = fields.iter().find_map(|v| match v {
+        Value::SectionsValue { value, .. } => Some(value.clone()),
+        _ => None,
+    });
+    Ok(Filed {
+        text: file::clone_text(
             &shape,
             number,
             akt["state"]["key"].as_str().unwrap_or_default(),
             &values,
-        );
-        Ok((
-            shape,
-            text,
-            akt["title"].as_str().map(str::to_owned),
-            sections,
-        ))
+        ),
+        title: akt["title"].as_str().map(str::to_owned),
+        sections,
+    })
+}
+
+/// What the history builds each commit from: the akter's revisions as of
+/// it, and the container's members then, in the order it added them.
+type Moment = (HashMap<String, i64>, Vec<String>);
+
+impl Remote {
+    /// Each of `asked`, an akt by number, at a revision if one is given,
+    /// with `body` selected and `fragments` defined: several to a request,
+    /// splitting one Kuria finds too big. Answers
+    /// them in order; an akt that isn't there is refused as `NOT_FOUND`.
+    // r[impl git.fetch.batched]
+    async fn akter(
+        &self,
+        asked: &[(String, Option<i64>)],
+        body: &str,
+        fragments: &str,
+        per_request: usize,
+    ) -> Result<Vec<Json>, CliError> {
+        let mut answers = Vec::with_capacity(asked.len());
+        let mut pending: Vec<&[(String, Option<i64>)]> =
+            asked.chunks(per_request.max(1)).rev().collect();
+        while let Some(chunk) = pending.pop() {
+            let mut declared = Vec::new();
+            let mut selected = Vec::new();
+            let mut variables = Map::new();
+            for (i, (number, revision)) in chunk.iter().enumerate() {
+                declared.push(format!("$n{i}: String!"));
+                variables.insert(format!("n{i}"), json!(number));
+                let at = match revision {
+                    Some(r) => {
+                        declared.push(format!("$r{i}: Int"));
+                        variables.insert(format!("r{i}"), json!(r));
+                        format!(", revision: $r{i}")
+                    }
+                    None => String::new(),
+                };
+                selected.push(format!("a{i}: akt(number: $n{i}{at}) {{ {body} }}"));
+            }
+            let query = format!(
+                "query({}) {{ {} }} {fragments}",
+                declared.join(", "),
+                selected.join(" ")
+            );
+            match self.session.graphql(&query, Json::Object(variables)).await {
+                Ok(data) => {
+                    for (i, (number, _)) in chunk.iter().enumerate() {
+                        let akt = &data[format!("a{i}")];
+                        if akt.is_null() {
+                            return Err(CliError::from_server(
+                                "NOT_FOUND",
+                                format!("No akt `{number}`"),
+                                None,
+                            ));
+                        }
+                        answers.push(akt.clone());
+                    }
+                }
+                Err(e) if chunk.len() > 1 && too_big(&e) => {
+                    let (first, second) = chunk.split_at(chunk.len() / 2);
+                    pending.push(second);
+                    pending.push(first);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(answers)
+    }
+
+    /// The revisions and versions of each of `numbers`.
+    async fn revisions_of(
+        &self,
+        numbers: &[String],
+    ) -> Result<Vec<(Vec<Event>, Vec<(i64, i64)>)>, CliError> {
+        let asked: Vec<(String, Option<i64>)> = numbers.iter().map(|n| (n.clone(), None)).collect();
+        let answers = self
+            .akter(&asked, REVISIONS, "", REVISIONS_PER_REQUEST)
+            .await?;
+        Ok(numbers
+            .iter()
+            .zip(&answers)
+            .map(|(n, akt)| events_of(n, akt))
+            .collect())
     }
 
     /// The container's history, built from Kuria's revisions, the same way
-    /// for every clone (`git.history`, `git.identity`).
+    /// for every clone (`git.history`, `git.identity`). Files the clone
+    /// kept from an earlier fetch aren't read again (`git.fetch.cache`).
     // r[impl git.history]
     // r[impl git.identity]
+    // r[impl git.fetch.cache]
     pub async fn history(&self) -> Result<History, CliError> {
-        let (container_events, container_versions) = self.revisions_of(&self.number).await?;
+        let mut read = self
+            .revisions_of(std::slice::from_ref(&self.number))
+            .await?;
+        let (container_events, container_versions) = read.pop().unwrap_or_default();
         let mut members: Vec<String> = Vec::new();
         for e in &container_events {
             for n in &e.added {
@@ -212,19 +334,91 @@ impl Remote {
         }
         let mut events = container_events;
         let mut versions = vec![(self.number.clone(), container_versions)];
-        for member in &members {
-            let (e, v) = self.revisions_of(member).await?;
+        for (member, (e, v)) in members.iter().zip(self.revisions_of(&members).await?) {
             events.extend(e);
             versions.push((member.clone(), v));
         }
         events.sort_by(|a, b| (a.at, &a.number, a.revision).cmp(&(b.at, &b.number, b.revision)));
         let groups = grouped(events);
-        let mut cache: HashMap<(String, i64), AtRevision> = HashMap::new();
+        let moments = self.moments(&groups);
+
+        let kept_at = Kept::path(&self.name);
+        let mut kept = Kept::read(&kept_at, &self.session.url);
+        let mut missing: Vec<(String, Option<i64>)> = Vec::new();
+        for (revisions, present) in &moments {
+            for number in std::iter::once(&self.number).chain(present) {
+                if let Some(&r) = revisions.get(number) {
+                    let wanted = (number.clone(), Some(r));
+                    if !kept.files.contains_key(&key(number, r)) && !missing.contains(&wanted) {
+                        missing.push(wanted);
+                    }
+                }
+            }
+        }
+        if !missing.is_empty() {
+            let fragments = format!("{SHAPE} {VALUES} {SOMEONE}");
+            let answers = self
+                .akter(&missing, AT_REVISION, &fragments, FILES_PER_REQUEST)
+                .await?;
+            for ((number, revision), akt) in missing.iter().zip(&answers) {
+                kept.files.insert(
+                    key(number, revision.unwrap_or_default()),
+                    filed(number, akt)?,
+                );
+            }
+            kept.write(&kept_at);
+        }
+
+        let mut commits = Vec::new();
+        for (group, (revisions, present)) in groups.iter().zip(moments) {
+            let file = |n: &str| revisions.get(n).and_then(|r| kept.files.get(&key(n, *r)));
+            let tree = match file(&self.number) {
+                Some(container) => {
+                    let placed: Vec<(String, String, Option<String>)> = present
+                        .iter()
+                        .filter_map(|n| {
+                            file(n).map(|f| (n.clone(), f.text.clone(), f.title.clone()))
+                        })
+                        .collect();
+                    tree_of(
+                        &self.number,
+                        &container.text,
+                        container.title.as_deref(),
+                        container.sections.as_ref(),
+                        &placed,
+                    )
+                }
+                None => BTreeMap::new(),
+            };
+            let (author, committer, message) = metadata(group);
+            commits.push(Built {
+                author,
+                committer,
+                message,
+                tree,
+                revisions,
+            });
+        }
+        let tags = tags_of(&versions, &commits);
+        let seen = commits
+            .last()
+            .map(|c| c.revisions.clone().into_iter().collect())
+            .unwrap_or_default();
+        Ok(History {
+            commits,
+            tags,
+            seen,
+        })
+    }
+
+    /// The akter's revisions, and the container's members, as of each of
+    /// `groups`.
+    fn moments(&self, groups: &[Vec<Event>]) -> Vec<Moment> {
         let mut revisions: HashMap<String, i64> = HashMap::new();
         let mut present: Vec<String> = Vec::new();
-        let mut commits = Vec::new();
+        let mut moments = Vec::with_capacity(groups.len());
         for group in groups {
-            for e in &group {
+            for e in group {
                 revisions.insert(e.number.clone(), e.revision);
                 if e.number == self.number {
                     for n in &e.added {
@@ -235,56 +429,9 @@ impl Remote {
                     present.retain(|n| !e.removed.contains(n));
                 }
             }
-            let mut wanted = vec![self.number.clone()];
-            wanted.extend(present.iter().cloned());
-            for number in &wanted {
-                if let Some(&r) = revisions.get(number)
-                    && !cache.contains_key(&(number.clone(), r))
-                {
-                    let read = self.file_at(number, r).await?;
-                    cache.insert((number.clone(), r), read);
-                }
-            }
-            let file = |n: &str| {
-                revisions
-                    .get(n)
-                    .and_then(|r| cache.get(&(n.to_owned(), *r)))
-            };
-            let tree = match file(&self.number) {
-                Some((_, text, title, sections)) => {
-                    let placed: Vec<(String, String, Option<String>)> = present
-                        .iter()
-                        .filter_map(|n| {
-                            file(n)
-                                .map(|(_, text, title, _)| (n.clone(), text.clone(), title.clone()))
-                        })
-                        .collect();
-                    tree_of(
-                        &self.number,
-                        text,
-                        title.as_deref(),
-                        sections.as_ref(),
-                        &placed,
-                    )
-                }
-                None => BTreeMap::new(),
-            };
-            let (author, committer, message) = metadata(&group);
-            commits.push(Built {
-                author,
-                committer,
-                message,
-                tree,
-                revisions: revisions.clone(),
-            });
+            moments.push((revisions.clone(), present.clone()));
         }
-        let tags = tags_of(&versions, &commits);
-        let seen = revisions.into_iter().collect();
-        Ok(History {
-            commits,
-            tags,
-            seen,
-        })
+        moments
     }
 }
 
@@ -1024,5 +1171,40 @@ mod tests {
                 ("c.md".to_owned(), None)
             ]
         );
+    }
+
+    // r[verify git.fetch.cache]
+    #[test]
+    fn keeps_files_for_the_client_and_kuria_that_read_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("kuria/origin.files.json");
+        let mut kept = Kept::read(&path, "https://kuria.example");
+        assert!(kept.files.is_empty());
+        kept.files.insert(
+            key("D-1", 2),
+            Filed {
+                text: "---\nnumber: D-1\n---\n".to_owned(),
+                title: Some("Index".to_owned()),
+                sections: None,
+            },
+        );
+        kept.write(&path);
+        let again = Kept::read(&path, "https://kuria.example");
+        assert_eq!(again.files["D-1@2"].title.as_deref(), Some("Index"));
+        assert!(Kept::read(&path, "https://other.example").files.is_empty());
+        let mut older: Json =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        older["client"] = json!("0.0.1");
+        std::fs::write(&path, older.to_string()).unwrap();
+        assert!(Kept::read(&path, "https://kuria.example").files.is_empty());
+    }
+
+    // r[verify git.fetch.batched]
+    #[test]
+    fn knows_a_request_kuria_finds_too_big() {
+        let refused = |m: &str| CliError::from_server("BAD_REQUEST", m.to_owned(), None);
+        assert!(too_big(&refused("Query is too complex.")));
+        assert!(too_big(&refused("Query is nested too deep.")));
+        assert!(!too_big(&refused("No akt `D-9`")));
     }
 }
