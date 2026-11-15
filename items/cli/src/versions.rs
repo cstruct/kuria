@@ -137,7 +137,8 @@ fn row(v: &Released) -> Vec<String> {
 fn text(value: Option<&Json>) -> String {
     match value {
         None | Some(Json::Null) => String::new(),
-        Some(Json::String(text)) => text.clone(),
+        // One newline at the end, however it was kept.
+        Some(Json::String(text)) => format!("{}\n", text.trim_end_matches('\n')),
         Some(other) => serde_json::to_string_pretty(other).unwrap_or_default(),
     }
 }

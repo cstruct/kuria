@@ -165,6 +165,19 @@ Containment is the one link kind Kuria builds in ([containers](spec/containers.m
 
 `docs/examples/test-protocols` shows these together: protocols kept as templates, copied for each run, and testers' verdicts adding up.
 
+## Documents
+
+- **Markdown fields:** a `markdown` field is Markdown as its author wrote it. A write only puts `{#id}` after headings without one (`engine`'s `markdown`, on `pulldown-cmark`), so text reads and diffs as written. Its references (`kuria:<number>[@<version>][#<heading>]`) keep links of the kind the field names. Those links are recorded in the source's revision only, never as a revision of the target, and akt files leave them out, as local mode leaves them unstored: the text says them.
+- **Versions** name revisions (`akt_version`, immutable by trigger). A release checks and pins references in `engine`'s `versions`. Reading at a version replays revisions, as pinned links do. In local mode a directory file keeps its akt's versions, and git keeps the text.
+- **The editor** is Lexical's core in a Svelte component, offering only what the field's Markdown holds. Its transformers write heading ids from node state. An unchanged value saves as it was.
+- **PDFs** are rendered by the server: the engine turns the Markdown into typst markup, and typst 0.14 compiles it with its bundled fonts.
+- **The git remote** (`git-remote-kuria`, in the CLI crate) speaks git's remote-helper protocol with fast-import and fast-export.
+  - It rebuilds a container's history from revisions, the same way in every clone.
+  - A pushed commit's author, committer and message are kept in `akt_commit` beside the revisions its batch made, so the commit is rebuilt exactly.
+  - A clone's files leave out `revision`, which only git's history needs. Pushes are fast-forward only, and must be in normal form.
+
+`docs/examples/documents` shows these together.
+
 ## Real-time updates
 
 Postgres is the record of every change, and Valkey tells every instance that there is something new. Nothing is written to Valkey that is not already committed in Postgres ([spec](spec/changes.md)).

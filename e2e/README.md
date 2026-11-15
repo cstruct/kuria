@@ -26,8 +26,8 @@ mise exec -- npx --prefix e2e playwright test -g "release"
 mise run e2e:serve
 ```
 
-starts the same stack, defines the release-management and
-test-protocols examples' akt types, and prints who can sign in at <http://localhost:18090> (use
+starts the same stack, defines the release-management,
+test-protocols and documents examples' akt types, and prints who can sign in at <http://localhost:18090> (use
 `localhost`, not `127.0.0.1`). Each start begins with an empty Kuria and
 a fresh Konklav. Ctrl-C stops the server.
 
@@ -133,6 +133,23 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   that leads there (or refused where none does); an akt type's list
   filtered by state and by field values in the address, sorted, and
   loading more a page at a time.
+- [`tests/documents.spec.ts`](tests/documents.spec.ts): the
+  [documents example](../docs/examples/documents/README.md):
+  - the developer writes a document in the rich-text editor, with a reference to another document's heading;
+  - the release manager's release is refused while another reference is broken, and taken once it isn't;
+  - version 1 reads as released, its links pinned, and is downloaded as a PDF and compared with the living version;
+  - the index is cloned with git, rebased onto a change made in the app and pushed, and the app shows the pushed revision.
+  
+  axe checks the refused release, the version and the comparison.
+- [`tests/markdown-editor.spec.ts`](tests/markdown-editor.spec.ts): a
+  `markdown` field written and formatted in the editor, with a reference
+  inserted through the picker, saved as Markdown, rendered as a link that
+  opens the heading, and downloaded as a PDF; axe on the picker and editor.
+- [`tests/git-remote.spec.ts`](tests/git-remote.spec.ts): `git-remote-kuria` against the stack:
+  - two clones have the same commits;
+  - a push becomes a revision, and the other clone fetches the very same commit;
+  - a push is refused until `git pull --rebase`, and another until `kuria fmt`;
+  - a version becomes a tag.
 - [`tests/test-protocols.spec.ts`](tests/test-protocols.spec.ts): the
   [test-protocols example](../docs/examples/test-protocols/README.md):
   a template of three sections copied with two of them from the copy

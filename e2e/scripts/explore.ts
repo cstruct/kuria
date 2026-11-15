@@ -4,7 +4,7 @@
 // once it answers, and prints who can sign in. Runs until Ctrl-C.
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { defineExample, defineTestProtocols } from '../support/example.ts';
+import { defineDocuments, defineExample, defineTestProtocols } from '../support/example.ts';
 import { KURIA, seeded } from '../support/stack.ts';
 
 async function healthy(): Promise<boolean> {
@@ -32,6 +32,7 @@ for (let i = 0; !(await healthy()); i++) {
 }
 await defineExample();
 await defineTestProtocols();
+await defineDocuments();
 
 const { people } = seeded();
 const rows = Object.entries(people).map(([who, p]) => `  ${who.padEnd(15)} ${p.email.padEnd(20)} ${p.password}`);

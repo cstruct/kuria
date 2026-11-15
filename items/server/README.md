@@ -6,8 +6,9 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 
 - Serving the GraphQL endpoint (`POST /graphql`), GraphQL subscriptions over
   WebSocket (`GET /graphql/ws`, `graphql-transport-ws`), attachments
-  (`POST /attachments`, `GET /attachments/{id}`), and a health check
-  (`GET /healthz`).
+  (`POST /attachments`, `GET /attachments/{id}`), `markdown` fields as
+  PDFs (`GET /akter/{number}/pdf`, rendered with typst in
+  [`src/pdf.rs`](src/pdf.rs)), and a health check (`GET /healthz`).
 - Publishing every change event from the outbox to Valkey, and delivering
   them to `changes` subscriptions in order, after catching a client up from
   its cursor.
@@ -110,6 +111,11 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   never stored. `SectionsValue.value` gives the value as `editAkt` takes
   it, whatever its depth, which `items` can only be asked for as deep as
   the query's depth limit allows.
+- Documents: `markdown` fields keep their references as links
+  ([`src/akter/references.rs`](src/akter/references.rs)).
+  - `releaseVersion` names an akt's current revision as its next version, once no reference is broken, pinning what each meant.
+  - `akt(number:, version:)` and `akt(number:, revision:)` read an akt as it was ([`src/akter/versions.rs`](src/akter/versions.rs), `akt_version`).
+  - A batch may keep the git commit it came from with its revisions (`akt_commit`), for `git-remote-kuria`.
 - Copying: `copyAkt` copies an akt and the part of its member tree chosen,
   in one transaction, into new akter of the same types in their initial
   states, with their sections remapped and their links out; each copy's

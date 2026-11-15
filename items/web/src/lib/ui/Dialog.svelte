@@ -11,15 +11,26 @@
 		/** The dialog's actions, at its foot. */
 		footer?: Snippet;
 		onOpenChange?: (open: boolean) => void;
+		/** Where focus goes when it closes, instead of what opened it: call
+		 * `preventDefault` on the event and focus it. */
+		onCloseAutoFocus?: (event: Event) => void;
 	}
 
-	let { open = $bindable(), title, description, children, footer, onOpenChange }: Props = $props();
+	let {
+		open = $bindable(),
+		title,
+		description,
+		children,
+		footer,
+		onOpenChange,
+		onCloseAutoFocus
+	}: Props = $props();
 </script>
 
 <Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Portal>
 		<Dialog.Overlay class="dialog-overlay" />
-		<Dialog.Content class="dialog-content">
+		<Dialog.Content class="dialog-content" {onCloseAutoFocus}>
 			<header>
 				<Dialog.Title class="dialog-title">{title}</Dialog.Title>
 				<Dialog.Close class="dialog-close" aria-label="Close">

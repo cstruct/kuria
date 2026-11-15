@@ -69,6 +69,11 @@
 		margin: var(--space-2) 0;
 	}
 
+	/* Told apart from the text around them by more than colour. */
+	.markdown :global(a) {
+		text-decoration: underline;
+	}
+
 	.markdown :global(small) {
 		color: var(--tone-danger-fg);
 	}

@@ -207,6 +207,12 @@
 		found = await referable(option.value);
 	}
 
+	/** Typing goes on in the editor once a dialog of its closes. */
+	function backToEditor(event: Event) {
+		event.preventDefault();
+		editor?.focus();
+	}
+
 	function insertReference() {
 		if (!chosen) return;
 		const destination = destinationOf({
@@ -299,7 +305,7 @@
 	></div>
 </div>
 
-<Dialog bind:open={linkOpen} title="Link">
+<Dialog bind:open={linkOpen} title="Link" onCloseAutoFocus={backToEditor}>
 	<form
 		id="link-form"
 		aria-label="Link"
@@ -320,6 +326,7 @@
 <Dialog
 	bind:open={referenceOpen}
 	title="Reference"
+	onCloseAutoFocus={backToEditor}
 	description="A link to an akt, one of its headings, and its living version or one of its versions."
 >
 	<form

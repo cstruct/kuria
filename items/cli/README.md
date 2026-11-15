@@ -106,6 +106,16 @@ type.
     ([`src/writes/copy.rs`](src/writes/copy.rs)): `copyAkt`, then the
     copy's members walked, parents first, to answer each copy with its
     original;
+  - `release <number> [--label]`, `versions <number>`, `diff <number>
+    <from> [<to>]`, `pdf <number> [--field] [--version] -o <file>`, and
+    `cat`/`show --version` ([`src/versions.rs`](src/versions.rs));
+    `release` and version reads work in local mode too, from git
+    ([`src/local/versions.rs`](src/local/versions.rs));
+  - `fmt`, in a clone made with `git-remote-kuria`, the crate's second
+    binary ([`src/remote.rs`](src/remote.rs), docs/spec/git.md): `git clone
+    kuria::<url>/<container>` builds the container's history from its
+    revisions, the same commits in every clone, and `git push` applies each
+    commit as a batch that keeps the commit;
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
     <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;

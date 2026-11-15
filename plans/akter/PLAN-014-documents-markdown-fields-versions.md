@@ -631,16 +631,35 @@ Lint and `mise run test` (369 Rust, 80 app) pass.
 <!-- akt: PLAN-014-T07 -->
 ---
 type: task
-revision: 5
+revision: 9
 rank: b3x
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocked by PLAN-014-T03, Blocked by PLAN-014-T04, Blocked by PLAN-014-T05, Blocked by PLAN-014-T06]
 title: The documents example and its walkthrough
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`docs/examples/documents` with `document_index.json`, `document.json` and a README. An e2e walkthrough: edit with Lexical, a deep link, release refused and then taken, the PDF downloaded, git clone, rebase onto an app change, push, shown in the app. Extend the parity test.
+The documents example, its walkthrough, the parity test and the docs.
+
+- **Example:** `docs/examples/documents`: `document_index.json` and `document.json` (written in T04 for the e2e grants), and a README covering how it fits together, the app, the command line, git and the Konklav roles.
+- **Walkthrough** (`e2e/tests/documents.spec.ts`):
+  - the developer writes a document in the editor with a reference to another's heading;
+  - the release manager's release is refused while a reference to a missing heading is broken, then taken once the heading exists;
+  - version 1 reads as released, read-only, its links pinned;
+  - its PDF downloads, and it is compared with the living version;
+  - the index is cloned with git, rebased onto a change made in the app and pushed, and the app shows the pushed text and the commit's message in the history;
+  - axe on the refused release, the version and the comparison.
+- **Parity** (`parity.spec.ts`, a third test): stamped document types with versions and references, in a git-tracked directory. Both sides answer alike for `cat`, a refused release (broken), a refused hand link, a fixed body, `release --label`, `cat --version 1` and `2`, and `diff`.
+- **Shared e2e helper:** `e2e/support/git.ts`. `e2e:serve` defines the documents example too.
+- **Fixes found by the walkthrough and parity:**
+  - The editor's dialogs gave focus back to the toolbar button, so typing after Insert reopened the dialog. `Dialog` now takes `onCloseAutoFocus`, and the editor's dialogs focus the editor.
+  - Links in rendered Markdown are underlined (axe: link-in-text-block).
+  - `kuria diff` compares texts with one final newline, as local mode and the server keep them differently.
+- **Docs:** `docs/requirements.md`; `docs/architecture.md` (a Documents section); the e2e, CLI and server READMEs.
+
+Lint, `mise run test` (369 Rust, 80 app) and `mise run e2e` (33 tests) pass.
 
 <!-- field: acceptance -->
 - The walkthrough and the parity test pass in `mise run e2e`.

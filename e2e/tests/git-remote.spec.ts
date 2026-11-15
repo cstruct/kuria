@@ -2,16 +2,14 @@
 // document index cloned twice with the same commits, a commit pushed back
 // as a revision, a push refused until `git pull --rebase`, one refused
 // until `kuria fmt`, and a version as a tag.
-import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { Cli, finished, type Ran } from '../support/cli.ts';
+import { Cli, type Ran } from '../support/cli.ts';
+import { cloneUrl, gitIn, runIn } from '../support/git.ts';
 import { defineDocuments } from '../support/example.ts';
-import { KURIA, seeded } from '../support/stack.ts';
-
-const BINARIES = join(import.meta.dirname, '..', '..', 'target', 'debug');
+import { seeded } from '../support/stack.ts';
 
 // r[verify git.remote]
 // r[verify git.tree]
@@ -28,30 +26,9 @@ test('a document index is cloned, pushed to and rebased with git', async () => {
 	await defineDocuments();
 	const admin = await api(seeded().clients.admin);
 	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
-	const run = (command: string, args: string[], cwd = cli.dir): Promise<Ran> =>
-		finished(
-			spawn(command, args, {
-				cwd,
-				env: {
-					PATH: `${BINARIES}:${process.env.PATH ?? ''}`,
-					HOME: cli.dir,
-					KURIA_CONFIG_DIR: cli.dir,
-					KURIA_SECRET_STORE: 'file',
-					KURIA_URL: KURIA,
-					KURIA_KEY: seeded().clients.admin.key,
-					GIT_AUTHOR_NAME: 'Ada',
-					GIT_AUTHOR_EMAIL: 'ada@shop.example',
-					GIT_COMMITTER_NAME: 'Ada',
-					GIT_COMMITTER_EMAIL: 'ada@shop.example'
-				},
-				stdio: ['ignore', 'pipe', 'pipe']
-			})
-		);
-	const git = async (cwd: string, ...args: string[]) => {
-		const ran = await run('git', args, cwd);
-		expect(ran.code, `git ${args.join(' ')}: ${ran.stderr}`).toBe(0);
-		return ran.stdout.trim();
-	};
+	const key = seeded().clients.admin.key;
+	const run = (command: string, args: string[], cwd = cli.dir): Promise<Ran> => runIn(cli, key, command, args, cwd);
+	const git = (cwd: string, ...args: string[]) => gitIn(cli, key, cwd, ...args);
 	const create = async (type: string, fields: Record<string, unknown>, inside: string[] = []) =>
 		(
 			await admin.graphql<{ createAkt: { number: string } }>(
@@ -77,7 +54,7 @@ test('a document index is cloned, pushed to and rebased with git', async () => {
 	await edit(index, { folders: [{ title: 'Guides', items: [setup] }, guide] });
 
 	// Cloned twice: the same tree, and the same commits.
-	const url = `kuria::${KURIA}/${index}`;
+	const url = cloneUrl(index);
 	await git(cli.dir, 'clone', url, 'a');
 	await git(cli.dir, 'clone', url, 'b');
 	const a = join(cli.dir, 'a');
