@@ -195,53 +195,23 @@ impl Akter {
     pub async fn batch_from(
         &self,
         caller: Caller<'_>,
-        mut operations: Vec<Operation>,
+        operations: Vec<Operation>,
         commit: Option<serde_json::Value>,
     ) -> Result<Vec<AktRow>, BatchError> {
-        check(&mut operations)?;
-        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await.map_err(AktError::from)?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, BatchError, _>(async |conn| {
-                lock(conn, tenant, &mut operations).await?;
-                let before = kuria_store::akter::last_change_seq(conn, tenant)
-                    .await
-                    .map_err(AktError::from)?;
-                // Each operation's akt, by position, for `@<n>`.
-                let mut created: Vec<String> = Vec::with_capacity(operations.len());
-                let mut rows = Vec::with_capacity(operations.len());
-                for (i, operation) in operations.iter().enumerate() {
-                    let mut operation = operation.clone();
-                    // r[impl akt.batch.refer]
-                    for number in operation.numbers_mut() {
-                        if let Some(Ok(n)) = referred(number) {
-                            let made = created.get(n - 1).ok_or_else(|| BatchError {
-                                operation: Some(i + 1),
-                                error: AktError::Internal(format!("`{number}` passed the check")),
-                            })?;
-                            number.clone_from(made);
-                        }
-                    }
-                    let row = run(conn, caller, operation)
-                        .await
-                        .map_err(|error| BatchError {
-                            operation: Some(i + 1),
-                            error,
-                        })?;
-                    created.push(row.number.clone());
-                    rows.push(row);
-                }
-                // r[impl git.identity]
-                if let Some(commit) = &commit {
-                    kuria_store::versions::keep_commit(conn, tenant, before, commit)
-                        .await
-                        .map_err(AktError::from)?;
-                }
-                Ok(rows)
+                batch_in(conn, caller, operations, commit.as_ref()).await
             })
             .await;
         // The relay is woken once, and only if it all committed.
+        self.woken(result)
+    }
+
+    /// Wakes the relay if `result`, of a transaction that wrote akter, is
+    /// committed.
+    pub(crate) fn woken<T, E>(&self, result: Result<T, E>) -> Result<T, E> {
         if result.is_ok()
             && let Some(published) = &self.published
         {
@@ -249,6 +219,54 @@ impl Akter {
         }
         result
     }
+}
+
+/// Runs `operations` as [`Akter::batch_from`] does, in `conn`'s
+/// transaction, which may hold other batches: a push's commits, each its
+/// own batch, all kept or none (`git.repo.push`).
+pub(crate) async fn batch_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    mut operations: Vec<Operation>,
+    commit: Option<&serde_json::Value>,
+) -> Result<Vec<AktRow>, BatchError> {
+    check(&mut operations)?;
+    let tenant: Uuid = caller.actor.tenant.into();
+    lock(conn, tenant, &mut operations).await?;
+    let before = kuria_store::akter::last_change_seq(conn, tenant)
+        .await
+        .map_err(AktError::from)?;
+    // Each operation's akt, by position, for `@<n>`.
+    let mut created: Vec<String> = Vec::with_capacity(operations.len());
+    let mut rows = Vec::with_capacity(operations.len());
+    for (i, operation) in operations.iter().enumerate() {
+        let mut operation = operation.clone();
+        // r[impl akt.batch.refer]
+        for number in operation.numbers_mut() {
+            if let Some(Ok(n)) = referred(number) {
+                let made = created.get(n - 1).ok_or_else(|| BatchError {
+                    operation: Some(i + 1),
+                    error: AktError::Internal(format!("`{number}` passed the check")),
+                })?;
+                number.clone_from(made);
+            }
+        }
+        let row = run(conn, caller, operation)
+            .await
+            .map_err(|error| BatchError {
+                operation: Some(i + 1),
+                error,
+            })?;
+        created.push(row.number.clone());
+        rows.push(row);
+    }
+    // r[impl git.identity]
+    if let Some(commit) = commit {
+        kuria_store::versions::keep_commit(conn, tenant, before, commit)
+            .await
+            .map_err(AktError::from)?;
+    }
+    Ok(rows)
 }
 
 /// Takes the batch's locks before any operation: the tenant's order lock if

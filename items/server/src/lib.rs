@@ -12,6 +12,7 @@ pub mod changes;
 pub mod cli_relay;
 mod config;
 pub mod erasure;
+mod git;
 mod graphql;
 mod http;
 pub mod oidc;

@@ -168,6 +168,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             },
             cli_relay: Some(cli_relay(valkey.clone(), &config)?),
             renderer: kuria_typst::Renderer::current(config.render_limits)?,
+            git_cache: config.git_cache.clone(),
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

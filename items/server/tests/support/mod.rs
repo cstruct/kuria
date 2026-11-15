@@ -215,6 +215,7 @@ pub fn router_storing(
             login_proxy: None,
             cli_relay: None,
             renderer: renderer(),
+            git_cache: None,
         },
     )
     .unwrap()

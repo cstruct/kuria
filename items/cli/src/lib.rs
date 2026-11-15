@@ -27,6 +27,7 @@
 
 pub mod account;
 pub mod args;
+pub mod credential;
 pub mod dpop;
 pub mod error;
 pub mod file;
@@ -116,6 +117,7 @@ pub async fn open_remote(name: &str, url: &str) -> Result<remote::Remote, CliErr
         session,
         number,
         name: name.to_owned(),
+        git_dir: remote::git_dir(),
     })
 }
 
@@ -173,6 +175,8 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
             "an akt directory has no sign-in; git says who changed what",
         )),
         (Command::Whoami, Some(root)) => whoami_local(&root),
+        // r[impl git.repo.serve]
+        (Command::GitCredential { action }, _) => credential::run(&context, &action).await,
         // r[impl git.fmt]
         (Command::Fmt { remote }, _) => {
             let url = std::process::Command::new("git")

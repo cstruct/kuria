@@ -9,7 +9,9 @@ Akt type documents: their model, their validation, and number patterns.
   container what it `contains`, what it must be `created_in` and its
   `board` columns, per multiline text field a `draft` recipe, and per
   `attachment` field its `format` (`any` or `sbom`), and its `presentation`:
-  the title field, the fields on cards and in lists, and a tone per state.
+  the title field, the fields on cards and in lists, and a tone per state;
+  and `git`, for a type that contains akt types whose akter are git
+  repositories Kuria hosts (`git.repo.declare`).
 - `AktType::title_field` and `AktType::tone`: the presentation's title
   field, else the first required single-line text field, and a state's
   tone, `neutral` unless named. Unknown

@@ -95,6 +95,13 @@ impl AktType {
         self.document.links.iter().find(|l| l.key == key)
     }
 
+    /// Whether each of this type's akter is a git repository Kuria hosts
+    /// (`git.repo.declare`).
+    #[must_use]
+    pub fn git(&self) -> bool {
+        self.document.git
+    }
+
     /// How this type contains akter of the type `key`, if it does.
     #[must_use]
     pub fn contains(&self, key: &str) -> Option<&ContainsDef> {
@@ -190,6 +197,13 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     }
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
+    }
+    // r[impl git.repo.declare]
+    if document.git && document.contains.is_empty() {
+        problems.add(
+            "git",
+            "only a type that contains akt types is a git repository",
+        );
     }
     // r[impl akt.number.pattern]
     if number.as_ref().is_some_and(NumberPattern::uses_parent) && document.created_in.is_empty() {
@@ -1142,6 +1156,24 @@ mod tests {
         );
         document["contains"] = json!([{ "type": "story", "max": 1 }]);
         assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+    }
+
+    // r[verify git.repo.declare]
+    #[test]
+    fn only_a_container_is_a_repository() {
+        let mut document = release_candidate();
+        document["git"] = json!(true);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert!(ty.git());
+        document["contains"] = json!([]);
+        document["board"] = json!(null);
+        assert_eq!(
+            problems(document),
+            ["git: only a type that contains akt types is a git repository"]
+        );
+        let plain: AktTypeDocument = serde_json::from_value(release_candidate()).unwrap();
+        assert!(!validate(plain).unwrap().git());
     }
 
     // r[verify link.kinds]

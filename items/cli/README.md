@@ -118,7 +118,15 @@ type.
     request and keeping each file it read in `.git/kuria/`, so a fetch reads
     only new revisions; embedded images' pictures are files in
     `attachments/`, linked relatively ([`src/pictures.rs`](src/pictures.rs));
-    `git push` applies each commit as a batch that keeps the commit;
+    `git push` applies each commit as a batch that keeps the commit. The
+    server runs the same code, through an in-process `session::Api`, to
+    seed the repositories it hosts and check pushes to their `main`;
+  - `git-credential get|store|erase` ([`src/credential.rs`](src/credential.rs)):
+    a git credential helper answering `get` for the signed-in Kuria with the
+    session's access token as the password, so `git -c
+    credential.helper='!kuria git-credential' clone
+    https://kuria.example/git/DOCS-1.git` works; `store` and `erase` do
+    nothing;
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
     <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;

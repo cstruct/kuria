@@ -87,6 +87,18 @@ pub(crate) async fn changes(
     akt: &Akt,
     parsed: &Parsed,
 ) -> Result<Map<String, Json>, CliError> {
+    changes_and(session, akt, parsed, &BTreeSet::new()).await
+}
+
+/// What [`changes`] answers, with each field of `also` given as the file
+/// gives it even where it is the akt's value: a push's later commit setting
+/// back what an earlier one of it changed (`git.repo.push`).
+pub(crate) async fn changes_and(
+    session: &Session,
+    akt: &Akt,
+    parsed: &Parsed,
+    also: &BTreeSet<String>,
+) -> Result<Map<String, Json>, CliError> {
     let shape = &akt.shape;
     let given = parsed.values()?;
     for key in given.keys() {
@@ -103,7 +115,7 @@ pub(crate) async fn changes(
         }
         let wanted = input_of(field, given.get(&field.key).unwrap_or(&Json::Null), &people)?;
         let now = now.map_or(Json::Null, current_input);
-        if !same_input(&wanted, &now) {
+        if !same_input(&wanted, &now) || also.contains(&field.key) {
             changed.insert(field.key.clone(), wanted);
         }
     }

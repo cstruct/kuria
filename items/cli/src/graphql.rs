@@ -11,6 +11,9 @@ impl Session {
     /// `query` with `variables`, answering its `data`, or the first error
     /// Kuria refused it with.
     pub async fn graphql(&self, query: &str, variables: Value) -> Result<Value, CliError> {
+        if let Some(api) = &self.api {
+            return answered(api.graphql(query, variables).await?);
+        }
         let url = format!("{}/graphql", self.url);
         let body = json!({ "query": query, "variables": variables });
         let response = self

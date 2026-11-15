@@ -24,6 +24,15 @@ pub struct Remote {
     pub number: String,
     /// The remote's name, for its private refs.
     pub name: String,
+    /// The git directory the helper keeps what it read in
+    /// (`git.fetch.cache`): the clone's, or a repository Kuria hosts.
+    pub git_dir: PathBuf,
+}
+
+/// The git directory git runs a helper in.
+#[must_use]
+pub fn git_dir() -> PathBuf {
+    PathBuf::from(std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_owned()))
 }
 
 /// `kuria::https://kuria.example/DOCS-1` as the Kuria URL and the number.
@@ -110,8 +119,8 @@ struct Kept {
 }
 
 impl Kept {
-    fn path(remote: &str) -> PathBuf {
-        seen_path(remote).with_extension("files.json")
+    fn path(git_dir: &Path, remote: &str) -> PathBuf {
+        seen_path(git_dir, remote).with_extension("files.json")
     }
 
     /// What a clone kept at `path` for `url`, or nothing.
@@ -380,7 +389,7 @@ impl Remote {
             events.extend(e);
             versions.push((member.clone(), v));
         }
-        let kept_at = Kept::path(&self.name);
+        let kept_at = Kept::path(&self.git_dir, &self.name);
         let mut kept = Kept::read(&kept_at, &self.session.url);
         events.sort_by(|a, b| (a.at, &a.number, a.revision).cmp(&(b.at, &b.number, b.revision)));
         let moments = self.moments(&grouped(events.clone()));
@@ -611,9 +620,14 @@ impl Remote {
     /// The bytes of the attachment `id`, from the clone's git directory if
     /// it kept them, else from Kuria, keeping them there.
     async fn picture_bytes(&self, id: &str) -> Result<Vec<u8>, CliError> {
-        let path = seen_path(&self.name).with_file_name("pictures").join(id);
+        let path = seen_path(&self.git_dir, &self.name)
+            .with_file_name("pictures")
+            .join(id);
         if let Ok(bytes) = std::fs::read(&path) {
             return Ok(bytes);
+        }
+        if let Some(api) = &self.session.api {
+            return api.attachment(id).await;
         }
         let url = format!("{}/attachments/{id}", self.session.url);
         let response = self
@@ -994,9 +1008,8 @@ fn as_kept(tree: &BTreeMap<String, String>) -> BTreeMap<String, String> {
 }
 
 /// Where the helper keeps what it saw of Kuria at its last fetch.
-fn seen_path(remote: &str) -> PathBuf {
-    let dir = std::env::var("GIT_DIR").unwrap_or_else(|_| ".git".to_owned());
-    Path::new(&dir).join("kuria").join(format!("{remote}.json"))
+fn seen_path(git_dir: &Path, remote: &str) -> PathBuf {
+    git_dir.join("kuria").join(format!("{remote}.json"))
 }
 
 /// What a file says it is, and its values in the file's form.
@@ -1121,10 +1134,11 @@ impl Remote {
     // r[impl git.push.fast-forward]
     pub async fn push(&self, commits: &[Exported], tip: &str) -> Result<(), CliError> {
         let refuse = |why: String| CliError::refused("REFUSED", why);
-        let seen: BTreeMap<String, i64> = std::fs::read_to_string(seen_path(&self.name))
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default();
+        let seen: BTreeMap<String, i64> =
+            std::fs::read_to_string(seen_path(&self.git_dir, &self.name))
+                .ok()
+                .and_then(|t| serde_json::from_str(&t).ok())
+                .unwrap_or_default();
         if self.history().await?.seen != seen {
             return Err(refuse("Kuria changed since your last fetch: not a fast-forward; `git pull --rebase` and push again".to_owned()));
         }
@@ -1161,37 +1175,52 @@ impl Remote {
                     None => files.remove(path),
                 };
             }
-            let (normal, expected) = self.normal_tree(&tree).await?;
-            // r[impl git.pictures]
-            let as_text: BTreeMap<String, String> = expected
-                .iter()
-                .map(|(p, b)| (p.clone(), String::from_utf8_lossy(b).into_owned()))
-                .collect();
-            if as_text != pictures {
-                return Err(refuse(
-                    "a commit's pictures aren't the pictures of the images it embeds, as Kuria has them: pictures are images in Kuria, uploaded there; run `kuria fmt`, amend and push again".to_owned(),
-                ));
-            }
-            if normal != tree {
-                let differ: Vec<&String> = normal
-                    .keys()
-                    .chain(tree.keys())
-                    .filter(|p| normal.get(*p) != tree.get(*p))
-                    .collect();
-                return Err(refuse(format!(
-                    "a commit's files aren't as Kuria writes them ({}): run `kuria fmt`, amend and push again",
-                    differ
-                        .iter()
-                        .map(|p| p.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )));
-            }
+            self.check_normal(&tree, &pictures).await?;
             self.apply(&as_kept(&before), &as_kept(&tree), commit)
                 .await?;
         }
         let history = self.history().await?;
-        write_seen(&self.name, &history.seen)?;
+        write_seen(&seen_path(&self.git_dir, &self.name), &history.seen)?;
+        Ok(())
+    }
+
+    /// Refuses a commit's `tree`, its files, and `pictures`, its pictures as
+    /// text, unless they are in normal form (`git.push.normal`) and its
+    /// pictures are those of the images it embeds, as Kuria has them
+    /// (`git.pictures`).
+    // r[impl git.push.normal]
+    // r[impl git.pictures]
+    pub async fn check_normal(
+        &self,
+        tree: &BTreeMap<String, String>,
+        pictures: &BTreeMap<String, String>,
+    ) -> Result<(), CliError> {
+        let refuse = |why: String| CliError::refused("REFUSED", why);
+        let (normal, expected) = self.normal_tree(tree).await?;
+        let as_text: BTreeMap<String, String> = expected
+            .iter()
+            .map(|(p, b)| (p.clone(), String::from_utf8_lossy(b).into_owned()))
+            .collect();
+        if as_text != *pictures {
+            return Err(refuse(
+                "a commit's pictures aren't the pictures of the images it embeds, as Kuria has them: pictures are images in Kuria, uploaded there; run `kuria fmt`, amend and push again".to_owned(),
+            ));
+        }
+        if normal != *tree {
+            let differ: Vec<&String> = normal
+                .keys()
+                .chain(tree.keys())
+                .filter(|p| normal.get(*p) != tree.get(*p))
+                .collect();
+            return Err(refuse(format!(
+                "a commit's files aren't as Kuria writes them ({}): run `kuria fmt`, amend and push again",
+                differ
+                    .iter()
+                    .map(|p| p.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
         Ok(())
     }
 
@@ -1202,6 +1231,34 @@ impl Remote {
         after: &BTreeMap<String, String>,
         commit: &Exported,
     ) -> Result<(), CliError> {
+        let operations = self.operations(before, after, commit).await?;
+        if operations.is_empty() {
+            return Ok(());
+        }
+        self.session
+            .graphql(
+                "mutation($input: BatchInput!) { batch(input: $input) { number } }",
+                json!({ "input": {
+                    "operations": operations,
+                    "commit": commit_of(commit),
+                } }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// One commit's changes, from `before` to `after`, the files of its
+    /// parent and of it as Kuria keeps them, as the operations of the batch
+    /// that makes them (`git.push`): each changed file an `editAkt` of the
+    /// fields it changed, from the akt as Kuria has it now, and each removed
+    /// one a `removeFromContainer`. A new file is refused.
+    // r[impl git.push]
+    pub async fn operations(
+        &self,
+        before: &BTreeMap<String, String>,
+        after: &BTreeMap<String, String>,
+        commit: &Exported,
+    ) -> Result<Vec<Json>, CliError> {
         let numbers =
             |tree: &BTreeMap<String, String>| -> Result<BTreeMap<String, String>, CliError> {
                 tree.values()
@@ -1221,11 +1278,22 @@ impl Remote {
                     ));
                 }
                 Some(was) if was == text => {}
-                Some(_) => {
+                Some(was) => {
                     let akt = crate::writes::akt(&self.session, number).await?;
                     let parsed = file::parse(text)?;
                     crate::writes::edit::check_read_only(&akt, &parsed)?;
-                    let fields = crate::writes::edit::changes(&self.session, &akt, &parsed).await?;
+                    // What the commit changed from its parent, even where
+                    // Kuria, before an earlier commit of the push, had it.
+                    let (was, now) = (file::parse(was)?.values()?, parsed.values()?);
+                    let also = was
+                        .keys()
+                        .chain(now.keys())
+                        .filter(|k| was.get(*k) != now.get(*k))
+                        .cloned()
+                        .collect();
+                    let fields =
+                        crate::writes::edit::changes_and(&self.session, &akt, &parsed, &also)
+                            .await?;
                     if !fields.is_empty() {
                         operations.push(json!({ "editAkt": { "number": number, "revision": akt.revision, "fields": fields, "reason": commit.message.trim() } }));
                     }
@@ -1241,29 +1309,35 @@ impl Remote {
             }
             operations.push(json!({ "removeFromContainer": { "container": self.number, "member": number, "reason": commit.message.trim() } }));
         }
-        if operations.is_empty() {
-            return Ok(());
-        }
-        self.session
-            .graphql(
-                "mutation($input: BatchInput!) { batch(input: $input) { number } }",
-                json!({ "input": {
-                    "operations": operations,
-                    "commit": { "author": commit.author, "committer": commit.committer, "message": commit.message },
-                } }),
-            )
-            .await?;
-        Ok(())
+        Ok(operations)
     }
 }
 
-fn write_seen(remote: &str, seen: &BTreeMap<String, i64>) -> Result<(), CliError> {
-    let path = seen_path(remote);
+/// The commit a batch came from, as Kuria keeps it with each revision it
+/// makes (`git.identity`).
+#[must_use]
+pub fn commit_of(commit: &Exported) -> Json {
+    json!({ "author": commit.author, "committer": commit.committer, "message": commit.message })
+}
+
+/// `tree`'s files with their images linked to Kuria, as Kuria keeps them.
+#[must_use]
+pub fn kept_files(tree: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    as_kept(tree)
+}
+
+/// Whether `path` is in a clone's pictures (`git.pictures`).
+#[must_use]
+pub fn is_picture_path(path: &str) -> bool {
+    is_picture(path)
+}
+
+fn write_seen(path: &Path, seen: &BTreeMap<String, i64>) -> Result<(), CliError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| crate::profile::io_error(dir, &e))?;
     }
-    std::fs::write(&path, serde_json::to_string(seen).unwrap_or_default())
-        .map_err(|e| crate::profile::io_error(&path, &e))
+    std::fs::write(path, serde_json::to_string(seen).unwrap_or_default())
+        .map_err(|e| crate::profile::io_error(path, &e))
 }
 
 /// The remote helper's conversation with git, on standard input and
@@ -1308,7 +1382,7 @@ pub async fn serve(remote: &Remote) -> Result<(), CliError> {
                     }
                 }
                 let history = remote.history().await?;
-                write_seen(&remote.name, &history.seen)?;
+                write_seen(&seen_path(&remote.git_dir, &remote.name), &history.seen)?;
                 out.write_all(&fast_import(&history, &branch))
                     .map_err(|e| CliError::unavailable(e.to_string()))?;
                 out.flush().ok();

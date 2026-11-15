@@ -59,6 +59,7 @@ impl Instance {
                 login_proxy: None,
                 cli_relay: None,
                 renderer: support::renderer(),
+                git_cache: None,
             },
         )
         .unwrap();

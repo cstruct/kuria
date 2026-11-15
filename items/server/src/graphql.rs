@@ -16,6 +16,7 @@ mod filter;
 mod page;
 mod people;
 
+pub(crate) use akter::operations_from_json;
 pub(crate) use people::someone_name;
 
 use async_graphql::{Context, ID, Object, Schema, SimpleObject};
@@ -71,7 +72,7 @@ pub(crate) struct Principal {
 }
 
 impl Principal {
-    fn actor(self) -> Actor {
+    pub(crate) fn actor(self) -> Actor {
         Actor {
             subject: self.subject,
             tenant: self.tenant,
