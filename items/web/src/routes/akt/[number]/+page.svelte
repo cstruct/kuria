@@ -33,7 +33,9 @@
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
-	import { changes, draftOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
+	import { changes, draftOf, inputOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
+	import { LiveDraft } from '#lib/akt/live.svelte.ts';
+	import LivePresence from '#lib/akt/LivePresence.svelte';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import type { AktPageQuery, Verdict } from '#lib/graphql/generated/graphql.ts';
 	import {
@@ -104,7 +106,26 @@
 	const actions = $derived(
 		actionsOf(akt && !atVersion ? availableTransitions(akt.type.transitions, akt.state) : [])
 	);
-	const editable = $derived(Boolean(akt && !akt.state.final && !atVersion));
+	// r[impl app.live]: an akt with a live draft is its live draft, edited
+	// together with everyone else who has it open.
+	const liveFor = $derived(akt?.type.liveDrafts && !atVersion ? akt.number : null);
+	let live = $state<LiveDraft | null>(null);
+	$effect(() => {
+		if (!liveFor) return;
+		const opened = new LiveDraft(liveFor);
+		live = opened;
+		return () => {
+			opened.destroy();
+			if (live === opened) live = null;
+		};
+	});
+	/** Whether the field is a text of the live draft, edited as it is typed. */
+	const isLiveText = (field: FieldDef) =>
+		field.kind === 'MARKDOWN' || (field.kind === 'TEXT' && field.multiline);
+	const editable = $derived(
+		// A live draft is edited once it is in hand, by those who may.
+		Boolean(akt && !akt.state.final && !atVersion && !(live && (live.readOnly || !live.synced)))
+	);
 	const versioned = $derived(
 		Boolean(akt && (akt.type.document as { versions?: unknown } | null)?.versions)
 	);
@@ -123,6 +144,11 @@
 
 	async function releaseVersion(label: string) {
 		if (!akt) return false;
+		// r[impl app.live]: the live draft as it is, with every edit made.
+		if (live && !(await live.settled())) {
+			toast('Your last edits haven’t reached the server yet: try again', 'danger');
+			return false;
+		}
 		const input = { number: akt.number, revision: akt.revision, label: label.trim() || null };
 		const released = await run(() => mutate(client, ReleaseVersion, { input }));
 		if (released) toast(`${akt.number}: released`, 'success');
@@ -243,6 +269,18 @@
 
 	async function save(key: string) {
 		if (!akt) return;
+		// r[impl app.live]: a field of a live draft is set in it, but for a
+		// checkbox, which the server checks for whoever checks it.
+		const kind = akt.type.fields.find((f) => f.key === key)?.kind;
+		if (live && kind !== 'CHECKBOX' && drafts[key]) {
+			if (JSON.stringify(base[key]) !== JSON.stringify(drafts[key])) {
+				live.setField(key, inputOf(drafts[key]));
+				base[key] = structuredClone($state.snapshot(drafts[key]));
+			}
+			editingField = null;
+			if (await live.settled(2000)) await refetch();
+			return;
+		}
 		const fields = oneField(key, base[key], drafts[key]);
 		if (Object.keys(fields).length === 0) {
 			editingField = null;
@@ -427,6 +465,9 @@
 					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
 						>{/if}
 				</div>
+				{#if live}
+					<LivePresence {live} />
+				{/if}
 				{#if akt.version}
 					<p class="origin" role="status">
 						Version {akt.version.number}{akt.version.label ? ` (${akt.version.label})` : ''},
@@ -511,6 +552,8 @@
 								number={akt.number}
 								judged={ownVerdicts}
 								onVerdict={(verdict) => giveVerdict(akt, verdict)}
+								liveDraft={Boolean(live)}
+								live={live && isLiveText(field) ? live : null}
 							/>
 						{/each}
 					</dl>

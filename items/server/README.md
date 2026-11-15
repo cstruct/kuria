@@ -128,6 +128,22 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   it; transitions and membership changes record the latest revision's
   fields, refusing a transition that sets fields. `Akt.draftChanges` lists
   the draft's changes by author since the latest release, or all of them.
+- Editing live drafts together ([`src/live.rs`](src/live.rs),
+  `live.sync`, `live.instances`, `live.presence`): `GET
+  /akter/{number}/live` upgrades to a WebSocket speaking the y-websocket
+  sync and awareness protocols, authenticated as `/graphql` is. A client's
+  update is taken through the write path (`Akter::take_live_update`):
+  checked as a write would be (diagrams excepted, rendered at release) and
+  kept with its author; refused, it is kept with the update that undoes
+  it, every client is sent both, and the sender an auth message saying
+  why. Readers get every change and are told their edits aren't taken.
+  Each akt's room on an instance sends its clients the draft's kept
+  updates from Postgres, woken by its clients, by the other instances
+  through the Valkey channel `kuria:live:<tenant>:<akt>` (which says only
+  that there are new updates, or carries awareness), and every second, so
+  `editAkt` and pushes reach clients too. Awareness is stamped with who
+  each client is (`person.name`). Draft edits are `DRAFT` change events,
+  a room's at most once a second.
 - Copying: `copyAkt` copies an akt and the part of its member tree chosen,
   in one transaction, into new akter of the same types in their initial
   states, with their sections remapped and their links out; each copy's
@@ -330,6 +346,13 @@ mise run test
   recording the person, and linking a contact by a verified email only, in
   the tenant signed in to only, and never relinking one.
   They need the development Postgres and Valkey (`mise run db:up`).
+- [`tests/live_sync.rs`](tests/live_sync.rs), with `yrs` clients over
+  WebSocket against two instances sharing a fresh database and the
+  development Valkey: two clients on two instances editing one draft,
+  kept by author; an `editAkt` reaching a client; a reader's update not
+  taken; a refused update undone for both; awareness stamped with who
+  each client is, reaching another instance and a late joiner, and gone
+  on leaving; and akter without a live draft, or unreadable, not found.
 - [`tests/live_drafts.rs`](tests/live_drafts.rs), against a fresh database:
   edits changing the live draft and not the revisions, refused edits
   leaving it, releases recording it as a revision and a version and refused

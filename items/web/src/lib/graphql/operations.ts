@@ -270,6 +270,7 @@ export const TypeShape = graphql(`
 	fragment TypeShape on AktType {
 		...TypeMark
 		document
+		liveDrafts
 		fields {
 			key
 			name

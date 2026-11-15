@@ -406,12 +406,12 @@ async fn a_readers_update_is_not_taken() {
         .await
         .unwrap();
     assert_eq!(reader.text("body"), "Hello.");
+    // Told at once, and again when it edits.
+    let read_only = "you may read this live draft, not edit it";
+    assert_eq!(reader.refusals, [read_only]);
     reader.insert("body", 0, "Not mine. ").await;
-    reader.until(|c| !c.refusals.is_empty()).await;
-    assert_eq!(
-        reader.refusals,
-        ["you may read this live draft, not edit it"]
-    );
+    reader.until(|c| c.refusals.len() == 2).await;
+    assert_eq!(reader.refusals, [read_only, read_only]);
     // A reader still gets every change.
     ada.insert("body", 6, " Welcome.").await;
     reader.until(|c| c.text("body").ends_with("Welcome.")).await;

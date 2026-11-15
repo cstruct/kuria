@@ -10,6 +10,7 @@
 	import VerdictButtons from './VerdictButtons.svelte';
 	import type { Judged } from './verdicts';
 	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
+	import type { LiveDraft } from './live.svelte';
 
 	interface Props {
 		field: FieldDef;
@@ -35,6 +36,12 @@
 		number?: string;
 		judged?: Judged | null;
 		onVerdict?: (verdict: Verdict | null) => void;
+		/** Whether the akt has a live draft: an edit changes it, without a
+		 * reason (`app.live`). */
+		liveDraft?: boolean;
+		/** The live draft the field's editor edits as it is typed in, for a
+		 * text field of one: no saving. */
+		live?: LiveDraft | null;
 	}
 
 	let {
@@ -55,11 +62,15 @@
 		members = [],
 		number = '',
 		judged = null,
-		onVerdict = () => {}
+		onVerdict = () => {},
+		liveDraft = false,
+		live = null
 	}: Props = $props();
 </script>
 
 <svelte:window onkeydown={(e) => editing && e.key === 'Escape' && onCancel()} />
+
+<!-- r[impl app.live]: a text field of a live draft is edited as it is typed, closed when done. -->
 
 <!-- r[impl app.inline-edit]: each field opens its own editor, in place. -->
 <!-- A dt and dd pair, as its list requires, whether shown or edited. -->
@@ -74,14 +85,20 @@
 					onSave();
 				}}
 			>
-				<FieldEditor {field} bind:draft {people} {error} {members} />
-				<label class="reason">
-					Reason <span class="optional">(optional)</span>
-					<input bind:value={reason} />
-				</label>
+				<FieldEditor {field} bind:draft {people} {error} {members} {live} />
+				{#if !liveDraft}
+					<label class="reason">
+						Reason <span class="optional">(optional)</span>
+						<input bind:value={reason} />
+					</label>
+				{/if}
 				<div class="actions">
-					<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
-					<Button variant="ghost" size="sm" onclick={onCancel}>Cancel</Button>
+					{#if live}
+						<Button variant="primary" size="sm" onclick={onCancel}>Done</Button>
+					{:else}
+						<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
+						<Button variant="ghost" size="sm" onclick={onCancel}>Cancel</Button>
+					{/if}
 				</div>
 			</form>
 		</dd>

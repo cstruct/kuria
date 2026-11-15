@@ -25,7 +25,7 @@ use crate::akter::{Actor, AktError, Caller};
 use crate::authorize::Authorizer;
 use crate::graphql::Principal;
 
-/// What a reader is told of an update they sent.
+/// What a reader is told on connecting, and of an update they sent.
 const READ_ONLY: &str = "you may read this live draft, not edit it";
 
 /// One client of a room.
@@ -66,6 +66,10 @@ impl Client {
         }
         if let Some(present) = self.room.presence() {
             opening.push(Message::Awareness(present).encode_v1());
+        }
+        // A reader is told at once that their edits won't be taken.
+        if !self.may_edit {
+            opening.push(denied(READ_ONLY));
         }
         for message in opening {
             if sink.send(Frame::Binary(message.into())).await.is_err() {

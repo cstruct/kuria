@@ -337,6 +337,11 @@ enum ChangeKind {
 	The akt released a version, of the revision `revision` (`version.history`).
 	"""
 	VERSION
+	"""
+	The akt's live draft changed; `revision` is its latest revision,
+	unchanged (`live.sync`).
+	"""
+	DRAFT
 }
 
 type ChangesSubscription {

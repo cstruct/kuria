@@ -63,6 +63,10 @@
 		"graphql": "^17.1.0",
 		"graphql-ws": "^6.4.2",
 		"lexical": "0.53.0",
-		"marked": "^18.2.0"
+		"lib0": "0.2.119",
+		"marked": "^18.2.0",
+		"y-protocols": "1.0.7",
+		"y-websocket": "3.1.0",
+		"yjs": "13.6.33"
 	}
 }
