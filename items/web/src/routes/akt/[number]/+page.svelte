@@ -108,15 +108,15 @@
 	const versioned = $derived(
 		Boolean(akt && (akt.type.document as { versions?: unknown } | null)?.versions)
 	);
-	// r[impl app.pdf]: each markdown field as a PDF, of what is being read.
+	// r[impl app.pdf]: each markdown field as a PDF, of what is being read,
+	// to download.
+	const markdownFields = $derived((akt?.type.fields ?? []).filter((f) => f.kind === 'MARKDOWN'));
 	const pdfs = $derived(
-		(akt?.type.fields ?? [])
-			.filter((f) => f.kind === 'MARKDOWN')
-			.map((f, _, all) => ({
-				key: f.key,
-				label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
-				href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}`
-			}))
+		markdownFields.map((f, _, all) => ({
+			key: f.key,
+			label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
+			href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}&download`
+		}))
 	);
 	let comparing = $state<{ from: number; to: number | null } | null>(null);
 	let compareOpen = $state(false);
@@ -624,6 +624,7 @@
 					<VersionsCard
 						number={akt.number}
 						versions={akt.versions}
+						pdfFields={markdownFields}
 						reading={atVersion}
 						releasable={!atVersion}
 						{busy}

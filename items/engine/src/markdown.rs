@@ -451,8 +451,13 @@ mod tests {
     // r[verify akt.field.markdown]
     #[test]
     fn headings_are_given_ids_and_keep_them() {
-        let cases: [(&str, &str); 8] = [
+        let cases: [(&str, &str); 9] = [
             ("# Installing\n", "# Installing {#installing}\n"),
+            // A page break is kept as it is.
+            (
+                "# One\n\n<!-- pagebreak -->\n\n# Two\n",
+                "# One {#one}\n\n<!-- pagebreak -->\n\n# Two {#two}\n",
+            ),
             (
                 "## Set up `kuria` ##\n",
                 "## Set up `kuria` {#set-up-kuria} ##\n",

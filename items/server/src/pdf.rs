@@ -43,10 +43,14 @@ type Picture = (String, String, Vec<u8>);
 pub(crate) struct Asked {
     field: Option<String>,
     version: Option<i32>,
+    /// Present, whatever its value, when the PDF is to be saved rather
+    /// than shown where it opens.
+    download: Option<String>,
 }
 
-/// `GET /akter/{number}/pdf?field=&version=`: a `markdown` field as a PDF,
-/// to a subject who may read the akt; 404 otherwise, as if it didn't exist.
+/// `GET /akter/{number}/pdf?field=&version=&download`: a `markdown` field as
+/// a PDF, to a subject who may read the akt, shown inline unless `download`
+/// is asked for; 404 otherwise, as if it didn't exist.
 // r[impl pdf.route]
 pub(crate) async fn pdf(
     State(state): State<PdfState>,
@@ -109,7 +113,12 @@ pub(crate) async fn pdf(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/pdf"),
     );
-    if let Ok(disposition) = HeaderValue::from_str(&format!("attachment; filename=\"{name}\"")) {
+    let disposition = if asked.download.is_some() {
+        "attachment"
+    } else {
+        "inline"
+    };
+    if let Ok(disposition) = HeaderValue::from_str(&format!("{disposition}; filename=\"{name}\"")) {
         headers.insert(header::CONTENT_DISPOSITION, disposition);
     }
     response

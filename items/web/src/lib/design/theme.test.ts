@@ -15,7 +15,8 @@ describe('the tokens', () => {
 		const failures: string[] = [];
 		for (const [theme, tokens] of [
 			['light', light],
-			['dark', dark]
+			// What dark doesn't redefine, as sheets' tokens, is as in light.
+			['dark', { ...light, ...dark }]
 		] as const) {
 			for (const [fg, bg, least] of PAIRS) {
 				expect(tokens[fg], `${theme} --${fg}`).toBeDefined();
@@ -26,6 +27,15 @@ describe('the tokens', () => {
 			}
 		}
 		expect(failures).toEqual([]);
+	});
+
+	// r[verify app.sheets]
+	it('keep sheets white with dark text in dark too', () => {
+		expect(light['sheet-bg']).toBe('#ffffff');
+		for (const name of Object.keys(light).filter((n) => n.startsWith('sheet-'))) {
+			expect(dark[name], `--${name} in dark`).toBeUndefined();
+			expect(forced[name], `--${name} in data-theme dark`).toBeUndefined();
+		}
 	});
 
 	it('are the same dark for the system preference and for data-theme', () => {

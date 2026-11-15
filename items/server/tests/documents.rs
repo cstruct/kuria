@@ -392,6 +392,11 @@ async fn a_version_reads_as_it_was_released() {
 /// A PDF of `number`'s body, at `version` if given.
 async fn pdf(world: &World, number: &str, version: Option<i32>) -> support::Answer {
     let query = version.map(|v| format!("&version={v}")).unwrap_or_default();
+    pdf_asked(world, number, &query).await
+}
+
+/// A PDF of `number`'s body, asked for with `query` after its field.
+async fn pdf_asked(world: &World, number: &str, query: &str) -> support::Answer {
     let request = axum::http::Request::get(format!("/akter/{number}/pdf?field=body{query}"))
         .header("authorization", "Bearer tenant")
         .body(axum::body::Body::empty())
@@ -505,4 +510,52 @@ async fn a_markdown_field_is_read_as_a_pdf() {
     )
     .await;
     assert_eq!(title.status, 404);
+}
+
+// r[verify pdf.render]
+// r[verify pdf.route]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_page_break_starts_a_page_and_a_pdf_opens_unless_downloaded() {
+    let world = World::new().await;
+    let guide = world
+        .create(
+            "Guide",
+            "# First\n\nOn page one.\n\n<!-- pagebreak -->\n\n# Second\n\nOn page two.\n",
+        )
+        .await;
+    let shown = pdf(&world, &guide, None).await;
+    assert_eq!(shown.status, 200, "{}", shown.body);
+    assert_eq!(
+        shown.headers["content-disposition"],
+        format!("inline; filename=\"{guide}.pdf\"").as_str()
+    );
+    let document = lopdf::Document::load_mem(&shown.bytes).unwrap();
+    let pages: Vec<u32> = document.get_pages().keys().copied().collect();
+    assert_eq!(pages.len(), 2);
+    let first = document.extract_text(&pages[..1]).unwrap();
+    let second = document.extract_text(&pages[1..]).unwrap();
+    assert!(
+        first.contains("page one") && !first.contains("page two"),
+        "{first:?}"
+    );
+    assert!(second.contains("page two"), "{second:?}");
+    assert!(!read_pdf(&shown.bytes).0.contains("pagebreak"));
+
+    let saved = pdf_asked(&world, &guide, "&download").await;
+    assert_eq!(saved.status, 200, "{}", saved.body);
+    assert_eq!(
+        saved.headers["content-disposition"],
+        format!("attachment; filename=\"{guide}.pdf\"").as_str()
+    );
+    world.release("tenant", &guide, None).await;
+    let version = pdf_asked(&world, &guide, "&version=1&download").await;
+    assert_eq!(
+        version.headers["content-disposition"],
+        format!("attachment; filename=\"{guide}-v1.pdf\"").as_str()
+    );
+    let version = pdf_asked(&world, &guide, "&version=1").await;
+    assert_eq!(
+        version.headers["content-disposition"],
+        format!("inline; filename=\"{guide}-v1.pdf\"").as_str()
+    );
 }

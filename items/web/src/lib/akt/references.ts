@@ -7,6 +7,7 @@
 // r[impl app.references]
 import { Lexer, Marked, type MarkedExtension, type Token, type Tokens } from 'marked';
 import { sanitized } from './markdown';
+import { PAGE_BREAK, PAGE_BREAK_HTML } from './sheets';
 
 /** A reference, as `kuria:<number>[@<version>][#<heading>]` names it. */
 export interface Reference {
@@ -207,6 +208,10 @@ export function renderReferenced(
 				const url = token.lang === 'diagram' ? drawn.get(token.text.replace(/\n$/, '')) : undefined;
 				if (!url) return false;
 				return `<figure><img src="${escaped(url)}" alt="${escaped(token.text)}"></figure>\n`;
+			},
+			// r[impl app.sheets]: a page break, which sheetsOf starts a sheet at.
+			html(token) {
+				return token.block && token.text.trim() === PAGE_BREAK ? `${PAGE_BREAK_HTML}\n` : false;
 			},
 			paragraph(token) {
 				// An image alone in its paragraph is a figure, captioned by its alt text.

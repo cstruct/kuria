@@ -75,6 +75,7 @@ import {
 	TextNode
 } from 'lexical';
 import { Lexer } from 'marked';
+import { PAGE_BREAK } from '../sheets';
 
 type SerializedFootnoteReference = SerializedTextNode & { label: string };
 
@@ -434,8 +435,58 @@ export function $toDiagram(node: LexicalNode): void {
 	node.replace($createDiagramNode(node.getTextContent()));
 }
 
+/** A page break, `<!-- pagebreak -->` on a line of its own: a gap between
+ * two sheets (`app.sheets`). */
+export class PageBreakNode extends DecoratorNode<null> {
+	static getType(): string {
+		return 'kuria-page-break';
+	}
+
+	static clone(node: PageBreakNode): PageBreakNode {
+		return new PageBreakNode(node.__key);
+	}
+
+	static importJSON(): PageBreakNode {
+		return $createPageBreakNode();
+	}
+
+	createDOM(): HTMLElement {
+		const dom = document.createElement('div');
+		dom.className = 'page-break';
+		dom.contentEditable = 'false';
+		dom.setAttribute('role', 'separator');
+		dom.setAttribute('aria-label', 'Page break');
+		return dom;
+	}
+
+	updateDOM(): boolean {
+		return false;
+	}
+
+	decorate(): null {
+		return null;
+	}
+
+	isInline(): false {
+		return false;
+	}
+
+	getTextContent(): string {
+		return '\n';
+	}
+}
+
+export function $createPageBreakNode(): PageBreakNode {
+	return $applyNodeReplacement(new PageBreakNode());
+}
+
+export function $isPageBreakNode(node: LexicalNode | null | undefined): node is PageBreakNode {
+	return node instanceof PageBreakNode;
+}
+
 /** The nodes the editor offers. */
 export const NODES: Klass<LexicalNode>[] = [
+	PageBreakNode,
 	DiagramNode,
 	ImageNode,
 	FootnoteReferenceNode,
@@ -483,6 +534,23 @@ const HORIZONTAL_RULE: ElementTransformer = {
 			parent.insertBefore(rule);
 		}
 		rule.selectNext();
+	},
+	type: 'element'
+};
+
+/** A page break, written exactly as the field holds it. */
+const PAGE_BREAK_LINE: ElementTransformer = {
+	dependencies: [PageBreakNode],
+	export: (node) => ($isPageBreakNode(node) ? PAGE_BREAK : null),
+	regExp: /^ {0,3}<!-- pagebreak -->\s*$/,
+	replace: (parent, _children, _match, isImport) => {
+		const pageBreak = $createPageBreakNode();
+		if (isImport || parent.getNextSibling() != null) {
+			parent.replace(pageBreak);
+		} else {
+			parent.insertBefore(pageBreak);
+		}
+		pageBreak.selectNext();
 	},
 	type: 'element'
 };
@@ -633,6 +701,7 @@ const DIAGRAM: ElementTransformer = {
 /** The transformers between the editor and Markdown, in the order they
  * are tried. */
 export const TRANSFORMERS: Transformer[] = [
+	PAGE_BREAK_LINE,
 	DIAGRAM,
 	FOOTNOTE_DEFINITION,
 	TABLE,
@@ -696,7 +765,7 @@ export function $fromMarkdown(
 	if (diagrams) $getRoot().getChildren().forEach($toDiagram);
 	// Somewhere to type after a picture or diagram that ends the text.
 	const last = $getRoot().getLastChild();
-	if ($isDiagramNode(last)) $getRoot().append($createParagraphNode());
+	if ($isDiagramNode(last) || $isPageBreakNode(last)) $getRoot().append($createParagraphNode());
 }
 
 /** The editor's root, in a read, as a field's Markdown, without the empty

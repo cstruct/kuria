@@ -1,0 +1,203 @@
+/*
+ * Sheets (app.sheets): a markdown field shown and edited as A4 pages,
+ * 210 mm wide or scaled down to fit, white with dark text whatever the
+ * theme, with the PDF's 2 cm margins and a serif close to its Libertinus
+ * Serif. Inside a sheet the theme's tokens are the sheet's, so that what
+ * a component styles with them stays legible on white.
+ */
+
+.sheets {
+	/* The theme around the sheets, kept before a sheet redefines it. */
+	--sheet-outside: var(--bg-subtle);
+	--sheet-edge: var(--border);
+	container-type: inline-size;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.sheet {
+	--sheet-width: min(100cqi, 210mm);
+	--sheet-margin: calc(var(--sheet-width) * 2 / 21);
+	--sheet-height: calc(var(--sheet-width) * 297 / 210);
+	--bg: var(--sheet-bg);
+	--bg-subtle: var(--sheet-subtle);
+	--bg-muted: var(--sheet-code-bg);
+	--surface: var(--sheet-bg);
+	--surface-raised: var(--sheet-bg);
+	--border: var(--sheet-border);
+	--border-strong: var(--sheet-border-strong);
+	--text: var(--sheet-text);
+	--text-muted: var(--sheet-muted);
+	--accent: var(--sheet-link);
+	--accent-hover: var(--sheet-link-hover);
+	--focus: var(--sheet-focus);
+	--tone-danger-fg: var(--sheet-danger);
+	--font-mono: var(--font-sheet-mono);
+	color-scheme: light;
+	position: relative;
+	box-sizing: border-box;
+	width: var(--sheet-width);
+	max-width: 100%;
+	margin-inline: auto;
+	padding: var(--sheet-margin);
+	box-shadow:
+		0 0 0 1px var(--sheet-edge),
+		var(--shadow-sm);
+	background-color: var(--sheet-bg);
+	color: var(--sheet-text);
+	font-family: var(--font-sheet);
+	/* 11 pt on a 210 mm sheet, scaled with it, but never too small to read. */
+	font-size: max(0.8125rem, calc(var(--sheet-width) * 11 / 595.28));
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+	/* A faint guide wherever a sheet of the PDF would end. */
+	background-image: linear-gradient(
+		to bottom,
+		transparent calc(100% - 1px),
+		var(--sheet-guide) calc(100% - 1px)
+	);
+	background-size: 100% var(--sheet-height);
+	background-repeat: repeat-y;
+}
+
+/* The editor's sheets, where a page break is a gap in one sheet, mark
+   where they would end themselves. */
+.sheet.edited {
+	background-image: none;
+}
+
+/* A sheet a page break ends is a whole page. */
+.sheet.ended {
+	min-height: var(--sheet-height);
+}
+
+.sheet > :first-child {
+	margin-top: 0;
+}
+
+.sheet > :last-child {
+	margin-bottom: 0;
+}
+
+.sheet :is(h1, h2, h3, h4, h5, h6) {
+	margin: 1em 0 0.5em;
+	font-weight: 700;
+	line-height: 1.25;
+}
+
+.sheet h1 {
+	font-size: 1.4em;
+}
+
+.sheet h2 {
+	font-size: 1.2em;
+}
+
+.sheet :is(h3, h4, h5, h6) {
+	font-size: 1em;
+}
+
+.sheet p {
+	margin: 0 0 0.8em;
+}
+
+.sheet :is(ul, ol) {
+	margin: 0 0 0.8em;
+	padding-left: 1.5em;
+}
+
+.sheet a {
+	color: var(--sheet-link);
+	text-decoration: underline;
+}
+
+.sheet a:visited {
+	color: var(--sheet-visited);
+}
+
+.sheet a:hover {
+	color: var(--sheet-link-hover);
+}
+
+.sheet :is(code, kbd, samp, pre) {
+	font-family: var(--font-sheet-mono);
+	font-size: 0.82em;
+}
+
+.sheet code {
+	padding: 0 0.2em;
+	border-radius: var(--radius-sm);
+	background: var(--sheet-code-bg);
+	color: var(--sheet-text);
+}
+
+.sheet pre {
+	margin: 0 0 0.8em;
+	padding: 0.6em 0.8em;
+	border-radius: var(--radius-sm);
+	background: var(--sheet-code-bg);
+	white-space: pre-wrap;
+}
+
+.sheet pre code {
+	padding: 0;
+	font-size: 1em;
+}
+
+.sheet blockquote {
+	margin: 0 0 0.8em;
+	padding-left: 1em;
+	border-left: 3px solid var(--sheet-border);
+}
+
+.sheet hr {
+	margin: 0.8em 0;
+	border: 0;
+	border-top: 1px solid var(--sheet-text);
+}
+
+.sheet table {
+	width: auto;
+	margin: 0 0 0.8em;
+	border-collapse: collapse;
+}
+
+.sheet :is(th, td) {
+	padding: 0.25em 0.5em;
+	border: 1px solid var(--sheet-border-strong);
+	text-align: left;
+}
+
+.sheet figure {
+	margin: 0 0 0.8em;
+	text-align: center;
+}
+
+.sheet img {
+	max-width: 100%;
+	height: auto;
+}
+
+.sheet figcaption {
+	font-size: 0.9em;
+	color: var(--sheet-muted);
+}
+
+.sheet section[aria-label='Footnotes'] {
+	font-size: 0.85em;
+	color: var(--sheet-text);
+}
+
+.sheet section[aria-label='Footnotes'] hr {
+	width: 30%;
+	border-top-color: var(--sheet-muted);
+}
+
+.sheet small {
+	color: var(--sheet-danger);
+}
+
+.sheet :focus-visible {
+	outline-color: var(--sheet-focus);
+}

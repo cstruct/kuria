@@ -3,6 +3,7 @@
 	import { renderMarkdown } from './markdown';
 	import { pictureOf } from './members';
 	import { renderReferenced, type Reference } from './references';
+	import { sheetsOf } from './sheets';
 	import { textOf, type Value } from './values';
 
 	/** Where a reference goes in the app: the akt's page, at its version and
@@ -35,16 +36,17 @@
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a href={value.url} rel="noreferrer noopener external">{value.label ?? value.url}</a>
 {:else if value.__typename === 'MarkdownValue'}
-	{@const html = renderReferenced(
-		value.markdown,
-		value.references,
-		hrefOf,
-		value.images,
-		value.diagrams
+	<!-- r[impl app.sheets]: A4 sheets, a new one at each page break. -->
+	{@const sheets = sheetsOf(
+		renderReferenced(value.markdown, value.references, hrefOf, value.images, value.diagrams)
 	)}
-	<!-- Sanitized by renderReferenced. -->
-	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-	<div class="markdown">{@html html}</div>
+	<div class="sheets">
+		{#each sheets as sheet, i (i)}
+			<!-- Sanitized by renderReferenced. -->
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			<div class="sheet" class:ended={i < sheets.length - 1}>{@html sheet}</div>
+		{/each}
+	</div>
 {:else if value.__typename === 'TextValue' && multiline}
 	<!-- Sanitized by renderMarkdown. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->

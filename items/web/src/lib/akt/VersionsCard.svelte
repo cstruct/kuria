@@ -19,6 +19,8 @@
 	interface Props {
 		number: string;
 		versions: readonly ShownVersion[];
+		/** The akt's `markdown` fields, each version's PDFs. */
+		pdfFields?: readonly { key: string; name: string }[];
 		/** The version being read, if one is. */
 		reading: number | null;
 		/** Whether the living version can be released now. */
@@ -29,13 +31,26 @@
 		onCompare: (from: number, to: number | null) => void;
 	}
 
-	let { number, versions, reading, releasable, busy, refusal, onRelease, onCompare }: Props =
-		$props();
+	let {
+		number,
+		versions,
+		pdfFields = [],
+		reading,
+		releasable,
+		busy,
+		refusal,
+		onRelease,
+		onCompare
+	}: Props = $props();
 
 	let releaseOpen = $state(false);
 	let label = $state('');
 	let from = $state('');
 	let to = $state('');
+
+	// r[impl app.pdf]: each version's PDF, opened where it is shown.
+	const pdfOf = (version: number, field: string) =>
+		`/akter/${encodeURIComponent(number)}/pdf?field=${encodeURIComponent(field)}&version=${version}`;
 
 	const page = (version: number | null) =>
 		`${resolve('/akt/[number]', { number })}${version ? `?version=${version}` : ''}`;
@@ -69,6 +84,22 @@
 							>{ago(v.releasedAt)}</time
 						></span
 					>
+					{#if pdfFields.length}
+						<span class="pdfs">
+							{#each pdfFields as f (f.key)}
+								{@const shown = pdfFields.length > 1 ? `Open ${f.name} PDF` : 'Open PDF'}
+								<!-- The server's PDF route, not a page of the app. -->
+								<!-- eslint-disable svelte/no-navigation-without-resolve -->
+								<a
+									href={pdfOf(v.number, f.key)}
+									target="_blank"
+									rel="noopener"
+									aria-label="{shown} of version {v.number}">{shown}</a
+								>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							{/each}
+						</span>
+					{/if}
 				</li>
 			{/each}
 		</ol>
@@ -158,6 +189,13 @@
 	.versions li {
 		display: flex;
 		flex-direction: column;
+	}
+
+	.pdfs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-3);
+		font-size: var(--text-sm);
 	}
 
 	.versions li[aria-current='page'] a {

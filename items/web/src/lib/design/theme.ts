@@ -35,7 +35,18 @@ export const PAIRS: [fg: string, bg: string, least: number][] = [
 	['border-strong', 'bg', 3],
 	['border-strong', 'surface', 3],
 	['focus', 'bg', 3],
-	['focus', 'surface', 3]
+	['focus', 'surface', 3],
+	// Sheets (app.sheets): the same in either theme.
+	['sheet-text', 'sheet-bg', 4.5],
+	['sheet-text', 'sheet-subtle', 4.5],
+	['sheet-text', 'sheet-code-bg', 4.5],
+	['sheet-muted', 'sheet-bg', 4.5],
+	['sheet-link', 'sheet-bg', 4.5],
+	['sheet-link-hover', 'sheet-bg', 4.5],
+	['sheet-visited', 'sheet-bg', 4.5],
+	['sheet-danger', 'sheet-bg', 4.5],
+	['sheet-border-strong', 'sheet-bg', 3],
+	['sheet-focus', 'sheet-bg', 3]
 ];
 
 function channel(value: number): number {

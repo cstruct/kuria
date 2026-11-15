@@ -72,7 +72,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   them; `PeopleSelect`, several people for a `multiple` user field),
   the
   header's title and actions (`header.ts`), sanitized Markdown
-  (`markdown.ts`), pickers that search akter (`pickers.ts`), and
+  (`markdown.ts`), a `markdown` field as white A4 sheets, split at its
+  page breaks, with guides where a sheet would otherwise end (`sheets.ts`,
+  styled by `src/lib/design/sheets.css`), pickers that search akter (`pickers.ts`), and
   whom pickers offer (`people.ts`: me, the tenant's users, contacts),
   linking a contact to a user (`contacts.ts`), each field kind's editor,
   input and text (`values.ts`), refusals

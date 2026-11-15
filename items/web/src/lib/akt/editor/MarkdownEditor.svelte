@@ -56,10 +56,12 @@
 	import { upload } from '../upload';
 	import { pickable } from '../pickers';
 	import { destinationOf } from '../references';
+	import { A4, guideOffsets } from '../sheets';
 	import {
 		$toDiagram as toDiagram,
 		setDiagramRenderer,
 		$createImageNode as createImage,
+		$createPageBreakNode as createPageBreak,
 		$createFootnoteDefinitionNode as createFootnoteDefinition,
 		$createFootnoteReferenceNode as createFootnoteReference,
 		$fromMarkdown as fromMarkdown,
@@ -165,6 +167,18 @@
 		diagramSource = '';
 	}
 
+	// r[impl app.sheets]: a page break inserted at the cursor, typing going
+	// on in the next sheet.
+	function insertPageBreak() {
+		editor?.update(() => {
+			const pageBreak = createPageBreak();
+			insertAtRoot(pageBreak);
+			if (!pageBreak.getNextSibling()) pageBreak.insertAfter(createParagraph());
+			pageBreak.selectNext();
+		});
+		editor?.focus();
+	}
+
 	function insertDiagram() {
 		editor?.update(() => {
 			const code = createCode('diagram');
@@ -194,7 +208,27 @@
 	}
 
 	let root: HTMLDivElement;
+	/** Where the guides are, from the top of the sheets, and how tall. */
+	let guides = $state<{ tops: number[]; height: number }>({ tops: [], height: 0 });
 	let editor: LexicalEditor | undefined;
+
+	// r[impl app.sheets]: a faint guide wherever a sheet would end, counted
+	// from the sheet's start: the top, or the page break before it.
+	function placeGuides() {
+		if (!root) return;
+		const sheets: [number, number][] = [];
+		let start = 0;
+		for (const pageBreak of root.querySelectorAll<HTMLElement>(':scope > .page-break')) {
+			sheets.push([start, pageBreak.offsetTop]);
+			start = pageBreak.offsetTop + pageBreak.offsetHeight;
+		}
+		sheets.push([start, root.offsetHeight]);
+		const tops = guideOffsets(sheets, root.offsetWidth * A4);
+		const height = root.offsetHeight;
+		if (height !== guides.height || tops.join() !== guides.tops.join()) {
+			guides = { tops, height };
+		}
+	}
 	let block = $state('paragraph');
 
 	onMount(() => {
@@ -221,6 +255,8 @@
 		});
 		instance.setRootElement(root);
 		editor = instance;
+		const resized = new ResizeObserver(placeGuides);
+		resized.observe(root);
 		setDiagramRenderer(instance, renderDiagram);
 		const unregister = mergeRegister(
 			registerRichText(instance),
@@ -247,8 +283,10 @@
 			const now = editorState.read(() => toMarkdown());
 			text = now === unchanged ? original : now;
 			if (diagrams) followDiagramCode();
+			placeGuides();
 		});
 		return () => {
+			resized.disconnect();
 			stop();
 			unregister();
 			instance.setRootElement(null);
@@ -517,6 +555,7 @@
 			onclick={() => editor?.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined)}
 			>Rule</Button
 		>
+		<Button size="sm" variant="ghost" onclick={insertPageBreak}>Page break</Button>
 		<Button
 			size="sm"
 			variant="ghost"
@@ -542,15 +581,24 @@
 			<Button size="sm" variant="ghost" onclick={insertDiagram}>Diagram</Button>
 		{/if}
 	</div>
-	<div
-		class="content markdown"
-		bind:this={root}
-		contenteditable="true"
-		role="textbox"
-		aria-multiline="true"
-		aria-label={label}
-		tabindex="0"
-	></div>
+	<div class="sheets">
+		<div class="paper">
+			<div
+				class="content sheet edited"
+				bind:this={root}
+				contenteditable="true"
+				role="textbox"
+				aria-multiline="true"
+				aria-label={label}
+				tabindex="0"
+			></div>
+			<svg class="guides" aria-hidden="true" width="100%" height={guides.height}>
+				{#each guides.tops as top (top)}
+					<line x1="0" x2="100%" y1={top + 0.5} y2={top + 0.5} />
+				{/each}
+			</svg>
+		</div>
+	</div>
 	{#if diagramCode}
 		<section class="diagram-preview" aria-label="Diagram preview">
 			<div class="preview-head">
@@ -705,10 +753,43 @@
 		border-bottom: 1px solid var(--border);
 	}
 
+	.sheets {
+		padding: var(--space-4) var(--space-3);
+		background: var(--sheet-outside);
+	}
+
+	.paper {
+		position: relative;
+		width: min(100cqi, 210mm);
+		margin-inline: auto;
+	}
+
 	.content {
-		min-height: 10rem;
-		padding: var(--space-3);
+		min-height: calc(var(--sheet-margin) * 2 + 8em);
 		outline: none;
+	}
+
+	.guides {
+		position: absolute;
+		top: 0;
+		left: 0;
+		pointer-events: none;
+	}
+
+	.guides line {
+		stroke: var(--sheet-guide);
+		stroke-dasharray: 4 4;
+	}
+
+	/* A page break: the end of one sheet, a gap, and the start of the next. */
+	.content :global(.page-break) {
+		height: var(--space-4);
+		margin: var(--sheet-margin) calc(-1 * var(--sheet-margin));
+		background: var(--sheet-outside);
+		box-shadow:
+			inset 0 1px 0 var(--sheet-edge),
+			inset 0 -1px 0 var(--sheet-edge);
+		cursor: default;
 	}
 
 	.content:focus-visible {

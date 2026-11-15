@@ -8,6 +8,7 @@ import {
 	$isImageNode,
 	$isFootnoteReferenceNode,
 	$isDiagramNode,
+	$isPageBreakNode,
 	$nextFootnoteLabel,
 	$toMarkdown,
 	atx,
@@ -40,6 +41,10 @@ describe('the editor’s Markdown', () => {
 		['links and references', '[web](https://example.com) and [setup](kuria:DOCS-1-D04@2#install)'],
 		['tables', '| Name | Value |\n| --- | --- |\n| a | 1 |\n| b | 2 |'],
 		['rules', 'Above\n\n---\n\nBelow'],
+		[
+			'page breaks',
+			'# One {#one}\n\nText.\n\n<!-- pagebreak -->\n\n## Two {#two}\n\n- a\n\n<!-- pagebreak -->\n\nEnd.'
+		],
 		['images', '![The chart](kuria:IMG-1) inline, and ![a \\[bracket\\]](kuria:IMG-2@3).'],
 		[
 			'footnotes',
@@ -138,5 +143,29 @@ describe('the editor’s Markdown', () => {
 			{ discrete: true }
 		);
 		expect(editor.getEditorState().read(() => $toMarkdown())).toBe(markdown);
+	});
+
+	// r[verify app.sheets]
+	it('hold a page break as its own node, written exactly as the field holds it', () => {
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(
+			() => $fromMarkdown('One.\n\n  <!-- pagebreak -->  \n\nTwo.\n\n<!-- pagebreak -->'),
+			{
+				discrete: true
+			}
+		);
+		editor.getEditorState().read(() => {
+			const kinds = $getRoot()
+				.getChildren()
+				.map((n) => ($isPageBreakNode(n) ? 'page break' : n.getType()));
+			// Somewhere to type after a page break that ends the text.
+			expect(kinds).toEqual(['paragraph', 'page break', 'paragraph', 'page break', 'paragraph']);
+			expect($toMarkdown()).toBe('One.\n\n<!-- pagebreak -->\n\nTwo.\n\n<!-- pagebreak -->');
+		});
 	});
 });

@@ -1,7 +1,7 @@
 //! A `markdown` field as typst markup, for its PDF (`pdf.render`): its
 //! headings, which become the PDF's bookmarks, text, lists, task lists,
-//! quotes, code, tables, rules and footnotes, and its references as links
-//! to the app.
+//! quotes, code, tables, rules, footnotes and page breaks, and its
+//! references as links to the app.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
@@ -17,6 +17,9 @@ const PREAMBLE: &str = "#set page(paper: \"a4\", margin: 2cm)
 #show raw: set text(font: \"DejaVu Sans Mono\", size: 9pt)
 #show link: underline
 ";
+
+/// A line holding only this is a page break (`akt.field.markdown`).
+const PAGE_BREAK: &str = "<!-- pagebreak -->";
 
 /// Text, escaped so that typst reads it as text.
 fn escaped(text: &str) -> String {
@@ -70,6 +73,10 @@ struct Writer<'a> {
     cell: Option<String>,
     /// Whether the cells are the table's header.
     header: bool,
+    /// Whether it is in an HTML block.
+    html: bool,
+    /// How many quotes it is in.
+    quotes: usize,
     /// Each footnote's typst, by label, read before the text that refers
     /// to it is written.
     notes: HashMap<String, String>,
@@ -141,8 +148,14 @@ impl Writer<'_> {
                 self.out
                     .push_str(if self.lists.is_empty() { "\n\n" } else { "\n" });
             }
-            Event::Start(Tag::BlockQuote(_)) => self.out.push_str("#quote(block: true)[\n"),
-            Event::End(TagEnd::BlockQuote(_)) => self.out.push_str("]\n\n"),
+            Event::Start(Tag::BlockQuote(_)) => {
+                self.quotes += 1;
+                self.out.push_str("#quote(block: true)[\n");
+            }
+            Event::End(TagEnd::BlockQuote(_)) => {
+                self.quotes = self.quotes.saturating_sub(1);
+                self.out.push_str("]\n\n");
+            }
             Event::Start(Tag::CodeBlock(kind)) => {
                 let lang = match kind {
                     CodeBlockKind::Fenced(lang) => {
@@ -176,6 +189,17 @@ impl Writer<'_> {
             Event::End(TagEnd::Item) if !self.out.ends_with('\n') => self.out.push('\n'),
             Event::TaskListMarker(done) => self.out.push_str(if *done { "☒ " } else { "☐ " }),
             Event::Rule => self.out.push_str("#line(length: 100%)\n\n"),
+            // A page break: a line of an HTML block holding only it, which
+            // its indentation may come before. In a list, a quote or a
+            // footnote, where typst has none, it is nothing.
+            Event::Html(line) if line.trim() == PAGE_BREAK => {
+                if self.lists.is_empty() && self.quotes == 0 && self.note.is_none() {
+                    self.out.push_str("#pagebreak()\n\n");
+                }
+            }
+            Event::Text(indent) if self.html && indent.trim().is_empty() => {}
+            Event::Start(Tag::HtmlBlock) => self.html = true,
+            Event::End(TagEnd::HtmlBlock) => self.html = false,
             Event::Start(Tag::Paragraph) | Event::End(TagEnd::Paragraph | TagEnd::Item) => {}
             _ => return false,
         }
@@ -370,6 +394,8 @@ fn writer<'a>(
         table: None,
         cell: None,
         header: false,
+        html: false,
+        quotes: 0,
         notes: HashMap::new(),
         noted: HashSet::new(),
         note: None,
@@ -448,7 +474,23 @@ mod tests {
     // r[verify pdf.render]
     #[test]
     fn markdown_becomes_typst() {
-        let cases: [(&str, &str); 18] = [
+        let cases: [(&str, &str); 22] = [
+            (
+                "One\n\n<!-- pagebreak -->\n\nTwo",
+                "One\n\n#pagebreak()\n\nTwo",
+            ),
+            (
+                "One\n<!-- pagebreak -->\nTwo\n\n  <!-- pagebreak -->  \n# Three",
+                "One\n\n#pagebreak()\n\nTwo\n\n#pagebreak()\n\n= Three",
+            ),
+            (
+                "- one\n\n  <!-- pagebreak -->\n\n> <!-- pagebreak -->\n\n```\n<!-- pagebreak -->\n```",
+                "- one\n\n#quote(block: true)[\n]\n\n#raw(block: true, lang: none, \"<!-- pagebreak -->\")",
+            ),
+            (
+                "<!-- not a break -->\n\nText",
+                "\\<!\\-\\- not a break \\-\\-\\>\nText",
+            ),
             (
                 "```diagram\n#diagram(node((0, 0), [A]))\n```",
                 "#block[#diagram(node((0, 0), [A]))]",
