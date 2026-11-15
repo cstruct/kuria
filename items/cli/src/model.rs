@@ -9,7 +9,7 @@ pub const SHAPE: &str = "fragment Shape on AktType {
   key version name numberPattern
   fields { key name kind description required multiline multiple of assignees options { key name } format }
   states { key name initial final tone }
-  transitions { key name from to requires }
+  transitions { key name from to requires outcomes }
   presentation { title card list icon colour }
 }";
 
@@ -128,6 +128,9 @@ pub struct Transition {
     pub from: Vec<String>,
     pub to: String,
     pub requires: Vec<String>,
+    /// As GraphQL names them: `PASS`, …
+    #[serde(default)]
+    pub outcomes: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

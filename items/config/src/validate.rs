@@ -342,6 +342,49 @@ fn transitions(
                 );
             }
         }
+        outcomes(problems, document, &path, transition);
+    }
+}
+
+/// The outcomes an akt may have.
+const OUTCOMES: [&str; 4] = ["pass", "fail", "skip", "pending"];
+
+/// Checks the outcomes a transition allows: known ones, each once, on a type
+/// whose akter may have outcomes, that is one with a `verdict` field or one
+/// that contains an akt type (whether a contained type has outcomes isn't
+/// known here, as types may be defined in any order).
+// r[impl akt.transition.outcomes]
+// r[impl akt.type.validation]
+fn outcomes(
+    problems: &mut Problems,
+    document: &AktTypeDocument,
+    path: &str,
+    transition: &TransitionDef,
+) {
+    if transition.outcomes.is_empty() {
+        return;
+    }
+    let path = format!("{path}.outcomes");
+    let may_have = !document.contains.is_empty()
+        || document.fields.iter().any(|f| f.kind == FieldKind::Verdict);
+    if !may_have {
+        problems.add(
+            &path,
+            "only a type with a verdict field, or one that contains akter, has outcomes",
+        );
+    }
+    for (i, outcome) in transition.outcomes.iter().enumerate() {
+        if transition.outcomes[..i].contains(outcome) {
+            problems.add(
+                &format!("{path}[{i}]"),
+                format!("`{outcome}` is used twice"),
+            );
+        } else if !OUTCOMES.contains(&outcome.as_str()) {
+            problems.add(
+                &format!("{path}[{i}]"),
+                format!("no outcome `{outcome}`: it is one of pass, fail, skip or pending"),
+            );
+        }
     }
 }
 
@@ -768,6 +811,43 @@ mod tests {
                 "transitions[0].to: no state `opened`",
                 "transitions[0].requires[0]: no field `owner`",
                 "transitions[1].from: a transition starts from at least one state",
+            ]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.outcomes]
+    #[test]
+    fn checks_the_outcomes_a_transition_allows() {
+        let gated = |outcomes: serde_json::Value| {
+            json!([{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done",
+                     "outcomes": outcomes }])
+        };
+        let mut document = protocol();
+        document["states"] = json!([
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ]);
+        document["transitions"] = gated(json!(["pass", "fail", "skip"]));
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        // A container without a verdict field may have outcomes too.
+        let mut container = document.clone();
+        container["fields"] = json!([{ "key": "title", "name": "Title", "kind": "text" }]);
+        assert_eq!(problems(container), Vec::<String>::new());
+        document["transitions"] = gated(json!(["pass", "passed", "pass"]));
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].outcomes[1]: no outcome `passed`: it is one of pass, fail, skip or pending",
+                "transitions[0].outcomes[2]: `pass` is used twice",
+            ]
+        );
+        let mut capa = capa();
+        capa["transitions"][0]["outcomes"] = json!(["pass"]);
+        assert_eq!(
+            problems(capa),
+            [
+                "transitions[0].outcomes: only a type with a verdict field, or one that contains akter, has outcomes"
             ]
         );
     }

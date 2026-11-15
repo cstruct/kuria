@@ -214,7 +214,17 @@ pub fn perform(
     let current = w.current(number)?;
     let t = w.dir.types[&akt.type_key].clone();
     let change = w.change();
-    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change)
+    // r[impl akt.transition.outcomes]
+    // The directory lock holds every other write off until this one is done.
+    let gated =
+        t.ty.transition(&chosen.key)
+            .is_some_and(|d| !d.outcomes.is_empty());
+    let held = if gated {
+        super::answers::outcome(&w.dir, &akt)?
+    } else {
+        None
+    };
+    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, held)
         .map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();

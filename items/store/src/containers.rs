@@ -120,6 +120,20 @@ pub async fn lock_akter(
         .await
 }
 
+/// The akter `ids`, share-locked until the transaction ends, in id order:
+/// none can be changed, or gain or lose a member, until then.
+pub async fn share_akter(conn: &mut Connection, tenant: Uuid, ids: &[Uuid]) -> QueryResult<()> {
+    akt::table
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::id.eq_any(ids))
+        .order(akt::id)
+        .select(akt::id)
+        .for_share()
+        .load::<Uuid>(conn)
+        .await?;
+    Ok(())
+}
+
 /// One membership, as stored.
 #[derive(Clone, Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = akt_membership)]

@@ -351,7 +351,7 @@ pub(crate) async fn edit_in(
         |ty| Permission::Edit {
             key: ty.key().to_owned(),
         },
-        |ty, current, change| kuria_engine::edit(ty, current, fields, change),
+        |ty, current, change, _| kuria_engine::edit(ty, current, fields, change),
     )
     .await
 }
@@ -377,7 +377,9 @@ pub(crate) async fn transition_in(
             key: ty.key().to_owned(),
             action: ty.transition(transition).and_then(|t| t.action.clone()),
         },
-        |ty, current, change| kuria_engine::transition(ty, current, transition, fields, change),
+        |ty, current, change, held| {
+            kuria_engine::transition(ty, current, transition, fields, change, held)
+        },
     )
     .await
 }
@@ -398,7 +400,13 @@ async fn change_in(
     transition: Option<String>,
     reason: Option<String>,
     permission: impl FnOnce(&AktType) -> Permission + Send,
-    decide: impl FnOnce(&AktType, &Current, kuria_engine::Change) -> Result<Outcome, Refusal> + Send,
+    decide: impl FnOnce(
+        &AktType,
+        &Current,
+        kuria_engine::Change,
+        Option<kuria_engine::outcomes::Outcome>,
+    ) -> Result<Outcome, Refusal>
+    + Send,
 ) -> Result<AktRow, AktError> {
     let Caller { actor, auth } = caller;
     let tenant: Uuid = actor.tenant.into();
@@ -435,6 +443,13 @@ async fn change_in(
         fields: fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
             .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
     };
+    // r[impl akt.transition.outcomes]
+    let held = match transition.as_deref().and_then(|t| stored.ty.transition(t)) {
+        Some(def) if !def.outcomes.is_empty() => {
+            outcomes::held_locked(conn, tenant, &stored.ty, &akt).await?
+        }
+        _ => None,
+    };
     let now = Utc::now();
     let outcome = decide(
         &stored.ty,
@@ -443,6 +458,7 @@ async fn change_in(
             by: actor.subject.into(),
             at: now,
         },
+        held,
     )?;
     akt.state = outcome.state.clone();
     akt.fields = Json::Object(fields_to_json(&outcome.fields));

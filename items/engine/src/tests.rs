@@ -215,17 +215,17 @@ fn refuses_an_edit_that_changes_nothing_or_a_final_akt() {
 fn transitions_from_its_states_only() {
     let akt = current("open", json!({ "title": "T" }));
     assert_eq!(
-        transition(&capa(), &akt, "close", &Map::new(), change()),
+        transition(&capa(), &akt, "close", &Map::new(), change(), None),
         Err(Refusal::NotFrom {
             transition: "close".to_owned(),
             state: "open".to_owned()
         })
     );
     assert_eq!(
-        transition(&capa(), &akt, "reopen", &Map::new(), change()),
+        transition(&capa(), &akt, "reopen", &Map::new(), change(), None),
         Err(Refusal::UnknownTransition("reopen".to_owned()))
     );
-    let outcome = transition(&capa(), &akt, "investigate", &Map::new(), change()).unwrap();
+    let outcome = transition(&capa(), &akt, "investigate", &Map::new(), change(), None).unwrap();
     assert_eq!(outcome.state, "investigating");
     assert!(
         outcome.changes.is_empty(),
@@ -241,7 +241,7 @@ fn a_transition_needs_its_required_fields_afterwards() {
         json!({ "title": "T", "severity": "major" }),
     );
     assert_eq!(
-        transition(&capa(), &akt, "close", &Map::new(), change()),
+        transition(&capa(), &akt, "close", &Map::new(), change(), None),
         Err(Refusal::Requires {
             transition: "close".to_owned(),
             fields: vec!["root_cause".to_owned()]
@@ -253,6 +253,7 @@ fn a_transition_needs_its_required_fields_afterwards() {
         "close",
         &input(json!({ "root_cause": "No reviewer was assigned" })),
         change(),
+        None,
     )
     .unwrap();
     assert_eq!(outcome.state, "closed");
@@ -340,7 +341,8 @@ fn a_transition_requiring_a_checkbox_needs_it_checked() {
             &akt,
             "release",
             &input(json!({ "go": false })),
-            change()
+            change(),
+            None
         ),
         Err(Refusal::Requires { .. })
     ));
@@ -350,6 +352,7 @@ fn a_transition_requiring_a_checkbox_needs_it_checked() {
         "release",
         &input(json!({ "go": true })),
         change(),
+        None,
     )
     .unwrap();
     assert_eq!(released.state, "released");
@@ -811,4 +814,77 @@ fn an_assignee_removed_takes_their_verdict_with_them() {
     )
     .unwrap();
     assert_eq!(verdicts(&both.fields).len(), 2);
+}
+
+fn gated_test_type() -> AktType {
+    let mut document = test_type().document().clone();
+    document.transitions = serde_json::from_value(json!([
+        { "key": "finish", "name": "Finish", "from": ["open"], "to": "closed",
+          "outcomes": ["pass", "fail", "skip"] }
+    ]))
+    .unwrap();
+    validate(document).unwrap()
+}
+
+// r[verify akt.transition.outcomes]
+#[test]
+fn a_transition_may_require_an_outcome() {
+    let ty = gated_test_type();
+    let finish = |now: &Current, held| transition(&ty, now, "finish", &Map::new(), change(), held);
+    let mut now = assigned();
+    let pending = finish(&now, None).unwrap_err();
+    assert_eq!(
+        pending.to_string(),
+        "`finish` requires the outcome to be pass, fail or skip, and it is pending"
+    );
+    // Its own verdicts decide, not what the caller says its members hold.
+    assert!(finish(&now, Some(outcomes::Outcome::Pass)).is_err());
+    give(&mut now, &json!("pass"), 1).unwrap();
+    assert!(finish(&now, None).is_err(), "2 hasn't answered");
+    give(&mut now, &json!("fail"), 2).unwrap();
+    assert_eq!(finish(&now, None).unwrap().state, "closed");
+    // A verdict the transition gives counts.
+    let mut later = assigned();
+    give(&mut later, &json!("pass"), 1).unwrap();
+    let given = transition(
+        &ty,
+        &later,
+        "finish",
+        &input(json!({ "verdict": "skip" })),
+        by(2),
+        None,
+    );
+    assert_eq!(given.unwrap().state, "closed");
+}
+
+// r[verify akt.transition.outcomes]
+#[test]
+fn a_container_s_transition_goes_by_what_its_members_hold() {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "protocol", "name": "Protocol", "number": "P-{seq}",
+        "fields": [],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ],
+        "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done",
+                          "outcomes": ["pass"] }],
+        "contains": [{ "type": "test" }]
+    }))
+    .unwrap();
+    let ty = validate(document).unwrap();
+    let open = current("open", json!({}));
+    let finish = |held| transition(&ty, &open, "finish", &Map::new(), change(), held);
+    assert_eq!(finish(Some(outcomes::Outcome::Pass)).unwrap().state, "done");
+    assert!(matches!(
+        finish(Some(outcomes::Outcome::Skip)),
+        Err(Refusal::Outcome {
+            outcome: Some(outcomes::Outcome::Skip),
+            ..
+        })
+    ));
+    assert_eq!(
+        finish(None).unwrap_err().to_string(),
+        "`finish` requires the outcome to be pass, and the akt has no outcome"
+    );
 }

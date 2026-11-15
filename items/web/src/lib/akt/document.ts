@@ -59,3 +59,17 @@ export function requiredFields<F extends { key: string }>(
 ): F[] {
 	return fields.filter((f) => transition.requires.includes(f.key));
 }
+
+/** Why `transition` is unavailable to an akt with `outcome`, if it is: it
+ * names the outcomes it allows, and the akt's isn't one of them. */
+// r[impl app.transitions]
+export function outcomeRefusal(
+	transition: { outcomes?: readonly string[] | null },
+	outcome: string | null | undefined
+): string | null {
+	const allowed = transition.outcomes ?? [];
+	if (allowed.length === 0 || (outcome && allowed.includes(outcome))) return null;
+	const words = allowed.map((o) => o.toLowerCase());
+	const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} or ${words.at(-1)}` : words[0];
+	return `Only when the outcome is ${list}`;
+}

@@ -989,6 +989,12 @@ impl AktType {
                 from: t.from.clone(),
                 to: t.to.clone(),
                 requires: t.requires.clone(),
+                outcomes: t
+                    .outcomes
+                    .iter()
+                    .filter_map(|o| kuria_engine::outcomes::Outcome::parse(o))
+                    .map(OutcomeKind::from)
+                    .collect(),
             })
             .collect()
     }
@@ -1208,6 +1214,9 @@ pub struct Transition {
     from: Vec<String>,
     to: String,
     requires: Vec<String>,
+    /// The outcomes the akt must have for it to be performed; any, or
+    /// none, if empty (`akt.transition.outcomes`).
+    outcomes: Vec<OutcomeKind>,
 }
 
 /// A link between this akt and another, as this akt reads it.

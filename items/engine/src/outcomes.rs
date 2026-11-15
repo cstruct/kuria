@@ -31,6 +31,14 @@ impl Outcome {
             Self::Pending => "pending",
         }
     }
+
+    /// The outcome `key` names, as `as_str` gives it.
+    #[must_use]
+    pub fn parse(key: &str) -> Option<Self> {
+        [Self::Pass, Self::Fail, Self::Skip, Self::Pending]
+            .into_iter()
+            .find(|o| o.as_str() == key)
+    }
 }
 
 /// A test's outcome from its assignees and the verdicts they gave: `fail`

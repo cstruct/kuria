@@ -1526,7 +1526,13 @@ fn applies_a_multi_akt_file_checking_every_akt_first() {
 fn protocols(dir: &Dir) {
     let states = json!([{ "key": "open", "name": "Open", "initial": true }]);
     let protocol = json!({
-        "key": "protocol", "name": "Protocol", "number": "PROT-{seq:3}", "states": states,
+        "key": "protocol", "name": "Protocol", "number": "PROT-{seq:3}",
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ],
+        "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done",
+                          "outcomes": ["pass", "fail", "skip"] }],
         "fields": [
             { "key": "title", "name": "Title", "kind": "text", "required": true },
             { "key": "layout", "name": "Layout", "kind": "sections", "of": ["test"] }
@@ -1550,6 +1556,35 @@ fn protocols(dir: &Dir) {
         )
         .unwrap();
     }
+}
+
+// r[verify akt.transition.outcomes]
+#[test]
+fn a_protocol_finishes_only_with_an_outcome_it_allows() {
+    let dir = Dir::new();
+    released(&dir);
+    let schema = dir.ok(&["schema", "protocol"]).markdown;
+    assert!(
+        schema
+            .contains("- `finish` Finish: open → done, only if the outcome is pass, fail, skip\n"),
+        "{schema}"
+    );
+    assert_eq!(
+        dir.ok(&["schema", "protocol", "--format", "json"]).json["type"]["transitions"][0]["outcomes"],
+        json!(["pass", "fail", "skip"])
+    );
+    let pending = dir.refused(&["do", "PROT-001", "finish"]);
+    assert_eq!(pending.code, "REFUSED");
+    assert_eq!(
+        pending.message,
+        "`finish` requires the outcome to be pass, fail or skip, and it is pending"
+    );
+    for test in ["PROT-001-T2", "PROT-001-T3"] {
+        dir.ok(&["verdict", test, "fail"]);
+    }
+    // Bo hasn't answered T1, but a failure is an outcome.
+    let done = dir.ok(&["do", "PROT-001", "finish"]);
+    assert_eq!(done.json["state"], "done", "{}", done.markdown);
 }
 
 /// The outcome `show --format json` gives `number`.

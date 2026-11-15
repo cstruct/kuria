@@ -67,6 +67,26 @@ pub enum Refusal {
         transition: String,
         fields: Vec<String>,
     },
+    #[error(
+        "`{transition}` requires the outcome to be {}, and {}",
+        one_of(.allowed),
+        .outcome.map_or("the akt has no outcome".to_owned(), |o| format!("it is {}", o.as_str()))
+    )]
+    Outcome {
+        transition: String,
+        /// The akt's outcome, `None` if it has none.
+        outcome: Option<outcomes::Outcome>,
+        allowed: Vec<String>,
+    },
+}
+
+/// `["a", "b", "c"]` as "a, b or c".
+fn one_of(words: &[String]) -> String {
+    match words {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
+    }
 }
 
 /// Creates an akt of `ty` with the values `input` gives.
@@ -103,7 +123,9 @@ pub fn edit(
 }
 
 /// Performs `transition` on `current`, setting the values `input` gives on
-/// the way.
+/// the way. `held` is what the akt's members add up to (`outcomes::of_all`)
+/// if its type has outcomes and no `verdict` field of its own; a caller
+/// needs to work it out only for a transition that names `outcomes`.
 // r[impl akt.transition]
 pub fn transition(
     ty: &AktType,
@@ -111,6 +133,7 @@ pub fn transition(
     transition: &str,
     input: &Map<String, Json>,
     change: Change,
+    held: Option<outcomes::Outcome>,
 ) -> Result<Outcome, Refusal> {
     let Some(def) = ty.transition(transition) else {
         return Err(Refusal::UnknownTransition(transition.to_owned()));
@@ -136,6 +159,18 @@ pub fn transition(
             transition: transition.to_owned(),
             fields: missing,
         });
+    }
+    // r[impl akt.transition.outcomes]
+    // Its own verdicts as the transition leaves them, else its members'.
+    if !def.outcomes.is_empty() {
+        let outcome = outcomes::of_fields(ty, &fields).or(held);
+        if !outcome.is_some_and(|o| def.outcomes.iter().any(|a| a == o.as_str())) {
+            return Err(Refusal::Outcome {
+                transition: transition.to_owned(),
+                outcome,
+                allowed: def.outcomes.clone(),
+            });
+        }
     }
     Ok(outcome(def.to.clone(), fields, changes))
 }

@@ -226,6 +226,7 @@ export const ShownType = graphql(`
 			from
 			to
 			requires
+			outcomes
 		}
 	}
 `);
@@ -262,6 +263,7 @@ export const TypeShape = graphql(`
 			from
 			to
 			requires
+			outcomes
 		}
 	}
 `);

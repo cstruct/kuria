@@ -75,6 +75,7 @@ pub fn shape(t: &LocalType) -> Json {
         "states": d.states.iter().map(|s| state(t, &s.key)).collect::<Vec<_>>(),
         "transitions": d.transitions.iter().map(|tr| json!({
             "key": tr.key, "name": tr.name, "from": tr.from, "to": tr.to, "requires": tr.requires,
+            "outcomes": tr.outcomes.iter().map(|o| o.to_ascii_uppercase()).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "presentation": {
             "title": t.ty.title_field().map(|f| f.key.clone()),

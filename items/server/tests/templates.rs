@@ -14,7 +14,7 @@ use support::decider::FakeDecider;
 use support::{FakeHost, SUBJECT, graphql_with, router_with, send};
 
 struct World {
-    _db: TestDatabase,
+    db: TestDatabase,
     router: Router,
     /// Another tester: a contact, who needs no sign-in.
     other: String,
@@ -50,7 +50,10 @@ fn types() -> [Value; 3] {
                 { "key": "sections", "name": "Sections", "kind": "sections", "of": ["test"] }
             ],
             "states": states,
-            "transitions": [{ "key": "make_template", "name": "Make template", "from": ["draft"], "to": "template" }],
+            "transitions": [
+                { "key": "make_template", "name": "Make template", "from": ["draft"], "to": "template" },
+                { "key": "finish", "name": "Finish", "from": ["draft"], "to": "done", "outcomes": ["pass", "fail", "skip"] }
+            ],
             "contains": [{ "type": "test", "exclusive": true }]
         }),
     ]
@@ -62,7 +65,7 @@ impl World {
         let decider: Arc<FakeDecider> = FakeDecider::allowing_tenant();
         let router = router_with(&FakeHost::new(), db.pool().clone(), decider);
         let mut world = Self {
-            _db: db,
+            db,
             router,
             other: String::new(),
         };
@@ -136,6 +139,34 @@ impl World {
             json!({ "n": number, "v": revision, "f": fields }),
         )
         .await
+    }
+
+    /// Performs `finish` on `number`, through `router`, which a spawned
+    /// task may hold.
+    async fn finish(router: &Router, number: &str, revision: &Value) -> Value {
+        send(
+            router,
+            graphql_with(
+                "tenant",
+                "mutation($n: String!, $v: Int!) { performTransition(input: { number: $n, revision: $v, transition: \"finish\" }) { state { key } } }",
+                &json!({ "n": number, "v": revision }),
+            ),
+        )
+        .await
+        .json()
+    }
+
+    /// Every test's verdicts given: `pass` from us, `skip` for the contact.
+    async fn pass_all(&self, tests: &[String]) {
+        for test in tests {
+            for verdict in [
+                json!("pass"),
+                json!({ "verdict": "skip", "for": { "contact": self.other } }),
+            ] {
+                let given = self.edit(test, json!({ "verdict": verdict })).await;
+                assert!(given.get("errors").is_none(), "{given}");
+            }
+        }
     }
 
     async fn count(&self) -> usize {
@@ -293,6 +324,75 @@ async fn verdicts_make_outcomes_up_to_the_protocol() {
         )
         .await;
     assert_eq!(code(&stranger), "REFUSED", "{stranger}");
+}
+
+// r[verify akt.transition.outcomes]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_protocol_finishes_only_with_an_outcome_it_allows() {
+    let world = World::new().await;
+    let (tp, tests, _) = protocol(&world).await;
+    let schema = world
+        .ok(
+            "{ aktType(key: \"protocol\") { transitions { key outcomes } } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(
+        schema["aktType"]["transitions"][1],
+        json!({ "key": "finish", "outcomes": ["PASS", "FAIL", "SKIP"] })
+    );
+    let revision = world.akt(&tp).await["revision"].clone();
+    let pending = World::finish(&world.router, &tp, &revision).await;
+    assert_eq!(code(&pending), "REFUSED", "{pending}");
+    assert_eq!(
+        pending["errors"][0]["message"],
+        "`finish` requires the outcome to be pass, fail or skip, and it is pending"
+    );
+    world.pass_all(&tests).await;
+    let finished = World::finish(&world.router, &tp, &revision).await;
+    assert_eq!(
+        finished["data"]["performTransition"]["state"]["key"], "done",
+        "{finished}"
+    );
+}
+
+/// A verdict taken back while a protocol finishes: the finish waits for it,
+/// and then sees the protocol pending (PLAN-013-D02).
+// r[verify akt.transition.outcomes]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_finish_waits_for_a_verdict_in_its_tree() {
+    use diesel_async::SimpleAsyncConnection;
+
+    let world = World::new().await;
+    let (tp, tests, _) = protocol(&world).await;
+    world.pass_all(&tests).await;
+    let revision = world.akt(&tp).await["revision"].clone();
+    // As a verdict being taken back would: the test locked and changed,
+    // not yet committed.
+    let mut conn = world.db.pool().get().await.unwrap();
+    conn.batch_execute(&format!(
+        "BEGIN; UPDATE akt SET fields = fields - 'verdict' WHERE number = '{}'",
+        tests[3]
+    ))
+    .await
+    .unwrap();
+    let router = world.router.clone();
+    let finishing = tokio::spawn(async move { World::finish(&router, &tp, &revision).await });
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    assert!(
+        !finishing.is_finished(),
+        "the finish didn't wait for the test"
+    );
+    conn.batch_execute("COMMIT").await.unwrap();
+    let answer = finishing.await.unwrap();
+    assert_eq!(code(&answer), "REFUSED", "{answer}");
+    assert!(
+        answer["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .ends_with("it is pending"),
+        "{answer}"
+    );
 }
 
 const SUPPORT_STRANGER: &str = "01900000-0000-7000-8000-0000000000ee";

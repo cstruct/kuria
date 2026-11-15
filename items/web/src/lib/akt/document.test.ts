@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { availableTransitions, containedTypes, draftedFields, requiredFields } from './document';
+import {
+	availableTransitions,
+	containedTypes,
+	draftedFields,
+	outcomeRefusal,
+	requiredFields
+} from './document';
 
 describe('akt type documents', () => {
 	// r[verify app.akt-types]
@@ -26,5 +32,18 @@ describe('akt type documents', () => {
 		expect(availableTransitions(transitions, { key: 'testing', final: true })).toEqual([]);
 		const fields = [{ key: 'title' }, { key: 'go' }, { key: 'version' }];
 		expect(requiredFields(fields, transitions[1]).map((f) => f.key)).toEqual(['go', 'version']);
+	});
+});
+
+// r[verify app.transitions]
+describe('outcomeRefusal', () => {
+	const finish = { outcomes: ['PASS', 'FAIL', 'SKIP'] };
+	it('says what a transition allows while the outcome is another', () => {
+		expect(outcomeRefusal(finish, 'PENDING')).toBe('Only when the outcome is pass, fail or skip');
+		expect(outcomeRefusal({ outcomes: ['PASS'] }, null)).toBe('Only when the outcome is pass');
+	});
+	it('lets the outcomes it allows, and any for a transition naming none, through', () => {
+		expect(outcomeRefusal(finish, 'FAIL')).toBeNull();
+		expect(outcomeRefusal({ outcomes: [] }, null)).toBeNull();
 	});
 });

@@ -992,6 +992,11 @@ type Transition {
 	from: [String!]!
 	to: String!
 	requires: [String!]!
+	"""
+	The outcomes the akt must have for it to be performed; any, or
+	none, if empty (`akt.transition.outcomes`).
+	"""
+	outcomes: [Outcome!]!
 }
 
 """

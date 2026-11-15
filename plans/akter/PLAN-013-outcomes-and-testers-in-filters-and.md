@@ -166,16 +166,33 @@ Lint, `mise run test` (337 Rust, 61 app) pass. The server README is updated.
 <!-- akt: PLAN-013-T03 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3f
-state: todo
+state: done
 in: [PLAN-013]
 links: [Blocked by PLAN-013-T01, Blocks PLAN-013-T05, Resolves PLAN-012-G02]
 title: Transitions that require an outcome
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`kuria-config`: `outcomes` on a transition, validated. `kuria-engine`: `transition` takes the current outcome and refuses one not allowed (`Refusal::Outcome`). Server: the outcome worked out under PLAN-013-D02's locks for a gated transition. Local mode: through `answers::outcome`. The app shows the refusal; `kuria schema` and the app's transition list say what a transition allows.
+A transition may name the outcomes it allows, and is refused unless the akt's outcome, as it is when the transition is performed, is one of them.
+
+- **Config** (`document.rs`, `validate.rs`): `outcomes` on a transition. Validation refuses an unknown outcome, one named twice, and outcomes on a type with neither a `verdict` field nor `contains`.
+- **Engine:** `transition` takes `held`, what the members add up to, and refuses with `Refusal::Outcome` ("`finish` requires the outcome to be pass, fail or skip, and it is pending"). A type with its own `verdict` field goes by its verdicts as the transition leaves them, so a verdict the transition gives counts.
+- **Server:** for a gated transition, `outcomes::held_locked` share-locks the member tree in id order (`containers::share_akter`) and reads it again until it finds nothing new, then works out the members' outcome (PLAN-013-D02). `Transition.outcomes` in GraphQL.
+- **Local mode:** the outcome from `answers::outcome`, under the directory lock.
+- **CLI:** `kuria schema` says "only if the outcome is pass, fail, skip", and its JSON has `outcomes`.
+- **App:** a transition the outcome doesn't allow is a disabled button, described by "Finish: only when the outcome is pass, fail or skip" (`outcomeRefusal` in `document.ts`).
+
+**Tests:**
+- Config: `checks_the_outcomes_a_transition_allows`.
+- Engine: `a_transition_may_require_an_outcome` and `a_container_s_transition_goes_by_what_its_members_hold`.
+- Server (`tests/templates.rs`): `a_protocol_finishes_only_with_an_outcome_it_allows`, and `a_finish_waits_for_a_verdict_in_its_tree`, where another transaction holds a test while taking its verdict back. The finish waits, then is refused as pending. Without the share lock this test fails.
+- Local: `a_protocol_finishes_only_with_an_outcome_it_allows`, schema included.
+- App: `document.test.ts`.
+
+Lint, `mise run test` (63 app tests and every Rust suite) and the parity and test-protocols e2e tests pass. The example gets its gated finish, and an e2e check of the unavailable button, in T05.
 
 <!-- field: acceptance -->
 - Engine, config and server tests, including a verdict racing a gated transition; local tests.

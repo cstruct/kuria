@@ -22,6 +22,7 @@
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
 		availableTransitions,
+		outcomeRefusal,
 		containedTypes,
 		linkKinds,
 		draftedFields,
@@ -407,12 +408,30 @@
 				{#if actions.primary}
 					{@const primary = actions.primary}
 					{#each actions.others as transition (transition.key)}
-						<Button disabled={busy} onclick={() => begin(transition)}>{transition.name}</Button>
+						{@const blocked = outcomeRefusal(transition, akt.outcome)}
+						<Button
+							disabled={busy || blocked !== null}
+							aria-describedby={blocked ? `blocked-${transition.key}` : undefined}
+							onclick={() => begin(transition)}>{transition.name}</Button
+						>
 					{/each}
-					<Button variant="primary" disabled={busy} onclick={() => begin(primary)}
-						>{primary.name}</Button
+					{@const blocked = outcomeRefusal(primary, akt.outcome)}
+					<Button
+						variant="primary"
+						disabled={busy || blocked !== null}
+						aria-describedby={blocked ? `blocked-${primary.key}` : undefined}
+						onclick={() => begin(primary)}>{primary.name}</Button
 					>
 				{/if}
+				<!-- r[impl app.transitions]: a transition the outcome doesn't allow, unavailable, saying what it allows. -->
+				{#each [...actions.others, ...(actions.primary ? [actions.primary] : [])] as transition (transition.key)}
+					{@const blocked = outcomeRefusal(transition, akt.outcome)}
+					{#if blocked}
+						<p class="blocked" id="blocked-{transition.key}">
+							{transition.name}: {blocked.toLowerCase()}
+						</p>
+					{/if}
+				{/each}
 			</div>
 		</header>
 
@@ -733,6 +752,14 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--space-2);
+	}
+
+	.blocked {
+		flex-basis: 100%;
+		margin: 0;
+		text-align: end;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
 	}
 
 	.columns {
