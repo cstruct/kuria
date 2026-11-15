@@ -50,14 +50,31 @@ pub fn target(dir: &AktDir, number: &str) -> Option<Target> {
                             .collect()
                     })
                     .unwrap_or_default(),
-                // An akt directory holds no attachments, so no pictures.
-                picture: false,
+                picture: v["picture"] == true,
             })
             .collect(),
         revision: akt.revision,
         image: ty.document().presentation.image.is_some(),
-        picture: false,
+        picture: has_picture(dir, akt),
     })
+}
+
+/// Whether `akt` is an image with a picture: a file of the directory in
+/// the field its type names as `image` (`akt.field.markdown.images`).
+// r[impl cli.local.attachments]
+#[must_use]
+pub fn has_picture(dir: &AktDir, akt: &LocalAkt) -> bool {
+    dir.type_of(akt)
+        .ty
+        .document()
+        .presentation
+        .image
+        .as_ref()
+        .and_then(|key| akt.values.get(key))
+        .and_then(Json::as_str)
+        .is_some_and(|path| {
+            super::attachments::holder(path).is_some() && dir.root.join(path).is_file()
+        })
 }
 
 /// `kuria release` in local mode: the akt's current revision, committed,
@@ -115,7 +132,7 @@ pub fn release(
         )
     })?;
     let next = akt.versions.iter().map(number_of).max().unwrap_or(0) + 1;
-    let version = json!({
+    let mut version = json!({
         "number": next,
         "revision": akt.revision,
         "label": label,
@@ -124,6 +141,11 @@ pub fn release(
         "pins": pins,
         "headings": markdown::heading_ids(&ty, &fields),
     });
+    // Whether it had a picture, kept as its headings are, for an image
+    // naming the version.
+    if has_picture(&w.dir, &akt) {
+        version["picture"] = true.into();
+    }
     // A release makes no revision (`version.history`).
     w.akt_mut(number).versions.push(version);
     Ok(super::write::answer(

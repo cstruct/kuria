@@ -34,11 +34,15 @@ in that shape, rather than editing the directory's files by hand.
   `kuria check --fix` first moves akter into the files they belong in and
   renames files by their titles.
 - Writes lock the directory, so agents may write at once.
-- Signing in, users, contacts, drafts, attachments and bundles aren't
+- An attachment is a file `attachments/<number>/<name>`, and its field's
+  value is that path. `kuria set IMG-1 file=@logo.png` copies a file in;
+  `kuria check` names one that is missing, of a media type its field
+  doesn't take, or not an SBOM where one belongs.
+- Signing in, users, contacts, drafts, uploads and bundles aren't
   there (`LOCAL_UNSUPPORTED`, exit 1). Signed in, `kuria export --types
   <key>,… --to-dir <path>` makes a directory from a server's akter, and
   `kuria import --from-dir <path>` takes one to a server that lacks its
-  types, keeping numbers and versions.
+  types, keeping numbers, versions and attachments.
 
 ## Finding your way
 

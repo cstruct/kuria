@@ -325,6 +325,26 @@ impl Times {
     }
 }
 
+/// The bytes git last held at `path` in `root`, from the latest commit that
+/// had a file there, such as one since removed.
+#[must_use]
+pub fn last_bytes(root: &Path, path: &str) -> Option<Vec<u8>> {
+    let commits = git(root, &["rev-list", "HEAD", "--", path])?;
+    let show = |object: &str| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["cat-file", "blob", object])
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        out.status.success().then_some(out.stdout)
+    };
+    // The latest commit to touch it either holds it or removed it.
+    let latest = commits.lines().next()?.trim();
+    show(&format!("{latest}:{path}")).or_else(|| show(&format!("{latest}^:{path}")))
+}
+
 /// The email `git config user.email` gives in `root`, if any.
 #[must_use]
 pub fn email(root: &Path) -> Option<String> {

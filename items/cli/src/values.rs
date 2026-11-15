@@ -165,7 +165,8 @@ fn is(someone: &Someone, user: &User) -> bool {
 
 /// A value as the akt file and JSON answers hold it: options by key, users
 /// and contacts by email or name, a checkbox as `true` or `for:<someone>`,
-/// and references, Git and Docker values and attachments as objects.
+/// and references, Git and Docker values and attachments as objects, but
+/// an akt directory's attachment as its path.
 // r[impl cli.file]
 #[must_use]
 pub fn file_value(value: &Value) -> Json {
@@ -219,6 +220,14 @@ pub fn file_value(value: &Value) -> Json {
                 object["tag"] = tag.clone().into();
             }
             object
+        }
+        // An akt directory's attachment is its path (`cli.local.attachments`).
+        Value::AttachmentValue { attachment, .. }
+            if attachment
+                .id
+                .starts_with(&format!("{}/", crate::pictures::DIRECTORY)) =>
+        {
+            attachment.id.clone().into()
         }
         Value::AttachmentValue { attachment, .. } => {
             json!({ "id": attachment.id, "name": attachment.name })

@@ -118,6 +118,13 @@ are uploaded in Kuria: a push that changes one is refused, and `kuria fmt`
 fetches the pictures of images newly embedded and puts back any changed.
 Diagrams stay as their code.
 
+Exported as an akt directory, `kuria export --types
+document_index,document,image --to-dir handbook`, each image keeps its
+file as `attachments/IMG-1/<name>`, its `file` naming that path, and
+`kuria import --from-dir handbook` takes the files along to another
+tenant. There, `kuria --dir handbook set IMG-1 file=@flow.png` copies a
+new picture in, and a release finds the pictures it embeds.
+
 ## Konklav roles
 
 - **Writer:** `kuria:akter:read`, and `kuria:akter:create`,
