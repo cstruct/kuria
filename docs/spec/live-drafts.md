@@ -27,7 +27,7 @@ the map. Updates MUST be Yjs v1 updates, as y-websocket speaks them.
 
 r[live.edit]
 Writing the fields of an akt with a live draft, through `editAkt`, a batch
-or a push (`git.repo.main`), MUST change its live draft only and MUST NOT
+or a push from a clone (`clone.server`), MUST change its live draft only and MUST NOT
 make a revision. Each write MUST be checked as a revision's would be
 (`akt.field.kinds`), the live draft's values standing for the akt's, and
 MUST change each text by the characters that differ, so that edits made
@@ -55,10 +55,16 @@ so that every revision's fields are a release's. A transition that would
 set fields MUST be refused as `BAD_REQUEST`.
 
 r[live.history]
-Every change to a live draft MUST be kept, with who made it and when, so
+Every change to a live draft MUST be kept, with who made it, when and, for
+a push from a clone (`clone.server`), its message, so
 that the akt's history shows its live draft's changes between releases, by
 author: `Akt.draftChanges` MUST answer those since its latest release, or
 all with `all`, each with who made it, when and the fields it changed.
+
+r[live.state]
+Reading an akt with a live draft MUST also answer, to a subject who may
+read it, its live draft's state, encoded as a Yjs update, and its state
+vector, so that a clone can make updates against it (`clone.server`).
 
 ## Editing together
 

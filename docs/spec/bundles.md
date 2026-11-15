@@ -27,7 +27,7 @@ A bundle that holds akter MUST hold, for them:
   fields, title, rank, and when it was created and last changed;
 - every akt revision of each, as stored: its number, author, time,
   transition, reason, changes, resulting state, membership or link change,
-  hash, and the git commit it was pushed in, if it was (`git.identity`);
+  and hash;
 - every version of each, as stored: its number, the revision it names, its
   label, who released it and when, and its pins (`version.pins`);
 - the memberships and links among them, with any pinned revisions;

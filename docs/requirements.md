@@ -38,8 +38,8 @@ link is broken, read as PDFs, with images that are akter of their own and
 diagrams and plots written as typst in the text, laid out as A4 pages:
 see [the documents example](examples/documents/README.md). Their live
 drafts are written by several people at once, each release a revision,
-and their indices are git repositories Kuria hosts, with branches and
-merges.
+and their indices are cloned as files, staged, pulled and pushed with
+`kuria`, alongside one's own git.
 Not yet: other link kinds and traceability, signatures, structured tables,
 computed fields, deadlines, obligations, reporting and the frontend.
 

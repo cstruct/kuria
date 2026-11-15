@@ -1,7 +1,7 @@
 ---
 number: PLAN-016
 type: plan
-revision: 22
+revision: 29
 rank: b4O
 state: active
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
@@ -133,9 +133,9 @@ The server, with `yrs`, can then read, check and merge every draft, and a push's
 <!-- akt: PLAN-016-D04 -->
 ---
 type: decision
-revision: 2
+revision: 3
 rank: b4S
-state: decided
+state: superseded
 in: [PLAN-016]
 title: Git repositories with packs in object storage and refs in Postgres
 decided_by: albin@mattsson.io
@@ -153,9 +153,9 @@ Packfiles are content-addressed and never change, which suits object storage; re
 <!-- akt: PLAN-016-D05 -->
 ---
 type: decision
-revision: 2
+revision: 3
 rank: b4T
-state: decided
+state: superseded
 in: [PLAN-016]
 title: "main is the drafts; pushes merge in, app edits become commits"
 decided_by: albin@mattsson.io
@@ -378,12 +378,13 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-016-T08 -->
 ---
 type: task
-revision: 5
+revision: 7
 rank: b4c
-state: todo
+state: doing
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T02, Blocked by PLAN-016-T03, Blocked by PLAN-016-T05, Blocked by PLAN-016-T07]
 title: The example and its walkthrough
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -408,15 +409,18 @@ The editor binds Lexical to a `Y.Text` of Markdown by diffing (D03). Re-importin
 <!-- akt: PLAN-016-G02 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b4e
-state: open
+state: closed
 in: [PLAN-016]
 title: Repacking repositories in object storage
 ---
 
 <!-- field: description -->
 Every push adds a packfile to object storage. Fetches slow as packs accumulate. When and where are a repository's packs repacked into one, and how are unreachable objects (from deleted branches) collected without racing pushes?
+
+<!-- field: resolution -->
+Moot: hosted repositories are removed (PLAN-016-D08).
 
 <!-- akt: PLAN-016-G03 -->
 ---
@@ -450,12 +454,149 @@ With drafts, the record of who changed what between releases is the draft's upda
 <!-- akt: PLAN-016-G05 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b4h
-state: open
+state: closed
 in: [PLAN-016]
 title: "git's credentials against DPoP-bound tokens"
 ---
 
 <!-- field: description -->
 The CLI's access tokens are DPoP-bound: each request carries a proof signed with the CLI's key. git sends a fixed credential, so `kuria git-credential` hands it the token as a plain password, which Konklav refuses as a bearer token. Against real Konklav, cloning over HTTPS therefore fails; only the test host accepts it. Options: Kuria mints its own short-lived git tokens for a DPoP-authenticated request (`kuria git-credential` asks for one), kept hashed and scoped to the subject and tenant, deciding permissions as the subject; or Konklav issues an unbound token for git. Which?
+
+<!-- field: resolution -->
+Moot: hosted repositories are removed (PLAN-016-D08).
+
+<!-- akt: PLAN-016-D07 -->
+---
+type: decision
+revision: 2
+rank: b4i
+state: decided
+in: [PLAN-016]
+title: "Clones sync with live drafts through kuria; git stays local"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+Hosted repositories (D04, D05) made Kuria invent commits from live drafts on a timer, keep every clone's commit ids equal, store and repack packs, and authenticate git over HTTPS, which DPoP-bound tokens can't do (G05). A CRDT has no commits: what means something is a release, a deliberate push, and live edits by author. What people want from git is a working copy: clone records a base, edit, stage what to send, push after fetching the current state, resolve conflicts.
+
+<!-- field: decision -->
+`kuria clone` writes a container and its members as files with a base in `.kuria/`; `kuria status`, `diff`, `add` (with `-p` for hunks), `pull` and `push` work against it. A push fetches first and is refused unless the base is current; it sends each live draft's staged change as a Yjs update made against the base, checked as a live edit and recorded as one change set with its author and message, and other akter's as edits. A pull merges the remote state into the working copy three ways, writing conflict markers where both changed the same text. git, if used, is local: branches, reverts and merges are the user's, and Kuria sees only files.
+
+<!-- field: why -->
+An update made against the base merges with live edits character by character, as Yjs does, with no commit to invent. The CLI's own signed session authenticates, so no git credentials are needed. Since no commit leaves the machine, nothing needs equal ids across clones, and a revert or a reset are alike to Kuria. Conflict markers are what git users know.
+
+<!-- akt: PLAN-016-D08 -->
+---
+type: decision
+revision: 2
+rank: b4j
+state: decided
+in: [PLAN-016]
+title: Hosted repositories and git-remote-kuria are removed
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+With clones synced through `kuria` (D07), hosted repositories (T06, T07) and `git-remote-kuria` have no use left.
+
+<!-- field: decision -->
+They are removed: the `git` flag, smart HTTP, packs and refs, Kuria's commits, the credential helper, and the helper binary. Their layout code (files, sections as directories, pictures, normal form) and the three-way text merge stay, for clones. A migration drops `git_ref` and `git_mark`.
+
+<!-- field: why -->
+Less to run and secure, nothing to repack, and one way to work locally instead of three.
+
+<!-- akt: PLAN-016-T09 -->
+---
+type: task
+revision: 7
+rank: b4k
+state: done
+in: [PLAN-016]
+links: [Blocks PLAN-016-T10, Blocks PLAN-016-T11]
+title: Spec clones synced with live drafts
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+The spec of clones synced with live drafts (D07, D08). No implementation.
+
+- New `docs/spec/clones.md`: `clone.tree`, `clone.pictures`, `clone.normal` (the layout `git.md` had), and `clone.clone`, `clone.status`, `clone.add` (with `-p`), `clone.push` (fetch first, refused unless the base is current; live drafts as updates against the base, others as edits at the base's revision; new and removed files refused), `clone.pull` (three-way, conflict markers `<<<<<<< ours` / `=======` / `>>>>>>> kuria`), `clone.server` (`pushClone`, all or nothing, `STALE` for a stale base, a change set with its message).
+- `docs/spec/git.md` removed, with its repository and helper rules.
+- `live-drafts.md`: `live.state` (the draft's Yjs state and state vector answered for clones); `live.edit` and `live.history` name pushes from clones and their messages.
+- `cli.md`, `akter.md`, `bundles.md`, `README.md`: references to the removed rules gone.
+- Nomenclature: `clone` redefined; `base`, `change set` new; `repository`, `main` removed. `architecture.md` and `requirements.md` describe clones.
+
+Code still references the removed `git.*` rules until T10.
+
+<!-- field: acceptance -->
+- `mise run lint` passes, tracey listing the new rules as uncovered.
+
+<!-- akt: PLAN-016-T10 -->
+---
+type: task
+revision: 3
+rank: b4l
+state: todo
+in: [PLAN-016]
+links: [Blocked by PLAN-016-T09, Blocks PLAN-016-T12]
+title: Remove hosted repositories and git-remote-kuria
+---
+
+<!-- field: description -->
+Remove hosted repositories and `git-remote-kuria` (D08): the server's git module, routes, timing and options, the `git` flag, `git_ref` and `git_mark` (dropped by a new migration), the credential helper, the helper binary and its history builder; the server no longer depends on `kuria-cli`. The layout code moves to the CLI's `clone` module, annotated with the new `clone.*` rules.
+
+<!-- field: acceptance -->
+- Lint and tests pass with no `git.*` rule referenced and nothing left of the removed parts.
+
+<!-- akt: PLAN-016-T11 -->
+---
+type: task
+revision: 3
+rank: b4m
+state: todo
+in: [PLAN-016]
+links: [Blocked by PLAN-016-T09, Blocks PLAN-016-T12]
+title: Pull and push on the server
+---
+
+<!-- field: description -->
+The server side of clones: an akt with a live draft answers its draft's Yjs state and state vector; `pushClone` takes, all or nothing, each live draft's update made against a base (refused as `STALE` unless the base is the draft's current state), checked as a live edit, and other akter's edits with their revisions, under one message; a push is a change set with its author and message in the draft's history.
+
+<!-- field: acceptance -->
+- Server tests: a push from a base merged with a concurrent live edit; a stale base refused; a refused field keeps nothing; the change set listed with its message.
+
+<!-- akt: PLAN-016-T12 -->
+---
+type: task
+revision: 4
+rank: b4n
+state: todo
+in: [PLAN-016]
+links: [Blocked by PLAN-016-T11, Blocked by PLAN-016-T10, Blocks PLAN-016-T13]
+title: "The CLI's clone workflow"
+---
+
+<!-- field: description -->
+The CLI's clone workflow: `kuria clone <number> [dir]`, `status`, `diff`, `add [-p]`, `pull`, `push -m`, with the base and staged files in `.kuria/`, Yjs updates made with the engine's `LiveDraft` against the base, three-way pulls with conflict markers, pictures kept read-only, and `kuria fmt` kept.
+
+<!-- field: acceptance -->
+- CLI tests against a test server: clone, edit, stage a hunk, push; a push behind a live edit refused, pull merging it; a conflict written as markers, resolved and pushed; the branch workflow with local git.
+
+<!-- akt: PLAN-016-T13 -->
+---
+type: task
+revision: 2
+rank: b4o
+state: todo
+in: [PLAN-016]
+links: [Blocked by PLAN-016-T12]
+title: "The walkthrough, the failing browser tests and docs"
+---
+
+<!-- field: description -->
+The example (`document` with live drafts; `document_index` without `git`), the walkthrough with two editors, a release, an exported directory and the branch workflow through `kuria clone/pull/push` with local git; the browser tests that fail since the merges (documents, live, the editor's image test, sheets) fixed; docs.
+
+<!-- field: acceptance -->
+- All of `mise run e2e` passes, with lint and the tests.

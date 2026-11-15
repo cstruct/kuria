@@ -130,12 +130,6 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `live draft`
   - The fields of an akt whose type says `"live_drafts": true`, edited together, live, with Yjs. Edits change the live draft only; a release records it as a revision. Not to be confused with a `draft`, which a recipe fills a field with.
 
-- `repository`
-  - A container whose type says `"git": true`, kept as a git repository Kuria hosts at `/git/<number>.git`, with its commits, branches and tags as pushed.
-
-- `main`
-  - A repository's branch that is its akter: the live drafts and the rest. A push to it changes them; changes made in Kuria become commits on it.
-
 - `page break`
   - A line holding only `<!-- pagebreak -->` in a `markdown` field: a new page in its PDF, a new sheet in the app.
 
@@ -155,10 +149,16 @@ Terms are introduced in dependency order: each definition only uses terms define
   - What a version records for each of its references without a version: the target's latest version when it was released, else the target's revision then, so that the version's links keep their meaning.
 
 - `clone`
-  - A git working tree of a container and its members, made with `git clone kuria::<url>` through `git-remote-kuria`, the CLI's git remote helper.
+  - A container and its members as files on someone's machine, made with `kuria clone`, worked on with any editor and synced with Kuria by `kuria pull` and `kuria push`. It may also be a git repository, which is the person's own.
+
+- `base`
+  - What a clone last had from Kuria: each file, each akt's revision, and each live draft's state. Pushes are made against it; pulls merge from it.
+
+- `change set`
+  - What one push from a clone changed in a live draft, kept as one change with its author and message.
 
 - `normal form`
-  - The files exactly as Kuria writes a container and its members to a clone. A push whose files aren't in normal form is refused; `kuria fmt` puts them in it.
+  - The files exactly as Kuria writes a container and its members to a clone; `kuria fmt` puts them in it.
 
 ## Links
 
