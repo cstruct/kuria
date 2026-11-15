@@ -1,7 +1,7 @@
 ---
 number: PLAN-016
 type: plan
-revision: 21
+revision: 22
 rank: b4O
 state: active
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
@@ -317,16 +317,28 @@ Editing together: the y-websocket sync and awareness protocols at `/akter/{numbe
 <!-- akt: PLAN-016-T06 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b4a
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T01, Blocks PLAN-016-T07]
 title: Git repositories on object storage
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Git repositories (D04): `"git": true`; packfiles in object storage and `git_ref` in Postgres; smart HTTP at `/git/<number>.git` by the `git` binary with a pushed pack checked, stored and refs moved by compare-and-swap; `kuria git-credential`; each repository seeded from the helper's history.
+Git repositories on object storage (D04), built in a worktree (`5a91797`, `a4de226`), merged in `f007f5c`.
+
+- **Config:** `git` on a type that contains akt types.
+- **Storage:** packfiles at `git/<tenant>/<akt>/pack-<sha>.{pack,idx}` in object storage; `git_ref` in Postgres (migration `000019`), moved by `move_ref` compare-and-swap.
+- **Cache:** a bare repository per repository under `KURIA_GIT_CACHE`, locked per request, filled with packs it lacks and `packed-refs` from `git_ref`; throwaway.
+- **Serving:** `info/refs` and `git-upload-pack` by the `git` binary; `git-receive-pack` answered by the server itself: commands parsed, the pack indexed into a quarantine, each update checked (branch or tag, from `git_ref`'s target, connected), `main` as below, then one transaction runs the batches (`akter::batch_in`), moves every ref by compare-and-swap and stores the pack; any refusal refuses every update, keeping nothing.
+- **Auth:** routes authenticated as `/graphql`; git's Basic password taken as the bearer token; 401s ask for Basic so git asks its helper; `kuria git-credential get|store|erase`.
+- **Shared code:** the server uses `kuria-cli` as a library: the helper's history builder and push logic run in-process through `kuria_cli::session::Api`, answered by the server's schema as the caller.
+- **Seeding:** a repository without refs is seeded from the helper's history through `git fast-import`; commits equal the helper's, by id.
+- **Until T07:** a push to `main` must be a linear fast-forward of the history Kuria would build now; merges on `main` refused; releases after seeding untagged.
+- **The credential gap:** the CLI's tokens are DPoP-bound, which Konklav refuses as plain bearer tokens, so `kuria git-credential` authenticates only against the test host (PLAN-016-G05).
+- **Tests:** `tests/repositories.rs` (6, real git over a local port), the store's CAS, config, the credential protocol, pkt-lines and Basic parsing.
 
 <!-- field: acceptance -->
 - Server tests: clone, fetch and push over HTTP against in-memory storage; a racing push refused; a seeded repository's commits equal the helper's.
@@ -417,3 +429,16 @@ title: Auditing a draft between releases
 
 <!-- field: description -->
 With drafts, the record of who changed what between releases is the draft's updates, not revisions. Is the update log, compacted, enough for an audit, or must each author's changes be kept as named snapshots?
+
+<!-- akt: PLAN-016-G05 -->
+---
+type: gap
+revision: 1
+rank: b4h
+state: open
+in: [PLAN-016]
+title: "git's credentials against DPoP-bound tokens"
+---
+
+<!-- field: description -->
+The CLI's access tokens are DPoP-bound: each request carries a proof signed with the CLI's key. git sends a fixed credential, so `kuria git-credential` hands it the token as a plain password, which Konklav refuses as a bearer token. Against real Konklav, cloning over HTTPS therefore fails; only the test host accepts it. Options: Kuria mints its own short-lived git tokens for a DPoP-authenticated request (`kuria git-credential` asks for one), kept hashed and scoped to the subject and tenant, deciding permissions as the subject; or Konklav issues an unbound token for git. Which?
