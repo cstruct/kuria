@@ -1,7 +1,7 @@
 ---
 number: PLAN-015
 type: plan
-revision: 16
+revision: 18
 rank: b47
 state: active
 title: "Images and diagrams in documents, and types under Show more"
@@ -366,10 +366,11 @@ Lint, 392 Rust, 92 app and all 36 browser tests pass.
 <!-- akt: PLAN-015-G01 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b4K
 state: open
 in: [PLAN-015]
+links: [Resolved by PLAN-015-T09]
 title: Images and diagrams in local mode and clones
 ---
 
@@ -379,12 +380,58 @@ Local mode refuses attachments (`cli.local.unsupported`), so a directory can't h
 <!-- akt: PLAN-015-G02 -->
 ---
 type: gap
-revision: 1
+revision: 3
 rank: b4L
-state: open
+state: closed
 in: [PLAN-015]
+links: [Resolved by PLAN-015-T08]
 title: Limits on compiling a diagram
 ---
 
 <!-- field: description -->
 typst can't be interrupted, so a diagram that loops or allocates without end would hold a server thread. Rendering runs off the async runtime, but a write waits for it. Does rendering need its own worker with a time and memory limit, such as a separate process?
+
+<!-- field: resolution -->
+Resolved (T08): each PDF and diagram renders in `kuria-server render`, a process of its own, stopped past its wall time and limited in CPU time and, on Linux, memory, each set by the environment.
+
+<!-- akt: PLAN-015-T08 -->
+---
+type: task
+revision: 6
+rank: b4M
+state: done
+in: [PLAN-015]
+links: [Resolves PLAN-015-G02]
+title: "Render typst in a process with time, CPU and memory limits"
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+typst runs in a process of its own, with limits on wall time, CPU time and memory (PLAN-015-G02).
+
+- **The worker:** `kuria-server render` (`kuria_typst::worker::main`, before the server's runtime starts) reads one job from standard input, a JSON header then the files' bytes, sets its own limits with `setrlimit` (`nix`, so no `unsafe`), and answers the PDF or SVG on standard output, or typst's message on standard error with exit code 2.
+- **The renderer:** `kuria_typst::Renderer { program, limits }` starts a worker per job (`tokio::process`, killed on drop), kills it past the wall time, and says which limit stopped it: `took longer than N s`, `used more than N s of CPU time` (SIGXCPU or the hard limit's SIGKILL), `used more than N MB of memory` (any other signal, such as the abort on a failed allocation).
+- **Memory on macOS:** macOS refuses to lower a process's address space (`RLIMIT_AS`, and `RLIMIT_DATA` and `RLIMIT_RSS` too), so there the worker limits time only; on Linux, where Kuria runs, it limits both. Checked in a Linux container.
+- **The server:** `Options.renderer`, from `KURIA_RENDER_SECONDS` (30), `KURIA_RENDER_CPU_SECONDS` (20) and `KURIA_RENDER_MEMORY_MB` (1024); `Akter` and `Caller` carry it for diagrams and `renderDiagram`, the PDF route for PDFs. A diagram stopped by a limit refuses the write as `INVALID_DIAGRAM` saying which; a PDF answers 500 and logs it. Tests use the built `kuria-server` as the worker.
+- **Spec:** `render.limits`. Docs: the server README's settings, `docs/architecture.md`.
+
+Tests: `tests/rendering.rs` (a diagram and a PDF with a file rendered by the worker, typst's refusal, a render stopped by its wall time and by its CPU time, and on Linux by its memory). A doubly recursive function made a poor endless diagram: typst caches pure calls, and it caps `while` loops; nested `for` loops over small ranges run for minutes in 60 MB. Lint, 395 Rust and 92 app tests pass; the render tests pass on Linux too.
+
+<!-- akt: PLAN-015-T09 -->
+---
+type: task
+revision: 2
+rank: b4N
+state: todo
+in: [PLAN-015]
+links: [Resolves PLAN-015-G01]
+title: "Pictures in clones, linked relatively"
+---
+
+<!-- field: description -->
+A clone holds the pictures of the images its documents embed (PLAN-015-G01).
+
+- Each picture is a file `attachments/<number>.<ext>` in the clone, and an embedded image's link is relative to its file, `![alt](../attachments/IMG-1.png)`, so editors and git hosts show it.
+- The history follows the images too: an image's revisions are commits that change its file, so every clone has the same commits.
+- A push turns relative links back into `kuria:` references, and refuses a change to `attachments/`, since images are uploaded in Kuria. `kuria fmt` writes links as Kuria does.
+- Diagrams stay text. Akt directories (`kuria init`, `export --to-dir`) still refuse attachments.

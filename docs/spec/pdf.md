@@ -13,6 +13,15 @@ akt in the app (`app.references`). An embedded image MUST be drawn as its
 picture, as the PDF's version reads it, and a broken one as its alt text.
 A diagram block MUST be drawn from its source, as a vector drawing.
 
+r[render.limits]
+Kuria MUST render each PDF and each diagram in a process of its own, which
+it stops past a wall time, and which can use at most a CPU time and, where
+the system lets a process be limited so, an amount of memory: by default
+30 s, 20 s and 1 GiB, set by `KURIA_RENDER_SECONDS`,
+`KURIA_RENDER_CPU_SECONDS` and `KURIA_RENDER_MEMORY_MB`. A diagram stopped
+by a limit MUST refuse its write as `INVALID_DIAGRAM`, saying which
+limit; a PDF stopped by one MUST be answered with 500.
+
 r[pdf.packages]
 typst MUST be run with Kuria's bundled fonts and packages only: fletcher
 0.5.8, cetz 0.3.4 and 0.5.2, cetz-plot 0.1.4, and oxifmt 0.2.1 and

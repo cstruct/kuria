@@ -114,6 +114,7 @@ impl World {
                 web: None,
                 login_proxy: None,
                 cli_relay: None,
+                renderer: support::renderer(),
             },
         )
         .unwrap();

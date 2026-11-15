@@ -59,6 +59,10 @@ pub struct Config {
     /// The largest attachment accepted, in bytes (`KURIA_ATTACHMENT_LIMIT`,
     /// 100 MiB by default).
     pub attachment_limit: u64,
+    /// What rendering a PDF or a diagram may use (`render.limits`):
+    /// `KURIA_RENDER_SECONDS` (30), `KURIA_RENDER_CPU_SECONDS` (20) and
+    /// `KURIA_RENDER_MEMORY_MB` (1024).
+    pub render_limits: kuria_typst::Limits,
     /// The tenant a sign-in that names none is for (`KURIA_DEFAULT_TENANT`).
     pub default_tenant: Option<uuid::Uuid>,
     /// The built app, to serve from the server's own origin
@@ -160,6 +164,7 @@ impl Config {
             })?,
             _ => 100 * 1024 * 1024,
         };
+        let render_limits = render_limits(&lookup)?;
         let default_tenant = match lookup("KURIA_DEFAULT_TENANT") {
             Some(tenant) if !tenant.is_empty() => Some(tenant.parse().map_err(|_| {
                 ConfigError::Invalid("KURIA_DEFAULT_TENANT", "expected a tenant id".to_owned())
@@ -192,6 +197,7 @@ impl Config {
             trusted_proxies,
             storage,
             attachment_limit,
+            render_limits,
             default_tenant,
             web_dir: lookup("KURIA_WEB_DIR")
                 .filter(|d| !d.is_empty())
@@ -250,6 +256,37 @@ fn flag(
             format!("expected true or false, not {other}"),
         )),
     }
+}
+
+/// The limits rendering runs under, each a whole number from the
+/// environment, else its default.
+// r[impl render.limits]
+fn render_limits(
+    lookup: &impl Fn(&str) -> Option<String>,
+) -> Result<kuria_typst::Limits, ConfigError> {
+    let number = |name: &'static str, default: u64| -> Result<u64, ConfigError> {
+        match lookup(name) {
+            Some(value) if !value.is_empty() => {
+                value.parse::<u64>().ok().filter(|n| *n > 0).ok_or_else(|| {
+                    ConfigError::Invalid(name, "expected a whole number above 0".to_owned())
+                })
+            }
+            _ => Ok(default),
+        }
+    };
+    let defaults = kuria_typst::Limits::default();
+    Ok(kuria_typst::Limits {
+        wall: std::time::Duration::from_secs(number(
+            "KURIA_RENDER_SECONDS",
+            defaults.wall.as_secs(),
+        )?),
+        cpu_seconds: number("KURIA_RENDER_CPU_SECONDS", defaults.cpu_seconds)?,
+        memory_bytes: number(
+            "KURIA_RENDER_MEMORY_MB",
+            defaults.memory_bytes / (1024 * 1024),
+        )? * 1024
+            * 1024,
+    })
 }
 
 #[cfg(test)]

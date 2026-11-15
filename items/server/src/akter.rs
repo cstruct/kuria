@@ -65,6 +65,9 @@ pub struct Caller<'a> {
     /// (`akt.field.markdown.diagrams`); without it, a write that renders
     /// one is refused.
     pub storage: Option<&'a crate::attachments::Storage>,
+    /// What renders diagrams; without it, a write that renders one is
+    /// refused.
+    pub renderer: Option<&'a kuria_typst::Renderer>,
 }
 
 /// Why a change to akt types or akter failed.
@@ -238,6 +241,8 @@ pub struct Akter {
     pool: Pool,
     /// Where rendered diagrams are kept.
     storage: Option<crate::attachments::Storage>,
+    /// What renders diagrams.
+    renderer: Option<kuria_typst::Renderer>,
     /// Woken after a change commits, so its change event is published at
     /// once.
     published: Option<Arc<Notify>>,
@@ -249,6 +254,7 @@ impl Akter {
         Self {
             pool,
             storage: None,
+            renderer: None,
             published,
         }
     }
@@ -258,6 +264,19 @@ impl Akter {
     pub fn with_storage(mut self, storage: crate::attachments::Storage) -> Self {
         self.storage = Some(storage);
         self
+    }
+
+    /// The same, rendering diagrams with `renderer`.
+    #[must_use]
+    pub fn with_renderer(mut self, renderer: kuria_typst::Renderer) -> Self {
+        self.renderer = Some(renderer);
+        self
+    }
+
+    /// What renders diagrams, if anything.
+    #[must_use]
+    pub fn renderer(&self) -> Option<&kuria_typst::Renderer> {
+        self.renderer.as_ref()
     }
 
     /// Where rendered diagrams are kept, if anywhere.

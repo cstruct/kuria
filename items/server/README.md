@@ -268,6 +268,9 @@ redirect URI. The end-to-end seed registers it
 | `KURIA_S3_REGION` | The bucket's region, `us-east-1` by default |
 | `KURIA_S3_ACCESS_KEY`, `KURIA_S3_SECRET_KEY` | Credentials for the bucket; without them, the standard AWS environment and instance credentials |
 | `KURIA_ATTACHMENT_LIMIT` | The largest upload in bytes, 100 MiB by default |
+| `KURIA_RENDER_SECONDS` | How long rendering a PDF or diagram may take, in a process of its own; 30 by default |
+| `KURIA_RENDER_CPU_SECONDS` | How much CPU time rendering may use; 20 by default |
+| `KURIA_RENDER_MEMORY_MB` | How much memory rendering may use, on Linux (macOS can't limit it); 1024 by default |
 | `KURIA_WEB_DIR` | The built app (`items/web/build`) to serve; none by default |
 | `KURIA_LOGIN_APP` | `true` to be Konklav's login application: proxying its subject-facing surface, with Konklav's issuer this server's public URL and its login URL `<public URL>/login`; `false` by default |
 | `KURIA_DEFAULT_TENANT` | The tenant a sign-in that names none is for; none by default |

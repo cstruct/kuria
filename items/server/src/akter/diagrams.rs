@@ -23,11 +23,23 @@ pub fn source_hash(source: &str) -> Vec<u8> {
     hash.finalize().to_vec()
 }
 
-/// `source` rendered to SVG off the async runtime, or typst's message.
-pub async fn render(source: String) -> Result<Result<String, String>, AktError> {
-    tokio::task::spawn_blocking(move || kuria_typst::diagram(&source))
-        .await
-        .map_err(|e| AktError::Internal(format!("rendering a diagram: {e}")))
+/// `source` rendered to SVG by `renderer`, in a process of its own under
+/// its limits (`render.limits`), or why it wasn't: typst's message, or
+/// the limit it went past.
+pub async fn render(
+    renderer: Option<&kuria_typst::Renderer>,
+    source: String,
+) -> Result<Result<String, String>, AktError> {
+    let renderer =
+        renderer.ok_or_else(|| AktError::Internal("this Kuria renders no diagrams".to_owned()))?;
+    match renderer.render(kuria_typst::Job::Diagram { source }).await {
+        Ok(bytes) => Ok(Ok(String::from_utf8_lossy(&bytes).into_owned())),
+        Err(kuria_typst::RenderError::Refused(message)) => Ok(Err(message)),
+        Err(e @ kuria_typst::RenderError::Limit(_)) => Ok(Err(e.to_string())),
+        Err(kuria_typst::RenderError::Failed(e)) => {
+            Err(AktError::Internal(format!("rendering a diagram: {e}")))
+        }
+    }
 }
 
 /// Renders each diagram block `outcome` writes in a field of `ty` that
@@ -60,13 +72,13 @@ pub(super) async fn render_written(
             if held.iter().any(kept) || rendered.iter().any(kept) {
                 continue;
             }
-            let svg = render(source)
-                .await?
-                .map_err(|message| AktError::InvalidDiagram {
+            let svg = render(caller.renderer, source).await?.map_err(|message| {
+                AktError::InvalidDiagram {
                     field: field.key.clone(),
                     block: i + 1,
                     message,
-                })?;
+                }
+            })?;
             let storage = caller
                 .storage
                 .ok_or_else(|| AktError::Internal("this Kuria keeps no diagrams".to_owned()))?;

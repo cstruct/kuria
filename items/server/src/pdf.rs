@@ -28,24 +28,11 @@ pub(crate) struct PdfState {
     pub pool: Pool,
     /// Where embedded images' pictures are read from.
     pub storage: Storage,
+    /// What renders the PDF.
+    pub renderer: kuria_typst::Renderer,
     pub decider: Arc<dyn Decider>,
     /// Kuria's public URL, that references link to.
     pub public_url: String,
-}
-
-/// The PDF route's state.
-pub(crate) fn state(
-    pool: Pool,
-    storage: Storage,
-    decider: Arc<dyn Decider>,
-    public_url: String,
-) -> PdfState {
-    PdfState {
-        pool,
-        storage,
-        decider,
-        public_url,
-    }
 }
 
 /// An embedded image's picture, for typst: the reference's destination,
@@ -96,20 +83,20 @@ pub(crate) async fn pdf(
         .into_iter()
         .map(|(_, path, bytes)| (path, bytes))
         .collect();
-    let rendered = tokio::task::spawn_blocking(move || kuria_typst::pdf(markup, files)).await;
+    // r[impl render.limits]
+    let rendered = state
+        .renderer
+        .render(kuria_typst::Job::Pdf { markup, files })
+        .await;
     let bytes = match rendered {
-        Ok(Ok(bytes)) => bytes,
-        Ok(Err(e)) => {
+        Ok(bytes) => bytes,
+        Err(e) => {
             tracing::error!("rendering {number}'s PDF: {e}");
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "the PDF couldn't be made",
             )
                 .into_response();
-        }
-        Err(e) => {
-            tracing::error!("rendering {number}'s PDF: {e}");
-            return (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response();
         }
     };
     let name = match asked.version {

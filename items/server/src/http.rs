@@ -65,6 +65,8 @@ pub struct Options {
     pub login_proxy: Option<crate::web::LoginProxy>,
     /// The CLI's login relay. Without it, `/cli/authorized` isn't served.
     pub cli_relay: Option<Arc<crate::cli_relay::CliRelay>>,
+    /// What renders PDFs and diagrams, each in a process of its own.
+    pub renderer: kuria_typst::Renderer,
 }
 
 /// What delivers change events: the hub subscriptions join, and what wakes
@@ -79,6 +81,37 @@ pub struct Changes {
 /// with connect info (`into_make_service_with_connect_info::<SocketAddr>()`),
 /// so client addresses are known.
 // r[impl auth.relying-system]
+/// Attachments' upload and download, and PDFs, which read them.
+fn file_routes(api: &RouterPolicy, state: crate::pdf::PdfState) -> Result<Router, AppError> {
+    let attachment_routes = Router::new()
+        .route(
+            "/attachments",
+            // r[impl attachment.limit]
+            post(attachments::upload)
+                .layer(DefaultBodyLimit::max(state.storage.limit))
+                .route_layer(api.route(&Policy::new())?),
+        )
+        .route(
+            "/attachments/{id}",
+            get(attachments::download).route_layer(api.route(&Policy::new())?),
+        )
+        .with_state(AttachmentState {
+            pool: state.pool.clone(),
+            storage: state.storage.clone(),
+            decider: state.decider.clone(),
+        });
+
+    // r[impl pdf.route]
+    let pdf_routes = Router::new()
+        .route(
+            "/akter/{number}/pdf",
+            get(crate::pdf::pdf).route_layer(api.route(&Policy::new())?),
+        )
+        .with_state(state);
+
+    Ok(attachment_routes.merge(pdf_routes))
+}
+
 pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppError> {
     let Options {
         public_url,
@@ -91,6 +124,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         web,
         login_proxy,
         cli_relay,
+        renderer,
     } = options;
     let pdf_base = public_url.clone();
     let konklav = Konklav::builder(host.clone())
@@ -124,32 +158,16 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             decider: decider.clone(),
         });
 
-    let attachment_routes = Router::new()
-        .route(
-            "/attachments",
-            // r[impl attachment.limit]
-            post(attachments::upload)
-                .layer(DefaultBodyLimit::max(storage.limit))
-                .route_layer(api.route(&Policy::new())?),
-        )
-        .route(
-            "/attachments/{id}",
-            get(attachments::download).route_layer(api.route(&Policy::new())?),
-        )
-        .with_state(AttachmentState {
+    let file_routes = file_routes(
+        &api,
+        crate::pdf::PdfState {
             pool: pool.clone(),
             storage: storage.clone(),
+            renderer: renderer.clone(),
             decider: decider.clone(),
-        });
-
-    // r[impl pdf.route]
-    let pdf_state = crate::pdf::state(pool.clone(), storage.clone(), decider.clone(), pdf_base);
-    let pdf_routes = Router::new()
-        .route(
-            "/akter/{number}/pdf",
-            get(crate::pdf::pdf).route_layer(api.route(&Policy::new())?),
-        )
-        .with_state(pdf_state);
+            public_url: pdf_base,
+        },
+    )?;
 
     let mut router = Router::new()
         // r[impl auth.health]
@@ -167,13 +185,14 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         )
         .with_state(GraphqlState {
             schema: schema(
-                Akter::new(pool, changes.as_ref().map(|c| c.waker.clone())).with_storage(storage),
+                Akter::new(pool, changes.as_ref().map(|c| c.waker.clone()))
+                    .with_storage(storage)
+                    .with_renderer(renderer),
                 changes.map(|c| c.hub),
             ),
             decider,
         })
-        .merge(attachment_routes)
-        .merge(pdf_routes)
+        .merge(file_routes)
         .merge(bundle_routes);
     if let Some(relay) = cli_relay {
         router = router.merge(crate::cli_relay::router(relay)?);

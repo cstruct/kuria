@@ -221,7 +221,7 @@ impl AkterQuery {
             });
         }
         Ok(
-            match crate::akter::diagrams::render(source)
+            match crate::akter::diagrams::render(akter(ctx)?.renderer(), source)
                 .await
                 .map_err(error)?
             {
@@ -781,6 +781,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let mut operations = Vec::with_capacity(input.operations.len());
         for (i, op) in input.operations.into_iter().enumerate() {
@@ -815,6 +816,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         akter(ctx)?
             .define_type(caller, document.0)
@@ -833,6 +835,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
@@ -851,6 +854,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -872,6 +876,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(Some(input.fields))?;
         let akter = akter(ctx)?;
@@ -893,6 +898,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let row = akter(ctx)?
             .release(caller, &input.number, input.revision, input.label)
@@ -911,6 +917,7 @@ impl AkterMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
@@ -1010,6 +1017,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1026,6 +1034,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1052,6 +1061,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1077,6 +1087,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1097,6 +1108,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1116,6 +1128,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1147,6 +1160,7 @@ impl ContainmentMutation {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
             storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter

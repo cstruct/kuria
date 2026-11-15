@@ -214,9 +214,18 @@ pub fn router_storing(
             web: None,
             login_proxy: None,
             cli_relay: None,
+            renderer: renderer(),
         },
     )
     .unwrap()
+}
+
+/// The server's own binary as the renderer, with the default limits.
+pub fn renderer() -> kuria_typst::Renderer {
+    kuria_typst::Renderer {
+        program: env!("CARGO_BIN_EXE_kuria-server").into(),
+        limits: kuria_typst::Limits::default(),
+    }
 }
 
 /// A pool for tests that never touch the database: it connects only when a

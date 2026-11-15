@@ -16,6 +16,10 @@ use typst::{Library, LibraryExt, World};
 
 include!(concat!(env!("OUT_DIR"), "/packages.rs"));
 
+pub mod worker;
+
+pub use worker::{Job, Limits, RenderError, Renderer};
+
 /// What a diagram block has imported for it, and every PDF too, so that a
 /// diagram drawn in a PDF reads as it does on its own.
 pub const IMPORTS: &str = "#import \"@preview/fletcher:0.5.8\" as fletcher: diagram, node, edge
