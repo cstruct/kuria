@@ -90,6 +90,15 @@ pub async fn at_version(
     Ok(Some((row, version)))
 }
 
+/// `akt`'s field values, as its row holds them.
+pub(crate) fn values_of(
+    ty: &StoredType,
+    akt: &AktRow,
+) -> Result<std::collections::BTreeMap<String, kuria_engine::Value>, AktError> {
+    kuria_engine::fields_from_json(&ty.ty, akt.fields.as_object().unwrap_or(&Map::new()))
+        .map_err(|e| AktError::Internal(format!("akt {}: {e}", akt.number)))
+}
+
 /// The akt type version `akt` was created with.
 pub async fn type_of_akt(
     conn: &mut kuria_store::Connection,
@@ -257,14 +266,36 @@ async fn release_in(
         ));
     }
     let existing = stored::of(conn, tenant, akt.id).await?;
-    if existing.iter().any(|v| v.revision == revision) {
+    let live = super::live::has_live_draft(&ty);
+    if !live && existing.iter().any(|v| v.revision == revision) {
         return Err(AktError::BadRequest(format!(
             "revision {revision} of {number} is already a version"
         )));
     }
-    let fields =
-        kuria_engine::fields_from_json(&ty.ty, akt.fields.as_object().unwrap_or(&Map::new()))
-            .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?;
+    let draft = if live {
+        Some(super::live::load(conn, &ty, &akt).await?)
+    } else {
+        None
+    };
+    let fields = match &draft {
+        Some(loaded) => loaded.fields.clone(),
+        None => values_of(&ty, &akt)?,
+    };
+    // r[impl live.release]
+    if draft.is_some()
+        && let Some(latest) = existing.first()
+    {
+        let released = at_revision(conn, tenant, akt.id, latest.revision)
+            .await?
+            .map(|(fields, _)| fields)
+            .unwrap_or_default();
+        if released == kuria_engine::fields_to_json(&fields) {
+            return Err(AktError::BadRequest(format!(
+                "{number}'s live draft is version {} as it is",
+                latest.number
+            )));
+        }
+    }
     // The targets first, since the check can't wait on the database.
     let mut targets = std::collections::HashMap::new();
     for (_, reference) in versions::references_of(&ty.ty, &fields) {
@@ -276,6 +307,10 @@ async fn release_in(
     let pins = versions::check(&ty.ty, &fields, &|n| targets.get(n).cloned().flatten()).map_err(
         |broken| AktError::BrokenReferences(broken.iter().map(ToString::to_string).collect()),
     )?;
+    let revision = match draft {
+        Some(loaded) => record_draft(conn, caller, &ty, akt.clone(), loaded).await?,
+        None => revision,
+    };
     let row = VersionRow {
         tenant_id: tenant,
         akt_id: akt.id,
@@ -288,4 +323,58 @@ async fn release_in(
     };
     stored::insert(conn, &row).await?;
     Ok(row)
+}
+
+/// Records `akt`'s live draft `loaded` as its next revision, checked as a
+/// write would be, and answers its number (`live.release`).
+// r[impl live.release]
+// r[impl live.revisions]
+async fn record_draft(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &StoredType,
+    mut akt: AktRow,
+    loaded: super::live::Loaded,
+) -> Result<i32, AktError> {
+    let tenant = akt.tenant_id;
+    let before = values_of(ty, &akt)?;
+    // r[impl akt.field.required]
+    if let Some(missing) = ty
+        .ty
+        .document()
+        .fields
+        .iter()
+        .find(|f| f.required && !loaded.fields.contains_key(&f.key))
+    {
+        return Err(AktError::Refused(kuria_engine::Refusal::Required(
+            missing.key.clone(),
+        )));
+    }
+    let outcome = kuria_engine::Outcome {
+        state: akt.state.clone(),
+        hash: kuria_engine::state_hash(&akt.state, &loaded.fields),
+        changes: super::live::changes(&before, &loaded.fields),
+        fields: loaded.fields.clone(),
+    };
+    let now = Utc::now();
+    let expected = akt.revision;
+    akt.fields = Json::Object(kuria_engine::fields_to_json(&outcome.fields));
+    akt.title = super::title_of(&ty.ty, &outcome.fields);
+    akt.revision += 1;
+    akt.updated_at = now;
+    if !store::update_akt(conn, &akt, expected).await? {
+        return Err(AktError::Internal(format!(
+            "akt {} moved while locked",
+            akt.number
+        )));
+    }
+    super::check_sections(conn, tenant, &ty.ty, Some(akt.id), &outcome).await?;
+    super::check_contacts(conn, tenant, &outcome).await?;
+    super::hold_attachments(conn, caller, &ty.ty, &akt, &outcome).await?;
+    super::diagrams::render_written(conn, caller, &ty.ty, &akt, &outcome).await?;
+    let mut recorded = super::revision(&akt, caller.actor, None, None, &outcome, now);
+    super::references::record(conn, &ty.ty, &akt, &outcome.fields, &mut recorded).await?;
+    store::append_revision(conn, &recorded).await?;
+    super::live::released(conn, ty, &akt, &loaded, now).await?;
+    Ok(akt.revision)
 }

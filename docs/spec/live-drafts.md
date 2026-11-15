@@ -10,7 +10,8 @@ a field is filled with by its recipe ([drafts](drafts.md)).
 
 r[live.declare]
 An akt type document MAY say `"live_drafts": true`. It MUST then also
-declare `versions` (`version.declare`); otherwise the document MUST be
+declare `versions` (`version.declare`), and no `markdown` or multiline
+`text` field of it may be keyed `fields`; otherwise the document MUST be
 refused.
 
 ## The live draft
@@ -20,14 +21,19 @@ An akt with a live draft MUST have exactly one, a Yjs document holding
 every field of its type: each `markdown` and multiline `text` field as a
 `Y.Text` named by the field's key, holding its Markdown or text; every
 other field as the field's value in the `Y.Map` named `fields`, in the
-form GraphQL takes it as input, the last write winning. A field without a
-value is an empty `Y.Text` or absent from the map.
+form GraphQL answers it (`Akt.fields`, a revision's `changes`), the last
+write winning. A field without a value is an empty `Y.Text` or absent from
+the map. Updates MUST be Yjs v1 updates, as y-websocket speaks them.
 
 r[live.edit]
 Writing the fields of an akt with a live draft, through `editAkt`, a batch
 or a push (`git.repo.main`), MUST change its live draft only and MUST NOT
 make a revision. Each write MUST be checked as a revision's would be
-(`akt.field.kinds`), the live draft's values standing for the akt's.
+(`akt.field.kinds`), the live draft's values standing for the akt's, and
+MUST change each text by the characters that differ, so that edits made
+concurrently merge. The revision an edit names MUST NOT be checked
+(`akt.revision.concurrency`): it doesn't move with the live draft, which
+merges.
 
 r[live.read]
 Reading such an akt MUST answer its live draft's fields as its fields,
@@ -45,12 +51,14 @@ caller read, as `version.release` does, and MUST be refused as
 r[live.revisions]
 A transition, or a change to the akt's containers or links, MUST still
 append a revision, recording the fields of its latest revision unchanged,
-so that every revision's fields are a release's.
+so that every revision's fields are a release's. A transition that would
+set fields MUST be refused as `BAD_REQUEST`.
 
 r[live.history]
 Every change to a live draft MUST be kept, with who made it and when, so
 that the akt's history shows its live draft's changes between releases, by
-author.
+author: `Akt.draftChanges` MUST answer those since its latest release, or
+all with `all`, each with who made it, when and the fields it changed.
 
 ## Editing together
 

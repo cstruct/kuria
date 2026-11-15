@@ -10,6 +10,7 @@ pub mod attachments;
 pub mod bundles;
 pub mod contacts;
 pub mod containers;
+pub mod drafts;
 pub mod erasure;
 pub mod links;
 mod migrate;

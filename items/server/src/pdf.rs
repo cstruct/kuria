@@ -206,7 +206,11 @@ async fn wanted(
             }
             None => return Ok(None),
         },
-        None => (akt, Vec::new()),
+        // r[impl live.read]
+        None => (
+            crate::akter::live::read_as_draft(&mut conn, &ty, akt).await?,
+            Vec::new(),
+        ),
     };
     let values = fields_from_json(&ty.ty, row.fields.as_object().unwrap_or(&Map::new()))
         .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?;
