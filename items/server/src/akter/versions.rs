@@ -99,6 +99,51 @@ pub async fn type_of_akt(
     type_of(conn, tenant, akt).await
 }
 
+/// The picture an akt of `ty` with `fields` shows, if its type names one
+/// and it has one (`akt.field.markdown.images`).
+#[must_use]
+pub fn picture_in(ty: &StoredType, fields: &Map<String, Json>) -> Option<Uuid> {
+    let key = ty.ty.document().presentation.image.as_ref()?;
+    let field = ty.ty.field(key)?;
+    match kuria_engine::Value::from_json(field, fields.get(key)?).ok()? {
+        kuria_engine::Value::Attachment(id) => Some(id),
+        _ => None,
+    }
+}
+
+/// The picture the akt `number` shows at its version `version`, else at
+/// `revision`, else now, if it has one then; whether the reader may read
+/// it is [`target`]'s to say.
+pub async fn picture_at(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    number: &str,
+    version: Option<u32>,
+    revision: Option<i32>,
+) -> Result<Option<Uuid>, AktError> {
+    let Some(akt) = store::akt_by_number(conn, tenant, number).await? else {
+        return Ok(None);
+    };
+    let ty = type_of(conn, tenant, &akt).await?;
+    let revision = match version {
+        Some(n) => {
+            match stored::one(conn, tenant, akt.id, i32::try_from(n).unwrap_or(i32::MAX)).await? {
+                Some(v) => Some(v.revision),
+                None => return Ok(None),
+            }
+        }
+        None => revision,
+    };
+    let fields = match revision {
+        Some(r) => match at_revision(conn, tenant, akt.id, r).await? {
+            Some((fields, _)) => fields,
+            None => return Ok(None),
+        },
+        None => akt.fields.as_object().cloned().unwrap_or_default(),
+    };
+    Ok(picture_in(&ty, &fields))
+}
+
 /// What the akt `number` has for a reference to it, as a subject `auth`
 /// allows to read it: `None` if it doesn't exist or they may not read it.
 pub async fn target(
@@ -119,10 +164,13 @@ pub async fn target(
             .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?;
         Ok(markdown::heading_ids(&ty.ty, &values))
     };
+    let now = akt.fields.as_object().cloned().unwrap_or_default();
     let mut found = Target {
-        headings: headings(&ty, akt.fields.as_object().unwrap_or(&Map::new()))?,
+        headings: headings(&ty, &now)?,
         versions: Vec::new(),
         revision: akt.revision,
+        image: ty.ty.document().presentation.image.is_some(),
+        picture: picture_in(&ty, &now).is_some(),
     };
     let mut rows = stored::of(conn, tenant, akt.id).await?;
     rows.reverse();
@@ -135,6 +183,7 @@ pub async fn target(
             number: u32::try_from(version.number).unwrap_or_default(),
             revision: version.revision,
             headings: headings(&ty, &at)?,
+            picture: picture_in(&ty, &at).is_some(),
         });
     }
     Ok(Some(found))

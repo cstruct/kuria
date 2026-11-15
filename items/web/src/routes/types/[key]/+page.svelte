@@ -210,7 +210,13 @@
 								>
 								<td class="title">{akt.title ?? ''}</td>
 								{#each shownFields(akt, 'list') as field (field.name)}
-									<td>{field.text}</td>
+									<td
+										>{#if field.picture}<img
+												class="thumb"
+												src={field.picture}
+												alt={akt.title ?? field.name}
+											/>{:else}{field.text}{/if}</td
+									>
 								{/each}
 								<td><Badge tone={akt.state.tone}>{akt.state.name}</Badge></td>
 								{#if byOutcome}
@@ -240,6 +246,13 @@
 </main>
 
 <style>
+	.thumb {
+		display: block;
+		max-width: 6rem;
+		max-height: 3rem;
+		object-fit: contain;
+	}
+
 	.list {
 		display: flex;
 		flex-direction: column;

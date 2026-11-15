@@ -117,7 +117,14 @@ pub struct PresentationDef {
     /// Where the sidebar lists the type; `main` if not given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub navigation: Option<Navigation>,
+    /// The `attachment` field whose value is the akt's picture, making
+    /// its akter images (`akt.field.markdown.images`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
+
+/// The media types an image's picture may have.
+pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
 
 /// Where the app's sidebar lists an akt type (`app.navigation`).
 // r[impl akt.type.presentation]
@@ -265,6 +272,9 @@ pub struct FieldDef {
     /// For `attachment`: what files it holds, any file by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<AttachmentFormat>,
+    /// For `attachment`: the media types it takes, any if empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub media_types: Vec<String>,
     /// For `user`: whether it holds a list of users and contacts.
     #[serde(default, skip_serializing_if = "is_false")]
     pub multiple: bool,

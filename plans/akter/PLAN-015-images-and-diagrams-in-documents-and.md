@@ -231,22 +231,28 @@ Tests: config (`checks_the_presentation`), `shell.test.ts`, and `shell.spec.ts`'
 <!-- akt: PLAN-015-T03 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b4F
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocked by PLAN-015-T01, Blocks PLAN-015-T04]
 title: "Image akter, embedded and read"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 Image akter, embedded and read.
 
-- `kuria-config`: `media_types` on `attachment` fields, and `presentation.image` naming one whose types are all images; validated.
-- Server: an upload stored in a field that doesn't take its media type is refused.
-- Engine: `![alt](kuria:…)` read as a reference marked embedded; a heading in it is broken.
-- Server: `MarkdownValue.images`, each with its attachment at the revision read or its pin, or why it is broken; releases check them.
-- App: embedded images shown as figures; the sanitizer allows `img` of `/attachments/<uuid>` only; an image akt's page and cards show its picture.
+- **Config:** `media_types` on `attachment` fields (each a media type, once; only on attachment fields), and `presentation.image` naming an attachment field whose media types are all of `IMAGE_MEDIA_TYPES` (PNG, JPEG, SVG, WebP).
+- **Writes:** an attachment of a media type its field doesn't take is refused as `REFUSED`, naming both (`attachment.media-types`).
+- **Held for good:** `akt_held` (migration `000016`) records every attachment an akt has held, in a field at any revision; `set_held` adds to it and never removes, and downloads are decided by it. So a version or revision read later still shows the picture it had, even after the image's file is replaced. A bundle import records the attachments each akt held in any revision. This changes `attachment.download`: an attachment cleared from a field stays readable by the akt's readers, as its history shows it; the attachments test now says so.
+- **Engine:** `markdown::images` reads `![alt](kuria:…)`; `references` includes them, so they are kept as the field's references links and pinned. `Target` gains `image` and `picture` (and `TargetVersion.picture`); `broken_image` says why one is broken; `versions::check` uses it for embedded images.
+- **Server:** `versions::target` fills `image`/`picture`; `picture_in`, `picture_at`; `MarkdownValue.images` (`MarkdownImage`: destination, number, version, attachment at the revision read or its pin, broken).
+- **App:** `renderReferenced` takes the images: an image is an `<img>` of its attachment's download, one alone in its paragraph a figure captioned by its alt text, a broken one or an image of anything else its alt text and why. The sanitizer lets `img` through only in markdown fields and only with a `src` of `/attachments/<uuid>`. `pictureOf`: an image attachment is shown as its picture on an akt's page (`FieldShown`), on cards (`Members`) and in lists (the type's page).
+- **Example:** `image.json` gets its media types, `image: "file"`, and lists `file` and `caption`; a document's `refers_to` may name images.
+- **Spec:** `app.images` and `attachment.download` say what was built.
+
+Tests: config (`checks_the_presentation`), engine (`reads_embedded_images_as_references`, `embedded_images_are_checked_and_pinned_as_references`), server `tests/images.rs` (media types, broken cases, links, release refused, a version's picture after the file is replaced, and its download), app (`references.test.ts`, `members.test.ts`). Lint, 380 Rust and 88 app tests, and the documents, editor, parity, git and shell browser tests pass.
 
 <!-- field: acceptance -->
 - Server tests: embedding, broken cases, pins at a version, downloads, the refused media type.

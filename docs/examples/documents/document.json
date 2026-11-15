@@ -17,7 +17,7 @@
     { "key": "retire", "name": "Retire", "from": ["draft"], "to": "retired" }
   ],
   "links": [
-    { "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }
+    { "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document", "image"] }
   ],
   "versions": { "action": "documents:release" },
   "presentation": {

@@ -7,7 +7,7 @@ use serde_json::Value as Json;
 use uuid::Uuid;
 
 use crate::Connection;
-use crate::schema::{akt, akt_attachment, akt_type_version, attachment};
+use crate::schema::{akt, akt_attachment, akt_held, akt_type_version, attachment};
 
 /// An attachment, as stored.
 #[derive(Clone, Debug, PartialEq, Eq, Insertable, Queryable, Selectable)]
@@ -47,25 +47,49 @@ pub async fn find(
         .await
 }
 
-/// The akt type keys of the akter that hold the attachment `id`.
+/// The akt type keys of the akter that hold the attachment `id`, or held
+/// it at any revision, in a field or as a diagram (`attachment.download`).
 pub async fn holder_types(
     conn: &mut Connection,
     tenant: Uuid,
     id: Uuid,
 ) -> QueryResult<Vec<String>> {
-    akt_attachment::table
-        .inner_join(akt::table.on(akt::id.eq(akt_attachment::akt_id)))
+    akt_held::table
+        .inner_join(akt::table.on(akt::id.eq(akt_held::akt_id)))
         .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
-        .filter(akt_attachment::tenant_id.eq(tenant))
-        .filter(akt_attachment::attachment_id.eq(id))
+        .filter(akt_held::tenant_id.eq(tenant))
+        .filter(akt_held::attachment_id.eq(id))
         .select(akt_type_version::key)
         .distinct()
         .load(conn)
         .await
 }
 
+/// Records that `akt` holds each of `ids`, as it does from now on, never
+/// letting go (`attachment.download`).
+pub async fn keep_held(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+    ids: &[Uuid],
+) -> QueryResult<()> {
+    for id in ids {
+        diesel::insert_into(akt_held::table)
+            .values((
+                akt_held::tenant_id.eq(tenant),
+                akt_held::akt_id.eq(akt),
+                akt_held::attachment_id.eq(id),
+            ))
+            .on_conflict_do_nothing()
+            .execute(conn)
+            .await?;
+    }
+    Ok(())
+}
+
 /// Records that `akt`'s fields hold `held`, as field and attachment pairs,
-/// replacing what was recorded for it before.
+/// replacing what was recorded for it before, and that it has held them
+/// (`keep_held`).
 pub async fn set_held(
     conn: &mut Connection,
     tenant: Uuid,
@@ -86,5 +110,6 @@ pub async fn set_held(
             .execute(conn)
             .await?;
     }
-    Ok(())
+    let ids: Vec<Uuid> = held.iter().map(|(_, id)| *id).collect();
+    keep_held(conn, tenant, akt, &ids).await
 }

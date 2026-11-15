@@ -686,6 +686,27 @@ type MarkdownHeading {
 }
 
 """
+An image a `markdown` field embeds (`akt.field.markdown.images`).
+"""
+type MarkdownImage {
+	"""
+	As the text says it: `kuria:<number>[@<version>]`.
+	"""
+	destination: String!
+	number: String!
+	version: Int
+	"""
+	The picture it shows, as read: at its version, at a version read's
+	pin, else now.
+	"""
+	attachment: Attachment
+	"""
+	Why it is broken, if it is.
+	"""
+	broken: String
+}
+
+"""
 A reference in a `markdown` field to an akt, one of its versions and
 one of its headings (`akt.field.markdown.references`).
 """
@@ -733,6 +754,11 @@ type MarkdownValue {
 	or why it is broken.
 	"""
 	references: [MarkdownReference!]!
+	"""
+	The images the text embeds, in order, each once, each with the
+	picture it shows or why it is broken.
+	"""
+	images: [MarkdownImage!]!
 }
 
 """

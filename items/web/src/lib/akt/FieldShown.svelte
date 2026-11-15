@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { renderMarkdown } from './markdown';
+	import { pictureOf } from './members';
 	import { renderReferenced, type Reference } from './references';
 	import { textOf, type Value } from './values';
 
@@ -17,6 +18,10 @@
 </script>
 
 {#if value.__typename === 'AttachmentValue'}
+	{@const picture = pictureOf(value)}
+	{#if picture}
+		<img class="picture" src={picture} alt={value.attachment.name} />
+	{/if}
 	<!-- The server's attachment endpoint, not a page of the app. -->
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a href={value.attachment.url} download={value.attachment.name}>{value.attachment.name}</a>
@@ -30,9 +35,10 @@
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a href={value.url} rel="noreferrer noopener external">{value.label ?? value.url}</a>
 {:else if value.__typename === 'MarkdownValue'}
+	{@const html = renderReferenced(value.markdown, value.references, hrefOf, value.images)}
 	<!-- Sanitized by renderReferenced. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-	<div class="markdown">{@html renderReferenced(value.markdown, value.references, hrefOf)}</div>
+	<div class="markdown">{@html html}</div>
 {:else if value.__typename === 'TextValue' && multiline}
 	<!-- Sanitized by renderMarkdown. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -72,6 +78,28 @@
 	/* Told apart from the text around them by more than colour. */
 	.markdown :global(a) {
 		text-decoration: underline;
+	}
+
+	.picture {
+		display: block;
+		max-width: 100%;
+		max-height: 24rem;
+		margin-bottom: var(--space-2);
+		object-fit: contain;
+	}
+
+	.markdown :global(figure) {
+		margin: var(--space-3) 0;
+	}
+
+	.markdown :global(img) {
+		max-width: 100%;
+		height: auto;
+	}
+
+	.markdown :global(figcaption) {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
 	}
 
 	.markdown :global(section[aria-label='Footnotes']) {

@@ -351,6 +351,35 @@ async fn subjects(
     Ok(mapped)
 }
 
+/// Every attachment each akt held, now or at any revision, recorded as
+/// held for good (`attachment.download`).
+async fn keep_held(
+    conn: &mut Connection,
+    tenant: Uuid,
+    bundle: &Bundle,
+    types: &HashMap<Uuid, AktType>,
+    akt_ids: &HashMap<Uuid, Uuid>,
+) -> Result<(), BundleError> {
+    for a in &bundle.akter {
+        let ty = &types[&a.type_version];
+        let mut ids: Vec<Uuid> = a.attachments.iter().map(|h| h.attachment).collect();
+        for r in &a.revisions {
+            for (key, raw) in r.changes.as_object().into_iter().flatten() {
+                if let Some(Value::Attachment(id)) = ty
+                    .field(key)
+                    .filter(|_| !raw.is_null())
+                    .and_then(|f| Value::from_json(f, raw).ok())
+                    && !ids.contains(&id)
+                {
+                    ids.push(id);
+                }
+            }
+        }
+        kuria_store::attachments::keep_held(conn, tenant, akt_ids[&a.id], &ids).await?;
+    }
+    Ok(())
+}
+
 /// The bundle's versions and commits, with the akter's new identifiers
 /// (`bundle.import.history`).
 async fn insert_versions(
@@ -618,6 +647,7 @@ async fn write(
         .collect();
     store::insert_akter(conn, &akter, &revisions, &memberships, &links, &held).await?;
     insert_versions(conn, tenant, bundle, &akt_ids).await?;
+    keep_held(conn, tenant, bundle, types, &akt_ids).await?;
     for a in &bundle.akter {
         if let Some(origin) = a.copied_from.and_then(|o| akt_ids.get(&o)) {
             kuria_store::akter::insert_origin(conn, tenant, akt_ids[&a.id], *origin).await?;

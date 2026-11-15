@@ -157,7 +157,9 @@
 							{#if member.type.presentation.card.length > 0}
 								<dl class="shown">
 									{#each shownFields(member, 'card') as field (field.name)}
-										{#if field.text}
+										{#if field.picture}
+											<img class="picture" src={field.picture} alt={member.title ?? field.name} />
+										{:else if field.text}
 											<div>
 												<dt>{field.name}</dt>
 												<dd>{field.text}</dd>
@@ -381,6 +383,13 @@
 	.shown div {
 		display: flex;
 		gap: var(--space-2);
+	}
+
+	.picture {
+		max-width: 100%;
+		max-height: 8rem;
+		object-fit: contain;
+		border-radius: var(--radius-sm);
 	}
 
 	.shown dd {

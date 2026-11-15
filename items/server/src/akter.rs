@@ -647,6 +647,17 @@ async fn hold_attachments(
         if wants_sbom && row.sbom.is_none() {
             return Err(refused("the attachment is not an SBOM"));
         }
+        // r[impl attachment.media-types]
+        if let Some(field) = ty.field(key)
+            && !field.media_types.is_empty()
+            && !field.media_types.contains(&row.media_type)
+        {
+            return Err(refused(&format!(
+                "the attachment is {}, and the field takes {}",
+                row.media_type,
+                field.media_types.join(", ")
+            )));
+        }
     }
     let held: Vec<(String, Uuid)> = outcome
         .fields

@@ -14,6 +14,8 @@ const HEADING = /^H[1-6]$/;
 /** A footnote and the reference to it, as `app.references` numbers them. */
 const NOTE_ID = /^fn(?:ref)?:\d+$/;
 const NOTE_HREF = /^#fn(?:ref)?:\d+$/;
+/** An attachment's download, the only thing an image may show (`app.images`). */
+const PICTURE = /^\/attachments\/[0-9a-f-]{36}$/;
 
 let hooked = false;
 
@@ -30,6 +32,11 @@ function purifier() {
 					node.setAttribute('rel', 'noopener noreferrer');
 					node.setAttribute('target', '_blank');
 				}
+			}
+			// An image only of an attachment's download, else nothing.
+			if (node.tagName === 'IMG' && !PICTURE.test(node.getAttribute('src') ?? '')) {
+				node.remove();
+				return;
 			}
 			// Ids only on headings, where a document's heading ids go, and on
 			// footnotes and the references to them.
@@ -48,11 +55,12 @@ function purifier() {
 
 /** `html` sanitized: no scripts, styles, frames, forms or event handlers,
  * links only to http, https and mailto addresses, or with `headingIds` to
- * the app's akt pages and footnotes, and with ids on headings and
- * footnotes. */
+ * the app's akt pages and footnotes, with ids on headings and footnotes,
+ * and images of attachments' downloads. */
 export function sanitized(html: string, { headingIds = false } = {}): string {
 	return purifier().sanitize(html, {
 		FORBID_TAGS: [
+			...(headingIds ? [] : ['img']),
 			'style',
 			'script',
 			'iframe',
@@ -64,13 +72,14 @@ export function sanitized(html: string, { headingIds = false } = {}): string {
 			'button',
 			'textarea',
 			'select',
-			'img',
 			'svg',
 			'math'
 		],
 		FORBID_ATTR: headingIds ? ['style', 'class'] : ['style', 'class', 'id'],
 		ALLOW_DATA_ATTR: false,
-		ALLOWED_URI_REGEXP: headingIds ? /^(?:https?:|mailto:|\/akt\/|#fn(?:ref)?:\d+$)/i : LINK
+		ALLOWED_URI_REGEXP: headingIds
+			? /^(?:https?:|mailto:|\/akt\/|\/attachments\/|#fn(?:ref)?:\d+$)/i
+			: LINK
 	});
 }
 

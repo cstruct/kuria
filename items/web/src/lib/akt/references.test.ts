@@ -74,3 +74,37 @@ describe('footnotes', () => {
 		expect(html.indexOf('id="fn:1"')).toBeLessThan(html.indexOf('id="fn:2"'));
 	});
 });
+
+// r[verify app.images]
+describe('embedded images', () => {
+	const id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
+	it('show their picture, alone as a captioned figure, or say why they are broken', () => {
+		const html = renderReferenced(
+			`![The chart](kuria:IMG-1)\n\nInline ![logo](kuria:IMG-1) and ![none](kuria:IMG-2) and ![web](https://x.example/a.png).\n`,
+			[],
+			href,
+			[
+				{ destination: 'kuria:IMG-1', broken: null, attachment: { url: `/attachments/${id}` } },
+				{ destination: 'kuria:IMG-2', broken: '`IMG-2` has no picture', attachment: null }
+			]
+		);
+		expect(html).toContain(
+			`<figure><img src="/attachments/${id}" alt="The chart"><figcaption>The chart</figcaption></figure>`
+		);
+		expect(html).toContain(`Inline <img src="/attachments/${id}" alt="logo"> and`);
+		expect(html).toContain('none <small>(broken image: `IMG-2` has no picture)</small>');
+		expect(html).toContain('web <small>(broken image: only images in Kuria are shown)</small>');
+		expect(html).not.toContain('x.example');
+	});
+
+	it('never show anything but an attachment', () => {
+		const html = renderReferenced(
+			'<img src="https://evil.example/x.png" onerror="alert(1)">\n\n<img src="/attachments/../../graphql">\n\n<svg><script>alert(1)</script></svg>\n',
+			[],
+			href
+		);
+		expect(html).not.toContain('<img');
+		expect(html).not.toContain('<svg');
+		expect(html).not.toContain('onerror');
+	});
+});

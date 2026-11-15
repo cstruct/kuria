@@ -227,6 +227,25 @@ fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSe
                 "only attachment fields have a format",
             );
         }
+        if !field.media_types.is_empty() && field.kind != FieldKind::Attachment {
+            problems.add(
+                &format!("{path}.media_types"),
+                "only attachment fields have media types",
+            );
+        }
+        for (i, media_type) in field.media_types.iter().enumerate() {
+            if field.media_types[..i].contains(media_type) {
+                problems.add(
+                    &format!("{path}.media_types[{i}]"),
+                    format!("`{media_type}` is used twice"),
+                );
+            } else if !is_media_type(media_type) {
+                problems.add(
+                    &format!("{path}.media_types[{i}]"),
+                    format!("`{media_type}` isn't a media type, such as `image/png`"),
+                );
+            }
+        }
         if field.multiline && field.kind != FieldKind::Text {
             problems.add(
                 &format!("{path}.multiline"),
@@ -440,6 +459,27 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             format!("a card shows at most {MAX_CARD_FIELDS} fields"),
         );
     }
+    if let Some(image) = &presentation.image {
+        match field(image) {
+            None => problems.add("presentation.image", format!("no field `{image}`")),
+            Some(f)
+                if f.kind != FieldKind::Attachment
+                    || f.media_types.is_empty()
+                    || f.media_types
+                        .iter()
+                        .any(|t| !crate::IMAGE_MEDIA_TYPES.contains(&t.as_str())) =>
+            {
+                problems.add(
+                    "presentation.image",
+                    format!(
+                        "the picture must be an attachment field taking only {}, and `{image}` isn't",
+                        crate::IMAGE_MEDIA_TYPES.join(", ")
+                    ),
+                );
+            }
+            Some(_) => {}
+        }
+    }
     for state in presentation.tones.keys() {
         if !document.states.iter().any(|s| &s.key == state) {
             problems.add(
@@ -448,6 +488,17 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             );
         }
     }
+}
+
+/// Whether `text` reads as a media type: `type/subtype`, lowercase, of
+/// letters, digits and `.+-`.
+fn is_media_type(text: &str) -> bool {
+    let part = |p: &str| {
+        !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || ".+-".contains(c))
+    };
+    matches!(text.split_once('/'), Some((t, s)) if part(t) && part(s))
 }
 
 /// Checks a field's draft recipe.
@@ -1146,6 +1197,35 @@ mod tests {
         assert_eq!(
             ty.document().presentation.navigation,
             Some(crate::Navigation::More)
+        );
+        // An image's picture: an attachment field taking only images.
+        let mut image = capa();
+        image["fields"].as_array_mut().unwrap().push(json!({
+            "key": "file", "name": "File", "kind": "attachment",
+            "media_types": ["image/png", "image/svg+xml"]
+        }));
+        image["presentation"] = json!({ "image": "file" });
+        assert_eq!(problems(image.clone()), Vec::<String>::new());
+        image["fields"][3]["media_types"] =
+            json!(["image/png", "application/pdf", "image/png", "Bad"]);
+        image["fields"][0]["media_types"] = json!(["image/png"]);
+        let found = problems(image.clone());
+        for expected in [
+            "presentation.image: the picture must be an attachment field taking only image/png, image/jpeg, image/svg+xml, image/webp, and `file` isn't",
+            "fields[3].media_types[2]: `image/png` is used twice",
+            "fields[3].media_types[3]: `Bad` isn't a media type, such as `image/png`",
+            "fields[0].media_types: only attachment fields have media types",
+        ] {
+            assert!(
+                found.iter().any(|p| p == expected),
+                "{expected} not in {found:?}"
+            );
+        }
+        image["presentation"] = json!({ "image": "title" });
+        assert!(
+            problems(image)
+                .iter()
+                .any(|p| p.starts_with("presentation.image: the picture must be"))
         );
         for wrong in [
             json!({ "tones": { "open": "loud" } }),

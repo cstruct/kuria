@@ -171,6 +171,14 @@ export const FieldValues = graphql(`
 				broken
 				pinnedVersion
 			}
+			images {
+				destination
+				broken
+				attachment {
+					url
+					mediaType
+				}
+			}
 		}
 		... on VerdictValue {
 			field

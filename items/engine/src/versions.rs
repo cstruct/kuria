@@ -56,6 +56,22 @@ pub fn references_of(ty: &AktType, fields: &BTreeMap<String, Value>) -> Vec<(Str
         .collect()
 }
 
+/// Every image embedded in the `markdown` fields of an akt of `ty` with
+/// `fields`, each with its field, in the type's field order.
+#[must_use]
+pub fn images_of(ty: &AktType, fields: &BTreeMap<String, Value>) -> Vec<(String, Reference)> {
+    ty.document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Markdown)
+        .filter_map(|f| match fields.get(&f.key) {
+            Some(Value::Markdown(text)) => Some((f.key.clone(), markdown::images(text))),
+            _ => None,
+        })
+        .flat_map(|(field, images)| images.into_iter().map(move |r| (field.clone(), r)))
+        .collect()
+}
+
 /// Checks a release of an akt of `ty` with `fields`: none of its
 /// references may be broken, `target` giving each referenced akt as the
 /// releaser may see it, `None` if it doesn't exist or they may not read
@@ -70,9 +86,16 @@ pub fn check(
 ) -> Result<Vec<Pin>, Vec<Broken>> {
     let mut broken = Vec::new();
     let mut pins: Vec<Pin> = Vec::new();
+    let images = images_of(ty, fields);
     for (field, reference) in references_of(ty, fields) {
         let found = target(&reference.number);
-        if let Some(why) = markdown::broken(&reference, found.as_ref()) {
+        let embedded = images.contains(&(field.clone(), reference.clone()));
+        let why = if embedded {
+            markdown::broken_image(&reference, found.as_ref())
+        } else {
+            markdown::broken(&reference, found.as_ref())
+        };
+        if let Some(why) = why {
             broken.push(Broken {
                 field,
                 destination: reference.to_string(),
@@ -154,19 +177,34 @@ mod tests {
                         number: 1,
                         revision: 2,
                         headings: vec!["setup".to_owned()],
+                        picture: false,
                     },
                     TargetVersion {
                         number: 2,
                         revision: 4,
                         headings: vec!["install".to_owned()],
+                        picture: false,
                     },
                 ],
                 revision: 6,
+                ..Default::default()
             }),
             "D-2" => Some(Target {
                 headings: Vec::new(),
                 versions: Vec::new(),
                 revision: 3,
+                ..Default::default()
+            }),
+            "IMG-1" => Some(Target {
+                revision: 2,
+                image: true,
+                picture: true,
+                ..Default::default()
+            }),
+            "IMG-2" => Some(Target {
+                revision: 1,
+                image: true,
+                ..Default::default()
             }),
             _ => None,
         }
@@ -224,6 +262,38 @@ mod tests {
                 "`kuria:D-1@3` in `body`: `D-1` has no version 3",
                 "`kuria:D-1@1#install` in `body`: `D-1` has no heading `install` in version 1",
                 "`kuria:D-9` in `body`: there is no akt `D-9`",
+            ]
+        );
+    }
+
+    // r[verify akt.field.markdown.images]
+    // r[verify version.references]
+    #[test]
+    fn embedded_images_are_checked_and_pinned_as_references() {
+        let pins = check(&ty(), &body("![A diagram](kuria:IMG-1)"), &targets).unwrap();
+        assert_eq!(
+            pins,
+            [Pin {
+                destination: "kuria:IMG-1".to_owned(),
+                number: "IMG-1".to_owned(),
+                version: None,
+                revision: Some(2)
+            }]
+        );
+        let broken = check(
+            &ty(),
+            &body("![none](kuria:IMG-2) ![doc](kuria:D-2) ![h](kuria:IMG-1#x) ![gone](kuria:IMG-9) [linked](kuria:D-2)"),
+            &targets,
+        )
+        .unwrap_err();
+        let said: Vec<&str> = broken.iter().map(|b| b.why.as_str()).collect();
+        assert_eq!(
+            said,
+            [
+                "`IMG-2` has no picture",
+                "`D-2` isn't an image",
+                "`kuria:IMG-1#x` names a heading, which an embedded image can't",
+                "there is no akt `IMG-9`",
             ]
         );
     }

@@ -50,9 +50,13 @@ pub fn target(dir: &AktDir, number: &str) -> Option<Target> {
                             .collect()
                     })
                     .unwrap_or_default(),
+                // An akt directory holds no attachments, so no pictures.
+                picture: false,
             })
             .collect(),
         revision: akt.revision,
+        image: ty.document().presentation.image.is_some(),
+        picture: false,
     })
 }
 

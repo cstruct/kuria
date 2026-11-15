@@ -127,7 +127,8 @@ describe('markdown fields', () => {
 			field: 'f',
 			markdown: '# Scope {#scope}\n',
 			headings: [{ id: 'scope', level: 1, text: 'Scope' }],
-			references: []
+			references: [],
+			images: []
 		};
 		const draft = draftOf(field('MARKDOWN'), value);
 		expect(draft).toEqual({ kind: 'MARKDOWN', text: '# Scope {#scope}\n' });

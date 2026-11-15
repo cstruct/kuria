@@ -144,12 +144,14 @@ the browser whether it was. Every other place that lists akt types MUST
 list them as before.
 
 r[app.images]
-The app MUST show an embedded image (`akt.field.markdown.images`) as a
-figure of its picture, its alt text as the picture's text and caption,
-and a broken one as broken, saying why. A picture MUST only ever be an
-image of its attachment's download, never markup put in the page, so
-that an SVG's scripts never run. An image akt's page and cards MUST show
-its picture.
+The app MUST show an embedded image (`akt.field.markdown.images`) as its
+picture, with its alt text as the picture's text, and one alone in its
+paragraph as a figure captioned by it; a broken one, or an image of
+anything but an akt, MUST be shown as its alt text, saying why. A picture
+MUST only ever be an image of an attachment's download, never markup put
+in the page, so that an SVG's scripts never run. An attachment of an
+image's media type MUST be shown as its picture on an akt's page, on
+cards and in lists.
 
 r[app.diagrams]
 The app MUST show a diagram block (`akt.field.markdown.diagrams`) as the

@@ -139,12 +139,30 @@ fn end_of_text(text: &str, range: &Range<usize>) -> usize {
     range.start + end.len()
 }
 
-/// The references of `text`, in order, each once.
+/// The references of `text`, links and embedded images alike, in order,
+/// each once.
 #[must_use]
 pub fn references(text: &str) -> Vec<Reference> {
     let mut found = Vec::new();
     for event in Parser::new_ext(text, options()) {
-        if let Event::Start(Tag::Link { dest_url, .. }) = event
+        if let Event::Start(Tag::Link { dest_url, .. } | Tag::Image { dest_url, .. }) = event
+            && let Some(reference) = Reference::parse(&dest_url)
+            && !found.contains(&reference)
+        {
+            found.push(reference);
+        }
+    }
+    found
+}
+
+/// The images `text` embeds, `![alt](kuria:…)`, in order, each once
+/// (`akt.field.markdown.images`).
+// r[impl akt.field.markdown.images]
+#[must_use]
+pub fn images(text: &str) -> Vec<Reference> {
+    let mut found = Vec::new();
+    for event in Parser::new_ext(text, options()) {
+        if let Event::Start(Tag::Image { dest_url, .. }) = event
             && let Some(reference) = Reference::parse(&dest_url)
             && !found.contains(&reference)
         {
@@ -286,6 +304,10 @@ pub struct Target {
     pub versions: Vec<TargetVersion>,
     /// Its current revision.
     pub revision: i32,
+    /// Whether it is an image: its type names a picture.
+    pub image: bool,
+    /// Whether it has a picture, as of its current revision.
+    pub picture: bool,
 }
 
 /// One version of a reference's target.
@@ -295,6 +317,8 @@ pub struct TargetVersion {
     pub revision: i32,
     /// Its heading ids, as of the revision it names.
     pub headings: Vec<String>,
+    /// Whether it had a picture then.
+    pub picture: bool,
 }
 
 /// Why `reference` is broken, if it is (`broken reference`): `target` is
@@ -323,6 +347,38 @@ pub fn broken(reference: &Reference, target: Option<&Target>) -> Option<String> 
         });
     }
     None
+}
+
+/// Why `reference`, an embedded image, is broken, if it is, beyond what
+/// [`broken`] says: it names a heading, its target isn't an image, or has
+/// no picture in the version named, else now (`akt.field.markdown.images`).
+// r[impl akt.field.markdown.images]
+#[must_use]
+pub fn broken_image(reference: &Reference, target: Option<&Target>) -> Option<String> {
+    if reference.heading.is_some() {
+        return Some(format!(
+            "`{reference}` names a heading, which an embedded image can't"
+        ));
+    }
+    if let Some(why) = broken(reference, target) {
+        return Some(why);
+    }
+    let target = target?;
+    if !target.image {
+        return Some(format!("`{}` isn't an image", reference.number));
+    }
+    let picture = match reference.version {
+        Some(n) => target
+            .versions
+            .iter()
+            .find(|v| v.number == n)
+            .is_some_and(|v| v.picture),
+        None => target.picture,
+    };
+    (!picture).then(|| match reference.version {
+        Some(n) => format!("`{}` has no picture in version {n}", reference.number),
+        None => format!("`{}` has no picture", reference.number),
+    })
 }
 
 /// Whether `text` holds a value: anything but white space.
@@ -403,8 +459,10 @@ mod tests {
                 number: 1,
                 revision: 3,
                 headings: vec!["setup".to_owned()],
+                picture: false,
             }],
             revision: 5,
+            ..Default::default()
         };
         assert_eq!(broken(&reference("kuria:D-1#install"), Some(&target)), None);
         assert_eq!(broken(&reference("kuria:D-1@1#setup"), Some(&target)), None);
@@ -464,6 +522,20 @@ mod tests {
                 version: None,
                 heading: Some("install".to_owned()),
             }]
+        );
+    }
+
+    // r[verify akt.field.markdown.images]
+    #[test]
+    fn reads_embedded_images_as_references() {
+        let text = "![A](kuria:IMG-1) [link](kuria:D-1) ![web](https://x.example/a.png) ![again](kuria:IMG-1@2)";
+        let numbers = |found: Vec<Reference>| -> Vec<String> {
+            found.iter().map(ToString::to_string).collect()
+        };
+        assert_eq!(numbers(images(text)), ["kuria:IMG-1", "kuria:IMG-1@2"]);
+        assert_eq!(
+            numbers(references(text)),
+            ["kuria:IMG-1", "kuria:D-1", "kuria:IMG-1@2"]
         );
     }
 }

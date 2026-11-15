@@ -127,8 +127,9 @@ field that says `"format": "sbom"` MUST only hold an attachment Kuria
 recognised as an SBOM ([attachments](attachments.md)). A field MAY list,
 as `media_types`, the media types it takes: it MUST then only hold an
 attachment of one of them (`attachment.media-types`). `format` and
-`media_types` MUST be refused on any other kind of field, and an empty
-`media_types` list or one naming a type twice MUST be refused.
+`media_types` MUST be refused on any other kind of field, and a
+`media_types` list naming a type twice, or something that isn't a media
+type, MUST be refused.
 
 r[akt.field.multiple]
 A `user` field that says `multiple` MUST hold a list of distinct users and

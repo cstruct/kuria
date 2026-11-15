@@ -1962,6 +1962,8 @@ pub struct MarkdownValue {
     headings: Vec<MarkdownHeading>,
     #[graphql(skip)]
     found: Vec<kuria_engine::markdown::Reference>,
+    #[graphql(skip)]
+    embedded: Vec<kuria_engine::markdown::Reference>,
     /// What its references meant, if it is read at a version.
     #[graphql(skip)]
     pins: Vec<Pin>,
@@ -2015,6 +2017,7 @@ impl MarkdownValue {
                 })
                 .collect(),
             found: markdown::references(text),
+            embedded: markdown::images(text),
         }
     }
 }
@@ -2073,6 +2076,71 @@ impl MarkdownValue {
         }
         Ok(answered)
     }
+
+    /// The images the text embeds, in order, each once, each with the
+    /// picture it shows or why it is broken.
+    // r[impl akt.field.markdown.images]
+    // r[impl version.read]
+    async fn images(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownImage>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let auth = authorizer(ctx)?;
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut answered = Vec::new();
+        for reference in &self.embedded {
+            let target = crate::akter::versions::target(&mut conn, tenant, auth, &reference.number)
+                .await
+                .map_err(error)?;
+            let (pinned_version, pinned_revision) =
+                kuria_engine::versions::as_pinned(reference, &self.pins);
+            let version = reference.version.or(pinned_version);
+            let as_read = kuria_engine::markdown::Reference {
+                version,
+                ..reference.clone()
+            };
+            let picture = match &target {
+                Some(_) => crate::akter::versions::picture_at(
+                    &mut conn,
+                    tenant,
+                    &reference.number,
+                    version,
+                    pinned_revision,
+                )
+                .await
+                .map_err(error)?,
+                None => None,
+            };
+            let broken = if pinned_revision.is_some() && target.is_some() {
+                // Unbroken at release, and a revision never changes.
+                picture
+                    .is_none()
+                    .then(|| format!("`{}` has no picture", reference.number))
+            } else {
+                kuria_engine::markdown::broken_image(&as_read, target.as_ref())
+            };
+            answered.push(MarkdownImage {
+                destination: reference.to_string(),
+                number: reference.number.clone(),
+                version: reference.version.and_then(|v| i32::try_from(v).ok()),
+                attachment: picture.filter(|_| broken.is_none()).map(Attachment),
+                broken,
+            });
+        }
+        Ok(answered)
+    }
+}
+
+/// An image a `markdown` field embeds (`akt.field.markdown.images`).
+#[derive(SimpleObject)]
+pub struct MarkdownImage {
+    /// As the text says it: `kuria:<number>[@<version>]`.
+    destination: String,
+    number: String,
+    version: Option<i32>,
+    /// The picture it shows, as read: at its version, at a version read's
+    /// pin, else now.
+    attachment: Option<Attachment>,
+    /// Why it is broken, if it is.
+    broken: Option<String>,
 }
 
 /// A version of an akt (`version.number`).

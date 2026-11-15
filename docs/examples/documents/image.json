@@ -5,6 +5,7 @@
   "fields": [
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "file", "name": "File", "kind": "attachment",
+      "media_types": ["image/png", "image/jpeg", "image/svg+xml", "image/webp"],
       "description": "The picture: PNG, JPEG, SVG or WebP." },
     { "key": "caption", "name": "Caption", "kind": "text" }
   ],
@@ -18,6 +19,8 @@
   "presentation": {
     "icon": "layers", "colour": "teal",
     "navigation": "more",
+    "image": "file",
+    "list": ["file", "caption"],
     "tones": { "current": "active", "retired": "neutral" }
   }
 }

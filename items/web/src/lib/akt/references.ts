@@ -24,6 +24,14 @@ export interface ShownReference {
 	pinnedVersion?: number | null;
 }
 
+/** An embedded image as the server answers it: its destination, and the
+ * picture it shows, or why it is broken. */
+export interface ShownImage {
+	destination: string;
+	broken?: string | null;
+	attachment?: { url: string } | null;
+}
+
 const ID = /\s*\{#([a-z][a-z0-9_-]*)\}\s*$/;
 
 /** Reads a link's destination, as the engine does; `null` if it isn't a
@@ -146,9 +154,23 @@ function footnotes(): { extension: MarkedExtension; notes: () => string } {
 export function renderReferenced(
 	text: string,
 	references: readonly ShownReference[],
-	hrefOf: (reference: Reference) => string
+	hrefOf: (reference: Reference) => string,
+	images: readonly ShownImage[] = []
 ): string {
 	const shown = new Map(references.map((r) => [r.destination, r]));
+	const pictures = new Map(images.map((i) => [i.destination, i]));
+	/** An embedded image's picture, or why it isn't shown (`app.images`). */
+	const picture = (token: Tokens.Image): string => {
+		const alt = escaped(token.text);
+		const found = pictures.get(token.href);
+		if (found?.attachment && !found.broken) {
+			return `<img src="${escaped(found.attachment.url)}" alt="${alt}">`;
+		}
+		const why =
+			found?.broken ??
+			(parseReference(token.href) ? 'not found' : 'only images in Kuria are shown');
+		return `<span>${alt} <small>(broken image: ${escaped(why)})</small></span>`;
+	};
 	const notes = footnotes();
 	const marked = new Marked(notes.extension, {
 		gfm: true,
@@ -164,6 +186,21 @@ export function renderReferenced(
 			}
 		},
 		renderer: {
+			image(token) {
+				return picture(token);
+			},
+			paragraph(token) {
+				// An image alone in its paragraph is a figure, captioned by its alt text.
+				const only = token.tokens.filter((t) => !(t.type === 'text' && !t.raw.trim()));
+				if (only.length === 1 && only[0].type === 'image') {
+					const image = only[0] as Tokens.Image;
+					const found = pictures.get(image.href);
+					if (found?.attachment && !found.broken) {
+						return `<figure>${picture(image)}<figcaption>${escaped(image.text)}</figcaption></figure>\n`;
+					}
+				}
+				return false;
+			},
 			heading(token) {
 				const anchor = (token as Tokens.Heading & { anchor?: string }).anchor;
 				const inner = this.parser.parseInline(token.tokens);

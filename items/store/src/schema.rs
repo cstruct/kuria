@@ -173,8 +173,17 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    akt_held (akt_id, attachment_id) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        attachment_id -> Uuid,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
+    akt_held,
     akt_origin,
     akt_commit,
     akt_version,

@@ -45,9 +45,11 @@ it doesn't list.
 
 r[attachment.download]
 `GET /attachments/{id}` MUST answer the attachment's bytes, with its media
-type and name, to a subject who may read an akt that holds it, in a field
-or as a diagram (`akt.field.markdown.diagrams`), or to the subject who
-uploaded it while no akt holds it. To anyone else it MUST answer
+type and name, to a subject who may read an akt that holds it, or held it
+at any revision, in a field or as a diagram
+(`akt.field.markdown.diagrams`), so that a revision or version read later
+still shows it, or to the subject who uploaded it while no akt has held
+it. To anyone else it MUST answer
 404, as if it did not exist.
 
 r[attachment.references]
