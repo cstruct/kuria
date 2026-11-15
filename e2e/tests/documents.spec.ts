@@ -1,6 +1,8 @@
 // The documents example (docs/examples/documents), walked through: a
 // document written in the editor with a deep link to another's heading,
-// its release refused while the link is broken and taken once it isn't,
+// a picture uploaded as an image akt and a fletcher diagram toggled from
+// code to its picture, its release refused while the link is broken and
+// taken once it isn't,
 // read at its version with the link pinned there, compared with the
 // living version and downloaded as a PDF; then the index cloned with git,
 // rebased onto a change made in the app, and pushed, the app showing the
@@ -19,6 +21,12 @@ import { seeded } from '../support/stack.ts';
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
+/** A one-pixel red PNG. */
+const PNG = Buffer.from(
+	'89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c49444154789c63f8cfc0000003010100c9fe92ef0000000049454e44ae426082',
+	'hex'
+);
+
 async function violations(page: Page): Promise<string[]> {
 	const results = await new AxeBuilder({ page }).withTags(TAGS).analyze();
 	return results.violations.map((v) => `${v.id} (${v.impact}): ${v.help}`);
@@ -34,6 +42,9 @@ async function editBody(page: Page, write: () => Promise<void>) {
 }
 
 // r[verify app.editor]
+// r[verify app.images]
+// r[verify app.diagrams]
+// r[verify app.navigation]
 // r[verify app.references]
 // r[verify app.versions]
 // r[verify app.pdf]
@@ -79,6 +90,39 @@ test('a document is written, released at its version, and edited through git', a
 	const body = dev.locator('dd[data-field="body"]');
 	await expect(body.getByRole('link', { name: 'Install' })).toHaveAttribute('href', `/akt/${setup}#install`);
 
+	// A picture, uploaded as an image akt, and a diagram, written as code and
+	// shown as its picture.
+	const toolbar = dev.getByRole('toolbar', { name: 'Format Body' });
+	await editBody(dev, async () => {
+		await dev.keyboard.press('Control+End');
+		await dev.keyboard.press('Enter');
+		await toolbar.getByRole('button', { name: 'Image' }).click();
+		const image = dev.getByRole('dialog', { name: 'Image' });
+		await image
+			.getByLabel('Or upload a file')
+			.setInputFiles({ name: `flow-${stamp}.png`, mimeType: 'image/png', buffer: PNG });
+		await image.getByLabel('Alt text').fill('The flow at a glance');
+		await image.getByRole('button', { name: 'Insert' }).click();
+		await expect(image).toBeHidden();
+		await toolbar.getByRole('button', { name: 'Diagram' }).click();
+		const preview = dev.getByRole('region', { name: 'Diagram preview' });
+		await expect(preview.getByRole('img')).toBeVisible();
+		expect(await violations(dev), 'a diagram as code').toEqual([]);
+		await preview.getByRole('button', { name: 'Show diagram' }).click();
+		await expect(dev.getByRole('textbox', { name: 'Body' }).locator('.diagram').getByRole('img')).toBeVisible();
+	});
+	const figures = body.getByRole('figure');
+	await expect(figures).toHaveCount(2);
+	await expect(figures.first().getByRole('img', { name: 'The flow at a glance' })).toBeVisible();
+	await expect(figures.nth(1).getByRole('img')).toBeVisible();
+	expect(await violations(dev), 'a body with a picture and a diagram').toEqual([]);
+	// The image akt sits under Show more.
+	const sidebar = dev.getByRole('navigation', { name: 'Kuria' });
+	await sidebar.getByRole('button', { name: /^Show more/ }).click();
+	await expect(
+		sidebar.getByRole('list', { name: 'More akt types' }).getByRole('link', { name: /^Image( \d+)?$/ })
+	).toBeVisible();
+
 	// The release manager may release documents; a broken link is refused.
 	const rm = await signIn(browser, seeded().people.releaseManager);
 	await open(rm, guide);
@@ -109,20 +153,26 @@ test('a document is written, released at its version, and edited through git', a
 	// The guide changes on; version 1 reads as released, its links pinned.
 	await open(dev, guide);
 	await editBody(dev, async () => {
-		await dev.keyboard.press('End');
-		await dev.keyboard.type(' More soon.');
+		// After the diagram that ends the body.
+		await dev.getByRole('textbox', { name: 'Body' }).locator('p').last().click();
+		await dev.keyboard.type('More soon.');
 	});
 	await dev.getByRole('region', { name: 'Versions' }).getByRole('link', { name: 'Version 1 (1.0)' }).click();
 	await expect(dev.getByRole('status').filter({ hasText: 'not the living version' })).toContainText('Version 1 (1.0)');
 	await expect(dev.getByRole('button', { name: 'Edit Body' })).toHaveCount(0);
 	await expect(body).not.toContainText('More soon.');
 	await expect(body.getByRole('link', { name: 'Install' })).toHaveAttribute('href', `/akt/${setup}#install`);
+	await expect(body.getByRole('figure')).toHaveCount(2);
 	expect(await violations(dev), 'a version').toEqual([]);
 	const [download] = await Promise.all([
 		dev.waitForEvent('download'),
 		dev.getByRole('link', { name: 'Download PDF' }).click()
 	]);
 	expect(download.suggestedFilename()).toBe(`${guide}-v1.pdf`);
+	const pdf = Buffer.concat(await (await download.createReadStream()).toArray());
+	expect(pdf.subarray(0, 4).toString()).toBe('%PDF');
+	// The picture is in it, as an image.
+	expect(pdf.includes(Buffer.from('/Subtype /Image')) || pdf.includes(Buffer.from('/Subtype/Image'))).toBe(true);
 
 	// Compared with the living version.
 	const compare = dev.getByRole('form', { name: 'Compare versions' });

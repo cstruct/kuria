@@ -136,15 +136,19 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
 - [`tests/documents.spec.ts`](tests/documents.spec.ts): the
   [documents example](../docs/examples/documents/README.md):
   - the developer writes a document in the rich-text editor, with a reference to another document's heading;
+  - a picture is uploaded as an image akt and a diagram written as code is toggled to its picture, and the image type sits under "Show more";
   - the release manager's release is refused while another reference is broken, and taken once it isn't;
-  - version 1 reads as released, its links pinned, and is downloaded as a PDF and compared with the living version;
+  - version 1 reads as released, its links pinned and its picture and diagram shown, and is downloaded as a PDF with the picture in it and compared with the living version;
   - the index is cloned with git, rebased onto a change made in the app and pushed, and the app shows the pushed revision.
   
-  axe checks the refused release, the version and the comparison.
+  axe checks the diagram as code, the body with its picture and diagram, the refused release, the version and the comparison.
 - [`tests/markdown-editor.spec.ts`](tests/markdown-editor.spec.ts): a
   `markdown` field written and formatted in the editor, with a reference
-  inserted through the picker, saved as Markdown, rendered as a link that
-  opens the heading, and downloaded as a PDF; axe on the picker and editor.
+  inserted through the picker and a footnote, saved as Markdown, rendered as
+  a link that opens the heading, and downloaded as a PDF; an image uploaded
+  from the Image dialog, shown as a figure and on its own page; a diagram
+  written as code, previewed through a compile error and back, toggled to
+  its picture and saved; axe on each dialog and view.
 - [`tests/git-remote.spec.ts`](tests/git-remote.spec.ts): `git-remote-kuria` against the stack:
   - two clones have the same commits;
   - a push becomes a revision, and the other clone fetches the very same commit;
@@ -161,8 +165,9 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   finished, and the template unchanged. axe checks the copy dialog, the
   run in its sections and the outline.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
-  the drawer and no sideways scrolling at 390 pixels, and signing out of
-  Kuria and of the login page's Konklav session.
+  the drawer and no sideways scrolling at 390 pixels, signing out of
+  Kuria and of the login page's Konklav session, and akt types under "Show
+  more", remembered across reloads.
 - [`tests/release-flow.spec.ts`](tests/release-flow.spec.ts): the
   [release-management example](../docs/examples/release-management/README.md)
   from planning to a closed release, as a developer and a release manager

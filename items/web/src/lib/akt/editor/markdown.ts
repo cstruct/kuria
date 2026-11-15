@@ -694,9 +694,13 @@ export function $fromMarkdown(
 	}
 	$showPictures(pictures);
 	if (diagrams) $getRoot().getChildren().forEach($toDiagram);
+	// Somewhere to type after a picture or diagram that ends the text.
+	const last = $getRoot().getLastChild();
+	if ($isDiagramNode(last)) $getRoot().append($createParagraphNode());
 }
 
-/** The editor's root, in a read, as a field's Markdown. */
+/** The editor's root, in a read, as a field's Markdown, without the empty
+ * paragraphs that may end it. */
 export function $toMarkdown(): string {
-	return $convertToMarkdownString(TRANSFORMERS, undefined, false);
+	return $convertToMarkdownString(TRANSFORMERS, undefined, false).replace(/\n+$/, '');
 }

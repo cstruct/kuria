@@ -341,20 +341,24 @@ Tests: engine typst cases, `a_pdf_draws_its_diagrams_from_their_source` (text of
 <!-- akt: PLAN-015-T07 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b4J
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocked by PLAN-015-T02, Blocked by PLAN-015-T04, Blocked by PLAN-015-T06]
 title: The example and its walkthrough
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 The example and its walkthrough.
 
-- `docs/examples/documents`: the `image` type; `document.body` with `"diagrams": true` and references to images; its README.
-- `e2e`: an image uploaded from the editor and embedded, a fletcher diagram written, toggled and saved, the document released, its PDF downloaded; the image type under "Show more". Axe on each step.
-- Docs: the CLI and server READMEs, `docs/architecture.md`.
+- **Example:** `docs/examples/documents/image.json` (T02–T03) and `document.json`'s `"diagrams": true` and references to images (T03, T06); its README covers images, diagrams, the editor's Image and Diagram buttons, PDFs and the writer role at `image`.
+- **Walkthrough** (`documents.spec.ts`): after the reference, a PNG uploaded from the Image dialog and a diagram inserted as code, previewed and shown as its picture; two figures; the image type under "Show more"; version 1 shows both, and its PDF holds the picture as an image. axe on the diagram as code and the body with both.
+- **A fix the walkthrough found:** a body ending in a diagram left nowhere to type after it. The editor now keeps an empty paragraph after a trailing diagram, and the Markdown it saves drops trailing blank lines.
+- **Docs:** the e2e README; the server README (T05).
+
+Lint, 392 Rust, 92 app and all 36 browser tests pass.
 
 <!-- field: acceptance -->
 - The walkthrough passes in `mise run e2e`, with lint and the tests.

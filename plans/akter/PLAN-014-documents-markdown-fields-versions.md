@@ -826,9 +826,9 @@ Lint, 375 Rust, 83 app and 33 browser tests pass.
 <!-- akt: PLAN-014-G06 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b46
-state: open
+state: closed
 in: [PLAN-014]
 links: [Resolved by PLAN-015-D02]
 title: Images in documents
@@ -836,3 +836,6 @@ title: Images in documents
 
 <!-- field: description -->
 Images in a document's body need it to hold attachments by reference, `![alt](attachment:<id>)`: kept as held by the akt (so bundles and erasure see them), uploaded from the editor, shown in the app through the download route, and given to typst for the PDF. Local mode and clones refuse attachments (`cli.local.unsupported`), so a directory and a clone would need the image files beside the akt files, and a push would need to upload them. Is that worth it, or do documents link to images kept elsewhere?
+
+<!-- field: resolution -->
+Resolved by PLAN-015: images are akter of their own, embedded in a body as references (`![alt](kuria:IMG-1)`), shown in the app, the editor and PDFs, and pinned by versions. Images in local mode and clones stay open as PLAN-015-G01.
