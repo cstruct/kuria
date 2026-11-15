@@ -8,6 +8,7 @@ pub mod board;
 pub mod copying;
 pub mod draft;
 mod hash;
+pub mod live;
 pub mod markdown;
 pub mod outcomes;
 mod rank;

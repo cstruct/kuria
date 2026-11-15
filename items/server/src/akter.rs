@@ -20,6 +20,7 @@ mod create;
 pub mod diagrams;
 mod draft;
 mod links;
+pub mod live;
 mod membership;
 mod ordering;
 pub mod outcomes;
@@ -485,16 +486,29 @@ async fn change_in(
     if !auth.allows(&permission(&stored.ty)).await? {
         return Err(AktError::Forbidden);
     }
-    if akt.revision != expected_revision {
+    // r[impl live.edit]
+    // An edit of a live draft changes the draft only, which merges, so the
+    // revision it was based on isn't checked: revisions don't move with it.
+    let live = live::has_live_draft(&stored);
+    let to_draft = live && transition.is_none();
+    if akt.revision != expected_revision && !to_draft {
         return Err(AktError::Stale {
             expected: expected_revision,
             current: akt.revision,
         });
     }
+    let draft = if live {
+        Some(live::load(conn, &stored, &akt).await?)
+    } else {
+        None
+    };
     let current = Current {
         state: akt.state.clone(),
-        fields: fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
-            .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
+        fields: match &draft {
+            Some(loaded) if to_draft => loaded.fields.clone(),
+            _ => fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
+                .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
+        },
     };
     // r[impl akt.transition.outcomes]
     let held = match transition.as_deref().and_then(|t| stored.ty.transition(t)) {
@@ -513,10 +527,25 @@ async fn change_in(
         },
         held,
     )?;
+    if let Some(loaded) = draft {
+        if to_draft {
+            return write_draft(conn, caller, &stored, akt, loaded, &outcome, now).await;
+        }
+        // r[impl live.revisions]
+        // A transition of an akt with a live draft records its latest
+        // revision's fields: its fields are the draft's to change.
+        if !outcome.changes.is_empty() {
+            return Err(AktError::BadRequest(format!(
+                "{number}'s fields are its live draft's: edit them, then release them"
+            )));
+        }
+        akt.title = title_of(&stored.ty, &loaded.fields);
+    } else {
+        akt.title = title_of(&stored.ty, &outcome.fields);
+    }
     akt.state = outcome.state.clone();
     akt.fields = Json::Object(fields_to_json(&outcome.fields));
     akt.revision = expected_revision + 1;
-    akt.title = title_of(&stored.ty, &outcome.fields);
     akt.updated_at = now;
     if !store::update_akt(conn, &akt, expected_revision).await? {
         return Err(AktError::Internal(format!(
@@ -530,7 +559,50 @@ async fn change_in(
     let mut recorded = revision(&akt, actor, transition, reason, &outcome, now);
     references::record(conn, &stored.ty, &akt, &outcome.fields, &mut recorded).await?;
     store::append_revision(conn, &recorded).await?;
+    if live {
+        return live::read_as_draft(conn, &stored, akt).await;
+    }
     Ok(akt)
+}
+
+/// Writes an edit's `outcome` to `akt`'s live draft `loaded`, checked as a
+/// revision's would be, and answers the akt as reading it does
+/// (`live.edit`). Its revision stays; its title and when it changed move.
+// r[impl live.edit]
+// r[impl live.history]
+async fn write_draft(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &StoredType,
+    mut akt: AktRow,
+    loaded: live::Loaded,
+    outcome: &Outcome,
+    now: DateTime<Utc>,
+) -> Result<AktRow, AktError> {
+    let tenant = akt.tenant_id;
+    check_sections(conn, tenant, &ty.ty, Some(akt.id), outcome).await?;
+    check_contacts(conn, tenant, outcome).await?;
+    hold_attachments(conn, caller, &ty.ty, &akt, outcome).await?;
+    diagrams::render_written(conn, caller, &ty.ty, &akt, outcome).await?;
+    let fields = live::write(
+        conn,
+        ty,
+        &akt,
+        loaded,
+        &outcome.fields,
+        caller.actor.subject.into(),
+        now,
+    )
+    .await?;
+    akt.title = title_of(&ty.ty, &fields);
+    akt.updated_at = now;
+    if !store::update_akt(conn, &akt, akt.revision).await? {
+        return Err(AktError::Internal(format!(
+            "akt {} moved while locked",
+            akt.number
+        )));
+    }
+    Ok(live::with_fields(ty, &akt, &fields))
 }
 
 /// A rank after every akt of the tenant. The caller holds the tenant's

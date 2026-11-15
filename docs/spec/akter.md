@@ -384,7 +384,8 @@ Akt revisions MUST never change or be removed by any operation of Kuria's.
 r[akt.revision.concurrency]
 An edit or a transition MUST name the akt revision it was based on, and MUST
 be refused if the akt has moved past it, so that no change is made on top of
-one its author did not see.
+one its author did not see; an edit of a live draft is not checked so
+(`live.edit`).
 
 r[akt.revision.atomic]
 An akt's current state, its new akt revision and its change event MUST be

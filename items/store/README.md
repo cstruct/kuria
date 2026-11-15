@@ -28,6 +28,9 @@ the queries the server runs.
   - [`attachments`](src/attachments.rs): attachments' metadata, which akt
     fields hold which attachment, and the akt types of an attachment's
     holders.
+  - [`drafts`](src/drafts.rs): live drafts, each a compacted Yjs state
+    and the updates after it, and every update with who made it, when and
+    the fields it changed, kept even when compacted.
   - [`erasure`](src/erasure.rs): deleting what Kuria holds about a subject
     (sessions, their name and email, and those of contacts linked to them),
     and the time erasures are handled up to.

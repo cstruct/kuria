@@ -360,6 +360,30 @@ async fn record_left(
     membership: Json,
     now: DateTime<Utc>,
 ) -> Result<(), AktError> {
+    // r[impl live.revisions]
+    // A container with a live draft loses the member from its draft's
+    // sections; its revision keeps its latest revision's fields.
+    if super::live::has_live_draft(&container.ty) {
+        super::live::leave_sections(
+            conn,
+            &container.ty,
+            &container.akt,
+            member,
+            caller.actor.subject.into(),
+            now,
+        )
+        .await?;
+        return super::record_membership(
+            conn,
+            &container.ty,
+            &mut container.akt,
+            caller.actor,
+            reason.map(str::to_owned),
+            membership,
+            now,
+        )
+        .await;
+    }
     let changes = super::leave_sections(&container.ty, &mut container.akt, member)?;
     super::record_membership_changing(
         conn,

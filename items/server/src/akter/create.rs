@@ -126,6 +126,11 @@ pub(super) async fn create_in(
     }
     super::references::record(conn, &stored.ty, &akt, &outcome.fields, &mut first).await?;
     store::append_revision(conn, &first).await?;
+    // r[impl live.edit]
+    // Its first revision, and its live draft as that revision has it.
+    if super::live::has_live_draft(&stored) {
+        super::live::start(conn, &stored, &akt, &outcome.fields, now).await?;
+    }
 
     for (parent, ty) in parents.iter_mut().zip(&parent_types) {
         containers::insert_membership(

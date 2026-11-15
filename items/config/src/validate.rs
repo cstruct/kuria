@@ -169,6 +169,25 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     {
         problems.add("versions.action", message);
     }
+    // r[impl live.declare]
+    if document.live_drafts && document.versions.is_none() {
+        problems.add(
+            "live_drafts",
+            "a live draft is released as versions, so `versions` must be declared",
+        );
+    }
+    // r[impl live.fields]
+    if document.live_drafts
+        && let Some(i) = document.fields.iter().position(|f| {
+            f.key == "fields"
+                && (f.kind == FieldKind::Markdown || (f.kind == FieldKind::Text && f.multiline))
+        })
+    {
+        problems.add(
+            &format!("fields[{i}].key"),
+            "`fields` names the live draft's map of the other fields, so no text can be keyed so",
+        );
+    }
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
     }
@@ -909,6 +928,50 @@ mod tests {
         let mut stray = capa();
         stray["versions"] = json!({ "label": "x" });
         assert!(serde_json::from_value::<AktTypeDocument>(stray).is_err());
+    }
+
+    // r[verify live.declare]
+    #[test]
+    fn live_drafts_need_versions() {
+        let mut document = capa();
+        document["live_drafts"] = json!(true);
+        assert_eq!(
+            problems(document.clone()),
+            vec![
+                "live_drafts: a live draft is released as versions, so `versions` must be declared"
+            ]
+        );
+        document["versions"] = json!({});
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        let ty = validate(serde_json::from_value(document).unwrap()).unwrap();
+        assert!(ty.document().live_drafts);
+        document = capa();
+        document["live_drafts"] = json!(false);
+        assert_eq!(problems(document), Vec::<String>::new());
+    }
+
+    // r[verify live.fields]
+    #[test]
+    fn no_text_of_a_live_draft_is_keyed_as_its_map() {
+        let mut document = capa();
+        document["live_drafts"] = json!(true);
+        document["versions"] = json!({});
+        let n = document["fields"].as_array().unwrap().len();
+        let with = |field: serde_json::Value| {
+            let mut document = document.clone();
+            document["fields"].as_array_mut().unwrap().push(field);
+            problems(document)
+        };
+        assert_eq!(
+            with(json!({ "key": "fields", "name": "Fields", "kind": "markdown" })),
+            vec![format!(
+                "fields[{n}].key: `fields` names the live draft's map of the other fields, so no text can be keyed so"
+            )]
+        );
+        assert_eq!(
+            with(json!({ "key": "fields", "name": "Fields", "kind": "text" })),
+            Vec::<String>::new()
+        );
     }
 
     // r[verify akt.type.validation]

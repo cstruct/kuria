@@ -81,6 +81,13 @@ type Akt {
 	"""
 	outcome: Outcome
 	"""
+	The changes to its live draft since its latest release, or all of
+	them with `all`, oldest first: who made each, when, and which fields
+	it changed (`live.history`). None for an akt without a live draft,
+	or read at a version or revision.
+	"""
+	draftChanges(all: Boolean! = false): [DraftChange!]!
+	"""
 	Every revision, oldest first.
 	"""
 	revisions: [AktRevision!]!
@@ -161,6 +168,11 @@ type AktType {
 	The document this version was defined by.
 	"""
 	document: JSON!
+	"""
+	Whether its akter have a live draft, edited together, that only
+	releases make revisions of (`live.declare`).
+	"""
+	liveDrafts: Boolean!
 	createdAt: DateTime!
 	"""
 	How many akter of this type the tenant has, to a subject who may
@@ -470,6 +482,25 @@ type DockerValue {
 	"""
 	digest: String!
 	tag: String
+}
+
+"""
+One change to an akt's live draft (`live.history`).
+"""
+type DraftChange {
+	"""
+	Its place among the live draft's changes, from 1.
+	"""
+	seq: Int!
+	"""
+	Who made it.
+	"""
+	by: User!
+	at: DateTime!
+	"""
+	The keys of the fields it changed.
+	"""
+	fields: [String!]!
 }
 
 """

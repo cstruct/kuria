@@ -118,6 +118,16 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   - `releaseVersion` names an akt's current revision as its next version, once no reference is broken, pinning what each meant.
   - `akt(number:, version:)` and `akt(number:, revision:)` read an akt as it was ([`src/akter/versions.rs`](src/akter/versions.rs), `akt_version`).
   - A batch may keep the git commit it came from with its revisions (`akt_commit`), for `git-remote-kuria`.
+- Live drafts ([`src/akter/live.rs`](src/akter/live.rs), `live.*`): for an
+  akt type that says `"live_drafts": true`, `editAkt`, batch edits and
+  `draftField` write to the akt's live draft only (`akt_draft`,
+  `akt_draft_update`), checked as a revision would be and without checking
+  the revision they name; creating one starts its draft from its first
+  revision. Reading answers the draft's fields and title with the latest
+  revision; `releaseVersion` records the draft as a new revision and names
+  it; transitions and membership changes record the latest revision's
+  fields, refusing a transition that sets fields. `Akt.draftChanges` lists
+  the draft's changes by author since the latest release, or all of them.
 - Copying: `copyAkt` copies an akt and the part of its member tree chosen,
   in one transaction, into new akter of the same types in their initial
   states, with their sections remapped and their links out; each copy's
@@ -307,6 +317,11 @@ mise run test
   recording the person, and linking a contact by a verified email only, in
   the tenant signed in to only, and never relinking one.
   They need the development Postgres and Valkey (`mise run db:up`).
+- [`tests/live_drafts.rs`](tests/live_drafts.rs), against a fresh database:
+  edits changing the live draft and not the revisions, refused edits
+  leaving it, releases recording it as a revision and a version and refused
+  when it is already released, transitions carrying the last release,
+  references checked on the draft at release, and its changes by author.
 - [`tests/bundles.rs`](tests/bundles.rs), between two fresh databases and
   two tenants of one: a whole tenant moved, reading the same through
   GraphQL (history, hashes, links, contacts, attachments' bytes) and

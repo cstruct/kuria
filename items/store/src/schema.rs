@@ -191,9 +191,35 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    akt_draft (akt_id) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        state -> Bytea,
+        fields -> Jsonb,
+        compacted_seq -> Int8,
+        released_seq -> Int8,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    akt_draft_update (akt_id, seq) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        seq -> Int8,
+        update -> Bytea,
+        by -> Uuid,
+        at -> Timestamptz,
+        fields -> Jsonb,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
     akt_diagram,
+    akt_draft,
+    akt_draft_update,
     akt_held,
     akt_origin,
     akt_commit,

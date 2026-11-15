@@ -59,6 +59,10 @@ pub struct AktTypeDocument {
     /// needs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub versions: Option<VersionsDef>,
+    /// Whether this type's akter have a live draft, edited together, that
+    /// only releases make revisions of (`live.declare`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub live_drafts: bool,
 }
 
 /// That an akt type releases versions (`version.declare`).

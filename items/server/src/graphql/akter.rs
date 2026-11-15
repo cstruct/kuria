@@ -590,19 +590,27 @@ async fn with_types(
         .map(|row| StoredType::read(row).map(|t| (t.row.id, t)))
         .collect::<Result<_, _>>()
         .map_err(error)?;
-    rows.into_iter()
+    let mut paired = rows
+        .into_iter()
         .map(|row| {
             let ty = types
                 .get(&row.type_version_id)
-                .cloned()
                 .ok_or_else(|| internal(format!("akt {} has no akt type", row.number)))?;
-            Ok(Akt {
-                row,
-                ty,
-                version: None,
-            })
+            Ok((row, ty))
         })
-        .collect()
+        .collect::<async_graphql::Result<Vec<_>>>()?;
+    // r[impl live.read]
+    crate::akter::live::read_as_drafts(conn, &mut paired)
+        .await
+        .map_err(error)?;
+    Ok(paired
+        .into_iter()
+        .map(|(row, ty)| Akt {
+            row,
+            ty: ty.clone(),
+            version: None,
+        })
+        .collect())
 }
 
 #[derive(Default)]
@@ -1269,6 +1277,12 @@ impl AktType {
     /// The document this version was defined by.
     async fn document(&self) -> Json<JsonValue> {
         Json(self.0.row.definition.clone())
+    }
+
+    /// Whether its akter have a live draft, edited together, that only
+    /// releases make revisions of (`live.declare`).
+    async fn live_drafts(&self) -> bool {
+        self.0.ty.document().live_drafts
     }
 
     async fn created_at(&self) -> DateTime<Utc> {
@@ -1996,6 +2010,44 @@ impl Akt {
             .map(Into::into))
     }
 
+    /// The changes to its live draft since its latest release, or all of
+    /// them with `all`, oldest first: who made each, when, and which fields
+    /// it changed (`live.history`). None for an akt without a live draft,
+    /// or read at a version or revision.
+    // r[impl live.history]
+    async fn draft_changes(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(default)] all: bool,
+    ) -> async_graphql::Result<Vec<DraftChange>> {
+        if !crate::akter::live::has_live_draft(&self.ty) || self.version.is_some() {
+            return Ok(Vec::new());
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let tenant = self.row.tenant_id;
+        let after = if all {
+            0
+        } else {
+            kuria_store::drafts::released_seq(&mut conn, tenant, self.row.id)
+                .await
+                .map_err(internal)?
+                .unwrap_or(0)
+        };
+        Ok(
+            kuria_store::drafts::updates_after(&mut conn, tenant, self.row.id, after)
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .map(|row| DraftChange {
+                    seq: row.seq,
+                    by: User(row.by),
+                    at: row.at,
+                    fields: serde_json::from_value(row.fields).unwrap_or_default(),
+                })
+                .collect(),
+        )
+    }
+
     /// Every revision, oldest first.
     async fn revisions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<AktRevision>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
@@ -2010,6 +2062,18 @@ impl Akt {
             })
             .collect())
     }
+}
+
+/// One change to an akt's live draft (`live.history`).
+#[derive(SimpleObject)]
+pub struct DraftChange {
+    /// Its place among the live draft's changes, from 1.
+    seq: i64,
+    /// Who made it.
+    by: User,
+    at: DateTime<Utc>,
+    /// The keys of the fields it changed.
+    fields: Vec<String>,
 }
 
 /// A field's value, by its kind.
