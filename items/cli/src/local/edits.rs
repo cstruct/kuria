@@ -77,6 +77,24 @@ pub fn create(
     let mut fields = inputs(w, &shape, &given)?;
     fields.retain(|_, v| !v.is_null());
 
+    let number = create_with(w, akt_type, &fields, &containers)?;
+    Ok(answer(
+        format!("Created {number}."),
+        revision(&number, 1),
+        reason,
+    ))
+}
+
+/// Creates an akt of `akt_type` with the inputs `fields` in `containers`,
+/// by the rules a server creates one by, and answers its number.
+// r[impl cli.local.rules]
+// r[impl cli.local.numbers]
+pub(crate) fn create_with(
+    w: &mut Writer,
+    akt_type: &str,
+    fields: &Map<String, Json>,
+    containers: &[String],
+) -> Result<String, CliError> {
     let refs: Vec<&str> = containers.iter().map(String::as_str).collect();
     containment::check_distinct(&refs)?;
     let parents = containers
@@ -89,7 +107,8 @@ pub fn create(
     containment::check_create_inside(&t.ty, &parents)?;
 
     let change = w.change();
-    let outcome = kuria_engine::create(&t.ty, &fields, change).map_err(|r| refusal(&r))?;
+    let outcome = kuria_engine::create(&t.ty, fields, change).map_err(|r| refusal(&r))?;
+    w.check_sections(&t.ty, None, &outcome.changes)?;
     let number = numbering::next_from(
         &t.ty,
         w.now,
@@ -105,18 +124,14 @@ pub fn create(
         &t,
         outcome.state,
         rank,
-        containers.clone(),
+        containers.to_vec(),
         values,
     );
     w.add(akt);
-    for parent in &containers {
+    for parent in containers {
         w.bump(parent);
     }
-    Ok(answer(
-        format!("Created {number}."),
-        revision(&number, 1),
-        reason,
-    ))
+    Ok(number)
 }
 
 /// `kuria set <number> <field>=<value>…` in local mode.
@@ -135,6 +150,7 @@ pub fn set(
     let t = w.dir.types[&key].clone();
     let change = w.change();
     let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
     w.akt_mut(number).values = values;
@@ -198,8 +214,19 @@ pub fn perform(
     let current = w.current(number)?;
     let t = w.dir.types[&akt.type_key].clone();
     let change = w.change();
-    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change)
+    // r[impl akt.transition.outcomes]
+    // The directory lock holds every other write off until this one is done.
+    let gated =
+        t.ty.transition(&chosen.key)
+            .is_some_and(|d| !d.outcomes.is_empty());
+    let held = if gated {
+        super::answers::outcome(&w.dir, &akt)?
+    } else {
+        None
+    };
+    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, held)
         .map_err(|r| refusal(&r))?;
+    w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(Some(&akt), &outcome.fields, &changed, &w.ids);
     let state = outcome.state.clone();
@@ -218,6 +245,47 @@ pub fn perform(
     ))
 }
 
+/// `kuria verdict <number> pass|fail|skip|clear [--for <user>]` in local
+/// mode: as `@me`, by the engine's rules (`akt.field.verdict`).
+// r[impl cli.local.rules]
+pub fn verdict(
+    w: &mut Writer,
+    number: &str,
+    given: &str,
+    for_whom: Option<&str>,
+    reason: Option<&str>,
+) -> Result<Answer, CliError> {
+    let key = w.akt(number)?.type_key.clone();
+    let shape = w.shape(&key)?;
+    let field = crate::writes::edit::verdict_field(&shape, number)?
+        .key
+        .clone();
+    let who = match for_whom {
+        Some(text) => Some(Json::from(w.ids.person(text)?.to_string())),
+        None => None,
+    };
+    let mut fields = Map::new();
+    fields.insert(field, crate::writes::edit::verdict_input(given, who)?);
+    let current = w.current(number)?;
+    let t = w.dir.types[&key].clone();
+    let change = w.change();
+    let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    let changed: Vec<String> = outcome.changes.keys().cloned().collect();
+    let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
+    w.akt_mut(number).values = values;
+    let now = w.bump(number);
+    let akt = w.akt(number)?;
+    let outcome = super::answers::outcome(&w.dir, akt)?;
+    let (markdown, json) = crate::writes::edit::verdict_answer(
+        number,
+        given,
+        for_whom,
+        now.into(),
+        outcome.map(kuria_engine::outcomes::Outcome::as_str),
+    );
+    Ok(answer(markdown, json, reason))
+}
+
 /// Refuses a file whose read-only keys differ from the akt's.
 fn check_read_only(w: &Writer, number: &str, parsed: &Parsed) -> Result<(), CliError> {
     let akt = w.akt(number)?;
@@ -234,6 +302,9 @@ fn check_read_only(w: &Writer, number: &str, parsed: &Parsed) -> Result<(), CliE
     if parsed.text("state").is_some_and(|s| s != akt.state) {
         return Err(read_only("state", "perform a transition with `kuria do`"));
     }
+    let outcome =
+        super::answers::outcome(&w.dir, akt)?.map(kuria_engine::outcomes::Outcome::as_str);
+    crate::writes::edit::outcome_unchanged(number, parsed, outcome)?;
     let listed = |key: &str| -> BTreeSet<String> {
         parsed.front[key]
             .as_array()
@@ -288,13 +359,33 @@ pub fn apply(
         // Every field: what the file leaves out, it clears.
         let mut fields = Map::new();
         for field in &shape.fields {
+            if field.kind == "VERDICT" {
+                let now = akt
+                    .values
+                    .get(&field.key)
+                    .cloned()
+                    .unwrap_or_else(|| json!({}));
+                crate::writes::edit::verdicts_unchanged(
+                    &number,
+                    field,
+                    given.get(&field.key),
+                    &now,
+                )?;
+                continue;
+            }
             let raw = given.get(&field.key).cloned().unwrap_or(Json::Null);
             fields.insert(field.key.clone(), input(field, &raw, &mut w.ids)?);
         }
         let current = w.current(&number)?;
         let t = w.dir.types[&akt.type_key].clone();
         let change = w.change();
-        let outcome = match kuria_engine::edit(&t.ty, &current, &fields, change) {
+        // An akt file applied unchanged changes nothing, also of a final
+        // akt, as against a server (`cli.local.rules`).
+        let edited = match kuria_engine::changes_anything(&t.ty, &current, &fields, change) {
+            Ok(false) => Err(Refusal::NoChange),
+            _ => kuria_engine::edit(&t.ty, &current, &fields, change),
+        };
+        let outcome = match edited {
             Ok(outcome) => outcome,
             Err(Refusal::NoChange) => {
                 lines.push(format!("{number}: nothing changed."));
@@ -303,6 +394,7 @@ pub fn apply(
             }
             Err(r) => return Err(refusal(&r)),
         };
+        w.check_sections(&t.ty, Some(&number), &outcome.changes)?;
         let changed: Vec<String> = outcome.changes.keys().cloned().collect();
         let names: Vec<&str> = changed.iter().map(|k| shape.field_name(k)).collect();
         if dry_run {

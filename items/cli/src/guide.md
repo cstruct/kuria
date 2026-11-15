@@ -94,6 +94,12 @@ Markdown, as long as it needs.
   with `link`/`unlink`.
 - Single-line fields are front-matter keys; each multiline field is a
   section after `<!-- field: <key> -->`. Leaving a field out clears it.
+- A field naming several people is a list: `testers: [a@x.example, b@x.example]`.
+  A sections field is a section whose body is YAML: a list of member
+  numbers and sections, each `{title, text, collapsible, items}`.
+- `verdict` (each assignee's `pass`, `fail` or `skip`) and `outcome` (what
+  verdicts, or members' outcomes, add up to) are read-only: give verdicts
+  with `kuria verdict`.
 - `revision` is the revision you read. If the akt changed since, `apply`
   is refused as `STALE` (exit 3) and says what changed: `cat` it again,
   merge, and apply again. Never force it.
@@ -124,6 +130,8 @@ kuria transfer <member> <from> <to>
 kuria move <number> --before <other>
 kuria link <number> blocks <other>      kuria unlink <number> blocks <other>
 kuria draft <number> <field>
+kuria verdict <test> pass|fail|skip|clear [--for <assignee>]
+kuria copy <template> [--only <number>…] [--in <container>]   # with its members
 ```
 
 Values: options by key or name; users and contacts by email, name or

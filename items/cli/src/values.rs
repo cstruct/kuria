@@ -82,6 +82,79 @@ pub fn text_of(value: &Value) -> String {
             None => format!("{repository}@{digest}"),
         },
         Value::AttachmentValue { attachment, .. } => attachment.name.clone(),
+        Value::UsersValue { users, .. } => users.iter().map(name_of).collect::<Vec<_>>().join(", "),
+        Value::VerdictValue { verdicts, .. } => verdicts
+            .iter()
+            .map(|g| format!("{}: {}", name_of(&g.assignee), g.verdict.to_lowercase()))
+            .collect::<Vec<_>>()
+            .join(", "),
+        Value::SectionsValue { value, .. } => {
+            sections_text(&kuria_engine::sections::from_json(value).unwrap_or_default())
+        }
+    }
+}
+
+/// A sections value as one line: its members by number, each section's in
+/// brackets after its title.
+fn sections_text(items: &[kuria_engine::sections::Item]) -> String {
+    use kuria_engine::sections::Item;
+    items
+        .iter()
+        .map(|item| match item {
+            Item::Akt(number) => number.clone(),
+            Item::Section(s) => format!(
+                "{} [{}]",
+                s.title.as_deref().unwrap_or("Untitled"),
+                sections_text(&s.items)
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A sections value, as `editAkt` takes it, as YAML: a section's
+/// keys in the order `title`, `text`, `collapsible`, `items`.
+// r[impl cli.file.kinds]
+#[must_use]
+pub fn sections_yaml(value: &Json) -> String {
+    use serde_yaml_ng::{Mapping, Value as Yaml};
+    fn convert(value: &Json) -> Yaml {
+        match value {
+            Json::Array(items) => Yaml::Sequence(items.iter().map(convert).collect()),
+            Json::Object(object) => {
+                let mut mapping = Mapping::new();
+                for key in ["title", "text", "collapsible", "items"] {
+                    if let Some(v) = object.get(key) {
+                        mapping.insert(Yaml::from(key), convert(v));
+                    }
+                }
+                Yaml::Mapping(mapping)
+            }
+            other => serde_yaml_ng::to_value(other).unwrap_or(Yaml::Null),
+        }
+    }
+    match value {
+        Json::Array(items) if items.is_empty() => "[]".to_owned(),
+        _ => serde_yaml_ng::to_string(&convert(value))
+            .unwrap_or_default()
+            .trim_end()
+            .to_owned(),
+    }
+}
+
+/// A sections field's section, its YAML read back as `editAkt` takes it.
+// r[impl cli.file.kinds]
+pub fn sections_from_text(text: &str) -> Result<Json, String> {
+    if text.trim().is_empty() {
+        return Ok(Json::Array(Vec::new()));
+    }
+    let yaml: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(text).map_err(|e| format!("isn't YAML: {e}"))?;
+    let json = serde_json::to_value(yaml).map_err(|e| format!("isn't plain values: {e}"))?;
+    if json.is_array() {
+        Ok(json)
+    } else {
+        Err("is a list of akt numbers and sections".to_owned())
     }
 }
 
@@ -148,6 +221,18 @@ pub fn file_value(value: &Value) -> Json {
         Value::AttachmentValue { attachment, .. } => {
             json!({ "id": attachment.id, "name": attachment.name })
         }
+        Value::UsersValue { users, .. } => users.iter().map(|u| Json::from(handle_of(u))).collect(),
+        Value::VerdictValue { verdicts, .. } => verdicts
+            .iter()
+            .map(|g| {
+                (
+                    handle_of(&g.assignee).to_owned(),
+                    Json::from(g.verdict.to_lowercase()),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>()
+            .into(),
+        Value::SectionsValue { value, .. } => value.clone(),
     }
 }
 
@@ -303,6 +388,7 @@ pub fn current_input(value: &Value) -> Json {
             }
         }
         Value::UserValue { user, .. } => someone(user),
+        Value::UsersValue { users, .. } => users.iter().map(someone).collect(),
         Value::AttachmentValue { attachment, .. } => attachment.id.clone().into(),
         other => file_value(other),
     }
@@ -354,6 +440,15 @@ pub fn input_of(field: &FieldDef, value: &Json, people: &People) -> Result<Json,
                 field.name
             ))),
         },
+        "USER" if field.multiple => users_input(field, value, people),
+        "SECTIONS" => sections_input(field, value),
+        "VERDICT" => Err(CliError {
+            field: Some(field.key.clone()),
+            ..CliError::refused(
+                "READ_ONLY",
+                format!("{} is given with `kuria verdict`", field.name),
+            )
+        }),
         "USER" => {
             match value {
                 Json::Object(o) if o.contains_key("contact") => Ok(value.clone()),
@@ -393,6 +488,53 @@ pub fn input_of(field: &FieldDef, value: &Json, people: &People) -> Result<Json,
             "{} is a {other} field, which the client can't write",
             field.name
         ))),
+    }
+}
+
+/// A list of people's input, from a list or comma-separated text.
+fn users_input(field: &FieldDef, value: &Json, people: &People) -> Result<Json, CliError> {
+    let refused = || CliError {
+        field: Some(field.key.clone()),
+        ..CliError::refused(
+            "BAD_REQUEST",
+            format!("{} takes a list of users and contacts", field.name),
+        )
+    };
+    let given: Vec<Json> = match value {
+        Json::Array(items) => items.clone(),
+        Json::String(text) => text
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(Json::from)
+            .collect(),
+        _ => return Err(refused()),
+    };
+    given
+        .iter()
+        .map(|one| match one {
+            Json::Object(o) if o.contains_key("contact") => Ok(one.clone()),
+            Json::String(text) => people.input(text).map_err(|e| CliError {
+                field: Some(field.key.clone()),
+                ..e
+            }),
+            _ => Err(refused()),
+        })
+        .collect()
+}
+
+/// A sections value's input: the YAML of a file's section, or a list.
+fn sections_input(field: &FieldDef, value: &Json) -> Result<Json, CliError> {
+    let refused = |why: String| CliError {
+        field: Some(field.key.clone()),
+        ..CliError::refused("BAD_REQUEST", format!("{} {why}", field.name))
+    };
+    match value {
+        Json::String(text) => sections_from_text(text).map_err(refused),
+        Json::Array(_) => Ok(value.clone()),
+        _ => Err(refused(
+            "takes a list of akt numbers and sections".to_owned(),
+        )),
     }
 }
 
@@ -513,7 +655,7 @@ pub fn set_value(field: &FieldDef, text: &str) -> Result<Json, CliError> {
                 ..CliError::refused("BAD_REQUEST", format!("{} isn't JSON: {e}", field.name))
             })
         }
-        "TEXT" => match text.strip_prefix('@') {
+        "TEXT" | "SECTIONS" => match text.strip_prefix('@') {
             Some(path) => read(path).map(Json::from),
             None => Ok(text.into()),
         },
@@ -555,6 +697,9 @@ mod tests {
                 name: "Bug fix".to_owned(),
             }],
             format: None,
+            multiple: false,
+            of: Vec::new(),
+            assignees: None,
         }
     }
 

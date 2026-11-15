@@ -17,6 +17,7 @@ pub mod answers;
 pub mod arrange;
 pub mod check;
 pub mod convert;
+pub mod copy;
 pub mod dir;
 pub mod edits;
 pub mod git;

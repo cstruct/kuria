@@ -9,6 +9,9 @@ function field(kind: FieldDef['kind'], extra: Partial<FieldDef> = {}): FieldDef 
 		description: null,
 		required: false,
 		multiline: false,
+		multiple: false,
+		of: [],
+		assignees: null,
 		options: [
 			{ key: 'a', name: 'A' },
 			{ key: 'b', name: 'B' }
@@ -59,6 +62,20 @@ describe('field values', () => {
 				field('DOCKER'),
 				{ __typename: 'DockerValue', field: 'f', repository: 'r/a', digest: 'sha256:1', tag: null },
 				{ repository: 'r/a', digest: 'sha256:1', tag: undefined }
+			],
+			[
+				field('USER', { multiple: true }),
+				{ __typename: 'UsersValue', field: 'f', users: [ALICE, BOB] },
+				['alice', { contact: 'c-bob' }]
+			],
+			[
+				field('SECTIONS'),
+				{
+					__typename: 'SectionsValue',
+					field: 'f',
+					value: [{ title: 'Setup', collapsible: true, items: ['T-1'] }, 'T-2']
+				},
+				[{ title: 'Setup', collapsible: true, items: ['T-1'] }, 'T-2']
 			]
 		];
 		for (const [def, value, input] of cases) {

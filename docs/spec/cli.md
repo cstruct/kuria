@@ -96,19 +96,22 @@ The client MUST offer:
 - `types`: the akt types, with how many akter each has;
 - `schema <type>`: a type's fields with their kinds, whether required, and
   options; its states and their tones; its transitions with what they
-  require; the types it contains and links to; its board and presentation;
-- `ls [<type>]`: akter as a table of number, title, state and the
-  presentation's list fields, filtered by `--state`, `--in <container>`,
-  `--where <field>=<value>` (`akt.filter`, `@me` for oneself) and
+  require and the outcomes they allow; the types it contains and links
+  to; its board and presentation;
+- `ls [<type>]`: akter as a table of number, title, state, outcome where
+  they have one, and the presentation's list fields, filtered by
+  `--state`, `--in <container>`, `--where <field>=<value>` (`akt.filter`,
+  `@me` for oneself), `--outcome <outcome>` (`akt.filter.outcome`) and
   `--search`, a page at a time, or every page with `--all` (`akt.page`);
 - `find <text>`: a search (`akt.search`);
 - `cat <number>…`: each akt as an akt file (`cli.file`), several as one
   multi-akt file; with `--members <type>,…`, each followed by its direct
   members of those akt types, or with `--all-members` by all of them, in
   the container's order (`cli.members`);
-- `show <number>`: an akt's fields, containers, members by column and
-  type, links, and the transitions its state allows, and with `--history`
-  its revisions;
+- `show <number>`: an akt's fields, its outcome, containers, members by
+  column and type, or in their sections with each section's outcome,
+  links, and the transitions its state allows, and with `--history` its
+  revisions;
 - `history <number>`: its revisions, as the app's history says them
   (`app.history`);
 - `users` and `contacts`: whom values can name.
@@ -128,6 +131,14 @@ An akt file MUST be Markdown with YAML front matter:
 Users and contacts MUST be written by email, else name, and read back by
 email, name or `@me`. A field without a value MUST be left out.
 `cat` followed by `apply` of the unchanged file MUST change nothing.
+
+r[cli.file.kinds]
+In an akt file, a `multiple` `user` field MUST be a list of users and
+contacts; a `sections` field MUST be a section of its own whose body is
+the field's value as YAML, akter by number; and a `verdict` field MUST be
+a front-matter mapping of each assignee to their verdict, read-only, given
+with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
+key after `state`.
 
 r[cli.file.multi]
 A multi-akt file MUST hold its first akt as an akt file, and each other
@@ -177,6 +188,10 @@ The client MUST offer:
 - `link <source> <kind> <target> [--pin]` and `unlink <source> <kind>
   <target>`;
 - `draft <number> <field>`;
+- `verdict <number> pass|fail|skip|clear [--for <user>]`: one's own
+  verdict, or one for another assignee (`akt.field.verdict`);
+- `copy <number> [--only <number>…] [--in <container>…]`, answering the
+  copy's number and the numbers of the copies of its members (`akt.copy`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
@@ -211,7 +226,8 @@ r[cli.local.layout]
 An akt directory MUST hold each akt type's document as
 `types/<key>.json`, one version per key, and its akter in `akter/*.md`.
 Each file MUST begin with an akt as an akt file (`cli.file`) with one more
-front-matter key, `rank`, its place in the directory's order. Any nested
+front-matter key, `rank`, its place in the directory's order, and without
+`outcome`, which is derived each time it is read (`akt.outcome.derived`). Any nested
 akter (`cli.local.nesting`) MUST follow it, each beginning with the line
 `<!-- akt: <NUMBER> -->` and then as an akt file of its own with `rank`
 but without `number`, which the line gives. Such a line inside a fenced

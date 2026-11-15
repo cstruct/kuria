@@ -65,6 +65,16 @@ group('history', () => {
 			'r/backend:4.2.1'
 		);
 		expect(valueText(['a', 'b'])).toBe('a, b');
+		expect(
+			valueText([{ title: 'Setup', collapsible: true, items: ['T-1', { items: [] }] }, 'T-2'])
+		).toBe('Setup (T-1, a section (empty)), T-2');
+		const named = new Map([['00000000-0000-0000-0000-000000000001', 'Alice']]);
+		expect(
+			valueText(
+				[{ assignee: '00000000-0000-0000-0000-000000000001', verdict: 'pass', by: 'x', at: 'y' }],
+				named
+			)
+		).toBe('Alice: pass');
 		expect(valueText('866b9e77-6aa2-4778-bb2f-77f6c8d0c816')).toBe('a user');
 		const long = valueText(`## Epic\n- ${'x'.repeat(300)}`)!;
 		expect(long).toHaveLength(140);

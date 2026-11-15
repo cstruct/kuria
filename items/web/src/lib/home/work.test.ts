@@ -11,14 +11,16 @@ describe('my work', () => {
 					fields: [
 						{ key: 'manager', kind: 'USER' },
 						{ key: 'go', kind: 'CHECKBOX' },
-						{ key: 'title', kind: 'TEXT' }
+						{ key: 'title', kind: 'TEXT' },
+						{ key: 'testers', kind: 'USER' }
 					]
 				},
 				{ key: 'backlog', fields: [{ key: 'title', kind: 'TEXT' }] }
 			])
 		).toEqual([
 			{ type: 'release', field: 'manager' },
-			{ type: 'release', field: 'go' }
+			{ type: 'release', field: 'go' },
+			{ type: 'release', field: 'testers' }
 		]);
 	});
 

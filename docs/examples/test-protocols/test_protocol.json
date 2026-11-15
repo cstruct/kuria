@@ -1,0 +1,36 @@
+{
+  "key": "test_protocol",
+  "name": "Test protocol",
+  "number": "TP-{seq:3}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "scope", "name": "Scope", "kind": "text", "multiline": true,
+      "description": "What it tests, and against what build or system." },
+    { "key": "layout", "name": "Layout", "kind": "sections", "of": ["test_case"],
+      "description": "Its test cases in sections." },
+    { "key": "owner", "name": "Owner", "kind": "user" },
+    { "key": "conclusion", "name": "Conclusion", "kind": "text", "multiline": true,
+      "description": "What the run showed, and what follows from it." }
+  ],
+  "states": [
+    { "key": "draft", "name": "Draft", "initial": true },
+    { "key": "template", "name": "Template" },
+    { "key": "running", "name": "Running" },
+    { "key": "done", "name": "Done", "final": true },
+    { "key": "withdrawn", "name": "Withdrawn", "final": true }
+  ],
+  "transitions": [
+    { "key": "keep", "name": "Keep as template", "from": ["draft"], "to": "template" },
+    { "key": "revise", "name": "Revise", "from": ["template"], "to": "draft" },
+    { "key": "start", "name": "Start", "from": ["draft"], "to": "running" },
+    { "key": "finish", "name": "Finish", "from": ["running"], "to": "done",
+      "requires": ["conclusion"], "outcomes": ["pass", "fail", "skip"] },
+    { "key": "withdraw", "name": "Withdraw", "from": ["draft", "template", "running"], "to": "withdrawn" }
+  ],
+  "contains": [{ "type": "test_case" }],
+  "presentation": {
+    "icon": "clipboard-check", "colour": "purple",
+    "list": ["owner"],
+    "tones": { "template": "neutral", "running": "active", "done": "success", "withdrawn": "neutral" }
+  }
+}

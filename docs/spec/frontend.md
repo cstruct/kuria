@@ -46,8 +46,9 @@ The app MUST show and edit each field by its kind: text in a single-line or
 multiline box, a choice or choices from the field's options, a date, a user
 or contact chosen by name, a checkbox that can be checked for someone else,
 a reference's URL and label, a git repository with a SHA or tag, a Docker
-repository with a digest and tag, and an attachment uploaded or
-downloaded.
+repository with a digest and tag, an attachment uploaded or downloaded,
+several users or contacts for a `multiple` field, and each assignee's
+verdict.
 
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
@@ -60,7 +61,9 @@ scripts, styles, frames, forms or event handlers, and links only to
 
 r[app.transitions]
 The app MUST offer the transitions an akt's state allows, asking for the
-fields a transition requires before performing it.
+fields a transition requires before performing it. A transition the akt's
+outcome doesn't allow (`akt.transition.outcomes`) MUST be shown as
+unavailable, saying the outcomes it allows.
 
 r[app.members]
 A container's page MUST show its members of the akt types its board names
@@ -68,6 +71,24 @@ on the board, and its members of every other akt type as a list per akt
 type, not as one unmapped column. Cards and lists MUST show each member's
 number, title, state and the fields its type's presentation names for
 them.
+
+r[app.sections]
+An akt with a `sections` field MUST show its members in those sections,
+nested as the field nests them: each section with its title, if any, its
+text as Markdown, and its outcome, and one that is `collapsible` closed
+until opened. Members no section names MUST follow, as `app.members`
+shows them.
+
+r[app.verdicts]
+Each member with a `verdict` field MUST show, where its sections or its
+container list it, its assignees, each one's verdict, and its outcome, and
+MUST let an assignee give, change or take back their own verdict there.
+An akt's page MUST show its outcome, if it has outcomes (`akt.outcome`).
+
+r[app.copy]
+The app MUST let a person copy an akt (`akt.copy`), choosing the sections
+and members to keep, all of them at first, and showing the copy once it is
+made.
 
 r[app.board-drop]
 Dropping a card on another column of a board MUST offer the transitions
@@ -88,12 +109,14 @@ number or title (`app.pickers`), and remove one.
 
 r[app.filters]
 A type's list MUST let a person filter it by the values of its filterable
-fields (`akt.filter`), keeping the filters in the page's address, and load
+fields (`akt.filter`), and by outcome where its type has a `verdict` field
+(`akt.filter.outcome`), keeping the filters in the page's address, and load
 more akter a page at a time (`akt.page`).
 
 r[app.my-work]
-Home MUST show the akter whose `user` fields or checkboxes name the
-viewer, by akt type, for the types that have such fields.
+Home MUST show the akter whose `user` fields, also those naming several
+people, or checkboxes name the viewer, by akt type, for the types that have
+such fields.
 
 r[app.pickers]
 Wherever the app asks for an akt, such as a container to add an akt to, or

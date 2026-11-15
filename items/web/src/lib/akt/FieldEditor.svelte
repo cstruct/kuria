@@ -1,4 +1,6 @@
 <script lang="ts">
+	import PeopleSelect from './PeopleSelect.svelte';
+	import SectionsEditor from './SectionsEditor.svelte';
 	import SomeoneSelect from './SomeoneSelect.svelte';
 	import { legendOf } from './labels';
 	import { upload } from './upload';
@@ -11,9 +13,11 @@
 		people: Person[];
 		/** The field's refusal, if its value was refused. */
 		error?: string;
+		/** The akt's members, which a sections field places. */
+		members?: readonly { number: string; title?: string | null }[];
 	}
 
-	let { field, draft = $bindable(), people, error }: Props = $props();
+	let { field, draft = $bindable(), people, error, members = [] }: Props = $props();
 
 	let uploading = $state(false);
 	let uploadError = $state('');
@@ -63,6 +67,10 @@
 		<input type="date" aria-label={field.name} bind:value={draft.date} />
 	{:else if draft.kind === 'USER'}
 		<SomeoneSelect label={field.name} bind:who={draft.who} {people} none="Nobody" />
+	{:else if draft.kind === 'USERS'}
+		<PeopleSelect bind:who={draft.who} {people} />
+	{:else if draft.kind === 'SECTIONS'}
+		<SectionsEditor bind:items={draft.items} {members} />
 	{:else if draft.kind === 'CHECKBOX'}
 		<label class="inline">
 			<input type="checkbox" bind:checked={draft.checked} />

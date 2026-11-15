@@ -27,6 +27,8 @@ A bundle that holds akter MUST hold, for them:
   transition, reason, changes, resulting state, membership or link change,
   and hash;
 - the memberships and links among them, with any pinned revisions;
+- for each copy among them, the akt it was copied from, if the bundle holds
+  that one too (`akt.copy.record`);
 - the tenant's number counters;
 - the contacts their values name, and the people their revisions and
   values name: subject, recorded name and email;

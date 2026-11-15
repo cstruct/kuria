@@ -180,6 +180,21 @@ async fn gather(
     Ok(bundle)
 }
 
+/// The origins of the copies among `ids` that the bundle holds too; one
+/// outside it can't be named (`akt.copy.record`).
+async fn origins_within(
+    conn: &mut Connection,
+    tenant: Uuid,
+    ids: &[Uuid],
+) -> Result<HashMap<Uuid, Uuid>, BundleError> {
+    let exported: HashSet<Uuid> = ids.iter().copied().collect();
+    Ok(kuria_store::akter::origins_of(conn, tenant, ids)
+        .await?
+        .into_iter()
+        .filter(|(_, origin)| exported.contains(origin))
+        .collect())
+}
+
 /// The akter of `versions`, with their revisions, memberships, links and
 /// attachments held, refusing a selection that leaves out an akt they name;
 /// answers who and what they name.
@@ -243,6 +258,7 @@ async fn gather_akter(
             attachment: h.attachment_id,
         });
     }
+    let origins = origins_within(conn, tenant, &ids).await?;
     for akt in akter {
         let ty = &types[&akt.type_version_id];
         let revisions = revisions.remove(&akt.id).unwrap_or_default();
@@ -262,6 +278,7 @@ async fn gather_akter(
             updated_at: akt.updated_at,
             revisions,
             attachments: held.remove(&akt.id).unwrap_or_default(),
+            copied_from: origins.get(&akt.id).copied(),
         });
     }
     for m in memberships {

@@ -102,6 +102,19 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   Konklav never verified.
 - Drafting a field, such as release notes, from the akter around its akt by
   the field's recipe, as an ordinary edit.
+- Sections, verdicts and outcomes: a `sections` field lays out an akt's
+  members, checked against them on every write and losing one that leaves
+  in the same revision; a `verdict` field takes each assignee's verdict;
+  `Akt.outcome` and each `Section.outcome` are derived on read from
+  verdicts and members ([`src/akter/outcomes.rs`](src/akter/outcomes.rs)),
+  never stored. `SectionsValue.value` gives the value as `editAkt` takes
+  it, whatever its depth, which `items` can only be asked for as deep as
+  the query's depth limit allows.
+- Copying: `copyAkt` copies an akt and the part of its member tree chosen,
+  in one transaction, into new akter of the same types in their initial
+  states, with their sections remapped and their links out; each copy's
+  origin is kept in `akt_origin`, answered as `Akt.copiedFrom`, and carried
+  by bundles ([`src/akter/copy.rs`](src/akter/copy.rs)).
 - Batches: several akt writes run in order in one transaction, all of them
   or none, a later one naming an akt an earlier one created as `@<n>`
   (`akt.batch`).
@@ -141,8 +154,16 @@ Not yet: signatures.
   so another list refuses it. `where` filters lists and members of one
   akt type by field values (`src/graphql/filter.rs`), as JSON containment
   on `akt.fields`: choices by key, users and checkboxes by `me` (and the
-  contacts linked to the viewer), a subject or `contact:<id>`, dates and
-  single-line text exactly.
+  contacts linked to the viewer), a subject or `contact:<id>`, a field
+  naming several people by any one of them, dates and single-line text
+  exactly. `outcome` filters by outcome (`akt.filter.outcome`): a type
+  with its own `verdict` field through a SQL expression over its verdicts
+  and assignees (`Match::Outcome` in `kuria-store`, held to the engine by
+  `tests/outcomes.rs`); a container's members of a type whose outcome
+  comes from its members by working each one's out, a chunk at a time,
+  until the page is full. Any other is `BAD_REQUEST`. A transition naming
+  `outcomes` share-locks the akt's member tree before working out its
+  outcome (`akter::outcomes::held_locked`).
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
@@ -346,6 +367,12 @@ mise run test
   shown as its user in values and drafts while the stored values stay;
   listing the tenant's users, linking a contact by hand and its refusals,
   and the people a revision's values name.
+- [`tests/templates.rs`](tests/templates.rs): sections placing only
+  members once and losing one that leaves; verdicts for assignees, by
+  anyone for them, making outcomes up through sections to the protocol; a
+  copy of part of a template in its initial state, without verdicts or
+  checkboxes, with its sections remapped, its link out and its origin, and
+  refused whole.
 - [`tests/batches.rs`](tests/batches.rs): batches all or none, a refused
   one leaving no trace (a create's number included), `@<n>` and sizes
   refused before running, each operation authorized as alone, revisions and
@@ -362,7 +389,7 @@ mise run test
   searches a page at a time, following cursors while the list changes
   and refusing another list's, and filtering by each kind of field and
   its refusals; `tests/contacts.rs` filters by `me`, contacts linked to
-  the viewer included.
+  the viewer included, also a field naming several people.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
   CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
   left out, cookies and redirects passed back); and discovering the

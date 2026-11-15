@@ -46,7 +46,13 @@ export const Home = graphql(`
 `);
 
 export const AkterOfType = graphql(`
-	query AkterOfType($type: String!, $state: String, $after: String, $where: [FieldCondition!]) {
+	query AkterOfType(
+		$type: String!
+		$state: String
+		$after: String
+		$where: [FieldCondition!]
+		$outcome: Outcome
+	) {
 		aktType(key: $type) {
 			...ShownType
 			states {
@@ -54,13 +60,14 @@ export const AkterOfType = graphql(`
 				name
 			}
 		}
-		akter(type: $type, state: $state, first: 50, after: $after, where: $where) {
+		akter(type: $type, state: $state, first: 50, after: $after, where: $where, outcome: $outcome) {
 			nodes {
 				id
 				number
 				title
 				rank
 				updatedAt
+				outcome
 				state {
 					key
 					name
@@ -141,6 +148,25 @@ export const FieldValues = graphql(`
 			digest
 			tag
 		}
+		... on UsersValue {
+			field
+			users {
+				...SomeoneShown
+			}
+		}
+		... on SectionsValue {
+			field
+			value
+		}
+		... on VerdictValue {
+			field
+			verdicts {
+				verdict
+				assignee {
+					...SomeoneShown
+				}
+			}
+		}
 		... on AttachmentValue {
 			field
 			attachment {
@@ -194,6 +220,8 @@ export const ShownType = graphql(`
 		fields {
 			key
 			name
+			kind
+			assignees
 		}
 		presentation {
 			card
@@ -205,6 +233,7 @@ export const ShownType = graphql(`
 			from
 			to
 			requires
+			outcomes
 		}
 	}
 `);
@@ -220,6 +249,9 @@ export const TypeShape = graphql(`
 			description
 			required
 			multiline
+			multiple
+			of
+			assignees
 			options {
 				key
 				name
@@ -238,6 +270,7 @@ export const TypeShape = graphql(`
 			from
 			to
 			requires
+			outcomes
 		}
 	}
 `);
@@ -257,6 +290,12 @@ export const AktPage = graphql(`
 			number
 			title
 			revision
+			outcome
+			copiedFrom {
+				id
+				number
+				title
+			}
 			state {
 				key
 				name
@@ -288,6 +327,7 @@ export const AktPage = graphql(`
 						number
 						title
 						revision
+						outcome
 						state {
 							key
 							name
@@ -396,6 +436,7 @@ export const ListFilters = graphql(`
 				name
 				kind
 				multiline
+				multiple
 				options {
 					key
 					name
@@ -466,6 +507,15 @@ export const EditAkt = graphql(`
 		editAkt(input: $input) {
 			id
 			revision
+		}
+	}
+`);
+
+export const CopyAkt = graphql(`
+	mutation CopyAkt($input: CopyAktInput!) {
+		copyAkt(input: $input) {
+			id
+			number
 		}
 	}
 `);

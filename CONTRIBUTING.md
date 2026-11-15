@@ -4,7 +4,9 @@
 
 Kuria builds with [mise](https://mise.jdx.dev), which pins Rust, Node and
 [tracey](https://github.com/bearcove/tracey) in [`mise.toml`](mise.toml),
-and runs its services in Docker.
+and runs its services in Docker. On Linux, the CLI also needs libdbus's
+headers and `pkg-config` to build, since it keeps its sign-in in the
+Secret Service (`libdbus-1-dev pkg-config` on Debian and Ubuntu).
 
 ```bash
 mise install

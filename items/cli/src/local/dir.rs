@@ -288,9 +288,19 @@ fn read_akt(
     let rank = parsed
         .text("rank")
         .ok_or_else(|| bad("has no `rank`".to_owned()))?;
-    let values = parsed.values().map_err(|e| bad(e.message))?;
+    let mut values = parsed.values().map_err(|e| bad(e.message))?;
     if let Some(key) = values.keys().find(|k| ty.ty.field(k).is_none()) {
         return Err(bad(format!("`{type_key}` has no field `{key}`")));
+    }
+    // A sections field's section is YAML (`cli.file.kinds`).
+    for field in &ty.ty.document().fields {
+        if field.kind == kuria_config::FieldKind::Sections
+            && let Some(Json::String(text)) = values.get(&field.key)
+        {
+            let read = crate::values::sections_from_text(text)
+                .map_err(|why| bad(format!("`{}` {why}", field.key)))?;
+            values.insert(field.key.clone(), read);
+        }
     }
     let list = |key: &str| strings(&parsed, key).map_err(bad);
     Ok(LocalAkt {

@@ -82,6 +82,7 @@ pub fn membership(
                     .into());
                 };
                 m.containers.remove(i);
+                w.leave_sections(container, member)?;
                 lines.push(format!("Removed {member} from {container}."));
             }
         }
@@ -131,6 +132,7 @@ pub fn transfer(
     let m = w.akt_mut(member);
     m.containers.retain(|c| c != from);
     m.containers.push(to.to_owned());
+    w.leave_sections(from, member)?;
     for number in [member, from, to] {
         w.bump(number);
     }
@@ -213,13 +215,33 @@ pub fn link(
     pin: bool,
     reason: Option<&str>,
 ) -> Result<Answer, CliError> {
-    links::check_not_itself(source, target)?;
-    let key = kind_key(w, source, kind)?.unwrap_or_else(|| kind.to_owned());
     let pinned = if pin {
         Some(w.akt(target)?.revision)
     } else {
         None
     };
+    let key = add_link(w, source, kind, target, pinned)?;
+    let said = pinned
+        .map(|r| format!(" at revision {r}"))
+        .unwrap_or_default();
+    Ok(answer(
+        format!("Linked {source} {key} {target}{said}."),
+        json!({ "source": source, "kind": key, "target": target, "pinnedRevision": pinned }),
+        reason,
+    ))
+}
+
+/// Links `source` to `target` by `kind`, pinned at `pinned` if given, on
+/// both akter's files, and answers the kind's key.
+pub(crate) fn add_link(
+    w: &mut Writer,
+    source: &str,
+    kind: &str,
+    target: &str,
+    pinned: Option<i32>,
+) -> Result<String, CliError> {
+    links::check_not_itself(source, target)?;
+    let key = kind_key(w, source, kind)?.unwrap_or_else(|| kind.to_owned());
     let def = links::to_add(&w.akt_ref(source)?, &key, &w.akt_ref(target)?, pinned)?.clone();
     let new = !w
         .akt(source)?
@@ -236,14 +258,7 @@ pub fn link(
         .push(format!("{} {source}{at}", def.inverse));
     w.bump(source);
     w.bump(target);
-    let said = pinned
-        .map(|r| format!(" at revision {r}"))
-        .unwrap_or_default();
-    Ok(answer(
-        format!("Linked {source} {key} {target}{said}."),
-        json!({ "source": source, "kind": key, "target": target, "pinnedRevision": pinned }),
-        reason,
-    ))
+    Ok(key)
 }
 
 /// `kuria unlink <source> <kind> <target>` in local mode.

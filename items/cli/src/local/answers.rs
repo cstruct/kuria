@@ -1,11 +1,14 @@
 //! What Kuria's GraphQL would answer for the CLI's reads, built from an akt
 //! directory, so that every read renders as it does against a server.
 
+use kuria_config::FieldKind;
+use kuria_engine::outcomes::{self, Outcome};
 use serde::Serialize;
 use serde_json::{Value as Json, json};
 
 use super::dir::{AktDir, LocalAkt, LocalType};
 use super::git::Times;
+use super::values::{Ids, current};
 use crate::error::CliError;
 
 /// A config enum as GraphQL names it: `file-text` → `FILE_TEXT`.
@@ -65,10 +68,14 @@ pub fn shape(t: &LocalType) -> Json {
             "multiline": f.multiline,
             "options": f.options.iter().map(|o| json!({ "key": o.key, "name": o.name })).collect::<Vec<_>>(),
             "format": f.format.as_ref().map(screaming),
+            "multiple": f.multiple,
+            "of": f.of,
+            "assignees": f.assignees,
         })).collect::<Vec<_>>(),
         "states": d.states.iter().map(|s| state(t, &s.key)).collect::<Vec<_>>(),
         "transitions": d.transitions.iter().map(|tr| json!({
             "key": tr.key, "name": tr.name, "from": tr.from, "to": tr.to, "requires": tr.requires,
+            "outcomes": tr.outcomes.iter().map(|o| o.to_ascii_uppercase()).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "presentation": {
             "title": t.ty.title_field().map(|f| f.key.clone()),
@@ -141,7 +148,21 @@ fn value(akt: &LocalAkt, t: &LocalType, key: &str, raw: &Json) -> Result<Option<
             json!({ "__typename": "DateValue", "date": text()? })
         }
         "date" => return Err(bad("a date as YYYY-MM-DD")),
+        "user" if field.multiple => users(raw).ok_or_else(|| bad("a list of people"))?,
         "user" => json!({ "__typename": "UserValue", "user": someone(text()?) }),
+        "verdict" => {
+            let given = raw
+                .as_object()
+                .ok_or_else(|| bad("a mapping of assignees to verdicts"))?;
+            match verdicts(given) {
+                Some(answer) => answer,
+                None => return Ok(None),
+            }
+        }
+        "sections" if kuria_engine::sections::from_json(raw).is_ok() => {
+            json!({ "__typename": "SectionsValue", "value": raw })
+        }
+        "sections" => return Err(bad("a list of akt numbers and sections")),
         "checkbox" => {
             let nobody = json!({ "id": "", "name": "", "email": null });
             let checked_for = match raw {
@@ -189,6 +210,79 @@ fn value(akt: &LocalAkt, t: &LocalType, key: &str, raw: &Json) -> Result<Option<
     Ok(Some(answer))
 }
 
+/// A multiple user field's value in the file's form as `UsersValue`, or
+/// `None` if it isn't a list of people.
+fn users(raw: &Json) -> Option<Json> {
+    let people = raw
+        .as_array()?
+        .iter()
+        .map(|p| p.as_str().map(someone))
+        .collect::<Option<Vec<_>>>()?;
+    Some(json!({ "__typename": "UsersValue", "users": people }))
+}
+
+/// A verdict field's value in the file's form as `VerdictValue`, `None`
+/// if it holds none.
+fn verdicts(given: &serde_json::Map<String, Json>) -> Option<Json> {
+    if given.is_empty() {
+        return None;
+    }
+    let verdicts: Vec<Json> = given
+        .iter()
+        .map(|(who, verdict)| {
+            let by = someone(who);
+            json!({
+                "assignee": by,
+                "verdict": verdict.as_str().unwrap_or_default().to_ascii_uppercase(),
+                "by": { "id": by["id"], "name": by["name"], "email": by["email"] },
+                "at": "",
+            })
+        })
+        .collect();
+    Some(json!({ "__typename": "VerdictValue", "verdicts": verdicts }))
+}
+
+/// `akt`'s outcome, `None` if its type has none (`akt.outcome`): from its
+/// own verdicts if it has a `verdict` field, else from its members'.
+// r[impl akt.outcome]
+// r[impl akt.outcome.derived]
+pub fn outcome(dir: &AktDir, akt: &LocalAkt) -> Result<Option<Outcome>, CliError> {
+    fn walk(
+        dir: &AktDir,
+        akt: &LocalAkt,
+        within: &mut Vec<String>,
+    ) -> Result<Option<Outcome>, CliError> {
+        let lookup = |key: &str| dir.types.get(key).map(|t| &t.ty);
+        // A directory with a cycle is `check`'s to name.
+        if within.contains(&akt.number) || !outcomes::has_outcomes(&akt.type_key, &lookup) {
+            return Ok(None);
+        }
+        let ty = &dir.type_of(akt).ty;
+        if ty
+            .document()
+            .fields
+            .iter()
+            .any(|f| f.kind == FieldKind::Verdict)
+        {
+            let fields = current(ty, akt, &mut Ids::default())?;
+            return Ok(outcomes::of_fields(ty, &fields));
+        }
+        within.push(akt.number.clone());
+        let mut held = Vec::new();
+        for member in dir.members_of(&akt.number) {
+            held.extend(walk(dir, member, within)?);
+        }
+        within.pop();
+        Ok(Some(outcomes::of_all(held)))
+    }
+    walk(dir, akt, &mut Vec::new())
+}
+
+/// An outcome as GraphQL names it, if there is one.
+fn outcome_json(dir: &AktDir, akt: &LocalAkt) -> Result<Json, CliError> {
+    Ok(outcome(dir, akt)?.map_or(Json::Null, |o| screaming(&o)))
+}
+
 /// An akt's field values as `fields { ...Values }`, in its type's order.
 pub fn values(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
     let t = dir.type_of(akt);
@@ -229,6 +323,7 @@ pub fn row(dir: &AktDir, times: &Times, akt: &LocalAkt) -> Result<Json, CliError
     answer["state"]["tone"] = screaming(&t.ty.tone(&akt.state));
     answer["updatedAt"] = json!(times.of_akt(akt).1);
     answer["fields"] = json!(values(dir, akt)?);
+    answer["outcome"] = outcome_json(dir, akt)?;
     Ok(answer)
 }
 
@@ -311,10 +406,9 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
     for member in &members {
         let key = kuria_engine::board::column_of(board, &member.type_key, &member.state);
         if let Some(column) = columns.iter_mut().find(|c| c["key"] == key) {
-            column["akter"]
-                .as_array_mut()
-                .expect("a list")
-                .push(other(dir, member));
+            let mut shown = other(dir, member);
+            shown["outcome"] = outcome_json(dir, member)?;
+            column["akter"].as_array_mut().expect("a list").push(shown);
         }
     }
     let containers: Vec<Json> = akt
@@ -342,12 +436,20 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
         "updatedAt": updated,
         "type": shape,
         "state": state(t, &akt.state),
+        "outcome": outcome_json(dir, akt)?,
         "fields": values(dir, akt)?,
         "containers": containers,
         "links": links(dir, akt)?,
         "board": { "columns": columns },
         "members": {
-            "nodes": members.iter().map(|m| other(dir, m)).collect::<Vec<_>>(),
+            "nodes": members
+                .iter()
+                .map(|m| {
+                    let mut shown = other(dir, m);
+                    shown["outcome"] = outcome_json(dir, m)?;
+                    Ok(shown)
+                })
+                .collect::<Result<Vec<_>, CliError>>()?,
             "pageInfo": { "endCursor": null, "hasNextPage": false },
         },
     })))

@@ -108,6 +108,7 @@ fn schema_json(shape: &Shape) -> Json {
             "from": t.from,
             "to": t.to,
             "requires": t.requires,
+            "outcomes": t.outcomes.iter().map(|o| o.to_ascii_lowercase()).collect::<Vec<_>>(),
             "action": document["transitions"].as_array().and_then(|ts| ts.iter().find(|d| d["key"] == t.key.as_str())).and_then(|d| d["action"].as_str()),
         })).collect::<Vec<_>>(),
         "contains": document.get("contains").cloned().unwrap_or_else(|| json!([])),
@@ -186,6 +187,12 @@ fn schema_markdown(shape: &Shape) -> String {
             let mut line = format!("- `{}` {}: {} → {}", t.key, t.name, t.from.join(", "), t.to);
             if !t.requires.is_empty() {
                 line.push_str(&format!(", requires {}", t.requires.join(", ")));
+            }
+            // r[impl akt.transition.outcomes]
+            if !t.outcomes.is_empty() {
+                let outcomes: Vec<String> =
+                    t.outcomes.iter().map(|o| o.to_ascii_lowercase()).collect();
+                line.push_str(&format!(", only if the outcome is {}", outcomes.join(", ")));
             }
             text.push_str(&line);
             text.push('\n');

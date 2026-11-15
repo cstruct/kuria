@@ -7,7 +7,8 @@
 use std::collections::HashMap;
 
 use async_graphql::{
-    Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, OneofObject, SimpleObject, Union,
+    ComplexObject, Context, Enum, ErrorExtensions, ID, InputObject, Json, Object, OneofObject,
+    SimpleObject, Union,
 };
 use chrono::{DateTime, Utc};
 use kuria_config::{
@@ -26,7 +27,7 @@ use super::attachments::Attachment;
 use super::filter::{self, FieldCondition};
 use super::page::{After, AktConnection, List, page_size};
 use super::people::{Someone, User};
-use crate::akter::{AktError, Akter, Caller, Operation, Place, StoredType};
+use crate::akter::{AktError, Akter, Caller, Operation, Place, StoredType, outcomes};
 use crate::authorize::{Authorizer, Permission};
 
 /// The most members one board shows.
@@ -232,6 +233,10 @@ impl AkterQuery {
             desc = "Conditions on field values, all of which an akt must meet; `type` must be given."
         )]
         conditions: Option<Vec<FieldCondition>>,
+        #[graphql(
+            desc = "Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field."
+        )]
+        outcome: Option<OutcomeKind>,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
@@ -244,6 +249,7 @@ impl AkterQuery {
                 state.as_deref(),
                 search.as_deref(),
                 Some(&where_key),
+                outcome.map(OutcomeKind::key),
             ],
         );
         let after = match list.after(after.as_deref())? {
@@ -264,7 +270,7 @@ impl AkterQuery {
                 readable.push(ty.key);
             }
         }
-        let conditions = match key.as_deref() {
+        let mut conditions = match key.as_deref() {
             _ if conditions.is_empty() => Vec::new(),
             Some(key) => matching(ctx, &mut conn, tenant, key, &conditions).await?,
             None => {
@@ -274,6 +280,17 @@ impl AkterQuery {
                 ));
             }
         };
+        if let Some(outcome) = outcome {
+            match by_outcome(&mut conn, tenant, key.as_deref(), outcome).await? {
+                ByOutcome::Verdicts(condition) => conditions.push(condition),
+                ByOutcome::Members(..) => {
+                    return Err(coded(
+                        "this type's outcome comes from its members, so only a container's members filter by it".to_owned(),
+                        "BAD_REQUEST",
+                    ));
+                }
+            }
+        }
         let listing = store::Listing {
             keys: &readable,
             state: state.as_deref(),
@@ -359,6 +376,116 @@ async fn matching(
     Ok(matches)
 }
 
+/// A container's members of some akt types, meeting some conditions.
+struct Members<'a> {
+    container: Uuid,
+    keys: &'a [String],
+    conditions: &'a [store::Condition],
+}
+
+impl Members<'_> {
+    /// Up to `limit` of them, in rank order after `after`, whose outcome,
+    /// from their own members, is `wanted`. They are read a chunk at a time
+    /// until the page is full.
+    // r[impl akt.filter.outcome]
+    // r[impl akt.page]
+    async fn held(
+        &self,
+        conn: &mut kuria_store::Connection,
+        tenant: Uuid,
+        types: &outcomes::Types,
+        wanted: kuria_engine::outcomes::Outcome,
+        mut after: Option<String>,
+        limit: i64,
+    ) -> async_graphql::Result<Vec<AktRow>> {
+        const CHUNK: i64 = 200;
+        let mut found = Vec::new();
+        loop {
+            let chunk = containers::member_page(
+                conn,
+                tenant,
+                self.container,
+                self.keys,
+                self.conditions,
+                after.as_deref(),
+                CHUNK,
+            )
+            .await
+            .map_err(internal)?;
+            let last = chunk.len() < usize::try_from(CHUNK).unwrap_or(usize::MAX);
+            for row in chunk {
+                after = Some(row.rank.clone());
+                if outcomes::of(conn, tenant, types, &row)
+                    .await
+                    .map_err(error)?
+                    == Some(wanted)
+                {
+                    found.push(row);
+                    if i64::try_from(found.len()).unwrap_or(i64::MAX) >= limit {
+                        return Ok(found);
+                    }
+                }
+            }
+            if last {
+                return Ok(found);
+            }
+        }
+    }
+}
+
+/// How a list of the akt type `key` filters by `outcome`
+/// (`akt.filter.outcome`).
+enum ByOutcome {
+    /// By a condition on its own verdicts, which the store pages.
+    Verdicts(store::Condition),
+    /// By its members' outcomes, worked out for each akt listed.
+    Members(kuria_engine::outcomes::Outcome, outcomes::Types),
+}
+
+// r[impl akt.filter.outcome]
+async fn by_outcome(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    key: Option<&str>,
+    outcome: OutcomeKind,
+) -> async_graphql::Result<ByOutcome> {
+    let refused = |message: String| Err(coded(message, "BAD_REQUEST"));
+    let Some(key) = key else {
+        return refused("filtering by outcome needs `type`".to_owned());
+    };
+    let types = outcomes::Types::of(conn, tenant).await.map_err(error)?;
+    let Some(row) = store::latest_type_versions(conn, tenant)
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .find(|row| row.key == key)
+    else {
+        return refused(format!("there is no akt type `{key}`"));
+    };
+    let ty = StoredType::read(row).map_err(error)?;
+    if !types.has_outcomes(&ty.ty) {
+        return refused(format!("akter of `{key}` have no outcome"));
+    }
+    let wanted = kuria_engine::outcomes::Outcome::parse(outcome.key())
+        .ok_or_else(|| internal("an outcome"))?;
+    Ok(
+        match ty
+            .ty
+            .document()
+            .fields
+            .iter()
+            .find(|f| f.kind == ConfigKind::Verdict)
+        {
+            Some(field) => ByOutcome::Verdicts(store::Condition(vec![store::Match::Outcome {
+                verdict: field.key.clone(),
+                assignees: field.assignees.clone(),
+                outcome: wanted.as_str().to_owned(),
+            }])),
+            None => ByOutcome::Members(wanted, types),
+        },
+    )
+}
+
 fn bad_cursor() -> async_graphql::Error {
     coded(
         "that cursor isn't one of this list's".to_owned(),
@@ -418,6 +545,21 @@ pub struct EditAktInput {
     revision: i32,
     /// Field keys to values; `null` clears a field.
     fields: Json<JsonValue>,
+    reason: Option<String>,
+}
+
+/// What copying an akt takes (`akt.copy`).
+#[derive(InputObject)]
+pub struct CopyAktInput {
+    /// The akt to copy.
+    number: String,
+    /// The akter of its tree to keep, with those between them and it and
+    /// every member under them; all of them if not given.
+    only: Option<Vec<String>>,
+    /// The containers to make the copy in; the copied akt's own if not
+    /// given.
+    #[graphql(name = "in")]
+    inside: Option<Vec<String>>,
     reason: Option<String>,
 }
 
@@ -600,6 +742,28 @@ impl AkterMutation {
         let akter = akter(ctx)?;
         let row = akter
             .create(caller, &input.key, &fields, input.reason, &input.inside)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Copies an akt, with the part of its member tree chosen, into new
+    /// akter of the same types in their initial states, and answers the copy.
+    // r[impl akt.copy]
+    async fn copy_akt(&self, ctx: &Context<'_>, input: CopyAktInput) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+        };
+        let akter = akter(ctx)?;
+        let row = akter
+            .copy(
+                caller,
+                &input.number,
+                input.only.as_deref(),
+                input.inside.as_deref(),
+                input.reason,
+            )
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -951,6 +1115,12 @@ impl AktType {
                 from: t.from.clone(),
                 to: t.to.clone(),
                 requires: t.requires.clone(),
+                outcomes: t
+                    .outcomes
+                    .iter()
+                    .filter_map(|o| kuria_engine::outcomes::Outcome::parse(o))
+                    .map(OutcomeKind::from)
+                    .collect(),
             })
             .collect()
     }
@@ -998,6 +1168,8 @@ pub enum FieldKind {
     Git,
     Docker,
     Attachment,
+    Sections,
+    Verdict,
 }
 
 impl From<ConfigKind> for FieldKind {
@@ -1013,6 +1185,8 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Docker => Self::Docker,
             ConfigKind::Reference => Self::Reference,
             ConfigKind::Attachment => Self::Attachment,
+            ConfigKind::Sections => Self::Sections,
+            ConfigKind::Verdict => Self::Verdict,
         }
     }
 }
@@ -1028,6 +1202,13 @@ pub struct Field {
     options: Vec<ChoiceOption>,
     /// For attachment fields: what files they hold.
     format: Option<AttachmentFormat>,
+    /// For user fields: whether they hold a list of users and contacts.
+    multiple: bool,
+    /// For sections fields: the akt types of the members they place; any
+    /// the akt type contains if empty.
+    of: Vec<String>,
+    /// For verdict fields: the key of the user field naming the assignees.
+    assignees: Option<String>,
 }
 
 /// What files an attachment field holds.
@@ -1051,6 +1232,9 @@ impl From<&FieldDef> for Field {
                 ConfigFormat::Any => AttachmentFormat::Any,
                 ConfigFormat::Sbom => AttachmentFormat::Sbom,
             }),
+            multiple: def.multiple,
+            of: def.of.clone(),
+            assignees: def.assignees.clone(),
         }
     }
 }
@@ -1156,6 +1340,9 @@ pub struct Transition {
     from: Vec<String>,
     to: String,
     requires: Vec<String>,
+    /// The outcomes the akt must have for it to be performed; any, or
+    /// none, if empty (`akt.transition.outcomes`).
+    outcomes: Vec<OutcomeKind>,
 }
 
 /// A link between this akt and another, as this akt reads it.
@@ -1394,6 +1581,10 @@ impl Akt {
             desc = "Conditions on field values, all of which a member must meet; `type` must be given."
         )]
         conditions: Option<Vec<FieldCondition>>,
+        #[graphql(
+            desc = "Only members with this outcome, as it is now; `type` must be given, and have outcomes."
+        )]
+        outcome: Option<OutcomeKind>,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
@@ -1402,7 +1593,12 @@ impl Akt {
         let where_key = serde_json::to_string(&conditions).map_err(internal)?;
         let list = List::new(
             "members",
-            &[Some(&container), key.as_deref(), Some(&where_key)],
+            &[
+                Some(&container),
+                key.as_deref(),
+                Some(&where_key),
+                outcome.map(OutcomeKind::key),
+            ],
         );
         let after = match list.after(after.as_deref())? {
             Some(After::Ranked(rank)) => Some(rank),
@@ -1416,7 +1612,7 @@ impl Akt {
             }
         }
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
-        let conditions = match key.as_deref() {
+        let mut conditions = match key.as_deref() {
             _ if conditions.is_empty() => Vec::new(),
             Some(key) => matching(ctx, &mut conn, tenant, key, &conditions).await?,
             None => {
@@ -1426,17 +1622,37 @@ impl Akt {
                 ));
             }
         };
-        let rows = containers::member_page(
-            &mut conn,
-            tenant,
-            self.row.id,
-            &readable,
-            &conditions,
-            after.as_deref(),
-            size + 1,
-        )
-        .await
-        .map_err(internal)?;
+        let by = match outcome {
+            Some(outcome) => Some(by_outcome(&mut conn, tenant, key.as_deref(), outcome).await?),
+            None => None,
+        };
+        let rows = match by {
+            Some(ByOutcome::Members(wanted, types)) => {
+                let page = Members {
+                    container: self.row.id,
+                    keys: &readable,
+                    conditions: &conditions,
+                };
+                page.held(&mut conn, tenant, &types, wanted, after, size + 1)
+                    .await?
+            }
+            by => {
+                if let Some(ByOutcome::Verdicts(condition)) = by {
+                    conditions.push(condition);
+                }
+                containers::member_page(
+                    &mut conn,
+                    tenant,
+                    self.row.id,
+                    &readable,
+                    &conditions,
+                    after.as_deref(),
+                    size + 1,
+                )
+                .await
+                .map_err(internal)?
+            }
+        };
         let (rows, page_info) = list.page(
             rows,
             size,
@@ -1541,6 +1757,38 @@ impl Akt {
         Ok(links)
     }
 
+    /// The akt it was copied from, if it is a copy and the viewer may read
+    /// it (`akt.copy.record`).
+    async fn copied_from(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Akt>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let Some(origin) = store::origin_of(&mut conn, tenant, self.row.id)
+            .await
+            .map_err(internal)?
+        else {
+            return Ok(None);
+        };
+        let akt = with_types(&mut conn, tenant, vec![origin]).await?.pop();
+        match akt {
+            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Ok(Some(akt)),
+            _ => Ok(None),
+        }
+    }
+
+    /// What its verdicts, or its members' outcomes, add up to, if its type
+    /// has outcomes (`akt.outcome`); derived now, never stored.
+    async fn outcome(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<OutcomeKind>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let types = outcomes::Types::of(&mut conn, tenant)
+            .await
+            .map_err(error)?;
+        Ok(outcomes::of(&mut conn, tenant, &types, &self.row)
+            .await
+            .map_err(error)?
+            .map(Into::into))
+    }
+
     /// Every revision, oldest first.
     async fn revisions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<AktRevision>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
@@ -1570,6 +1818,167 @@ pub enum FieldValue {
     Docker(DockerValue),
     Reference(ReferenceValue),
     Attachment(AttachmentValue),
+    Users(UsersValue),
+    Sections(SectionsValue),
+    Verdict(VerdictValue),
+}
+
+/// A `multiple` user field's users and contacts, in order.
+#[derive(SimpleObject)]
+pub struct UsersValue {
+    field: String,
+    users: Vec<Someone>,
+}
+
+/// An akt's members laid out in sections.
+#[derive(SimpleObject)]
+pub struct SectionsValue {
+    field: String,
+    items: Vec<SectionItem>,
+    /// The value as `editAkt` takes it, whatever its depth: a list of akt
+    /// numbers and `{title, text, collapsible, items}`.
+    value: Json<JsonValue>,
+}
+
+/// An item of a sections field: a member, by number, or a section.
+#[derive(SimpleObject)]
+pub struct SectionItem {
+    /// The member's number, if it is one.
+    number: Option<String>,
+    /// The section, if it is one.
+    section: Option<Section>,
+}
+
+/// A section.
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub struct Section {
+    title: Option<String>,
+    /// Markdown.
+    text: Option<String>,
+    collapsible: bool,
+    items: Vec<SectionItem>,
+}
+
+impl SectionItem {
+    fn of(items: &[kuria_engine::sections::Item]) -> Vec<Self> {
+        items
+            .iter()
+            .map(|item| match item {
+                kuria_engine::sections::Item::Akt(number) => Self {
+                    number: Some(number.clone()),
+                    section: None,
+                },
+                kuria_engine::sections::Item::Section(s) => Self {
+                    number: None,
+                    section: Some(Section {
+                        title: s.title.clone(),
+                        text: s.text.clone(),
+                        collapsible: s.collapsible,
+                        items: Self::of(&s.items),
+                    }),
+                },
+            })
+            .collect()
+    }
+}
+
+/// What a section's tests add up to (`akt.outcome.section`).
+#[ComplexObject]
+impl Section {
+    async fn outcome(&self, ctx: &Context<'_>) -> async_graphql::Result<OutcomeKind> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let types = outcomes::Types::of(&mut conn, tenant)
+            .await
+            .map_err(error)?;
+        Ok(section_outcome(&mut conn, tenant, &types, &self.items)
+            .await
+            .map_err(error)?
+            .into())
+    }
+}
+
+/// The outcome of a section holding `items`, by the same rules as a
+/// container's.
+// r[impl akt.outcome.section]
+async fn section_outcome(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    types: &outcomes::Types,
+    items: &[SectionItem],
+) -> Result<kuria_engine::outcomes::Outcome, AktError> {
+    let mut held = Vec::new();
+    for item in items {
+        if let Some(number) = &item.number {
+            if let Some(outcome) = outcomes::of_number(conn, tenant, types, number).await? {
+                held.push(outcome);
+            }
+        } else if let Some(section) = &item.section {
+            held.push(Box::pin(section_outcome(conn, tenant, types, &section.items)).await?);
+        }
+    }
+    Ok(kuria_engine::outcomes::of_all(held))
+}
+
+/// An outcome: what verdicts, or what a container holds, add up to.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+#[graphql(name = "Outcome")]
+pub enum OutcomeKind {
+    Pass,
+    Fail,
+    Skip,
+    Pending,
+}
+
+impl OutcomeKind {
+    /// As the engine names it.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Fail => "fail",
+            Self::Skip => "skip",
+            Self::Pending => "pending",
+        }
+    }
+}
+
+impl From<kuria_engine::outcomes::Outcome> for OutcomeKind {
+    fn from(outcome: kuria_engine::outcomes::Outcome) -> Self {
+        use kuria_engine::outcomes::Outcome as O;
+        match outcome {
+            O::Pass => Self::Pass,
+            O::Fail => Self::Fail,
+            O::Skip => Self::Skip,
+            O::Pending => Self::Pending,
+        }
+    }
+}
+
+/// Each assignee's verdict.
+#[derive(SimpleObject)]
+pub struct VerdictValue {
+    field: String,
+    verdicts: Vec<GivenVerdict>,
+}
+
+/// One assignee's verdict.
+#[derive(SimpleObject)]
+pub struct GivenVerdict {
+    assignee: Someone,
+    verdict: VerdictKind,
+    /// Who gave it: the assignee, unless given for them.
+    by: User,
+    at: DateTime<Utc>,
+}
+
+/// A verdict: pass, fail or skip.
+#[derive(Enum, Clone, Copy, PartialEq, Eq)]
+#[graphql(name = "Verdict")]
+pub enum VerdictKind {
+    Pass,
+    Fail,
+    Skip,
 }
 
 impl FieldValue {
@@ -1646,6 +2055,31 @@ impl FieldValue {
             Value::Attachment(id) => Self::Attachment(AttachmentValue {
                 field,
                 attachment: Attachment(*id),
+            }),
+            Value::Users(people) => Self::Users(UsersValue {
+                field,
+                users: people.iter().map(|s| (*s).into()).collect(),
+            }),
+            Value::Sections(items) => Self::Sections(SectionsValue {
+                field,
+                items: SectionItem::of(items),
+                value: Json(value.to_json()),
+            }),
+            Value::Verdicts(given) => Self::Verdict(VerdictValue {
+                field,
+                verdicts: given
+                    .iter()
+                    .map(|g| GivenVerdict {
+                        assignee: g.assignee.into(),
+                        verdict: match g.verdict {
+                            kuria_engine::verdicts::Verdict::Pass => VerdictKind::Pass,
+                            kuria_engine::verdicts::Verdict::Fail => VerdictKind::Fail,
+                            kuria_engine::verdicts::Verdict::Skip => VerdictKind::Skip,
+                        },
+                        by: User(g.by),
+                        at: g.at,
+                    })
+                    .collect(),
             }),
         }
     }

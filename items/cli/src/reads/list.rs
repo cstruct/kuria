@@ -24,6 +24,8 @@ pub struct Listing {
     pub inside: Option<String>,
     /// `<field>=<value>` conditions, all of which an akt must meet.
     pub conditions: Vec<String>,
+    /// An outcome, `pass`, `fail`, `skip` or `pending` (`akt.filter.outcome`).
+    pub outcome: Option<String>,
     pub search: Option<String>,
     pub limit: u32,
     /// The cursor a previous page ended at.
@@ -188,16 +190,17 @@ async fn page(
         Source::Local(local) => return local_page(local, listing, state, conditions, first, after),
     };
     let fragments = format!("{ROW} {VALUES} {SOMEONE}");
+    let outcome = listing.outcome.as_deref().map(str::to_ascii_uppercase);
     let wheres = (!conditions.is_empty()).then(|| conditions.to_vec());
     if let Some(container) = &listing.inside {
         let data = session
             .graphql(
                 &format!(
-                    "query($n: String!, $type: String, $first: Int, $after: String, $where: [FieldCondition!]) {{
-                      akt(number: $n) {{ members(type: $type, first: $first, after: $after, where: $where) {{
+                    "query($n: String!, $type: String, $first: Int, $after: String, $where: [FieldCondition!], $outcome: Outcome) {{
+                      akt(number: $n) {{ members(type: $type, first: $first, after: $after, where: $where, outcome: $outcome) {{
                         nodes {{ ...Row }} pageInfo {{ endCursor hasNextPage }} }} }} }} {fragments}"
                 ),
-                json!({ "n": container, "type": listing.akt_type, "first": first, "after": after, "where": wheres }),
+                json!({ "n": container, "type": listing.akt_type, "first": first, "after": after, "where": wheres, "outcome": outcome }),
             )
             .await?;
         if data["akt"].is_null() {
@@ -212,13 +215,13 @@ async fn page(
     let data = session
         .graphql(
             &format!(
-                "query($type: String, $state: String, $first: Int, $after: String, $search: String, $where: [FieldCondition!]) {{
-                  akter(type: $type, state: $state, first: $first, after: $after, search: $search, where: $where) {{
+                "query($type: String, $state: String, $first: Int, $after: String, $search: String, $where: [FieldCondition!], $outcome: Outcome) {{
+                  akter(type: $type, state: $state, first: $first, after: $after, search: $search, where: $where, outcome: $outcome) {{
                     nodes {{ ...Row }} pageInfo {{ endCursor hasNextPage }} }} }} {fragments}"
             ),
             json!({
                 "type": listing.akt_type, "state": state, "first": first, "after": after,
-                "search": listing.search, "where": wheres,
+                "search": listing.search, "where": wheres, "outcome": outcome,
             }),
         )
         .await?;
@@ -231,9 +234,15 @@ fn meets(kind: &str, value: &Json, equals: &str) -> bool {
         "CHOICES" => value
             .as_array()
             .is_some_and(|keys| keys.iter().any(|k| k == equals)),
-        "USER" => value
-            .as_str()
-            .is_some_and(|v| v.eq_ignore_ascii_case(equals)),
+        // One person, or any of several.
+        "USER" => match value {
+            Json::Array(people) => people
+                .iter()
+                .any(|p| p.as_str().is_some_and(|v| v.eq_ignore_ascii_case(equals))),
+            _ => value
+                .as_str()
+                .is_some_and(|v| v.eq_ignore_ascii_case(equals)),
+        },
         "CHECKBOX" => value
             .as_str()
             .and_then(|v| v.strip_prefix("for:"))
@@ -285,6 +294,19 @@ fn local_page(
             all
         }
     };
+    let wanted = local_outcome(local, listing)?;
+    let mut outcomes = Ok(());
+    akter.retain(|a| match wanted {
+        None => true,
+        Some(wanted) => match answers::outcome(dir, a) {
+            Ok(outcome) => outcome == Some(wanted),
+            Err(e) => {
+                outcomes = Err(e);
+                false
+            }
+        },
+    });
+    outcomes?;
     akter.retain(|a| {
         let ty = &dir.type_of(a).ty;
         listing.akt_type.as_ref().is_none_or(|t| *t == a.type_key)
@@ -330,6 +352,44 @@ fn local_page(
     )
 }
 
+/// The outcome a local list filters by, refused as a server refuses it
+/// (`akt.filter.outcome`): only for a type that has outcomes, and for one
+/// whose outcome comes from its members only within a container.
+// r[impl akt.filter.outcome]
+fn local_outcome(
+    local: &Local,
+    listing: &Listing,
+) -> Result<Option<kuria_engine::outcomes::Outcome>, CliError> {
+    let Some(outcome) = &listing.outcome else {
+        return Ok(None);
+    };
+    let refused = |message: String| Err(CliError::refused("BAD_REQUEST", message));
+    let Some(key) = &listing.akt_type else {
+        return refused("filtering by outcome needs `type`".to_owned());
+    };
+    let dir = &local.dir;
+    let Some(ty) = dir.types.get(key) else {
+        return refused(format!("there is no akt type `{key}`"));
+    };
+    let lookup = |k: &str| dir.types.get(k).map(|t| &t.ty);
+    if !kuria_engine::outcomes::has_outcomes(key, &lookup) {
+        return refused(format!("akter of `{key}` have no outcome"));
+    }
+    let own = ty
+        .ty
+        .document()
+        .fields
+        .iter()
+        .any(|f| f.kind == kuria_config::FieldKind::Verdict);
+    if !own && listing.inside.is_none() {
+        return refused(
+            "this type's outcome comes from its members, so only a container's members filter by it"
+                .to_owned(),
+        );
+    }
+    Ok(kuria_engine::outcomes::Outcome::parse(outcome))
+}
+
 fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, all: bool) -> Answer {
     let list: Vec<&str> = shape
         .map(|s| s.presentation.list.iter().map(String::as_str).collect())
@@ -339,6 +399,11 @@ fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, al
         headers.push("Type");
     }
     headers.extend(["Title", "State"]);
+    // r[impl cli.read]
+    let outcomes = rows.iter().any(|r| r.outcome.is_some());
+    if outcomes {
+        headers.push("Outcome");
+    }
     let names: Vec<&str> = list
         .iter()
         .map(|k| shape.map_or(*k, |s| s.field_name(k)))
@@ -353,6 +418,14 @@ fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, al
             }
             cells.push(r.title.clone().unwrap_or_default());
             cells.push(r.state.name.clone());
+            if outcomes {
+                cells.push(
+                    r.outcome
+                        .as_deref()
+                        .map(str::to_lowercase)
+                        .unwrap_or_default(),
+                );
+            }
             for key in &list {
                 cells.push(
                     r.fields
@@ -399,6 +472,7 @@ fn row_json(row: &Row) -> Json {
         "type": row.akt_type.key,
         "title": row.title,
         "state": row.state.key,
+        "outcome": row.outcome.as_ref().map(|o| o.to_lowercase()),
         "updatedAt": row.updated_at,
         "fields": fields,
     })

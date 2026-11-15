@@ -61,9 +61,9 @@ pub fn filterable(field: &FieldDef) -> bool {
     match field.kind {
         FieldKind::Choice
         | FieldKind::Choices
-        | FieldKind::User
         | FieldKind::Checkbox
-        | FieldKind::Date => true,
+        | FieldKind::Date
+        | FieldKind::User => true,
         FieldKind::Text => !field.multiline,
         _ => false,
     }
@@ -129,10 +129,11 @@ pub fn condition(
             vec![contains(json!(equals))]
         }
         FieldKind::Text => vec![contains(json!(equals))],
+        // A field naming several people matches when its list holds one.
         FieldKind::User => {
             someone(named.ok_or_else(|| refused(format!("say whom `{key}` names")))?)
                 .into_iter()
-                .map(contains)
+                .map(|who| contains(if field.multiple { json!([who]) } else { who }))
                 .collect()
         }
         FieldKind::Checkbox => {

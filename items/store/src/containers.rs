@@ -120,6 +120,20 @@ pub async fn lock_akter(
         .await
 }
 
+/// The akter `ids`, share-locked until the transaction ends, in id order:
+/// none can be changed, or gain or lose a member, until then.
+pub async fn share_akter(conn: &mut Connection, tenant: Uuid, ids: &[Uuid]) -> QueryResult<()> {
+    akt::table
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::id.eq_any(ids))
+        .order(akt::id)
+        .select(akt::id)
+        .for_share()
+        .load::<Uuid>(conn)
+        .await?;
+    Ok(())
+}
+
 /// One membership, as stored.
 #[derive(Clone, Debug, Insertable, Queryable, Selectable)]
 #[diesel(table_name = akt_membership)]
@@ -189,6 +203,24 @@ pub async fn containers_of(
         .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
         .filter(akt_membership::tenant_id.eq(tenant))
         .filter(akt_membership::member_id.eq(member))
+        .order(akt::rank)
+        .select((AktRow::as_select(), akt_type_version::key))
+        .load(conn)
+        .await
+}
+
+/// Every member of `container`, each with its akt type's key, in rank
+/// order.
+pub async fn members_with_types(
+    conn: &mut Connection,
+    tenant: Uuid,
+    container: Uuid,
+) -> QueryResult<Vec<(AktRow, String)>> {
+    akt_membership::table
+        .inner_join(akt::table.on(akt::id.eq(akt_membership::member_id)))
+        .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
+        .filter(akt_membership::tenant_id.eq(tenant))
+        .filter(akt_membership::container_id.eq(container))
         .order(akt::rank)
         .select((AktRow::as_select(), akt_type_version::key))
         .load(conn)

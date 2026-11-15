@@ -12,7 +12,15 @@
 	import type { AkterOfTypeQuery } from '#lib/graphql/generated/graphql.ts';
 	import { merged } from '#lib/akt/paging.ts';
 	import FilterBar from '#lib/akt/FilterBar.svelte';
-	import { conditionsOf, withCondition } from '#lib/akt/filters.ts';
+	import {
+		OUTCOMES,
+		conditionsOf,
+		filtersByOutcome,
+		outcomeOf,
+		withCondition
+	} from '#lib/akt/filters.ts';
+	import OutcomeBadge from '#lib/akt/OutcomeBadge.svelte';
+	import { shownOutcome } from '#lib/akt/outcomes.ts';
 	import { peopleOf } from '#lib/akt/people.ts';
 	import { AkterOfType, Contacts, ListFilters, Users } from '#lib/graphql/operations.ts';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
@@ -31,10 +39,14 @@
 	// A string, so that what depends on the conditions changes only when they
 	// do, not whenever the cache hands back new objects.
 	const conditionsKey = $derived(JSON.stringify(conditions));
+	// r[impl app.filters]: by outcome, where the type has a verdict field.
+	const byOutcome = $derived(filtersByOutcome(filterFields));
+	const outcome = $derived(outcomeOf(page.url.searchParams, filterFields));
 	const list = query(AkterOfType, () => ({
 		type: key,
 		state: stateKey || null,
-		where: conditions.length > 0 ? conditions : null
+		where: conditions.length > 0 ? conditions : null,
+		outcome
 	}));
 	const type = $derived(list.data?.aktType ?? undefined);
 	const users = query(Users, () => ({}));
@@ -50,7 +62,7 @@
 	let loading = $state(false);
 	$effect(() => {
 		// A new list starts again from its first page.
-		void [key, stateKey, conditionsKey];
+		void [key, stateKey, conditionsKey, outcome];
 		more = [];
 		next = null;
 	});
@@ -69,6 +81,7 @@
 				type: key,
 				state: stateKey || null,
 				where: conditions.length > 0 ? conditions : null,
+				outcome,
 				after: pageInfo.cursor
 			})
 			.toPromise();
@@ -86,7 +99,7 @@
 	);
 	setCrumbs(() => [{ label: type?.name ?? key }]);
 
-	function show(change: { state?: string; sort?: SortBy }) {
+	function show(change: { state?: string; sort?: SortBy; outcome?: string }) {
 		const params = new SvelteURLSearchParams(page.url.search);
 		for (const [name, value] of Object.entries(change)) {
 			if (value && !(name === 'sort' && value === 'updated')) params.set(name, value);
@@ -141,6 +154,20 @@
 					<option value="rank">Rank</option>
 				</select>
 			</label>
+			{#if byOutcome}
+				<label>
+					Outcome
+					<select
+						value={outcome?.toLowerCase() ?? ''}
+						onchange={(e) => show({ outcome: e.currentTarget.value })}
+					>
+						<option value="">Any outcome</option>
+						{#each OUTCOMES as option (option)}
+							<option value={option.toLowerCase()}>{shownOutcome(option).text}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
 			<FilterBar
 				fields={filterFields}
 				values={Object.fromEntries(conditions.map((c) => [c.field, c.equals]))}
@@ -151,10 +178,10 @@
 
 		{#if akter.length === 0}
 			<EmptyState
-				title={stateKey || conditions.length > 0
+				title={stateKey || outcome || conditions.length > 0
 					? `No ${type.name} matches`
 					: `No ${type.name} yet`}
-				description={stateKey || conditions.length > 0
+				description={stateKey || outcome || conditions.length > 0
 					? 'Try other filters.'
 					: `Create the first ${type.name}.`}
 			/>
@@ -169,6 +196,7 @@
 								<th scope="col">{name}</th>
 							{/each}
 							<th scope="col">State</th>
+							{#if byOutcome}<th scope="col">Outcome</th>{/if}
 							<th scope="col">Changed</th>
 						</tr>
 					</thead>
@@ -185,6 +213,11 @@
 									<td>{field.text}</td>
 								{/each}
 								<td><Badge tone={akt.state.tone}>{akt.state.name}</Badge></td>
+								{#if byOutcome}
+									<td
+										>{#if akt.outcome}<OutcomeBadge outcome={akt.outcome} />{/if}</td
+									>
+								{/if}
 								<td class="when" title={new Date(akt.updatedAt).toLocaleString()}
 									>{ago(akt.updatedAt)}</td
 								>

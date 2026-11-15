@@ -237,6 +237,17 @@ pub struct FieldDef {
     /// For `attachment`: what files it holds, any file by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<AttachmentFormat>,
+    /// For `user`: whether it holds a list of users and contacts.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub multiple: bool,
+    /// For `sections`: the akt types of the members it places; any of the
+    /// types the akt type contains if empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub of: Vec<String>,
+    /// For `verdict`: the key of the `multiple` `user` field naming who
+    /// gives verdicts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub assignees: Option<String>,
 }
 
 /// What files an `attachment` field holds.
@@ -263,6 +274,10 @@ pub enum FieldKind {
     Git,
     Docker,
     Attachment,
+    /// The akt's members laid out in nested sections.
+    Sections,
+    /// Each assignee's verdict.
+    Verdict,
 }
 
 impl FieldKind {
@@ -308,6 +323,10 @@ pub struct TransitionDef {
     /// Fields that must hold a value once it has been performed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<String>,
+    /// The outcomes the akt must have for it to be performed (`pass`,
+    /// `fail`, `skip` or `pending`); any, or none, if empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outcomes: Vec<String>,
     /// A Konklav action performing it requires, besides
     /// `kuria:akter:transition`, such as `capa:approve_closure`.
     #[serde(default, skip_serializing_if = "Option::is_none")]

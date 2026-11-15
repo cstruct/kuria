@@ -5,16 +5,20 @@
 //! stores what it answers.
 
 pub mod board;
+pub mod copying;
 pub mod draft;
 mod hash;
+pub mod outcomes;
 mod rank;
 pub mod rules;
 pub mod sbom;
+pub mod sections;
 mod value;
+pub mod verdicts;
 
 use std::collections::BTreeMap;
 
-use kuria_config::AktType;
+use kuria_config::{AktType, FieldKind};
 use serde_json::{Map, Value as Json};
 
 pub use hash::state_hash;
@@ -63,6 +67,26 @@ pub enum Refusal {
         transition: String,
         fields: Vec<String>,
     },
+    #[error(
+        "`{transition}` requires the outcome to be {}, and {}",
+        one_of(.allowed),
+        .outcome.map_or("the akt has no outcome".to_owned(), |o| format!("it is {}", o.as_str()))
+    )]
+    Outcome {
+        transition: String,
+        /// The akt's outcome, `None` if it has none.
+        outcome: Option<outcomes::Outcome>,
+        allowed: Vec<String>,
+    },
+}
+
+/// `["a", "b", "c"]` as "a, b or c".
+fn one_of(words: &[String]) -> String {
+    match words {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
+    }
 }
 
 /// Creates an akt of `ty` with the values `input` gives.
@@ -98,8 +122,22 @@ pub fn edit(
     Ok(outcome(current.state.clone(), fields, changes))
 }
 
+/// Whether editing `current` with `input` would change anything, final or
+/// not: what an apply of an unchanged akt file asks before editing.
+pub fn changes_anything(
+    ty: &AktType,
+    current: &Current,
+    input: &Map<String, Json>,
+    change: Change,
+) -> Result<bool, Refusal> {
+    let (_, changes) = apply(ty, &current.fields, input, change)?;
+    Ok(!changes.is_empty())
+}
+
 /// Performs `transition` on `current`, setting the values `input` gives on
-/// the way.
+/// the way. `held` is what the akt's members add up to (`outcomes::of_all`)
+/// if its type has outcomes and no `verdict` field of its own; a caller
+/// needs to work it out only for a transition that names `outcomes`.
 // r[impl akt.transition]
 pub fn transition(
     ty: &AktType,
@@ -107,6 +145,7 @@ pub fn transition(
     transition: &str,
     input: &Map<String, Json>,
     change: Change,
+    held: Option<outcomes::Outcome>,
 ) -> Result<Outcome, Refusal> {
     let Some(def) = ty.transition(transition) else {
         return Err(Refusal::UnknownTransition(transition.to_owned()));
@@ -133,6 +172,18 @@ pub fn transition(
             fields: missing,
         });
     }
+    // r[impl akt.transition.outcomes]
+    // Its own verdicts as the transition leaves them, else its members'.
+    if !def.outcomes.is_empty() {
+        let outcome = outcomes::of_fields(ty, &fields).or(held);
+        if !outcome.is_some_and(|o| def.outcomes.iter().any(|a| a == o.as_str())) {
+            return Err(Refusal::Outcome {
+                transition: transition.to_owned(),
+                outcome,
+                allowed: def.outcomes.clone(),
+            });
+        }
+    }
     Ok(outcome(def.to.clone(), fields, changes))
 }
 
@@ -154,10 +205,28 @@ fn apply(
 ) -> Result<Applied, Refusal> {
     let mut fields = fields.clone();
     let mut changes = BTreeMap::new();
+    // Verdicts last, against the assignees as the input leaves them.
+    let mut givings = Vec::new();
     for (key, raw) in input {
         let Some(def) = ty.field(key) else {
             return Err(Refusal::UnknownField(key.clone()));
         };
+        if def.kind == FieldKind::Verdict {
+            let invalid = |reason: String| Refusal::InvalidValue {
+                field: key.clone(),
+                reason,
+            };
+            if raw.is_null() {
+                return Err(invalid(
+                    "a verdict is taken back with {\"clear\": true}".to_owned(),
+                ));
+            }
+            givings.push((
+                def,
+                verdicts::Giving::from_input(raw, change).map_err(invalid)?,
+            ));
+            continue;
+        }
         // r[impl akt.field.kinds]
         let input =
             Value::from_input(def, raw, change).map_err(|reason| Refusal::InvalidValue {
@@ -185,7 +254,66 @@ fn apply(
             }
         }
     }
+    // r[impl akt.field.verdict]
+    for (def, giving) in givings {
+        let given = verdicts_of(&fields, &def.key);
+        let assignees = assignees_of(&fields, def);
+        let now =
+            giving
+                .apply(&given, &assignees, change)
+                .map_err(|reason| Refusal::InvalidValue {
+                    field: def.key.clone(),
+                    reason,
+                })?;
+        set_verdicts(&mut fields, &mut changes, &def.key, &given, now);
+    }
+    // An assignee removed loses their verdict in the same change.
+    for def in ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Verdict)
+    {
+        let given = verdicts_of(&fields, &def.key);
+        let kept = verdicts::only_of(&given, &assignees_of(&fields, def));
+        set_verdicts(&mut fields, &mut changes, &def.key, &given, kept);
+    }
     Ok((fields, changes))
+}
+
+fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {
+    match fields.get(key) {
+        Some(Value::Verdicts(given)) => given.clone(),
+        _ => Vec::new(),
+    }
+}
+
+fn assignees_of(fields: &BTreeMap<String, Value>, def: &kuria_config::FieldDef) -> Vec<Someone> {
+    match def.assignees.as_ref().and_then(|key| fields.get(key)) {
+        Some(Value::Users(people)) => people.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// Sets a `verdict` field to `now`, none if empty, recording a change if it
+/// isn't `before`.
+fn set_verdicts(
+    fields: &mut BTreeMap<String, Value>,
+    changes: &mut BTreeMap<String, Option<Value>>,
+    key: &str,
+    before: &[verdicts::Given],
+    now: Vec<verdicts::Given>,
+) {
+    if now == before {
+        return;
+    }
+    if now.is_empty() {
+        fields.remove(key);
+        changes.insert(key.to_owned(), None);
+    } else {
+        fields.insert(key.to_owned(), Value::Verdicts(now.clone()));
+        changes.insert(key.to_owned(), Some(Value::Verdicts(now)));
+    }
 }
 
 fn outcome(

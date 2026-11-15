@@ -176,6 +176,18 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `akt directory`
   - A directory of Markdown files that local mode reads and writes instead of a Kuria server: `kuria.toml`, akt type documents in `types/`, and akter in `akter/`, each file holding an akt and its nested akter, named by number and title, with git as their history.
 
+- `template`
+  - An akt kept to be copied, such as a test template copied into each test protocol. Nothing marks it but how it is used; an example may give it a state of its own.
+- `copy`
+  - A new akt made from another of the same akt type, in its initial state, with its field values and the part of its member tree chosen, each member copied likewise.
+- `section`
+  - A part of an akt's `sections` field: an optional title and text, whether it is collapsible, and the members and sections it holds, in order.
+- `assignee`
+  - A user or contact named in the `multiple` `user` field a `verdict` field names: someone who is to give the akt a verdict.
+- `verdict`
+  - An assignee's judgement of an akt: `pass`, `fail` or `skip`, recorded with who gave it and when.
+- `outcome`
+  - What an akt's verdicts, or its members' outcomes, add up to: `pass`, `fail`, `skip` or `pending`. Derived when read, never stored.
 - `batch`
   - A list of akt writes, operations, that the API runs in order in one transaction: all of them, or none.
 - `operation`

@@ -60,7 +60,16 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   column or list (`reorder.svelte.ts`) or from each member's menu, and
   dropped on another column to take a transition that leads there;
   `TypeMark`, a type's icon and colour from `identity.ts`; `LinksCard`, an
-  akt's links both ways, added by a kind its type declares and removed),
+  akt's links both ways, added by a kind its type declares and removed;
+  `Sections`, members in a `sections` field's nested sections, a
+  collapsible one closed until opened and kept open while the akt
+  reloads, each with its outcome worked out from its members'
+  (`sections.ts`, `outcomes.ts`); `VerdictButtons`, a member's assignees
+  and their verdicts, and an assignee's own given, changed or taken back
+  (`verdicts.ts`), in its section, in a list and on its own page;
+  `CopyDialog`, copying an akt with the sections and members chosen;
+  `SectionsEditor`, sections edited as an outline, placing members not in
+  them; `PeopleSelect`, several people for a `multiple` user field),
   the
   header's title and actions (`header.ts`), sanitized Markdown
   (`markdown.ts`), pickers that search akter (`pickers.ts`), and

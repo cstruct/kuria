@@ -7,6 +7,9 @@
 	import FieldShown from './FieldShown.svelte';
 	import type { Person } from './people';
 	import type { Draft, FieldDef, Value } from './values';
+	import VerdictButtons from './VerdictButtons.svelte';
+	import type { Judged } from './verdicts';
+	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
 
 	interface Props {
 		field: FieldDef;
@@ -26,6 +29,12 @@
 		onSave: () => void;
 		onCancel: () => void;
 		onDraft: () => void;
+		/** The akt's members, which a sections field places. */
+		members?: readonly { number: string; title?: string | null }[];
+		/** For a verdict field: the akt's number, its verdicts, and giving one. */
+		number?: string;
+		judged?: Judged | null;
+		onVerdict?: (verdict: Verdict | null) => void;
 	}
 
 	let {
@@ -42,7 +51,11 @@
 		onEdit,
 		onSave,
 		onCancel,
-		onDraft
+		onDraft,
+		members = [],
+		number = '',
+		judged = null,
+		onVerdict = () => {}
 	}: Props = $props();
 </script>
 
@@ -61,7 +74,7 @@
 					onSave();
 				}}
 			>
-				<FieldEditor {field} bind:draft {people} {error} />
+				<FieldEditor {field} bind:draft {people} {error} {members} />
 				<label class="reason">
 					Reason <span class="optional">(optional)</span>
 					<input bind:value={reason} />
@@ -76,13 +89,15 @@
 		<dt>{field.name}</dt>
 		<dd data-field={field.key}>
 			<div class="value">
-				{#if value}
+				{#if field.kind === 'VERDICT' && judged}
+					<VerdictButtons {number} {judged} busy={busy || !editable} onGive={onVerdict} />
+				{:else if value}
 					<FieldShown {value} multiline={field.multiline} />
 				{:else}
 					<span class="empty">—</span>
 				{/if}
 			</div>
-			{#if editable}
+			{#if editable && draft?.kind !== 'SHOWN'}
 				<div class="tools">
 					{#if drafted}
 						<IconButton

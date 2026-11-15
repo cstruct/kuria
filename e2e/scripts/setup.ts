@@ -142,12 +142,13 @@ for (const t of [tenant, lab]) {
 const people = {
 	developer: await person(tenant, 'dev@shop.example', [
 		'reader',
-		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item'] }
+		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case'] }
 	]),
 	releaseManager: await person(tenant, 'rm@shop.example', [
 		'reader',
 		'contacts-manager',
-		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] }
+		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] },
+		{ role: 'developer-work', at: ['test_protocol', 'test_case'] }
 	]),
 	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])
 };

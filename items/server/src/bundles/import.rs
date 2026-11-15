@@ -160,6 +160,16 @@ fn check(bundle: &Bundle, unpacked: &Unpacked) -> Result<HashMap<Uuid, AktType>,
             ));
         }
     }
+    if let Some(akt) = bundle
+        .akter
+        .iter()
+        .find(|a| a.copied_from.is_some_and(|o| !ids.contains(&o)))
+    {
+        return invalid(format!(
+            "{} was copied from an akt the bundle lacks",
+            akt.number
+        ));
+    }
     for m in &bundle.memberships {
         if !ids.contains(&m.container) || !ids.contains(&m.member) {
             return invalid("a membership names an akt the bundle lacks".to_owned());
@@ -548,6 +558,11 @@ async fn write(
         })
         .collect();
     store::insert_akter(conn, &akter, &revisions, &memberships, &links, &held).await?;
+    for a in &bundle.akter {
+        if let Some(origin) = a.copied_from.and_then(|o| akt_ids.get(&o)) {
+            kuria_store::akter::insert_origin(conn, tenant, akt_ids[&a.id], *origin).await?;
+        }
+    }
 
     // r[impl bundle.import.subjects]
     let people: Vec<Person> = bundle

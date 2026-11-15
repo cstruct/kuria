@@ -32,6 +32,9 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - every choice field has at least one option;
 - the number pattern is valid (`akt.number.pattern`);
 - every action a transition names is valid (`authz.transition-action`);
+- the outcomes a transition allows are `pass`, `fail`, `skip` or
+  `pending`, each once, and only on a type that has a `verdict` field or
+  contains an akt type (`akt.transition.outcomes`);
 - the keys in `contains` and `created_in` are valid akt type keys, each listed
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
@@ -88,12 +91,14 @@ fits the field's kind:
 | `choice` | The key of one of the field's options. |
 | `choices` | A list of distinct keys of the field's options. |
 | `date` | A calendar date, `YYYY-MM-DD`. |
-| `user` | A person or piece of software: a user, as a Konklav subject identifier, shown by name ([people](people.md)), or a contact, as `{"contact": <identifier>}` ([contacts](contacts.md)). |
+| `user` | A person or piece of software: a user, as a Konklav subject identifier, shown by name ([people](people.md)), or a contact, as `{"contact": <identifier>}` ([contacts](contacts.md)). A list of them if the field says `multiple`; see `akt.field.multiple`. |
 | `checkbox` | Checked or not; see `akt.field.checkbox`. |
 | `reference` | A link to something outside Kuria: an absolute `http` or `https` URL, and optionally a label. |
 | `git` | A commit in a git repository: the repository, as an `https` URL or an `ssh` remote such as `git@host:team/app.git`, and a commit SHA (40 or 64 lowercase hexadecimal digits), a tag, or both. |
 | `docker` | A container image: its repository, such as `registry.example/team/backend`, its digest (`sha256:` and 64 lowercase hexadecimal digits), and optionally a tag. |
 | `attachment` | A file uploaded to Kuria, by its identifier; see `akt.field.attachment`. |
+| `sections` | The akt's members laid out in nested sections; see `akt.field.sections`. |
+| `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`; see `akt.field.verdict`. |
 
 r[akt.field.checkbox]
 A `checkbox` field MUST take `true` to check it and `false` to clear it.
@@ -110,6 +115,35 @@ An `attachment` field MUST only hold an attachment of the akt's tenant. A
 field that says `"format": "sbom"` MUST only hold an attachment Kuria
 recognised as an SBOM ([attachments](attachments.md)). `format` MUST be
 refused on any other kind of field.
+
+r[akt.field.multiple]
+A `user` field that says `multiple` MUST hold a list of distinct users and
+contacts, in the order given, and is without a value when the list is
+empty. `multiple` MUST be refused on any other kind of field.
+
+r[akt.field.sections]
+A `sections` field MUST hold a list of items, in order, each either an akt
+number, naming a member of the akt, or a section: an optional `title`, an
+optional Markdown `text`, whether it is `collapsible`, and its own list of
+items. It MUST be refused if it names an akt that isn't a member of the
+akt, or one more than once; one that says `of`, a list of akt type keys,
+MUST also refuse a member of any other type. Members it doesn't name are
+outside every section. A member removed from the akt MUST leave its
+sections in the same change. An akt type MUST have at most one `sections`
+field.
+
+r[akt.field.verdict]
+A `verdict` field MUST name, as `assignees`, a `multiple` `user` field of
+its type, and MUST hold at most one verdict, `pass`, `fail` or `skip`, per
+assignee. Giving one MUST take the verdict, or `{"verdict": <verdict>,
+"for": <user>}` to give it for another assignee, `<user>` being a value a
+`user` field takes, and `{"clear": true}` or `{"clear": true, "for":
+<user>}` to take one back. It MUST record who gave it and when, taken from
+the change, never from the input, and for whom when that is someone else.
+A verdict MUST be refused unless it is for an assignee: one's own only if
+one is an assignee, and anyone's, with `for`, only for an assignee. An
+assignee removed from the `user` field MUST lose their verdict in the same
+change. An akt type MUST have at most one `verdict` field.
 
 r[akt.field.required]
 A field marked `required` MUST hold a value from the moment the akt is
@@ -151,6 +185,13 @@ as an edit does. It MUST be refused unless every field the transition
 requires holds a value afterwards. The akt then moves to the transition's
 target state.
 
+r[akt.transition.outcomes]
+A transition MAY name the outcomes it allows. Performing it MUST then be
+refused unless the akt has outcomes (`akt.outcome`) and its outcome, as
+it is when the transition is performed, is one of them, saying the
+outcome and those allowed. No verdict or membership in the akt's member
+tree MUST change between that check and the transition's revision.
+
 r[akt.version-pinned]
 An akt MUST be validated against the akt type version it was created with,
 also after newer versions of its akt type exist.
@@ -186,11 +227,72 @@ A list of akter of one akt type, and a container's members of one akt
 type, MAY be filtered by field values: each condition names a field of
 that type and a value, and an akt MUST match every condition. A field
 holding a choice matches by option key; a `user` field, by the user or
-contact it names, or `me` for the subject asking; a checkbox, by whom it
+contact it names, or one of those it names if it names several, or `me`
+for the subject asking; a checkbox, by whom it
 was checked for, or `me`; a date, by the date; a single-line `text` field,
 by the whole text. A condition on a field of any other kind, on a field
 the type lacks, or without one akt type to filter, MUST be refused as
 `BAD_REQUEST`.
+
+r[akt.filter.outcome]
+A list of akter of one akt type MAY be filtered by outcome if the type has
+a `verdict` field, and a container's members of one akt type if the type
+has outcomes: only akter with that outcome, as it is when the list is
+answered (`akt.outcome`), MUST be answered, a page at a time
+(`akt.page`). Filtering a type without outcomes, or a list other than a
+container's members of a type whose outcome comes from its members, MUST
+be refused as `BAD_REQUEST`.
+
+## Outcomes
+
+r[akt.outcome]
+An akt type has outcomes if it has a `verdict` field, or contains an akt
+type that has them (`container.contains`). An akt of such a type MUST be
+served with its outcome, `pass`, `fail`, `skip` or `pending`:
+
+- with a `verdict` field: `fail` if any assignee's verdict is `fail`;
+  otherwise `pending` if an assignee has given none, or it has no
+  assignees; otherwise `skip` if every verdict is `skip`; otherwise `pass`;
+- otherwise, from the outcomes of its members that have outcomes: `fail`
+  if any is `fail`; otherwise `pending` if any is `pending`, or it has none;
+  otherwise `skip` if all are `skip`; otherwise `pass`.
+
+r[akt.outcome.section]
+Each section of a `sections` field MUST be served with its outcome by the
+same rules as a container's, over the outcomes of the members it names and
+of the sections nested in it.
+
+r[akt.outcome.derived]
+An outcome MUST be derived from the verdicts and members as they are, each
+time it is read, and MUST NOT be stored or recorded as a revision.
+
+## Copying
+
+r[akt.copy]
+Copying an akt MUST create a new akt of the same akt type, as `akt.create`
+does, with the akt's field values except its `verdict` and `checkbox`
+values, and MUST copy its members the caller may read likewise, recursively,
+each created in the copy of the akt it is a member of. Each copy's
+`sections` MUST place the copies where the originals were. The copy MUST be
+created in the containers given, or else in those of the akt copied, as
+`akt.create` and `container.create-inside` require.
+
+r[akt.copy.only]
+A copy MAY name the akter of the copied tree to keep. It MUST then copy
+those, the akter between them and the akt copied, and every member under
+them, and leave out the rest, and the sections left holding nothing.
+Naming an akt outside the tree MUST be refused as `BAD_REQUEST`.
+
+r[akt.copy.links]
+A link between two akter of the copied tree MUST be copied as a link
+between their copies; a link from an akt of the tree to an akt outside it
+MUST be copied to the same akt, with the same pinned revision. Links into
+the tree from outside, and memberships outside it, MUST NOT be copied.
+
+r[akt.copy.record]
+Each copy's first revision MUST say which akt it was copied from, and the
+API MUST answer it as the copy's origin. A copy MUST be all or nothing, in
+one transaction (`akt.batch.atomic`).
 
 ## Akt revisions
 

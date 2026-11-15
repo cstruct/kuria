@@ -234,6 +234,83 @@ impl Writer {
         Ok(())
     }
 
+    /// Refuses sections that `changes` set on `number`, `None` for an akt
+    /// being created, that place an akt that isn't one of its members, one
+    /// twice, or one of a type the field doesn't place (`akt.field.sections`).
+    // r[impl cli.local.rules]
+    pub fn check_sections(
+        &self,
+        ty: &kuria_config::AktType,
+        number: Option<&str>,
+        changes: &std::collections::BTreeMap<String, Option<kuria_engine::Value>>,
+    ) -> Result<(), CliError> {
+        for field in ty
+            .document()
+            .fields
+            .iter()
+            .filter(|f| f.kind == kuria_config::FieldKind::Sections)
+        {
+            let Some(Some(kuria_engine::Value::Sections(items))) = changes.get(&field.key) else {
+                continue;
+            };
+            let members: Vec<(&str, &str)> = number
+                .map(|n| {
+                    self.dir
+                        .members_of(n)
+                        .map(|m| (m.number.as_str(), m.type_key.as_str()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            kuria_engine::sections::check(items, &members, &field.of).map_err(|reason| {
+                CliError::from_server(
+                    "REFUSED",
+                    kuria_engine::Refusal::InvalidValue {
+                        field: field.key.clone(),
+                        reason,
+                    }
+                    .to_string(),
+                    None,
+                )
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Takes `member` out of `container`'s sections, as when it leaves the
+    /// container (`akt.field.sections`).
+    pub fn leave_sections(&mut self, container: &str, member: &str) -> Result<(), CliError> {
+        let akt = self.akt(container)?;
+        let Some(field) = self
+            .dir
+            .type_of(akt)
+            .ty
+            .document()
+            .fields
+            .iter()
+            .find(|f| f.kind == kuria_config::FieldKind::Sections)
+        else {
+            return Ok(());
+        };
+        let Some(raw) = akt.values.get(&field.key) else {
+            return Ok(());
+        };
+        let Ok(kuria_engine::Value::Sections(items)) = kuria_engine::Value::from_json(field, raw)
+        else {
+            return Err(CliError::refused(
+                "BAD_FILE",
+                format!("{}: `{}` isn't sections", akt.path.display(), field.key),
+            ));
+        };
+        if !kuria_engine::sections::numbers(&items).contains(&member) {
+            return Ok(());
+        }
+        let kept = kuria_engine::Value::Sections(kuria_engine::sections::without(&items, member))
+            .to_json();
+        let key = field.key.clone();
+        self.akt_mut(container).values.insert(key, kept);
+        Ok(())
+    }
+
     /// Marks every akt as touched, so that saving moves each into the file
     /// it belongs in and names every file, changing no akt.
     pub fn touch_all(&mut self) {
@@ -320,11 +397,15 @@ pub fn text_of(dir: &AktDir, akt: &LocalAkt, numbered: bool) -> String {
         else {
             continue;
         };
-        let text = serde_json::to_value(field.kind).expect("serializable") == "text";
+        let text = field.kind == kuria_config::FieldKind::Text;
         match value {
             Json::String(body) if text && field.multiline => {
                 sections.push((field.key.clone(), body.clone()));
             }
+            _ if field.kind == kuria_config::FieldKind::Sections => {
+                sections.push((field.key.clone(), crate::values::sections_yaml(value)));
+            }
+            Json::Object(o) if o.is_empty() && field.kind == kuria_config::FieldKind::Verdict => {}
             _ => single.push((field.key.clone(), value.clone())),
         }
     }

@@ -612,3 +612,33 @@ async fn subjects_are_shown_and_filter_as_the_users_they_map_to() {
         json!([{ "number": first }])
     );
 }
+
+const ORIGINS: &str = "query($n: String!) { akt(number: $n) { copiedFrom { number } members(first: 10) { nodes { copiedFrom { number } } } } }";
+
+// r[verify akt.copy.record]
+// r[verify bundle.contents]
+#[tokio::test(flavor = "multi_thread")]
+async fn copies_keep_their_origins_when_the_tenant_moves() {
+    let source = Kuria::new().await;
+    let (plan, _, _) = seeded(&source).await;
+    let copy = source
+        .ok(
+            "tenant",
+            "mutation($n: String!) { copyAkt(input: { number: $n }) { number copiedFrom { number } } }",
+            json!({ "n": plan }),
+        )
+        .await["copyAkt"]
+        .clone();
+    assert_eq!(copy["copiedFrom"]["number"], json!(plan));
+    let copy = copy["number"].as_str().unwrap().to_owned();
+
+    let target = Kuria::new().await;
+    let archive = source.exported("tenant", "tenant=true").await;
+    let (status, imported) = target.import("tenant", archive).await;
+    assert_eq!(status, StatusCode::OK, "{imported}");
+    let there = target.ok("tenant", ORIGINS, json!({ "n": copy })).await["akt"].clone();
+    let here = source.ok("tenant", ORIGINS, json!({ "n": copy })).await["akt"].clone();
+    assert_eq!(there, here);
+    assert_eq!(there["copiedFrom"]["number"], json!(plan));
+    assert_eq!(there["members"]["nodes"].as_array().unwrap().len(), 2);
+}

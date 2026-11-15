@@ -233,9 +233,9 @@ test('local mode answers a sequence of commands as the server does', async () =>
 		await both(['cat', n]);
 	}
 	const order = async (prefix: string[], container: string) =>
-		JSON.parse(
-			(await cli.run([...prefix, 'ls', item, '--in', container, '--format', 'json'])).stdout
-		).akter.map((x: { number: string }) => x.number);
+		JSON.parse((await cli.run([...prefix, 'ls', item, '--in', container, '--format', 'json'])).stdout).akter.map(
+			(x: { number: string }) => x.number
+		);
 	for (const container of [a, b]) {
 		expect(await order(['--dir', dir], container)).toEqual(await order([], container));
 	}
@@ -244,5 +244,135 @@ test('local mode answers a sequence of commands as the server does', async () =>
 			.akter.map((x: { number: string }) => x.number)
 			.sort();
 	expect(await all(['--dir', dir])).toEqual(await all([]));
+	expect((await cli.run(['--dir', dir, 'check'])).code).toBe(0);
+});
+
+// r[verify cli.file.kinds]
+// r[verify cli.local.rules]
+// r[verify akt.copy]
+// r[verify akt.outcome]
+// r[verify akt.transition.outcomes]
+// r[verify akt.filter.outcome]
+// r[verify akt.filter]
+test('local mode lays out tests, takes verdicts, filters, copies and finishes as the server does', async () => {
+	test.setTimeout(300_000);
+	const stamp = Date.now();
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const dir = join(cli.dir, 'protocols');
+	const protocol = `parity_protocol_${stamp}`;
+	const check = `parity_test_${stamp}`;
+	const states = [{ key: 'open', name: 'Open', initial: true }];
+	writeFileSync(
+		join(cli.dir, 'types.json'),
+		JSON.stringify([
+			{
+				key: protocol,
+				name: 'Parity protocol',
+				number: `PP${stamp}-{seq}`,
+				states: [...states, { key: 'done', name: 'Done', final: true }],
+				transitions: [
+					{ key: 'finish', name: 'Finish', from: ['open'], to: 'done', outcomes: ['pass', 'fail', 'skip'] }
+				],
+				fields: [
+					{ key: 'title', name: 'Title', kind: 'text', required: true },
+					{ key: 'layout', name: 'Layout', kind: 'sections', of: [check] }
+				],
+				contains: [{ type: check }]
+			},
+			{
+				key: check,
+				name: 'Parity test',
+				number: '{parent}-T{seq}',
+				created_in: [protocol],
+				states,
+				fields: [
+					{ key: 'title', name: 'Title', kind: 'text', required: true },
+					{ key: 'testers', name: 'Testers', kind: 'user', multiple: true },
+					{ key: 'verdict', name: 'Verdict', kind: 'verdict', assignees: 'testers' }
+				]
+			}
+		])
+	);
+	expect((await cli.run(['init', '--dir', dir])).code).toBe(0);
+	// `@me` in the directory is whom the server names the client by.
+	const viewer = JSON.parse((await cli.run(['whoami', '--format', 'json'])).stdout);
+	const me = { KURIA_ME: viewer.email ?? viewer.name };
+
+	const both = async (args: string[]): Promise<Said> => {
+		const server = said(await cli.run(args));
+		const local = said(await cli.run(['--dir', dir, ...args], me));
+		expect(local, args.join(' ')).toEqual(server);
+		return server;
+	};
+	const number = (s: Said) => s.markdown!.match(/PP\d+-\d+(?:-T\d+)?/)![0];
+
+	await both(['types', 'define', join(cli.dir, 'types.json')]);
+	const p = number(await both(['new', protocol, '--set', 'title=Template']));
+	const tests: string[] = [];
+	for (const title of ['One', 'Two', 'Three']) {
+		tests.push(number(await both(['new', check, '--in', p, '--set', `title=${title}`, '--set', 'testers=@me'])));
+	}
+	const [one, two, three] = tests;
+	const layout = join(cli.dir, 'layout.yaml');
+	const bad = join(cli.dir, 'bad.yaml');
+	writeFileSync(
+		layout,
+		`- title: Session\n  collapsible: true\n  text: Each way in and out.\n  items: [${one}, ${two}]\n- ${three}\n`
+	);
+	writeFileSync(bad, `- ${p}\n`);
+
+	const steps: [string[], number][] = [
+		[['set', p, `layout=@${bad}`], 1],
+		[['set', p, `layout=@${layout}`], 0],
+		[['cat', p], 0],
+		[['cat', one], 0],
+		[['schema', protocol], 0],
+		[['do', p, 'finish'], 1],
+		[['verdict', one, 'pass', '--reason', 'Ran it'], 0],
+		[['verdict', one, 'maybe'], 1],
+		[['verdict', p, 'pass'], 1],
+		[['set', one, 'verdict=pass'], 1],
+		[['verdict', two, 'fail'], 0],
+		[['ls', check, '--in', p, '--where', 'testers=@me'], 0],
+		[['ls', check, '--outcome', 'fail'], 0],
+		[['ls', check, '--in', p, '--outcome', 'pending'], 0],
+		[['ls', protocol, '--outcome', 'fail'], 1],
+		[['cat', p], 0],
+		[['verdict', two, 'clear'], 0],
+		[['verdict', two, 'skip'], 0],
+		[['ls', check, '--in', p], 0],
+		[['verdict', three, 'pass'], 0],
+		[['cat', p, '--all-members'], 0],
+		[['copy', p, '--only', 'NOPE-1'], 1],
+		[['copy', p, '--only', one, '--reason', 'Run it'], 0],
+		[['copy', p], 0],
+		[['remove', p, three], 0],
+		[['do', p, 'finish'], 0],
+		[['cat', p], 0]
+	];
+	for (const [args, code] of steps) {
+		expect((await both(args)).code, args.join(' ')).toBe(code);
+	}
+	for (const copy of [`PP${stamp}-2`, `PP${stamp}-3`]) {
+		await both(['cat', copy, '--all-members']);
+		await both(['ls', check, '--in', copy]);
+	}
+
+	// Read and applied unchanged, nothing changes; a verdict changed in the
+	// file is refused.
+	for (const [where, prefix] of [
+		['server', []],
+		['local', ['--dir', dir]]
+	] as const) {
+		const read = await cli.run([...prefix, 'cat', p, '--all-members'], me);
+		const file = join(cli.dir, `protocol-${where}.md`);
+		writeFileSync(file, read.stdout);
+		const applied = await cli.run([...prefix, 'apply', file], me);
+		expect(applied.code, `${where}: ${applied.stderr}`).toBe(0);
+		expect(applied.stdout, where).not.toContain('changed ');
+		writeFileSync(file, read.stdout.replace(': pass}', ': fail}'));
+		const refused = await cli.run([...prefix, 'apply', file, '--format', 'json'], me);
+		expect(JSON.parse(refused.stderr).error.code, where).toBe('READ_ONLY');
+	}
 	expect((await cli.run(['--dir', dir, 'check'])).code).toBe(0);
 });

@@ -95,17 +95,66 @@ async fn changes(
     let people = people_for(session, shape, given.keys()).await?;
     let mut changed = Map::new();
     for field in &shape.fields {
+        let now = akt.fields.iter().find(|v| v.field() == field.key);
+        if field.kind == "VERDICT" {
+            let now = now.map_or_else(|| json!({}), crate::values::file_value);
+            verdicts_unchanged(&akt.number, field, given.get(&field.key), &now)?;
+            continue;
+        }
         let wanted = input_of(field, given.get(&field.key).unwrap_or(&Json::Null), &people)?;
-        let now = akt
-            .fields
-            .iter()
-            .find(|v| v.field() == field.key)
-            .map_or(Json::Null, current_input);
+        let now = now.map_or(Json::Null, current_input);
         if !same_input(&wanted, &now) {
             changed.insert(field.key.clone(), wanted);
         }
     }
     Ok(changed)
+}
+
+/// Refuses a file whose verdicts, `given` if it gives them, differ from
+/// those the akt has, `now`, in the file's form: they are given with
+/// `kuria verdict` (`cli.file.kinds`).
+// r[impl cli.file.kinds]
+pub(crate) fn verdicts_unchanged(
+    number: &str,
+    field: &crate::model::FieldDef,
+    given: Option<&Json>,
+    now: &Json,
+) -> Result<(), CliError> {
+    match given {
+        Some(given) if !(given == now || given.is_null() && now == &json!({})) => Err(CliError {
+            field: Some(field.key.clone()),
+            ..CliError::refused(
+                "READ_ONLY",
+                format!(
+                    "`{}` can't be changed in a file of {number}: give a verdict with `kuria verdict`",
+                    field.key
+                ),
+            )
+        }),
+        _ => Ok(()),
+    }
+}
+
+/// Refuses a file whose `outcome` differs from `now`'s: it follows from
+/// verdicts (`akt.outcome.derived`).
+pub(crate) fn outcome_unchanged(
+    number: &str,
+    parsed: &Parsed,
+    now: Option<&str>,
+) -> Result<(), CliError> {
+    let given = parsed.text("outcome");
+    if given.is_some() && given.as_deref() != now {
+        return Err(CliError {
+            field: Some("outcome".to_owned()),
+            ..CliError::refused(
+                "READ_ONLY",
+                format!(
+                    "`outcome` can't be changed in a file of {number}: it follows from verdicts"
+                ),
+            )
+        });
+    }
+    Ok(())
 }
 
 /// Refuses a file whose read-only keys differ from the akt's.
@@ -126,6 +175,8 @@ fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
     if parsed.text("state").is_some_and(|s| s != akt.state.key) {
         return Err(read_only("state", "perform a transition with `kuria do`"));
     }
+    let outcome = akt.outcome.as_ref().map(|o| o.to_lowercase());
+    outcome_unchanged(&akt.number, parsed, outcome.as_deref())?;
     let listed = |key: &str| -> BTreeSet<String> {
         parsed.front[key]
             .as_array()
@@ -455,4 +506,113 @@ pub async fn draft(
         ),
         json: json!({ "number": number, "revision": revision, "field": field }),
     })
+}
+
+/// `shape`'s verdict field, refused if it has none.
+pub(crate) fn verdict_field<'a>(
+    shape: &'a crate::model::Shape,
+    number: &str,
+) -> Result<&'a crate::model::FieldDef, CliError> {
+    shape
+        .fields
+        .iter()
+        .find(|f| f.kind == "VERDICT")
+        .ok_or_else(|| {
+            CliError::refused(
+                "BAD_REQUEST",
+                format!("{number} is a {}, which takes no verdicts", shape.name),
+            )
+        })
+}
+
+/// A verdict's input (`akt.field.verdict`): `pass`, `fail` or `skip` for
+/// oneself, with `for` another assignee's, and `clear` to take one back.
+// r[impl cli.write]
+pub(crate) fn verdict_input(given: &str, for_whom: Option<Json>) -> Result<Json, CliError> {
+    let given = given.trim().to_ascii_lowercase();
+    match (given.as_str(), for_whom) {
+        ("pass" | "fail" | "skip", None) => Ok(given.into()),
+        ("pass" | "fail" | "skip", Some(who)) => Ok(json!({ "verdict": given, "for": who })),
+        ("clear", None) => Ok(json!({ "clear": true })),
+        ("clear", Some(who)) => Ok(json!({ "clear": true, "for": who })),
+        _ => Err(CliError::refused(
+            "BAD_REQUEST",
+            format!("`{given}` isn't a verdict: pass, fail, skip or clear"),
+        )),
+    }
+}
+
+/// What `verdict` answers: the verdict given, the revision it made and
+/// the outcome now.
+pub(crate) fn verdict_answer(
+    number: &str,
+    given: &str,
+    for_whom: Option<&str>,
+    revision: i64,
+    outcome: Option<&str>,
+) -> (String, Json) {
+    let given = given.trim().to_ascii_lowercase();
+    let mut said = if given == "clear" {
+        "verdict cleared".to_owned()
+    } else {
+        given.clone()
+    };
+    if let Some(who) = for_whom {
+        said.push_str(&format!(" for {who}"));
+    }
+    let outcome = outcome.map(str::to_lowercase);
+    let mut markdown = format!("{number}: {said} (revision {revision})");
+    if let Some(outcome) = &outcome {
+        markdown.push_str(&format!("; its outcome is {outcome}"));
+    }
+    markdown.push('.');
+    (
+        markdown,
+        json!({
+            "number": number,
+            "revision": revision,
+            "verdict": (given != "clear").then_some(given),
+            "for": for_whom,
+            "outcome": outcome,
+        }),
+    )
+}
+
+/// `kuria verdict <number> pass|fail|skip|clear [--for <user>]`.
+// r[impl cli.write]
+pub async fn verdict(
+    session: &Session,
+    number: &str,
+    given: &str,
+    for_whom: Option<&str>,
+    reason: Option<&str>,
+) -> Result<Answer, CliError> {
+    let akt = akt(session, number).await?;
+    let field = verdict_field(&akt.shape, number)?;
+    let who = match for_whom {
+        Some(text) => Some(
+            crate::reads::people(crate::reads::Source::Server(session))
+                .await?
+                .input(text)?,
+        ),
+        None => None,
+    };
+    let mut fields = Map::new();
+    fields.insert(field.key.clone(), verdict_input(given, who)?);
+    let data = session
+        .graphql(
+            "mutation($n: String!, $v: Int!, $f: JSON!, $r: String) {
+               editAkt(input: { number: $n, revision: $v, fields: $f, reason: $r }) { revision outcome } }",
+            json!({ "n": number, "v": akt.revision, "f": fields, "r": reason }),
+        )
+        .await?;
+    let done = &data["editAkt"];
+    let (markdown, json) = verdict_answer(
+        number,
+        given,
+        for_whom,
+        done["revision"].as_i64().unwrap_or_default(),
+        done["outcome"].as_str(),
+    );
+    Ok(Answer { markdown, json })
 }

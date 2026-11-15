@@ -39,7 +39,11 @@ type Akt {
 		"""
 		Conditions on field values, all of which a member must meet; `type` must be given.
 		"""
-		where: [FieldCondition!]
+		where: [FieldCondition!],
+		"""
+		Only members with this outcome, as it is now; `type` must be given, and have outcomes.
+		"""
+		outcome: Outcome
 	): AktConnection!
 	"""
 	The akt as a board: its members that the subject may read, in the
@@ -58,6 +62,16 @@ type Akt {
 	those whose other akt the subject may not read.
 	"""
 	links: [Link!]!
+	"""
+	The akt it was copied from, if it is a copy and the viewer may read
+	it (`akt.copy.record`).
+	"""
+	copiedFrom: Akt
+	"""
+	What its verdicts, or its members' outcomes, add up to, if its type
+	has outcomes (`akt.outcome`); derived now, never stored.
+	"""
+	outcome: Outcome
 	"""
 	Every revision, oldest first.
 	"""
@@ -360,6 +374,27 @@ type Contact {
 }
 
 """
+What copying an akt takes (`akt.copy`).
+"""
+input CopyAktInput {
+	"""
+	The akt to copy.
+	"""
+	number: String!
+	"""
+	The akter of its tree to keep, with those between them and it and
+	every member under them; all of them if not given.
+	"""
+	only: [String!]
+	"""
+	The containers to make the copy in; the copied akt's own if not
+	given.
+	"""
+	in: [String!]
+	reason: String
+}
+
+"""
 What creating an akt takes.
 """
 input CreateAktInput {
@@ -456,6 +491,19 @@ type Field {
 	For attachment fields: what files they hold.
 	"""
 	format: AttachmentFormat
+	"""
+	For user fields: whether they hold a list of users and contacts.
+	"""
+	multiple: Boolean!
+	"""
+	For sections fields: the akt types of the members they place; any
+	the akt type contains if empty.
+	"""
+	of: [String!]!
+	"""
+	For verdict fields: the key of the user field naming the assignees.
+	"""
+	assignees: String
 }
 
 """
@@ -485,12 +533,14 @@ enum FieldKind {
 	GIT
 	DOCKER
 	ATTACHMENT
+	SECTIONS
+	VERDICT
 }
 
 """
 A field's value, by its kind.
 """
-union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue
+union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue | UsersValue | SectionsValue | VerdictValue
 
 """
 A commit in a git repository.
@@ -500,6 +550,19 @@ type GitValue {
 	repository: String!
 	sha: String
 	tag: String
+}
+
+"""
+One assignee's verdict.
+"""
+type GivenVerdict {
+	assignee: Someone!
+	verdict: Verdict!
+	"""
+	Who gave it: the assignee, unless given for them.
+	"""
+	by: User!
+	at: DateTime!
 }
 
 """
@@ -615,6 +678,11 @@ type Mutation {
 	"""
 	createAkt(input: CreateAktInput!): Akt!
 	"""
+	Copies an akt, with the part of its member tree chosen, into new
+	akter of the same types in their initial states, and answers the copy.
+	"""
+	copyAkt(input: CopyAktInput!): Akt!
+	"""
 	Edits an akt's field values.
 	"""
 	editAkt(input: EditAktInput!): Akt!
@@ -688,6 +756,16 @@ input OperationInput @oneOf {
 	removeLink: UnlinkInput
 	moveAkt: MoveAktInput
 	draftField: DraftFieldInput
+}
+
+"""
+An outcome: what verdicts, or what a container holds, add up to.
+"""
+enum Outcome {
+	PASS
+	FAIL
+	SKIP
+	PENDING
 }
 
 """
@@ -784,7 +862,11 @@ type Query {
 		"""
 		Conditions on field values, all of which an akt must meet; `type` must be given.
 		"""
-		where: [FieldCondition!]
+		where: [FieldCondition!],
+		"""
+		Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field.
+		"""
+		outcome: Outcome
 	): AktConnection!
 	"""
 	The tenant's contacts, by name.
@@ -818,6 +900,47 @@ type Sbom {
 enum SbomFormat {
 	SPDX
 	CYCLONEDX
+}
+
+"""
+A section.
+"""
+type Section {
+	title: String
+	"""
+	Markdown.
+	"""
+	text: String
+	collapsible: Boolean!
+	items: [SectionItem!]!
+	outcome: Outcome!
+}
+
+"""
+An item of a sections field: a member, by number, or a section.
+"""
+type SectionItem {
+	"""
+	The member's number, if it is one.
+	"""
+	number: String
+	"""
+	The section, if it is one.
+	"""
+	section: Section
+}
+
+"""
+An akt's members laid out in sections.
+"""
+type SectionsValue {
+	field: String!
+	items: [SectionItem!]!
+	"""
+	The value as `editAkt` takes it, whatever its depth: a list of akt
+	numbers and `{title, text, collapsible, items}`.
+	"""
+	value: JSON!
 }
 
 """
@@ -877,6 +1000,11 @@ type Transition {
 	from: [String!]!
 	to: String!
 	requires: [String!]!
+	"""
+	The outcomes the akt must have for it to be performed; any, or
+	none, if empty (`akt.transition.outcomes`).
+	"""
+	outcomes: [Outcome!]!
 }
 
 """
@@ -911,6 +1039,31 @@ type UserValue {
 	The user or contact it names.
 	"""
 	user: Someone!
+}
+
+"""
+A `multiple` user field's users and contacts, in order.
+"""
+type UsersValue {
+	field: String!
+	users: [Someone!]!
+}
+
+"""
+A verdict: pass, fail or skip.
+"""
+enum Verdict {
+	PASS
+	FAIL
+	SKIP
+}
+
+"""
+Each assignee's verdict.
+"""
+type VerdictValue {
+	field: String!
+	verdicts: [GivenVerdict!]!
 }
 
 """

@@ -215,17 +215,17 @@ fn refuses_an_edit_that_changes_nothing_or_a_final_akt() {
 fn transitions_from_its_states_only() {
     let akt = current("open", json!({ "title": "T" }));
     assert_eq!(
-        transition(&capa(), &akt, "close", &Map::new(), change()),
+        transition(&capa(), &akt, "close", &Map::new(), change(), None),
         Err(Refusal::NotFrom {
             transition: "close".to_owned(),
             state: "open".to_owned()
         })
     );
     assert_eq!(
-        transition(&capa(), &akt, "reopen", &Map::new(), change()),
+        transition(&capa(), &akt, "reopen", &Map::new(), change(), None),
         Err(Refusal::UnknownTransition("reopen".to_owned()))
     );
-    let outcome = transition(&capa(), &akt, "investigate", &Map::new(), change()).unwrap();
+    let outcome = transition(&capa(), &akt, "investigate", &Map::new(), change(), None).unwrap();
     assert_eq!(outcome.state, "investigating");
     assert!(
         outcome.changes.is_empty(),
@@ -241,7 +241,7 @@ fn a_transition_needs_its_required_fields_afterwards() {
         json!({ "title": "T", "severity": "major" }),
     );
     assert_eq!(
-        transition(&capa(), &akt, "close", &Map::new(), change()),
+        transition(&capa(), &akt, "close", &Map::new(), change(), None),
         Err(Refusal::Requires {
             transition: "close".to_owned(),
             fields: vec!["root_cause".to_owned()]
@@ -253,6 +253,7 @@ fn a_transition_needs_its_required_fields_afterwards() {
         "close",
         &input(json!({ "root_cause": "No reviewer was assigned" })),
         change(),
+        None,
     )
     .unwrap();
     assert_eq!(outcome.state, "closed");
@@ -340,7 +341,8 @@ fn a_transition_requiring_a_checkbox_needs_it_checked() {
             &akt,
             "release",
             &input(json!({ "go": false })),
-            change()
+            change(),
+            None
         ),
         Err(Refusal::Requires { .. })
     ));
@@ -350,6 +352,7 @@ fn a_transition_requiring_a_checkbox_needs_it_checked() {
         "release",
         &input(json!({ "go": true })),
         change(),
+        None,
     )
     .unwrap();
     assert_eq!(released.state, "released");
@@ -641,5 +644,260 @@ fn shows_whom_a_box_was_checked_for() {
     assert_eq!(
         text(json!({ "title": "T", "owner": { "contact": CONTACT } })),
         "Carl"
+    );
+}
+
+fn test_type() -> AktType {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "test", "name": "Test", "number": "T-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "testers", "name": "Testers", "kind": "user", "multiple": true },
+            { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ]
+    }))
+    .unwrap();
+    validate(document).unwrap()
+}
+
+fn subject(n: u128) -> String {
+    Uuid::from_u128(n).to_string()
+}
+
+fn by(n: u128) -> Change {
+    Change {
+        by: Uuid::from_u128(n),
+        ..change()
+    }
+}
+
+/// `(assignee, verdict, given by)` of an outcome's verdicts.
+fn verdicts(fields: &BTreeMap<String, Value>) -> Vec<(Someone, &'static str, Uuid)> {
+    match fields.get("verdict") {
+        Some(Value::Verdicts(given)) => given
+            .iter()
+            .map(|g| (g.assignee, g.verdict.as_str(), g.by))
+            .collect(),
+        None => Vec::new(),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// A test of `test_type()` assigned to 1 and 2.
+fn assigned() -> Current {
+    let made = create(
+        &test_type(),
+        &input(json!({ "title": "Boots", "testers": [subject(1), subject(2)] })),
+        change(),
+    )
+    .unwrap();
+    Current {
+        state: made.state,
+        fields: made.fields,
+    }
+}
+
+/// Gives `raw` as `who`, moving `now` on if it is taken.
+fn give(now: &mut Current, raw: &Json, who: u128) -> Result<(), Refusal> {
+    let o = edit(
+        &test_type(),
+        now,
+        &input(json!({ "verdict": raw })),
+        by(who),
+    )?;
+    *now = Current {
+        state: o.state,
+        fields: o.fields,
+    };
+    Ok(())
+}
+
+fn outcome_of(now: &Current) -> Option<outcomes::Outcome> {
+    outcomes::of_fields(&test_type(), &now.fields)
+}
+
+// r[verify akt.field.verdict]
+// r[verify akt.outcome]
+#[test]
+fn assignees_give_verdicts_and_the_outcome_follows() {
+    let (a, b, outsider) = (1, 2, 3);
+    let mut now = assigned();
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pending));
+    give(&mut now, &json!("pass"), a).unwrap();
+    assert!(
+        matches!(give(&mut now, &json!("pass"), a), Err(Refusal::NoChange)),
+        "the same again changes nothing"
+    );
+    // Not an assignee: not one's own, and not for someone else either.
+    for (raw, who) in [
+        (json!("fail"), outsider),
+        (json!({ "verdict": "skip", "for": subject(outsider) }), a),
+        (Json::Null, a),
+    ] {
+        let refused = give(&mut now, &raw, who).unwrap_err();
+        assert!(
+            matches!(refused, Refusal::InvalidValue { .. }),
+            "{raw}: {refused:?}"
+        );
+    }
+    // For an assignee, by anyone, recorded as given by them.
+    give(
+        &mut now,
+        &json!({ "verdict": "skip", "for": subject(b) }),
+        outsider,
+    )
+    .unwrap();
+    assert_eq!(
+        verdicts(&now.fields),
+        [
+            (
+                Someone::User(Uuid::from_u128(a)),
+                "pass",
+                Uuid::from_u128(a)
+            ),
+            (
+                Someone::User(Uuid::from_u128(b)),
+                "skip",
+                Uuid::from_u128(outsider)
+            ),
+        ]
+    );
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pass));
+    give(&mut now, &json!("fail"), b).unwrap();
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Fail));
+    give(&mut now, &json!({ "clear": true }), b).unwrap();
+    assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pending));
+}
+
+// r[verify akt.field.multiple]
+// r[verify akt.field.verdict]
+#[test]
+fn an_assignee_removed_takes_their_verdict_with_them() {
+    let ty = test_type();
+    let (a, b, newcomer) = (1, 2, 4);
+    let mut now = assigned();
+    give(&mut now, &json!("pass"), a).unwrap();
+    let dropped = edit(
+        &ty,
+        &now,
+        &input(json!({ "testers": [subject(b)] })),
+        change(),
+    )
+    .unwrap();
+    assert_eq!(dropped.changes.get("verdict"), Some(&None));
+    assert_eq!(verdicts(&dropped.fields), []);
+    let none = edit(&ty, &now, &input(json!({ "testers": [] })), change()).unwrap();
+    assert!(
+        !none.fields.contains_key("testers"),
+        "an empty list is no value"
+    );
+    assert!(
+        edit(
+            &ty,
+            &now,
+            &input(json!({ "testers": [subject(a), subject(a)] })),
+            change()
+        )
+        .is_err(),
+        "someone named twice"
+    );
+    // Assignees and a verdict in one change: the verdict sees the new ones.
+    let both = edit(
+        &ty,
+        &now,
+        &input(json!({ "testers": [subject(a), subject(newcomer)], "verdict": "pass" })),
+        by(newcomer),
+    )
+    .unwrap();
+    assert_eq!(verdicts(&both.fields).len(), 2);
+}
+
+fn gated_test_type() -> AktType {
+    let mut document = test_type().document().clone();
+    document.transitions = serde_json::from_value(json!([
+        { "key": "finish", "name": "Finish", "from": ["open"], "to": "closed",
+          "outcomes": ["pass", "fail", "skip"] }
+    ]))
+    .unwrap();
+    validate(document).unwrap()
+}
+
+// r[verify akt.transition.outcomes]
+#[test]
+fn a_transition_may_require_an_outcome() {
+    let ty = gated_test_type();
+    let finish = |now: &Current, held| transition(&ty, now, "finish", &Map::new(), change(), held);
+    let mut now = assigned();
+    let pending = finish(&now, None).unwrap_err();
+    assert_eq!(
+        pending.to_string(),
+        "`finish` requires the outcome to be pass, fail or skip, and it is pending"
+    );
+    // Its own verdicts decide, not what the caller says its members hold.
+    assert!(finish(&now, Some(outcomes::Outcome::Pass)).is_err());
+    give(&mut now, &json!("pass"), 1).unwrap();
+    assert!(finish(&now, None).is_err(), "2 hasn't answered");
+    give(&mut now, &json!("fail"), 2).unwrap();
+    assert_eq!(finish(&now, None).unwrap().state, "closed");
+    // A verdict the transition gives counts.
+    let mut later = assigned();
+    give(&mut later, &json!("pass"), 1).unwrap();
+    let given = transition(
+        &ty,
+        &later,
+        "finish",
+        &input(json!({ "verdict": "skip" })),
+        by(2),
+        None,
+    );
+    assert_eq!(given.unwrap().state, "closed");
+}
+
+// r[verify akt.transition.outcomes]
+#[test]
+fn a_container_s_transition_goes_by_what_its_members_hold() {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "protocol", "name": "Protocol", "number": "P-{seq}",
+        "fields": [],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ],
+        "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done",
+                          "outcomes": ["pass"] }],
+        "contains": [{ "type": "test" }]
+    }))
+    .unwrap();
+    let ty = validate(document).unwrap();
+    let open = current("open", json!({}));
+    let finish = |held| transition(&ty, &open, "finish", &Map::new(), change(), held);
+    assert_eq!(finish(Some(outcomes::Outcome::Pass)).unwrap().state, "done");
+    assert!(matches!(
+        finish(Some(outcomes::Outcome::Skip)),
+        Err(Refusal::Outcome {
+            outcome: Some(outcomes::Outcome::Skip),
+            ..
+        })
+    ));
+    assert_eq!(
+        finish(None).unwrap_err().to_string(),
+        "`finish` requires the outcome to be pass, and the akt has no outcome"
+    );
+}
+
+// r[verify akt.edit]
+#[test]
+fn says_whether_an_edit_changes_anything_also_of_a_final_akt() {
+    let closed = current("closed", json!({ "title": "T" }));
+    let ty = capa();
+    assert!(!changes_anything(&ty, &closed, &input(json!({ "title": "T" })), change()).unwrap());
+    assert!(changes_anything(&ty, &closed, &input(json!({ "title": "U" })), change()).unwrap());
+    assert_eq!(
+        edit(&ty, &closed, &input(json!({ "title": "U" })), change()),
+        Err(Refusal::Final)
     );
 }

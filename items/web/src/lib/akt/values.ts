@@ -9,6 +9,7 @@ import type {
 	SomeoneShownFragment,
 	TypeShapeFragment
 } from '#lib/graphql/generated/graphql.ts';
+import { inputOfSections, numbersIn, readSections, type Item } from './sections';
 
 export type FieldDef = TypeShapeFragment['fields'][number];
 export type Value = FieldValuesFragment;
@@ -27,7 +28,12 @@ export type Draft =
 	| { kind: 'REFERENCE'; url: string; label: string }
 	| { kind: 'GIT'; repository: string; sha: string; tag: string }
 	| { kind: 'DOCKER'; repository: string; digest: string; tag: string }
-	| { kind: 'ATTACHMENT'; id: string | null; name: string | null };
+	| { kind: 'ATTACHMENT'; id: string | null; name: string | null }
+	| { kind: 'USERS'; who: Who[] }
+	| { kind: 'SECTIONS'; items: Item[] }
+	// Shown here, and given elsewhere: verdicts, with their buttons
+	// (`app.verdicts`).
+	| { kind: 'SHOWN' };
 
 export function whoOf(someone: SomeoneShownFragment): Who {
 	return someone.__typename === 'Contact' ? { contact: someone.id } : { user: someone.id };
@@ -48,7 +54,19 @@ export function draftOf(field: FieldDef, value: Value | undefined): Draft {
 		case 'DATE':
 			return { kind: 'DATE', date: value?.__typename === 'DateValue' ? value.date : '' };
 		case 'USER':
+			if (field.multiple)
+				return {
+					kind: 'USERS',
+					who: value?.__typename === 'UsersValue' ? value.users.map(whoOf) : []
+				};
 			return { kind: 'USER', who: value?.__typename === 'UserValue' ? whoOf(value.user) : null };
+		case 'SECTIONS':
+			return {
+				kind: 'SECTIONS',
+				items: value?.__typename === 'SectionsValue' ? readSections(value.value) : []
+			};
+		case 'VERDICT':
+			return { kind: 'SHOWN' };
 		case 'CHECKBOX': {
 			if (value?.__typename !== 'CheckboxValue')
 				return { kind: 'CHECKBOX', checked: false, for: null };
@@ -103,6 +121,12 @@ export function isEmpty(draft: Draft): boolean {
 			return draft.repository.trim() === '';
 		case 'ATTACHMENT':
 			return draft.id === null;
+		case 'USERS':
+			return draft.who.length === 0;
+		case 'SECTIONS':
+			return draft.items.length === 0;
+		case 'SHOWN':
+			return false;
 	}
 }
 
@@ -142,6 +166,12 @@ export function inputOf(draft: Draft): unknown {
 			};
 		case 'ATTACHMENT':
 			return draft.id;
+		case 'USERS':
+			return draft.who.map((who) => ('user' in who ? who.user : who));
+		case 'SECTIONS':
+			return inputOfSections(draft.items);
+		case 'SHOWN':
+			return undefined;
 	}
 }
 
@@ -193,5 +223,15 @@ export function textOf(value: Value): string {
 			return `${value.repository}${value.tag ? `:${value.tag}` : ''}@${value.digest}`;
 		case 'AttachmentValue':
 			return value.attachment.name;
+		case 'UsersValue':
+			return value.users.map(nameOf).join(', ');
+		case 'SectionsValue': {
+			const placed = numbersIn(readSections(value.value)).length;
+			return placed === 1 ? '1 member placed' : `${placed} members placed`;
+		}
+		case 'VerdictValue':
+			return value.verdicts
+				.map((v) => `${nameOf(v.assignee)}: ${v.verdict.toLowerCase()}`)
+				.join(', ');
 	}
 }

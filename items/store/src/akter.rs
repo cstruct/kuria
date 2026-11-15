@@ -11,7 +11,9 @@ use serde_json::Value as Json;
 use uuid::Uuid;
 
 use crate::Connection;
-use crate::schema::{akt, akt_revision, akt_type, akt_type_version, change_event, tenant_counter};
+use crate::schema::{
+    akt, akt_origin, akt_revision, akt_type, akt_type_version, change_event, tenant_counter,
+};
 
 /// Takes the next value of a tenant's counter `name`, counting from 1. The
 /// counter's row stays locked until the transaction ends.
@@ -288,6 +290,15 @@ pub enum Match {
     /// The checkbox `field` was checked by `subject` for themself: its
     /// `checked_by` is the subject and it says no `for`.
     CheckedForSelf { field: String, subject: String },
+    /// The outcome of an akt with a `verdict` field of its own is
+    /// `outcome` (`pass`, `fail`, `skip` or `pending`), from its verdicts in
+    /// `verdict` and its assignees in `assignees` as
+    /// `kuria_engine::outcomes::of_verdicts` works it out.
+    Outcome {
+        verdict: String,
+        assignees: Option<String>,
+        outcome: String,
+    },
 }
 
 type AktFilter =
@@ -307,6 +318,40 @@ fn matched(m: &Match) -> AktFilter {
                 .bind::<Text, _>(field.clone())
                 .sql(") ? 'for'))"),
         ),
+        // r[impl akt.filter.outcome]
+        // Per assignee, the verdict given for them, if any; then `fail` if
+        // any failed, `pending` if none are assigned or one hasn't
+        // answered, `skip` if all skipped, else `pass`. An array in place
+        // of a missing or other value, as the engine reads one.
+        Match::Outcome {
+            verdict,
+            assignees,
+            outcome,
+        } => {
+            let assignees = assignees.clone().unwrap_or_default();
+            Box::new(
+                sql::<diesel::sql_types::Bool>(
+                    "((SELECT CASE WHEN bool_or(v = 'fail') THEN 'fail' \
+                       WHEN count(*) = 0 OR bool_or(v IS NULL) THEN 'pending' \
+                       WHEN bool_and(v = 'skip') THEN 'skip' ELSE 'pass' END \
+                     FROM (SELECT (SELECT g ->> 'verdict' FROM jsonb_array_elements(\
+                         CASE WHEN jsonb_typeof(akt.fields -> ",
+                )
+                .bind::<Text, _>(verdict.clone())
+                .sql(") = 'array' THEN akt.fields -> ")
+                .bind::<Text, _>(verdict.clone())
+                .sql(
+                    " ELSE '[]'::jsonb END) g WHERE g -> 'assignee' = a LIMIT 1) AS v \
+                     FROM jsonb_array_elements(CASE WHEN jsonb_typeof(akt.fields -> ",
+                )
+                .bind::<Text, _>(assignees.clone())
+                .sql(") = 'array' THEN akt.fields -> ")
+                .bind::<Text, _>(assignees)
+                .sql(" ELSE '[]'::jsonb END) a) t) = ")
+                .bind::<Text, _>(outcome.clone())
+                .sql(")"),
+            )
+        }
     }
 }
 
@@ -617,6 +662,54 @@ pub async fn changes_after(
             akt::number,
             akt_type_version::key,
         ))
+        .load(conn)
+        .await
+}
+
+/// Records that `akt` was copied from `origin` (`akt.copy.record`).
+pub async fn insert_origin(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+    origin: Uuid,
+) -> QueryResult<()> {
+    diesel::insert_into(akt_origin::table)
+        .values((
+            akt_origin::tenant_id.eq(tenant),
+            akt_origin::akt_id.eq(akt),
+            akt_origin::origin_id.eq(origin),
+        ))
+        .execute(conn)
+        .await
+        .map(drop)
+}
+
+/// The akt `akt` was copied from, if it is a copy.
+pub async fn origin_of(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akt: Uuid,
+) -> QueryResult<Option<AktRow>> {
+    akt_origin::table
+        .inner_join(akt::table.on(akt::id.eq(akt_origin::origin_id)))
+        .filter(akt_origin::tenant_id.eq(tenant))
+        .filter(akt_origin::akt_id.eq(akt))
+        .select(AktRow::as_select())
+        .first(conn)
+        .await
+        .optional()
+}
+
+/// The origins of the copies among `akter`, as `(copy, origin)`.
+pub async fn origins_of(
+    conn: &mut Connection,
+    tenant: Uuid,
+    akter: &[Uuid],
+) -> QueryResult<Vec<(Uuid, Uuid)>> {
+    akt_origin::table
+        .filter(akt_origin::tenant_id.eq(tenant))
+        .filter(akt_origin::akt_id.eq_any(akter))
+        .select((akt_origin::akt_id, akt_origin::origin_id))
         .load(conn)
         .await
 }
