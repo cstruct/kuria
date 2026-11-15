@@ -122,6 +122,18 @@ pub fn edit(
     Ok(outcome(current.state.clone(), fields, changes))
 }
 
+/// Whether editing `current` with `input` would change anything, final or
+/// not: what an apply of an unchanged akt file asks before editing.
+pub fn changes_anything(
+    ty: &AktType,
+    current: &Current,
+    input: &Map<String, Json>,
+    change: Change,
+) -> Result<bool, Refusal> {
+    let (_, changes) = apply(ty, &current.fields, input, change)?;
+    Ok(!changes.is_empty())
+}
+
 /// Performs `transition` on `current`, setting the values `input` gives on
 /// the way. `held` is what the akt's members add up to (`outcomes::of_all`)
 /// if its type has outcomes and no `verdict` field of its own; a caller

@@ -2,8 +2,9 @@
 // through in the app: a template of three sections copied with two of
 // them, started, verdicts given, changed and taken back by two testers in
 // its sections and in its list, a test case taken out of the sections in
-// the outline, each outcome following, and the run finished. Each view is
-// checked by axe.
+// the outline, each outcome following, the run's test cases in a tester's
+// work and in the list filtered by outcome, and the run finished once its
+// outcome allows. Each view is checked by axe.
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
@@ -48,6 +49,11 @@ const sectionOutcome = (page: Page, title: string) =>
 // r[verify app.accessible]
 // r[verify akt.copy]
 // r[verify akt.outcome]
+// r[verify app.transitions]
+// r[verify app.filters]
+// r[verify app.my-work]
+// r[verify akt.transition.outcomes]
+// r[verify akt.filter.outcome]
 test('a test protocol is copied from its template, run by two testers, and finished', async ({ browser }) => {
 	test.setTimeout(180_000);
 	await defineTestProtocols();
@@ -141,8 +147,13 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	await expect(dev.getByRole('heading', { name: 'Not in a section' })).toBeVisible();
 	await expect(mine(dev, passkey).getByRole('button', { name: 'Pass' })).toHaveAttribute('aria-pressed', 'true');
 
-	// The second tester, in the sections and in the list.
+	// The second tester finds the run's test cases in their work.
 	const rm = await signIn(browser, releaseManager);
+	await rm.goto('/');
+	const work = rm.getByRole('list', { name: 'My work: Test case' });
+	for (const number of [password, passkey, card, invoice]) await expect(work).toContainText(number);
+
+	// The second tester, in the sections and in the list.
 	await open(rm, run);
 	await sectionsOf(rm).getByText('Paying').click();
 	await give(rm, password, 'Pass');
@@ -161,10 +172,27 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	await mine(dev, card).getByRole('button', { name: 'Take back' }).click();
 	await expect(outcomeOf(dev, card)).toHaveText('Pending');
 	await expect(dev.getByTestId('outcome')).toHaveText('Pending');
+	// Pending, the run can't be finished.
+	const finish = dev.getByRole('button', { name: 'Finish', exact: true });
+	await expect(finish).toBeDisabled();
+	await expect(finish).toHaveAccessibleDescription('Finish: only when the outcome is pass, fail or skip');
+	expect(await violations(dev), 'a run that is pending').toEqual([]);
+
+	// The test cases still pending, as the list of test cases filters them.
+	await dev.goto('/types/test_case');
+	await dev.getByLabel('Outcome').selectOption({ label: 'Pending' });
+	await expect(dev).toHaveURL(/outcome=pending/);
+	const pending = dev.getByRole('table', { name: 'Test case' });
+	await expect(pending.getByRole('link', { name: card, exact: true })).toBeVisible();
+	await expect(pending.getByRole('link', { name: password, exact: true })).toHaveCount(0);
+	expect(await violations(dev), 'test cases filtered by outcome').toEqual([]);
+	await open(dev, run);
+	await sectionsOf(dev).getByText('Paying').click();
 	await give(dev, card, 'Pass');
 	await expect(sectionOutcome(dev, 'Paying')).toHaveText('Passed');
 	await expect(dev.getByTestId('outcome')).toHaveText('Passed');
 
+	await expect(finish).toBeEnabled();
 	await moved(dev, 'Finish', 'Done', { Conclusion: 'Ready for 4.2.' });
 	await expect(dev.getByTestId('outcome')).toHaveText('Passed');
 

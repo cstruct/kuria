@@ -24,7 +24,7 @@
     { "key": "revise", "name": "Revise", "from": ["template"], "to": "draft" },
     { "key": "start", "name": "Start", "from": ["draft"], "to": "running" },
     { "key": "finish", "name": "Finish", "from": ["running"], "to": "done",
-      "requires": ["conclusion"] },
+      "requires": ["conclusion"], "outcomes": ["pass", "fail", "skip"] },
     { "key": "withdraw", "name": "Withdraw", "from": ["draft", "template", "running"], "to": "withdrawn" }
   ],
   "contains": [{ "type": "test_case" }],

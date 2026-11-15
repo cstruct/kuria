@@ -1585,6 +1585,16 @@ fn a_protocol_finishes_only_with_an_outcome_it_allows() {
     // Bo hasn't answered T1, but a failure is an outcome.
     let done = dir.ok(&["do", "PROT-001", "finish"]);
     assert_eq!(done.json["state"], "done", "{}", done.markdown);
+    // r[verify cli.local.rules]
+    // Its file applied unchanged changes nothing, final as it is.
+    let file = dir.root.parent().unwrap().join("finished.md");
+    std::fs::write(&file, dir.ok(&["cat", "PROT-001"]).markdown).unwrap();
+    let applied = dir.ok(&["apply", file.to_str().unwrap()]);
+    assert!(
+        applied.markdown.contains("PROT-001: nothing changed."),
+        "{}",
+        applied.markdown
+    );
 }
 
 // r[verify akt.filter.outcome]

@@ -43,7 +43,15 @@ kuria types define docs/examples/test-protocols/{test_case,test_protocol}.json
   chosen (the sections that hold them come along, and empty ones are
   left out), each with its steps, expected result and testers, and no
   verdicts. The copy says what it was copied from. A run is started,
-  and finished with its conclusion; it can be withdrawn before then.
+  and finished with its conclusion once its outcome is `pass`, `fail` or
+  `skip`: while any test case is pending, it can't be finished
+  (`"outcomes"` on the `finish` transition). It can be withdrawn before
+  then.
+- **A tester's work:** test cases naming a tester among their testers are
+  in the tester's "My work" on Home, and `kuria ls test_case --where
+  testers=@me` lists them. The test cases still to run are those whose
+  outcome is pending: the list of test cases filters by outcome, as does
+  `kuria ls test_case --outcome pending`.
 - **Changing a run:** add a test case to it and place it in a section,
   move test cases between sections, or remove one, as with any akt;
   verdicts belong to the test case, not to its section.
@@ -61,7 +69,11 @@ kuria types define docs/examples/test-protocols/{test_case,test_protocol}.json
 3. Each tester gives their verdict with **Pass**, **Fail** or **Skip**
    beside the test case, and can change it or take it back. The outcome
    of the test case, its sections and the protocol follow.
-4. **Finish** it with a conclusion.
+4. **Finish** it with a conclusion. While a test case is pending,
+   **Finish** is unavailable, and says the outcomes it allows.
+
+A tester finds their test cases under **My work** on Home, and those
+still pending on the test cases' list, with **Outcome** set to Pending.
 
 ## A run, from the command line
 
@@ -72,6 +84,7 @@ kuria verdict TP-002-C01 pass                         # my own verdict
 kuria verdict TP-002-C01 skip --for ben@shop.example  # for another tester
 kuria show TP-002                                     # sections and outcomes
 kuria ls test_case --in TP-002                        # with an Outcome column
+kuria ls test_case --where testers=@me --outcome pending  # what I have left
 kuria do TP-002 finish --set conclusion=@conclusion.md
 ```
 

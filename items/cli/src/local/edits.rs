@@ -379,7 +379,13 @@ pub fn apply(
         let current = w.current(&number)?;
         let t = w.dir.types[&akt.type_key].clone();
         let change = w.change();
-        let outcome = match kuria_engine::edit(&t.ty, &current, &fields, change) {
+        // An akt file applied unchanged changes nothing, also of a final
+        // akt, as against a server (`cli.local.rules`).
+        let edited = match kuria_engine::changes_anything(&t.ty, &current, &fields, change) {
+            Ok(false) => Err(Refusal::NoChange),
+            _ => kuria_engine::edit(&t.ty, &current, &fields, change),
+        };
+        let outcome = match edited {
             Ok(outcome) => outcome,
             Err(Refusal::NoChange) => {
                 lines.push(format!("{number}: nothing changed."));

@@ -888,3 +888,16 @@ fn a_container_s_transition_goes_by_what_its_members_hold() {
         "`finish` requires the outcome to be pass, and the akt has no outcome"
     );
 }
+
+// r[verify akt.edit]
+#[test]
+fn says_whether_an_edit_changes_anything_also_of_a_final_akt() {
+    let closed = current("closed", json!({ "title": "T" }));
+    let ty = capa();
+    assert!(!changes_anything(&ty, &closed, &input(json!({ "title": "T" })), change()).unwrap());
+    assert!(changes_anything(&ty, &closed, &input(json!({ "title": "U" })), change()).unwrap());
+    assert_eq!(
+        edit(&ty, &closed, &input(json!({ "title": "U" })), change()),
+        Err(Refusal::Final)
+    );
+}

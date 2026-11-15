@@ -233,9 +233,9 @@ test('local mode answers a sequence of commands as the server does', async () =>
 		await both(['cat', n]);
 	}
 	const order = async (prefix: string[], container: string) =>
-		JSON.parse(
-			(await cli.run([...prefix, 'ls', item, '--in', container, '--format', 'json'])).stdout
-		).akter.map((x: { number: string }) => x.number);
+		JSON.parse((await cli.run([...prefix, 'ls', item, '--in', container, '--format', 'json'])).stdout).akter.map(
+			(x: { number: string }) => x.number
+		);
 	for (const container of [a, b]) {
 		expect(await order(['--dir', dir], container)).toEqual(await order([], container));
 	}
@@ -251,7 +251,10 @@ test('local mode answers a sequence of commands as the server does', async () =>
 // r[verify cli.local.rules]
 // r[verify akt.copy]
 // r[verify akt.outcome]
-test('local mode lays out tests, takes verdicts and copies as the server does', async () => {
+// r[verify akt.transition.outcomes]
+// r[verify akt.filter.outcome]
+// r[verify akt.filter]
+test('local mode lays out tests, takes verdicts, filters, copies and finishes as the server does', async () => {
 	test.setTimeout(300_000);
 	const stamp = Date.now();
 	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
@@ -266,7 +269,10 @@ test('local mode lays out tests, takes verdicts and copies as the server does', 
 				key: protocol,
 				name: 'Parity protocol',
 				number: `PP${stamp}-{seq}`,
-				states,
+				states: [...states, { key: 'done', name: 'Done', final: true }],
+				transitions: [
+					{ key: 'finish', name: 'Finish', from: ['open'], to: 'done', outcomes: ['pass', 'fail', 'skip'] }
+				],
 				fields: [
 					{ key: 'title', name: 'Title', kind: 'text', required: true },
 					{ key: 'layout', name: 'Layout', kind: 'sections', of: [check] }
@@ -320,11 +326,17 @@ test('local mode lays out tests, takes verdicts and copies as the server does', 
 		[['set', p, `layout=@${layout}`], 0],
 		[['cat', p], 0],
 		[['cat', one], 0],
+		[['schema', protocol], 0],
+		[['do', p, 'finish'], 1],
 		[['verdict', one, 'pass', '--reason', 'Ran it'], 0],
 		[['verdict', one, 'maybe'], 1],
 		[['verdict', p, 'pass'], 1],
 		[['set', one, 'verdict=pass'], 1],
 		[['verdict', two, 'fail'], 0],
+		[['ls', check, '--in', p, '--where', 'testers=@me'], 0],
+		[['ls', check, '--outcome', 'fail'], 0],
+		[['ls', check, '--in', p, '--outcome', 'pending'], 0],
+		[['ls', protocol, '--outcome', 'fail'], 1],
 		[['cat', p], 0],
 		[['verdict', two, 'clear'], 0],
 		[['verdict', two, 'skip'], 0],
@@ -335,6 +347,7 @@ test('local mode lays out tests, takes verdicts and copies as the server does', 
 		[['copy', p, '--only', one, '--reason', 'Run it'], 0],
 		[['copy', p], 0],
 		[['remove', p, three], 0],
+		[['do', p, 'finish'], 0],
 		[['cat', p], 0]
 	];
 	for (const [args, code] of steps) {

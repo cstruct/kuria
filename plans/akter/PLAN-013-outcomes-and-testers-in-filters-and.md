@@ -232,16 +232,25 @@ Lint, `mise run test` (348 Rust tests, 64 app tests) and the e2e tests for parit
 <!-- akt: PLAN-013-T05 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3h
-state: todo
+state: done
 in: [PLAN-013]
 links: [Blocked by PLAN-013-T02, Blocked by PLAN-013-T03, Blocked by PLAN-013-T04]
 title: "The example: a gated finish and a tester's pending work"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`test_protocol`'s `finish` allows `pass`, `fail` and `skip`. Its README says so, and how a tester finds their pending test cases. The test-protocols walkthrough: `finish` refused while a test case is pending, then taken; the tester's test cases in "My work"; the list filtered by outcome. The parity test runs `--where testers=@me`, `--outcome` and the gated `finish` on both sides.
+The test-protocols example uses what PLAN-013 built: a gated finish, and a tester's pending work.
+
+- **Example:** `test_protocol`'s `finish` allows `pass`, `fail` and `skip`. The README says a run can't be finished while a test case is pending, and how a tester finds their test cases: "My work", `--where testers=@me`, and the outcome filter in the app and with `--outcome`.
+- **Walkthrough** (`e2e/tests/test-protocols.spec.ts`): the second tester finds the run's test cases in "My work". With the card case pending again, **Finish** is disabled, described by "Finish: only when the outcome is pass, fail or skip", and axe passes. The test-case list filtered to Pending holds the card case and not the others. Once the last verdict is given, Finish is enabled and taken.
+- **Parity** (`e2e/tests/parity.spec.ts`, the protocols test): `schema`, a refused gated `finish`, `ls --in <p> --where testers=@me`, `ls --outcome fail`, `ls --in <p> --outcome pending`, a refused tenant-wide `ls <protocol> --outcome`, and the finish taken at the end.
+- **A parity gap the finish found:** an akt file applied unchanged to a final akt answered "nothing changed" against a server, which skips unchanged akter, but was refused locally as final. `kuria_engine::changes_anything` lets local `apply` ask first. Tested in the engine, in `tests/local.rs`, and by the parity test.
+- **Left as it is:** tenant-wide `ls` in local mode orders uncommitted akter by their file's modification time, so a container's members, sharing one file, tie. The parity test lists by tester within the protocol, where both sides use rank order.
+
+Lint, `mise run test` (349 Rust, 64 app) and `mise run e2e` (29 tests) pass.
 
 <!-- field: acceptance -->
 - The walkthrough and the parity test pass in `mise run e2e`.
