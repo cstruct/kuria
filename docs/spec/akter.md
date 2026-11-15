@@ -39,7 +39,10 @@ Kuria MUST refuse an akt type document, saying why, unless:
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
 - every draft recipe is valid (`draft.recipe`, `draft.line`);
-- its presentation is valid (`akt.type.presentation`).
+- its presentation is valid (`akt.type.presentation`);
+- every `markdown` field's `references` names a link kind the document
+  declares (`akt.field.markdown.references`);
+- its `versions` are valid (`version.declare`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or
@@ -99,6 +102,7 @@ fits the field's kind:
 | `attachment` | A file uploaded to Kuria, by its identifier; see `akt.field.attachment`. |
 | `sections` | The akt's members laid out in nested sections; see `akt.field.sections`. |
 | `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`; see `akt.field.verdict`. |
+| `markdown` | Markdown whose headings keep ids and whose links may name akter; see `akt.field.markdown`. |
 
 r[akt.field.checkbox]
 A `checkbox` field MUST take `true` to check it and `false` to clear it.
@@ -130,6 +134,30 @@ akt, or one more than once; one that says `of`, a list of akt type keys,
 MUST also refuse a member of any other type. Members it doesn't name are
 outside every section. A member removed from the akt MUST leave its
 sections in the same change. An akt type MUST have at most one `sections`
+field.
+
+r[akt.field.markdown]
+A `markdown` field MUST hold CommonMark text, with GitHub's tables, task
+lists and strikethrough, and is without a value when empty. A heading MAY
+end with an id, `{#<id>}`, of lowercase ASCII letters, digits, `-` and
+`_`, starting with a letter. Writing the field MUST give every heading
+without an id one, the heading's text in lower case with every run of
+other characters made one `-`, trimmed of `-` (`section` if that leaves
+nothing), and followed by `-2`, `-3`, … if needed, so that every heading
+id is unique within the akt across its `markdown` fields. A heading that
+has an id MUST keep it when its text changes. A value giving one id to
+two headings MUST be refused.
+
+r[akt.field.markdown.references]
+A link in a `markdown` field whose destination is `kuria:<number>`,
+optionally followed by `@<version>` (`version.number`) and `#<heading
+id>`, is a reference to that akt, that version of it and that heading. A
+`markdown` field MAY name, as `references`, a link kind its type
+declares: every write of the akt MUST then make the akt's links of that
+kind the akter its `markdown` fields reference that exist and are of a
+type the kind's `to` names, each once, unpinned. Any other reference is
+broken. A write MUST NOT be refused for a broken reference; a release is
+(`version.references`). `references` MUST be refused on any other kind of
 field.
 
 r[akt.field.verdict]
@@ -360,5 +388,5 @@ a batch rolled back.
 r[akt.change-event]
 Every akt revision MUST append a change event naming the tenant, the akt and
 the revision, numbered from 1 per tenant in the order the changes committed.
-Moves append change events too (`order.not-recorded`), numbered in the same
-sequence.
+Moves and releases append change events too (`order.not-recorded`,
+`version.history`), numbered in the same sequence.

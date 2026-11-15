@@ -58,7 +58,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - One named value an akt type defines, such as `severity`. Every field has a `field kind`.
 
 - `field kind`
-  - What values a field takes: `text`, `choice`, `choices`, `date`, `user`, `checkbox`, `reference`, `git`, `docker` or `attachment`, so far.
+  - What values a field takes: `text`, `choice`, `choices`, `date`, `user`, `checkbox`, `reference`, `git`, `docker`, `attachment`, `sections`, `verdict` or `markdown`, so far.
 
 - `person`
   - What Kuria knows about a subject to show them: the name and email recorded at their last browser sign-in.
@@ -91,6 +91,41 @@ Terms are introduced in dependency order: each definition only uses terms define
 
 - `change event`
   - The record that an akt changed, numbered per tenant: either a new akt revision, or a new rank. Change events are what subscriptions and catching up deliver.
+
+## Documents and versions
+
+- `markdown` (field kind)
+  - A field holding Markdown whose headings keep ids and whose links can name other akter: a document's body. Prefer it over `rich text`; the app edits it with a rich-text editor, but what it holds is Markdown.
+
+- `heading id`
+  - The id a heading in a `markdown` field keeps, written `## Installing {#install}`, unique within its akt. Given from the heading's text when it is first written, and kept when the text changes, so links to it survive renaming.
+
+- `reference`
+  - A link in a `markdown` field's text to an akt, written `kuria:<NUMBER>`, optionally to one of its versions (`@<n>`) and one of its headings (`#<heading id>`), such as `kuria:DOCS-1-D04@2#install`. Recorded as a link of the kind the field names. Not to be confused with the `reference` field kind, a link to something outside Kuria.
+
+- `deep link`
+  - A reference to a heading of another akt.
+
+- `broken reference`
+  - A reference to an akt that doesn't exist or the reader can't read, a version it doesn't have, or a heading it doesn't have.
+
+- `living version`
+  - An akt as it is now, which edits change; as opposed to its versions.
+
+- `version`
+  - One revision of an akt, named by releasing it: numbered 1, 2, … per akt, with an optional label, recording who released it and when and what each of its references meant then. It never changes. Not to be confused with an `akt type version`.
+
+- `release` (verb)
+  - To name the current revision of an akt as its next version. Prefer `version` for the result: `release` is also an akt type in the release-management example.
+
+- `pin` (of a version)
+  - What a version records for each of its references without a version: the target's latest version when it was released, else the target's revision then, so that the version's links keep their meaning.
+
+- `clone`
+  - A git working tree of a container and its members, made with `git clone kuria::<url>` through `git-remote-kuria`, the CLI's git remote helper.
+
+- `normal form`
+  - The files exactly as Kuria writes a container and its members to a clone. A push whose files aren't in normal form is refused; `kuria fmt` puts them in it.
 
 ## Links
 

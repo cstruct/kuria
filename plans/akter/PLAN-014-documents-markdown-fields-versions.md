@@ -278,16 +278,74 @@ Rendering on the server gives the app and the CLI the same PDF. typst is in Rust
 <!-- akt: PLAN-014-T01 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b3r
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocks PLAN-014-T02]
 title: "Spec documents: markdown fields, versions, references, PDFs and the git remote"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Write the spec PLAN-014 builds, and the terms it needs: `docs/spec/akter.md` for the `markdown` kind, heading ids and references; a new `docs/spec/versions.md`; `links.md` for links recorded from references; a `pdf` section; `cli.md` for `release`, `versions`, `pdf`, `--version` and `fmt`; a new `docs/spec/git.md` for the remote; and `frontend.md` for the editor, versions and PDFs. Add `markdown field`, `heading id`, `reference`, `living version`, `version` and `release` to `docs/nomenclature.md`. No implementation.
+The spec says what PLAN-014 builds. No implementation yet.
+
+**`docs/nomenclature.md`:** a "Documents and versions" section with these terms:
+- `markdown` (field kind), `heading id`, `reference`, `deep link`, `broken reference`;
+- `living version`, `version` (not an akt type version), `release` (the verb; `release` is also an example's akt type), `pin`;
+- `clone`, `normal form`.
+
+The field kinds list now includes `sections`, `verdict` and `markdown`.
+
+**`docs/spec/akter.md`:**
+- `akt.field.markdown`: CommonMark with GitHub's tables, task lists and strikethrough.
+  - Heading ids `{#id}`: given from the heading's text when missing, kept when the text changes, and unique within the akt.
+  - A value giving one id to two headings is refused.
+- `akt.field.markdown.references`: `kuria:<number>[@<version>][#<heading id>]`. A field's `references` link kind is kept as the akter referenced that exist and fit the kind's `to`. A write is never refused for a broken reference; a release is.
+- `akt.type.validation` checks `references` and `versions`. `akt.change-event` adds releases.
+
+**`docs/spec/links.md`:** `link.referenced`.
+- A references kind is kept by writes alone: `addLink` and `removeLink` refuse it.
+- Its changes are recorded in the source's revision only, never as a revision of the target, which may be final.
+- `link.revisions` excepts it.
+
+**`docs/spec/versions.md` (new):**
+- `version.declare`: `versions` with an optional `action`.
+- `version.release`: the current revision only (`STALE` otherwise), an optional label, also of a final akt.
+- `version.number`, `version.immutable`.
+- `version.references`: `BROKEN_REFERENCES` for a missing or unreadable akt, version or heading.
+- `version.pins`: the target's latest version, else its revision then.
+- `version.history`: in history, with a change event, not a revision.
+- `version.list`, `version.read` (references followed as pinned), `version.diff`.
+
+**`docs/spec/pdf.md` (new):**
+- `pdf.render`: body only, headings as bookmarks, references as links.
+- `pdf.route`: `GET /akter/{number}/pdf?field=&version=`, 404 as if absent.
+- `pdf.repeatable`.
+
+**`docs/spec/git.md` (new):**
+- `git.remote`: `kuria::<url>/<number>`.
+- `git.tree`: section directories, with members in no section at the root.
+- `git.history`: a commit per revision or batch, in change-event order; versions as `<number>/v<n>` tags.
+- `git.identity`: the same commits in every clone; a pushed commit's metadata kept with its revisions.
+- `git.fetch`.
+- `git.push`: a commit as a batch; moving a file is a move between sections; renaming a directory changes its section's title; removing a file removes the member.
+- `git.push.normal`, `git.push.fast-forward` (merge commits refused), `git.fmt`.
+
+**`docs/spec/authorization.md`:** `authz.release` requires edit, plus the type's `versions.action`.
+
+**`docs/spec/cli.md`:**
+- `cli.read`: `--version` for `cat`, `show` and `pdf`; `versions`; `diff`; `pdf`.
+- `cli.file.kinds`: a `markdown` field as a section, and a read-only `version` key.
+- `cli.write`: `release` and `fmt`.
+- `cli.local.versions` (new): versions in front matter, a release refused while uncommitted, versions read from git.
+- `cli.local.unsupported` adds `pdf`.
+
+**`docs/spec/frontend.md`:**
+- `app.fields`; `app.editor` (new: the rich-text editor's constructs, the unchanged round trip, the reference picker).
+- `app.references` (new), `app.versions` (new), `app.pdf` (new).
+
+`docs/spec/README.md` lists the new files. `mise run lint` passes, Tracey included.
 
 <!-- field: acceptance -->
 - `mise run lint` passes, Tracey included.

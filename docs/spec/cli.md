@@ -110,8 +110,16 @@ The client MUST offer:
   the container's order (`cli.members`);
 - `show <number>`: an akt's fields, its outcome, containers, members by
   column and type, or in their sections with each section's outcome,
-  links, and the transitions its state allows, and with `--history` its
-  revisions;
+  links, its versions, and the transitions its state allows, and with
+  `--history` its revisions;
+- `cat`, `show` and `pdf` with `--version <n>`: the akt at that version
+  (`version.read`);
+- `versions <number>`: its versions, latest first (`version.list`), and
+  `diff <number> <from> [<to>]`: what changed between two versions, or a
+  version and the living version, `markdown` fields line by line
+  (`version.diff`);
+- `pdf <number> [--field <key>] [--version <n>] -o <file>`: a `markdown`
+  field as a PDF (`pdf.route`), the type's only one if no field is named;
 - `history <number>`: its revisions, as the app's history says them
   (`app.history`);
 - `users` and `contacts`: whom values can name.
@@ -138,7 +146,10 @@ contacts; a `sections` field MUST be a section of its own whose body is
 the field's value as YAML, akter by number; and a `verdict` field MUST be
 a front-matter mapping of each assignee to their verdict, read-only, given
 with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
-key after `state`.
+key after `state`. A `markdown` field MUST be a section of its own whose
+body is its value. An akt read at a version MUST have a read-only
+`version` key after `revision`, and `apply` of it MUST be refused as
+`READ_ONLY`.
 
 r[cli.file.multi]
 A multi-akt file MUST hold its first akt as an akt file, and each other
@@ -192,6 +203,10 @@ The client MUST offer:
   verdict, or one for another assignee (`akt.field.verdict`);
 - `copy <number> [--only <number>…] [--in <container>…]`, answering the
   copy's number and the numbers of the copies of its members (`akt.copy`);
+- `release <number> [--label <label>]`: its current revision as its next
+  version, answering the version's number, or each broken reference
+  (`version.release`, `version.references`);
+- `fmt`, in a clone: its files in normal form (`git.fmt`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
@@ -303,10 +318,18 @@ A write in local mode MUST hold an exclusive lock on the directory for the
 whole change, so that two clients writing at once neither lose a change
 nor read one half made.
 
+r[cli.local.versions]
+In local mode an akt's versions MUST be kept in its akt file, as a
+read-only front-matter `versions` list of what `version.number` and
+`version.pins` record. A release MUST be refused as `UNCOMMITTED` while
+the akt has changes git hasn't committed, and reading an akt at a version
+MUST read it from the latest commit at which it had the version's
+revision (`cli.local.history`).
+
 r[cli.local.unsupported]
 In local mode `login`, `logout`, `users`, `contacts`, `draft`, attachments,
-`export` and `import` of bundles MUST be refused as `LOCAL_UNSUPPORTED`,
-saying why. `whoami` MUST answer the directory and who `@me` is.
+`pdf`, `export` and `import` of bundles MUST be refused as
+`LOCAL_UNSUPPORTED`, saying why. `whoami` MUST answer the directory and who `@me` is.
 
 r[cli.local.check]
 `kuria check --dir <path>` MUST check the whole directory as a server

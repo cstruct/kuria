@@ -35,6 +35,12 @@ Specs:
   `changes` subscription, catching up, and WebSocket connections
 - [attachments](attachments.md): uploading and reading files, their storage,
   and SBOMs
+- [versions](versions.md): releasing an akt's revision as a version that
+  never changes, the release's reference check, and reading versions
+- [PDFs](pdf.md): `markdown` fields as PDFs, of the living version or a
+  version
+- [the git remote](git.md): cloning a container and its members with git,
+  fetching, and pushing commits back as revisions
 - [people](people.md): the names Kuria shows for users, from sign-in
 - [contacts](contacts.md): people a tenant names before they are users,
   and linking them to the users they become

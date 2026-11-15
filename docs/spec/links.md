@@ -27,6 +27,13 @@ declares, when the target's akt type is one the kind's `to` names. It MUST
 refuse a link to the akt itself, and a link of the same kind between the
 same two akter that already exists, as `INVALID_LINK`.
 
+r[link.referenced]
+A link kind a `markdown` field names as its `references`
+(`akt.field.markdown.references`) MUST be kept by the akt's writes alone:
+`addLink` and `removeLink` MUST refuse it as `INVALID_LINK`. Its links
+changing MUST be recorded in the source's revision that changed them, and
+MUST NOT make a revision of the target, which may be final.
+
 r[link.pin]
 A link MAY pin a revision of its target. It MUST then be shown with the
 target's state and title as they were at that revision, and the revision's
@@ -37,7 +44,8 @@ r[link.remove]
 refuse one that doesn't exist as `NOT_FOUND`.
 
 r[link.revisions]
-Adding or removing a link MUST be recorded as one akt revision of each of
+Adding or removing a link, other than one a reference keeps
+(`link.referenced`), MUST be recorded as one akt revision of each of
 the two akter, as membership is (`container.revisions`), saying the kind,
 the other akt by number, and any pinned revision. It MUST NOT be refused
 as stale: like arranging members, it takes no revision from the caller.

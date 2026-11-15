@@ -47,8 +47,8 @@ multiline box, a choice or choices from the field's options, a date, a user
 or contact chosen by name, a checkbox that can be checked for someone else,
 a reference's URL and label, a git repository with a SHA or tag, a Docker
 repository with a digest and tag, an attachment uploaded or downloaded,
-several users or contacts for a `multiple` field, and each assignee's
-verdict.
+several users or contacts for a `multiple` field, each assignee's
+verdict, and a `markdown` field in a rich-text editor (`app.editor`).
 
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
@@ -58,6 +58,34 @@ r[app.markdown]
 The app MUST render multiline text as Markdown, as sanitized HTML: no
 scripts, styles, frames, forms or event handlers, and links only to
 `http`, `https` and `mailto` addresses, opened without the opener.
+
+r[app.editor]
+The app MUST edit a `markdown` field in a rich-text editor offering
+headings, paragraphs, emphasis, strikethrough, lists, task lists, quotes,
+code, tables, horizontal rules, links and references, and nothing the
+field's Markdown can't hold. Saving MUST give the field as Markdown, and
+opening and saving an unchanged value MUST change nothing, its heading ids
+included. Inserting a reference MUST let a person find an akt
+(`app.pickers`), then choose one of its headings or none, and its living
+version or one of its versions.
+
+r[app.references]
+The app MUST render a `markdown` field's headings with their ids as
+anchors, and each reference as a link to the akt's page, at its version if
+it names one or a version read pins it (`version.read`), and to its
+heading if it names one. A broken reference MUST be shown as broken,
+saying why.
+
+r[app.versions]
+An akt's page MUST list its versions, if its type declares them, and let a
+person release its current revision with an optional label, showing each
+broken reference a refusal names. It MUST let a person read the akt at a
+version, saying which and that it is not the living version, and compare
+two versions, or a version and the living version (`version.diff`).
+
+r[app.pdf]
+The app MUST offer a `markdown` field as a PDF, of the living version or
+of the version being read (`pdf.route`).
 
 r[app.transitions]
 The app MUST offer the transitions an akt's state allows, asking for the
