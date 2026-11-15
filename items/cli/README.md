@@ -116,8 +116,9 @@ type.
     kuria::<url>/<container>` builds the container's history from its
     revisions, the same commits in every clone, asking for many akter to a
     request and keeping each file it read in `.git/kuria/`, so a fetch reads
-    only new revisions; `git push` applies each commit as a batch that keeps
-    the commit;
+    only new revisions; embedded images' pictures are files in
+    `attachments/`, linked relatively ([`src/pictures.rs`](src/pictures.rs));
+    `git push` applies each commit as a batch that keeps the commit;
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
     <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;

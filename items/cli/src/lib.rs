@@ -38,6 +38,7 @@ pub mod local;
 pub mod md;
 pub mod model;
 pub mod output;
+pub mod pictures;
 pub mod profile;
 pub mod reads;
 pub mod remote;

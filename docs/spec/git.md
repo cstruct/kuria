@@ -41,6 +41,18 @@ MUST build them only from what Kuria answers. A commit pushed to Kuria
 was pushed: Kuria MUST keep its author, committer, times, message and
 parent with the revisions it made.
 
+r[git.pictures]
+A clone MUST hold, as `attachments/<number>.<extension>`, the picture of
+each image its files embed (`akt.field.markdown.images`) that names no
+version or heading and isn't one of the clone's own files, as Kuria has
+it at each commit, and each such embedded image MUST be linked to its
+picture by a path relative to its file. An image's revisions MUST be
+commits of the history too, so every clone has the same commits. A push
+MUST turn such links back into `kuria:<number>`, and MUST be refused unless
+its pictures are exactly those of the images it embeds, as Kuria has
+them: pictures are uploaded in Kuria. `kuria fmt` MUST write those
+pictures, and remove any other.
+
 r[git.fetch]
 A fetch MUST build the container's history from Kuria's revisions of it
 and its members (`git.history`), so that the commits the clone has stay

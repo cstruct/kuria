@@ -23,6 +23,7 @@ import { seeded } from '../support/stack.ts';
 // r[verify git.push.fast-forward]
 // r[verify git.push.normal]
 // r[verify git.fmt]
+// r[verify git.pictures]
 test('a document index is cloned, pushed to and rebased with git', async () => {
 	test.setTimeout(240_000);
 	const stamp = Date.now();
@@ -52,7 +53,14 @@ test('a document index is cloned, pushed to and rebased with git', async () => {
 		});
 
 	const index = await create('document_index', { title: `Handbook ${stamp}` });
-	const setup = await create('document', { title: 'Setup', body: '# Install\n\nRun it.\n' }, [index]);
+	const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8"/></svg>';
+	const logo = await create('image', {
+		title: 'Logo',
+		file: (await admin.upload('logo.svg', 'image/svg+xml', svg)).id
+	});
+	const setup = await create('document', { title: 'Setup', body: `# Install\n\n![Logo](kuria:${logo})\n\nRun it.\n` }, [
+		index
+	]);
 	const guide = await create('document', { title: 'Guide', body: 'Start here.\n' }, [index]);
 	await edit(index, { folders: [{ title: 'Guides', items: [setup] }, guide] });
 
@@ -63,7 +71,16 @@ test('a document index is cloned, pushed to and rebased with git', async () => {
 	const a = join(cli.dir, 'a');
 	const b = join(cli.dir, 'b');
 	const files = (await git(a, 'ls-files')).split('\n');
-	expect(files).toEqual([`${guide}-guide.md`, `${index}-handbook-${stamp}.md`, `guides/${setup}-setup.md`]);
+	expect(files).toEqual([
+		`${guide}-guide.md`,
+		`${index}-handbook-${stamp}.md`,
+		`attachments/${logo}.svg`,
+		`guides/${setup}-setup.md`
+	]);
+	// The picture is in the clone, and the setup links to it relatively.
+	expect(readFileSync(join(a, 'attachments', `${logo}.svg`), 'utf8')).toBe(svg);
+	const setupFile = join(a, 'guides', `${setup}-setup.md`);
+	expect(readFileSync(setupFile, 'utf8')).toContain(`![Logo](../attachments/${logo}.svg)`);
 	const guideFile = join(a, `${guide}-guide.md`);
 	const text = readFileSync(guideFile, 'utf8');
 	expect(text).toContain(`number: ${guide}\ntype: document\nstate: draft\n`);
@@ -78,6 +95,25 @@ test('a document index is cloned, pushed to and rebased with git', async () => {
 	await git(b, 'pull', '-q', '--rebase');
 	expect(await git(b, 'rev-parse', 'HEAD')).toBe(await git(a, 'rev-parse', 'HEAD'));
 	expect(await git(b, 'log', '-1', '--format=%an %s')).toBe('Ada Point to the setup');
+
+	// A push keeps the image a reference in Kuria; a changed picture is refused.
+	writeFileSync(setupFile, readFileSync(setupFile, 'utf8').replace('Run it.', 'Run it now.'));
+	await git(a, 'commit', '-qam', 'Say when');
+	await git(a, 'push', '-q', 'origin', 'main');
+	expect((await read(setup)).fields.find((f) => f?.markdown)?.markdown).toContain(
+		`![Logo](kuria:${logo})\n\nRun it now.`
+	);
+	writeFileSync(join(a, 'attachments', `${logo}.svg`), svg.replace('8"/>', '4"/>'));
+	await git(a, 'commit', '-qam', 'Another picture');
+	const picture = await run('git', ['push', '-q', 'origin', 'main'], a);
+	expect(picture.code).not.toBe(0);
+	expect(picture.stderr).toContain('pictures are images in Kuria');
+	// `kuria fmt` puts it back as Kuria has it.
+	const restored = await run('kuria', ['fmt'], a);
+	expect(restored.code, restored.stderr).toBe(0);
+	expect(readFileSync(join(a, 'attachments', `${logo}.svg`), 'utf8')).toBe(svg);
+	await git(a, 'reset', '-q', '--hard', 'HEAD~1');
+	await git(b, 'pull', '-q', '--rebase');
 
 	// Changed in Kuria meanwhile: refused until rebased onto it.
 	await edit(setup, { body: '# Install {#install}\n\nRun it twice.\n' });

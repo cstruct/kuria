@@ -366,9 +366,9 @@ Lint, 392 Rust, 92 app and all 36 browser tests pass.
 <!-- akt: PLAN-015-G01 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b4K
-state: open
+state: closed
 in: [PLAN-015]
 links: [Resolved by PLAN-015-T09]
 title: Images and diagrams in local mode and clones
@@ -376,6 +376,9 @@ title: Images and diagrams in local mode and clones
 
 <!-- field: description -->
 Local mode refuses attachments (`cli.local.unsupported`), so a directory can't hold image akter, and a local release of a document embedding one finds the reference broken. Local mode also has no typst, so it can't render or check diagram blocks; they are checked when the server takes them, by apply or push. Clones show both as text. Should local mode learn attachments, or treat images and diagrams as references it can't check?
+
+<!-- field: resolution -->
+Resolved for clones (T09): pictures are files in `attachments/`, linked relatively, kept in step with Kuria, and refused if changed in a push. Diagrams stay text. Akt directories (`kuria init`, `export --to-dir`) still refuse attachments, so a local release of a document embedding an image finds it broken.
 
 <!-- akt: PLAN-015-G02 -->
 ---
@@ -420,18 +423,22 @@ Tests: `tests/rendering.rs` (a diagram and a PDF with a file rendered by the wor
 <!-- akt: PLAN-015-T09 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b4N
-state: todo
+state: done
 in: [PLAN-015]
 links: [Resolves PLAN-015-G01]
 title: "Pictures in clones, linked relatively"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 A clone holds the pictures of the images its documents embed (PLAN-015-G01).
 
-- Each picture is a file `attachments/<number>.<ext>` in the clone, and an embedded image's link is relative to its file, `![alt](../attachments/IMG-1.png)`, so editors and git hosts show it.
-- The history follows the images too: an image's revisions are commits that change its file, so every clone has the same commits.
-- A push turns relative links back into `kuria:` references, and refuses a change to `attachments/`, since images are uploaded in Kuria. `kuria fmt` writes links as Kuria does.
-- Diagrams stay text. Akt directories (`kuria init`, `export --to-dir`) still refuse attachments.
+- **Pictures:** each image a clone's files embed, naming no version or heading and not one of the clone's own files, is a file `attachments/<number>.<ext>` holding its picture as Kuria had it at each commit; each embedded image is linked to it by a path relative to its file (`pictures.rs`: `path_of`, `relative`, `resolve`, `linked_relatively`, `linked_to_kuria`; the engine's `image_destinations` finds where links are written).
+- **History:** the builder reads the files, finds the images they embed, adds those images' revisions as commits, then reads each image's picture at each revision it is shown at (`PICTURE`, kept in `.git/kuria/`), and its bytes once (`.git/kuria/pictures/<id>`). Every clone builds the same commits; the browser test's fresh clone matches one that fetched over time.
+- **Push and fmt:** a push turns relative links back into `kuria:`, and is refused unless its pictures are exactly those of the images it embeds, as Kuria has them now: git sends the whole tree on a first push, so a picture in it isn't a change unless it differs. `normal_tree` answers the pictures too; `kuria fmt` writes them, fetching those of images newly embedded, and removes others.
+- Diagrams stay their code. Akt directories still refuse attachments.
+- **Spec:** `git.pictures`; `picture` in the nomenclature. Docs: the documents example's README, the CLI README.
+
+Tests: `pictures.rs` unit tests (links both ways, nested and at the root, paths that aren't pictures), the engine's `finds_where_image_destinations_are_written`, `a_commit_holds_its_pictures_bytes`, and `git-remote.spec.ts` (an SVG image embedded in a nested document: in the clone with a relative link, a push keeping `kuria:` in Kuria, a changed picture refused, `kuria fmt` putting it back, and a fresh clone with the same commits). Lint, 399 Rust, 92 app and all 36 browser tests pass.

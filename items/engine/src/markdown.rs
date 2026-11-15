@@ -155,6 +155,26 @@ pub fn references(text: &str) -> Vec<Reference> {
     found
 }
 
+/// Every inline image's destination in `text`, as written, with where it
+/// is in `text`, in order: so that a clone can write it otherwise
+/// (`git.pictures`).
+#[must_use]
+pub fn image_destinations(text: &str) -> Vec<(Range<usize>, String)> {
+    let mut found = Vec::new();
+    for (event, range) in Parser::new_ext(text, options()).into_offset_iter() {
+        let Event::Start(Tag::Image { dest_url, .. }) = event else {
+            continue;
+        };
+        let source = &text[range.clone()];
+        let written = format!("]({dest_url}");
+        if let Some(at) = source.rfind(&written) {
+            let start = range.start + at + 2;
+            found.push((start..start + dest_url.len(), dest_url.to_string()));
+        }
+    }
+    found
+}
+
 /// The images `text` embeds, `![alt](kuria:…)`, in order, each once
 /// (`akt.field.markdown.images`).
 // r[impl akt.field.markdown.images]
@@ -577,5 +597,17 @@ mod tests {
             diagrams(text),
             ["#diagram(node((0, 0), [A]))\n", "#canvas({})\n"]
         );
+    }
+
+    #[test]
+    fn finds_where_image_destinations_are_written() {
+        let text = "A ![chart](kuria:IMG-1) and ![b [x]](../a/b.png \"t\") and [link](kuria:D-1).";
+        let found = image_destinations(text);
+        assert_eq!(found.len(), 2);
+        for (range, destination) in &found {
+            assert_eq!(&text[range.clone()], destination);
+        }
+        assert_eq!(found[0].1, "kuria:IMG-1");
+        assert_eq!(found[1].1, "../a/b.png");
     }
 }

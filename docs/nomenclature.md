@@ -121,6 +121,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `diagram block`
   - A fenced code block with the language `diagram`, in a `markdown` field that says `"diagrams": true`: typst markup drawing a fletcher diagram or a cetz plot, rendered to SVG when the field is written.
 
+- `picture` (in a clone)
+  - An embedded image's picture as a file of a clone, `attachments/IMG-1.png`, which the document links to relatively. Pictures are uploaded in Kuria, never pushed.
+
 - `bundled package`
   - A typst package vendored in Kuria, unmodified with its license, the only kind a diagram or a PDF can import: fletcher, cetz and cetz-plot.
 

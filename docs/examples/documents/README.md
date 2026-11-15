@@ -110,6 +110,14 @@ Kuria writes them: `kuria fmt` gives headings their ids and puts each file
 where its index's folders say. Move a document by editing the index's
 `folders` section; a new document is made with `kuria new`, then fetched.
 
+The pictures of the images the documents embed are in `attachments/`, as
+`attachments/IMG-1.png`, and a document links to its pictures relatively,
+`![The flow at a glance](../attachments/IMG-1.png)`, so editors and git
+hosts show them. A push turns those links back into `kuria:IMG-1`. Pictures
+are uploaded in Kuria: a push that changes one is refused, and `kuria fmt`
+fetches the pictures of images newly embedded and puts back any changed.
+Diagrams stay as their code.
+
 ## Konklav roles
 
 - **Writer:** `kuria:akter:read`, and `kuria:akter:create`,

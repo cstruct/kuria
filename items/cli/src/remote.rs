@@ -67,6 +67,8 @@ pub struct Built {
     pub message: String,
     /// Path to text.
     pub tree: BTreeMap<String, String>,
+    /// Each picture's path, to the attachment it holds (`git.pictures`).
+    pub pictures: BTreeMap<String, String>,
     /// The akter's revisions as of it, to place versions' tags.
     revisions: HashMap<String, i64>,
 }
@@ -78,6 +80,8 @@ pub struct History {
     pub tags: Vec<(String, usize)>,
     /// Each akt's latest revision: what a push checks is unchanged.
     pub seen: BTreeMap<String, i64>,
+    /// Each picture's bytes, by attachment.
+    pub bytes: HashMap<String, Vec<u8>>,
 }
 
 /// An akt at a revision, as a clone holds it: its file, its title, and its
@@ -99,6 +103,10 @@ struct Kept {
     client: String,
     url: String,
     files: BTreeMap<String, Filed>,
+    /// Each image's picture at each revision read, as its attachment and
+    /// media type, `None` if it had none.
+    #[serde(default)]
+    pictures: BTreeMap<String, Option<(String, String)>>,
 }
 
 impl Kept {
@@ -116,6 +124,7 @@ impl Kept {
                 client: env!("CARGO_PKG_VERSION").to_owned(),
                 url: url.to_owned(),
                 files: BTreeMap::new(),
+                pictures: BTreeMap::new(),
             })
     }
 
@@ -138,6 +147,22 @@ fn key(number: &str, revision: i64) -> String {
 const REVISIONS: &str =
     "number revisions { revision createdAt reason commit membership by { id name email } }
   versions { number revision }";
+
+const PICTURE: &str = "number type { presentation { image } } fields { ... on AttachmentValue { field attachment { id mediaType } } }";
+
+/// The picture an akt shows, from what `akt { PICTURE }` answered: its
+/// attachment and media type, if its type names one and it holds one.
+fn picture_in(akt: &Json) -> Option<(String, String)> {
+    let field = akt["type"]["presentation"]["image"].as_str()?;
+    akt["fields"].as_array()?.iter().find_map(|f| {
+        (f["field"] == field).then(|| {
+            Some((
+                f["attachment"]["id"].as_str()?.to_owned(),
+                f["attachment"]["mediaType"].as_str()?.to_owned(),
+            ))
+        })?
+    })
+}
 
 const AT_REVISION: &str = "number title state { key } type { ...Shape } fields { ...Values }";
 
@@ -235,11 +260,8 @@ fn filed(number: &str, akt: &Json) -> Result<Filed, CliError> {
 type Moment = (HashMap<String, i64>, Vec<String>);
 
 impl Remote {
-    /// Each of `asked`, an akt by number, at a revision if one is given,
-    /// with `body` selected and `fragments` defined: several to a request,
-    /// splitting one Kuria finds too big. Answers
-    /// them in order; an akt that isn't there is refused as `NOT_FOUND`.
-    // r[impl git.fetch.batched]
+    /// Each of `asked`, as [`Remote::found`] answers it, refusing one that
+    /// isn't there as `NOT_FOUND`.
     async fn akter(
         &self,
         asked: &[(String, Option<i64>)],
@@ -247,6 +269,30 @@ impl Remote {
         fragments: &str,
         per_request: usize,
     ) -> Result<Vec<Json>, CliError> {
+        self.found(asked, body, fragments, per_request)
+            .await?
+            .into_iter()
+            .zip(asked)
+            .map(|(akt, (number, _))| {
+                akt.ok_or_else(|| {
+                    CliError::from_server("NOT_FOUND", format!("No akt `{number}`"), None)
+                })
+            })
+            .collect()
+    }
+
+    /// Each of `asked`, an akt by number, at a revision if one is given,
+    /// with `body` selected and `fragments` defined: several to a request,
+    /// splitting one Kuria finds too big. Answers them in order, `None` for
+    /// one that isn't there or the subject may not read.
+    // r[impl git.fetch.batched]
+    async fn found(
+        &self,
+        asked: &[(String, Option<i64>)],
+        body: &str,
+        fragments: &str,
+        per_request: usize,
+    ) -> Result<Vec<Option<Json>>, CliError> {
         let mut answers = Vec::with_capacity(asked.len());
         let mut pending: Vec<&[(String, Option<i64>)]> =
             asked.chunks(per_request.max(1)).rev().collect();
@@ -274,16 +320,9 @@ impl Remote {
             );
             match self.session.graphql(&query, Json::Object(variables)).await {
                 Ok(data) => {
-                    for (i, (number, _)) in chunk.iter().enumerate() {
+                    for i in 0..chunk.len() {
                         let akt = &data[format!("a{i}")];
-                        if akt.is_null() {
-                            return Err(CliError::from_server(
-                                "NOT_FOUND",
-                                format!("No akt `{number}`"),
-                                None,
-                            ));
-                        }
-                        answers.push(akt.clone());
+                        answers.push((!akt.is_null()).then(|| akt.clone()));
                     }
                 }
                 Err(e) if chunk.len() > 1 && too_big(&e) => {
@@ -314,11 +353,14 @@ impl Remote {
     }
 
     /// The container's history, built from Kuria's revisions, the same way
-    /// for every clone (`git.history`, `git.identity`). Files the clone
-    /// kept from an earlier fetch aren't read again (`git.fetch.cache`).
+    /// for every clone (`git.history`, `git.identity`), with the pictures of
+    /// the images its documents embed, whose revisions are commits too
+    /// (`git.pictures`). Files and pictures the clone kept from an earlier
+    /// fetch aren't read again (`git.fetch.cache`).
     // r[impl git.history]
     // r[impl git.identity]
     // r[impl git.fetch.cache]
+    // r[impl git.pictures]
     pub async fn history(&self) -> Result<History, CliError> {
         let mut read = self
             .revisions_of(std::slice::from_ref(&self.number))
@@ -338,66 +380,56 @@ impl Remote {
             events.extend(e);
             versions.push((member.clone(), v));
         }
+        let kept_at = Kept::path(&self.name);
+        let mut kept = Kept::read(&kept_at, &self.session.url);
+        events.sort_by(|a, b| (a.at, &a.number, a.revision).cmp(&(b.at, &b.number, b.revision)));
+        let moments = self.moments(&grouped(events.clone()));
+        self.read_files(&moments, &mut kept).await?;
+
+        // The images the documents embed, and their revisions as commits.
+        let mut images: Vec<String> = Vec::new();
+        for text in self.texts(&moments, &kept) {
+            for number in crate::pictures::embedded(text) {
+                if number != self.number && !members.contains(&number) && !images.contains(&number)
+                {
+                    images.push(number);
+                }
+            }
+        }
+        let asked: Vec<(String, Option<i64>)> = images.iter().map(|n| (n.clone(), None)).collect();
+        let found = self
+            .found(&asked, REVISIONS, "", REVISIONS_PER_REQUEST)
+            .await?;
+        for (number, akt) in images.iter().zip(found) {
+            if let Some(akt) = akt {
+                events.extend(events_of(number, &akt).0);
+            }
+        }
         events.sort_by(|a, b| (a.at, &a.number, a.revision).cmp(&(b.at, &b.number, b.revision)));
         let groups = grouped(events);
         let moments = self.moments(&groups);
-
-        let kept_at = Kept::path(&self.name);
-        let mut kept = Kept::read(&kept_at, &self.session.url);
-        let mut missing: Vec<(String, Option<i64>)> = Vec::new();
-        for (revisions, present) in &moments {
-            for number in std::iter::once(&self.number).chain(present) {
-                if let Some(&r) = revisions.get(number) {
-                    let wanted = (number.clone(), Some(r));
-                    if !kept.files.contains_key(&key(number, r)) && !missing.contains(&wanted) {
-                        missing.push(wanted);
-                    }
-                }
-            }
-        }
-        if !missing.is_empty() {
-            let fragments = format!("{SHAPE} {VALUES} {SOMEONE}");
-            let answers = self
-                .akter(&missing, AT_REVISION, &fragments, FILES_PER_REQUEST)
-                .await?;
-            for ((number, revision), akt) in missing.iter().zip(&answers) {
-                kept.files.insert(
-                    key(number, revision.unwrap_or_default()),
-                    filed(number, akt)?,
-                );
-            }
-            kept.write(&kept_at);
-        }
+        self.read_files(&moments, &mut kept).await?;
+        self.read_pictures(&moments, &images, &mut kept).await?;
+        kept.write(&kept_at);
 
         let mut commits = Vec::new();
-        for (group, (revisions, present)) in groups.iter().zip(moments) {
-            let file = |n: &str| revisions.get(n).and_then(|r| kept.files.get(&key(n, *r)));
-            let tree = match file(&self.number) {
-                Some(container) => {
-                    let placed: Vec<(String, String, Option<String>)> = present
-                        .iter()
-                        .filter_map(|n| {
-                            file(n).map(|f| (n.clone(), f.text.clone(), f.title.clone()))
-                        })
-                        .collect();
-                    tree_of(
-                        &self.number,
-                        &container.text,
-                        container.title.as_deref(),
-                        container.sections.as_ref(),
-                        &placed,
-                    )
-                }
-                None => BTreeMap::new(),
-            };
+        for (group, moment) in groups.iter().zip(moments) {
+            let (tree, pictures) = self.commit_tree(&moment, &images, &kept);
             let (author, committer, message) = metadata(group);
             commits.push(Built {
                 author,
                 committer,
                 message,
                 tree,
-                revisions,
+                pictures,
+                revisions: moment.0,
             });
+        }
+        let mut bytes = HashMap::new();
+        for id in commits.iter().flat_map(|c| c.pictures.values()) {
+            if !bytes.contains_key(id) {
+                bytes.insert(id.clone(), self.picture_bytes(id).await?);
+            }
         }
         let tags = tags_of(&versions, &commits);
         let seen = commits
@@ -408,7 +440,205 @@ impl Remote {
             commits,
             tags,
             seen,
+            bytes,
         })
+    }
+
+    /// Reads, into `kept`, each file `moments` show that it lacks.
+    async fn read_files(&self, moments: &[Moment], kept: &mut Kept) -> Result<(), CliError> {
+        let mut missing: Vec<(String, Option<i64>)> = Vec::new();
+        for (revisions, present) in moments {
+            for number in std::iter::once(&self.number).chain(present) {
+                if let Some(&r) = revisions.get(number) {
+                    let wanted = (number.clone(), Some(r));
+                    if !kept.files.contains_key(&key(number, r)) && !missing.contains(&wanted) {
+                        missing.push(wanted);
+                    }
+                }
+            }
+        }
+        if missing.is_empty() {
+            return Ok(());
+        }
+        let fragments = format!("{SHAPE} {VALUES} {SOMEONE}");
+        let answers = self
+            .akter(&missing, AT_REVISION, &fragments, FILES_PER_REQUEST)
+            .await?;
+        for ((number, revision), akt) in missing.iter().zip(&answers) {
+            kept.files.insert(
+                key(number, revision.unwrap_or_default()),
+                filed(number, akt)?,
+            );
+        }
+        Ok(())
+    }
+
+    /// The text of every file `moments` show, as Kuria keeps it.
+    fn texts<'k>(&self, moments: &[Moment], kept: &'k Kept) -> Vec<&'k str> {
+        let mut texts = Vec::new();
+        for (revisions, present) in moments {
+            for number in std::iter::once(&self.number).chain(present) {
+                if let Some(f) = revisions
+                    .get(number)
+                    .and_then(|r| kept.files.get(&key(number, *r)))
+                {
+                    texts.push(f.text.as_str());
+                }
+            }
+        }
+        texts
+    }
+
+    /// Reads, into `kept`, the picture of each of `images` at each revision
+    /// `moments` show it at, that it lacks.
+    async fn read_pictures(
+        &self,
+        moments: &[Moment],
+        images: &[String],
+        kept: &mut Kept,
+    ) -> Result<(), CliError> {
+        let mut missing: Vec<(String, Option<i64>)> = Vec::new();
+        for (revisions, _) in moments {
+            for number in images {
+                if let Some(&r) = revisions.get(number) {
+                    let wanted = (number.clone(), Some(r));
+                    if !kept.pictures.contains_key(&key(number, r)) && !missing.contains(&wanted) {
+                        missing.push(wanted);
+                    }
+                }
+            }
+        }
+        let answers = self
+            .found(&missing, PICTURE, "", REVISIONS_PER_REQUEST)
+            .await?;
+        for ((number, revision), akt) in missing.iter().zip(answers) {
+            kept.pictures.insert(
+                key(number, revision.unwrap_or_default()),
+                akt.as_ref().and_then(picture_in),
+            );
+        }
+        Ok(())
+    }
+
+    /// A commit's tree as of `moment`: each file where its container's
+    /// sections put it, its embedded images linked to their pictures, and
+    /// the pictures' paths, to their attachments.
+    fn commit_tree(
+        &self,
+        (revisions, present): &Moment,
+        images: &[String],
+        kept: &Kept,
+    ) -> (BTreeMap<String, String>, BTreeMap<String, String>) {
+        let file = |n: &str| revisions.get(n).and_then(|r| kept.files.get(&key(n, *r)));
+        let Some(container) = file(&self.number) else {
+            return (BTreeMap::new(), BTreeMap::new());
+        };
+        let placed: Vec<(String, String, Option<String>)> = present
+            .iter()
+            .filter_map(|n| file(n).map(|f| (n.clone(), f.text.clone(), f.title.clone())))
+            .collect();
+        let tree = tree_of(
+            &self.number,
+            &container.text,
+            container.title.as_deref(),
+            container.sections.as_ref(),
+            &placed,
+        );
+        let embedded: Vec<String> = tree
+            .values()
+            .flat_map(|t| crate::pictures::embedded(t))
+            .collect();
+        let mut links = HashMap::new();
+        let mut pictures = BTreeMap::new();
+        for number in images.iter().filter(|n| embedded.contains(n)) {
+            let held = revisions
+                .get(number)
+                .and_then(|r| kept.pictures.get(&key(number, *r)))
+                .cloned()
+                .flatten();
+            if let Some((id, media_type)) = held {
+                let path = crate::pictures::path_of(number, &media_type);
+                links.insert(number.clone(), path.clone());
+                pictures.insert(path, id);
+            }
+        }
+        let tree = tree
+            .into_iter()
+            .map(|(path, text)| {
+                let linked = crate::pictures::linked_relatively(&text, &path, &links);
+                (path, linked)
+            })
+            .collect();
+        (tree, pictures)
+    }
+
+    /// The pictures of the images the files of `kept`, as Kuria keeps them,
+    /// embed, as Kuria has them now: where each image's picture goes, by
+    /// number, and each picture's path, to its bytes. An image that is one
+    /// of the clone's own files is a file, not a picture.
+    async fn pictures_now(
+        &self,
+        kept: &BTreeMap<String, String>,
+    ) -> Result<(HashMap<String, String>, BTreeMap<String, Vec<u8>>), CliError> {
+        let files: Vec<String> = kept
+            .values()
+            .filter_map(|t| read_file(t).ok().map(|(n, _)| n))
+            .collect();
+        let mut numbers: Vec<String> = Vec::new();
+        for text in kept.values() {
+            for number in crate::pictures::embedded(text) {
+                if !files.contains(&number) && !numbers.contains(&number) {
+                    numbers.push(number);
+                }
+            }
+        }
+        let asked: Vec<(String, Option<i64>)> = numbers.iter().map(|n| (n.clone(), None)).collect();
+        let found = self
+            .found(&asked, PICTURE, "", REVISIONS_PER_REQUEST)
+            .await?;
+        let mut links = HashMap::new();
+        let mut pictures = BTreeMap::new();
+        for (number, akt) in numbers.iter().zip(found) {
+            if let Some((id, media_type)) = akt.as_ref().and_then(picture_in) {
+                let path = crate::pictures::path_of(number, &media_type);
+                pictures.insert(path.clone(), self.picture_bytes(&id).await?);
+                links.insert(number.clone(), path);
+            }
+        }
+        Ok((links, pictures))
+    }
+
+    /// The bytes of the attachment `id`, from the clone's git directory if
+    /// it kept them, else from Kuria, keeping them there.
+    async fn picture_bytes(&self, id: &str) -> Result<Vec<u8>, CliError> {
+        let path = seen_path(&self.name).with_file_name("pictures").join(id);
+        if let Ok(bytes) = std::fs::read(&path) {
+            return Ok(bytes);
+        }
+        let url = format!("{}/attachments/{id}", self.session.url);
+        let response = self
+            .session
+            .http
+            .send(
+                reqwest::Method::GET,
+                &url,
+                Some(self.session.access_token()),
+                &crate::http::Body::Empty,
+            )
+            .await?;
+        if !response.status().is_success() {
+            return Err(CliError::unavailable(format!(
+                "Kuria answered {} for the picture {id}",
+                response.status()
+            )));
+        }
+        let bytes = response.bytes().await?.to_vec();
+        if let Some(dir) = path.parent()
+            && std::fs::create_dir_all(dir).is_ok()
+        {
+            let _ = std::fs::write(&path, &bytes);
+        }
+        Ok(bytes)
     }
 
     /// The akter's revisions, and the container's members, as of each of
@@ -577,6 +807,13 @@ pub fn fast_import(history: &History, branch: &str) -> Vec<u8> {
             out.extend_from_slice(format!("M 100644 inline {path}\n").as_bytes());
             data(&mut out, text.as_bytes());
         }
+        for (path, id) in &c.pictures {
+            out.extend_from_slice(format!("M 100644 inline {path}\n").as_bytes());
+            data(
+                &mut out,
+                history.bytes.get(id).map_or(&[][..], Vec::as_slice),
+            );
+        }
         out.push(b'\n');
     }
     for (tag, i) in &history.tags {
@@ -714,16 +951,46 @@ fn git(args: &[&str]) -> Result<String, CliError> {
     }
 }
 
-/// The tree of `commit`: path to text.
+/// The tree of `commit`: path to text, its pictures left out.
 fn tree_at(commit: &str) -> Result<BTreeMap<String, String>, CliError> {
     let mut tree = BTreeMap::new();
-    for path in git(&["ls-tree", "-r", "--name-only", commit])?.lines() {
+    for path in git(&["ls-tree", "-r", "--name-only", commit])?
+        .lines()
+        .filter(|p| !is_picture(p))
+    {
         tree.insert(
             path.to_owned(),
             git(&["show", &format!("{commit}:{path}")])?,
         );
     }
     Ok(tree)
+}
+
+/// The pictures of `commit`, by path, as text, as git shows them.
+fn pictures_at(commit: &str) -> Result<BTreeMap<String, String>, CliError> {
+    let mut pictures = BTreeMap::new();
+    for path in git(&["ls-tree", "-r", "--name-only", commit])?
+        .lines()
+        .filter(|p| is_picture(p))
+    {
+        pictures.insert(
+            path.to_owned(),
+            git(&["show", &format!("{commit}:{path}")])?,
+        );
+    }
+    Ok(pictures)
+}
+
+/// Whether `path` is in a clone's pictures (`git.pictures`).
+fn is_picture(path: &str) -> bool {
+    path.starts_with(&format!("{}/", crate::pictures::DIRECTORY))
+}
+
+/// `tree`'s files with their images linked to Kuria, as Kuria keeps them.
+fn as_kept(tree: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+    tree.iter()
+        .map(|(path, text)| (path.clone(), crate::pictures::linked_to_kuria(text, path)))
+        .collect()
 }
 
 /// Where the helper keeps what it saw of Kuria at its last fetch.
@@ -795,15 +1062,18 @@ impl Remote {
     }
 
     /// The tree as Kuria would write it, from `tree`'s files: each in normal
-    /// form, where the container's `sections` puts it (`git.fmt`).
+    /// form, where the container's `sections` puts it, its embedded images
+    /// linked to their pictures; and those pictures, by path (`git.fmt`,
+    /// `git.pictures`).
     pub async fn normal_tree(
         &self,
         tree: &BTreeMap<String, String>,
-    ) -> Result<BTreeMap<String, String>, CliError> {
+    ) -> Result<(BTreeMap<String, String>, BTreeMap<String, Vec<u8>>), CliError> {
+        let (links, pictures) = self.pictures_now(&as_kept(tree)).await?;
         let mut shapes = HashMap::new();
         let mut container = None;
         let mut members = Vec::new();
-        for text in tree.values() {
+        for text in as_kept(tree).values() {
             let (number, parsed) = read_file(text)?;
             let key = parsed.text("type").unwrap_or_default();
             let shape = self.shape(&key, &mut shapes).await?;
@@ -828,13 +1098,20 @@ impl Remote {
                 format!("the clone has no file of {}", self.number),
             ));
         };
-        Ok(tree_of(
+        let texts = tree_of(
             &self.number,
             &text,
             title.as_deref(),
             sections.as_ref(),
             &members,
-        ))
+        )
+        .into_iter()
+        .map(|(path, text)| {
+            let linked = crate::pictures::linked_relatively(&text, &path, &links);
+            (path, linked)
+        })
+        .collect();
+        Ok((texts, pictures))
     }
 
     /// Applies each pushed commit as one batch (`git.push`), refusing one
@@ -852,6 +1129,7 @@ impl Remote {
             return Err(refuse("Kuria changed since your last fetch: not a fast-forward; `git pull --rebase` and push again".to_owned()));
         }
         let mut tree = tree_at(tip)?;
+        let mut pictures = pictures_at(tip)?;
         for (i, commit) in commits.iter().enumerate() {
             if commit.merges > 0 {
                 return Err(refuse(
@@ -870,14 +1148,30 @@ impl Remote {
             let before = tree.clone();
             if commit.deleteall {
                 tree.clear();
+                pictures.clear();
             }
             for (path, text) in &commit.changes {
+                let files = if is_picture(path) {
+                    &mut pictures
+                } else {
+                    &mut tree
+                };
                 match text {
-                    Some(text) => tree.insert(path.clone(), text.clone()),
-                    None => tree.remove(path),
+                    Some(text) => files.insert(path.clone(), text.clone()),
+                    None => files.remove(path),
                 };
             }
-            let normal = self.normal_tree(&tree).await?;
+            let (normal, expected) = self.normal_tree(&tree).await?;
+            // r[impl git.pictures]
+            let as_text: BTreeMap<String, String> = expected
+                .iter()
+                .map(|(p, b)| (p.clone(), String::from_utf8_lossy(b).into_owned()))
+                .collect();
+            if as_text != pictures {
+                return Err(refuse(
+                    "a commit's pictures aren't the pictures of the images it embeds, as Kuria has them: pictures are images in Kuria, uploaded there; run `kuria fmt`, amend and push again".to_owned(),
+                ));
+            }
             if normal != tree {
                 let differ: Vec<&String> = normal
                     .keys()
@@ -893,7 +1187,8 @@ impl Remote {
                         .join(", ")
                 )));
             }
-            self.apply(&before, &tree, commit).await?;
+            self.apply(&as_kept(&before), &as_kept(&tree), commit)
+                .await?;
         }
         let history = self.history().await?;
         write_seen(&self.name, &history.seen)?;
@@ -1056,7 +1351,7 @@ pub async fn fmt(remote: &Remote, root: &Path) -> Result<crate::output::Answer, 
             std::fs::read_to_string(&full).map_err(|e| crate::profile::io_error(&full, &e))?;
         tree.insert(path.to_owned(), text);
     }
-    let normal = remote.normal_tree(&tree).await?;
+    let (normal, pictures) = remote.normal_tree(&tree).await?;
     let mut changed = Vec::new();
     for (path, text) in &tree {
         if normal.get(path) != Some(text) {
@@ -1075,6 +1370,25 @@ pub async fn fmt(remote: &Remote, root: &Path) -> Result<crate::output::Answer, 
             if !changed.contains(path) {
                 changed.push(path.clone());
             }
+        }
+    }
+    // The pictures of the images the files embed, and no others.
+    // r[impl git.pictures]
+    for path in listed.lines().filter(|p| is_picture(p)) {
+        if !pictures.contains_key(path) {
+            let full = root.join(path);
+            std::fs::remove_file(&full).map_err(|e| crate::profile::io_error(&full, &e))?;
+            changed.push(path.to_owned());
+        }
+    }
+    for (path, bytes) in &pictures {
+        let full = root.join(path);
+        if std::fs::read(&full).ok().as_ref() != Some(bytes) {
+            if let Some(dir) = full.parent() {
+                std::fs::create_dir_all(dir).map_err(|e| crate::profile::io_error(dir, &e))?;
+            }
+            std::fs::write(&full, bytes).map_err(|e| crate::profile::io_error(&full, &e))?;
+            changed.push(path.clone());
         }
     }
     // Directories left empty go too.
@@ -1206,5 +1520,33 @@ mod tests {
         assert!(too_big(&refused("Query is too complex.")));
         assert!(too_big(&refused("Query is nested too deep.")));
         assert!(!too_big(&refused("No akt `D-9`")));
+    }
+
+    // r[verify git.pictures]
+    #[test]
+    fn a_commit_holds_its_pictures_bytes() {
+        let history = History {
+            commits: vec![Built {
+                author: "A <a@x> 1 +0000".to_owned(),
+                committer: "A <a@x> 1 +0000".to_owned(),
+                message: "Add\n".to_owned(),
+                tree: BTreeMap::from([(
+                    "D-1-index.md".to_owned(),
+                    "![Logo](attachments/IMG-1.png)\n".to_owned(),
+                )]),
+                pictures: BTreeMap::from([("attachments/IMG-1.png".to_owned(), "a1".to_owned())]),
+                revisions: HashMap::new(),
+            }],
+            tags: Vec::new(),
+            seen: BTreeMap::new(),
+            bytes: HashMap::from([("a1".to_owned(), vec![0x89, b'P', 0, 0xff])]),
+        };
+        let stream = fast_import(&history, "refs/heads/main");
+        let picture = b"M 100644 inline attachments/IMG-1.png\ndata 4\n\x89P\x00\xff\n";
+        assert!(
+            stream.windows(picture.len()).any(|w| w == picture),
+            "{}",
+            String::from_utf8_lossy(&stream)
+        );
     }
 }
