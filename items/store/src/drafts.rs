@@ -40,6 +40,9 @@ pub struct UpdateRow {
     pub at: DateTime<Utc>,
     /// The keys of the fields it changed, as a JSON list.
     pub fields: Json,
+    /// A push's message, if it came from a clone (`clone.server`); `None`
+    /// for live typing and other writes.
+    pub message: Option<String>,
 }
 
 /// Stores a new live draft.
@@ -115,8 +118,9 @@ pub async fn updates_after(
 }
 
 /// Appends `update`, made by `by` at `at` and changing the fields `keys`,
-/// to `akt`'s live draft, which then reads as `fields`, and answers its
-/// sequence number. The caller holds the akt's row lock.
+/// with a push's `message` if it is one, to `akt`'s live draft, which then
+/// reads as `fields`, and answers its sequence number. The caller holds the
+/// akt's row lock.
 #[allow(
     clippy::too_many_arguments,
     reason = "one update and what the draft reads as after it"
@@ -130,6 +134,7 @@ pub async fn append(
     at: DateTime<Utc>,
     keys: &[String],
     fields: &Json,
+    message: Option<&str>,
 ) -> QueryResult<i64> {
     let last: Option<i64> = akt_draft_update::table
         .filter(akt_draft_update::akt_id.eq(akt))
@@ -146,6 +151,7 @@ pub async fn append(
             by,
             at,
             fields: Json::from(keys.to_vec()),
+            message: message.map(ToOwned::to_owned),
         })
         .execute(conn)
         .await?;

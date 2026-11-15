@@ -26,6 +26,9 @@ use crate::{Change, Current, Outcome, Refusal, Value};
 /// The name of the `Y.Map` holding every field that isn't a text.
 pub const FIELDS: &str = "fields";
 
+/// The Yjs client that writes a draft made from fields ([`LiveDraft::of`]).
+pub const SEED: u64 = 1;
+
 /// How long a text diff may take before it settles for a coarser one.
 const DIFF_TIMEOUT: Duration = Duration::from_millis(500);
 
@@ -60,13 +63,41 @@ impl LiveDraft {
         Self { doc: Doc::new() }
     }
 
-    /// A live draft holding `fields` of `ty`, and the update that makes it
-    /// from an empty one.
+    /// A live draft holding `fields` of `ty`. The same fields always make
+    /// the same items, written by the client [`SEED`], so that a draft not
+    /// stored yet reads alike each time it is made, and an update made
+    /// against one applies to the next (`live.state`); what is written to
+    /// it after is written by a client of its own.
     #[must_use]
     pub fn of(ty: &AktType, fields: &BTreeMap<String, Value>) -> Self {
+        let mut seed = Self {
+            doc: Doc::with_client_id(SEED),
+        };
+        seed.write(ty, fields);
         let mut draft = Self::new();
-        draft.write(ty, fields);
+        // A draft's own state always applies; were it not to, the seed
+        // still holds the fields.
+        if draft.apply(&seed.state()).is_err() {
+            return seed;
+        }
         draft
+    }
+
+    /// The draft's base, as a push names it (`live.state`, `clone.server`):
+    /// its Yjs v1 snapshot, what it holds and what of that is deleted. Its
+    /// state vector alone wouldn't move with a change that only deletes.
+    #[must_use]
+    pub fn base(&self) -> Vec<u8> {
+        use yrs::updates::encoder::Encode;
+        self.doc.transact().snapshot().encode_v1()
+    }
+
+    /// Whether `base`, a Yjs v1 snapshot, is the draft's
+    /// ([`LiveDraft::base`]): an update made against it is made against the
+    /// whole draft as it is now (`clone.server`).
+    pub fn is_at(&self, base: &[u8]) -> Result<bool, String> {
+        let theirs = yrs::Snapshot::decode_v1(base).map_err(|e| e.to_string())?;
+        Ok(theirs == self.doc.transact().snapshot())
     }
 
     /// The live draft `state` encodes, with `updates` applied in order.
@@ -569,6 +600,29 @@ mod tests {
         // The update alone carries the edit to the draft as it was.
         let copy = LiveDraft::load(&before, [update.as_slice()]).unwrap();
         assert_eq!(copy.fields(&ty).unwrap(), edited);
+    }
+
+    // r[verify live.state]
+    #[test]
+    fn a_draft_made_from_fields_reads_alike_each_time() {
+        let ty = document();
+        let (mut one, other) = (LiveDraft::of(&ty, &fields()), LiveDraft::of(&ty, &fields()));
+        // The same items, by the same client: a map's object may encode its
+        // keys in another order.
+        assert_eq!(one.fields(&ty).unwrap(), other.fields(&ty).unwrap());
+        assert!(other.is_at(&one.base()).unwrap());
+        // An update made against one applies to the other, and moves it on,
+        // though it only deletes and leaves the state vector as it was.
+        let mut edited = fields();
+        edited.remove("summary");
+        let update = one.write(&ty, &edited).unwrap();
+        assert_eq!(one.state_vector(), other.state_vector());
+        assert!(!one.is_at(&other.base()).unwrap());
+        let mut other = other;
+        other.apply(&update).unwrap();
+        assert_eq!(other.fields(&ty).unwrap(), edited);
+        assert!(other.is_at(&one.base()).unwrap());
+        assert!(other.is_at(b"\xff").is_err());
     }
 
     /// A draft and a copy of it, as two clients have it.

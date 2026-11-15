@@ -108,8 +108,25 @@ impl Operation {
         }
     }
 
+    /// Makes `reason` its reason, as a push's message is each of its
+    /// revisions' (`clone.server`); a move has none.
+    pub(super) fn set_reason(&mut self, message: &str) {
+        match self {
+            Self::Create { reason, .. }
+            | Self::Edit { reason, .. }
+            | Self::Transition { reason, .. }
+            | Self::AddMember { reason, .. }
+            | Self::RemoveMember { reason, .. }
+            | Self::Transfer { reason, .. }
+            | Self::AddLink { reason, .. }
+            | Self::RemoveLink { reason, .. }
+            | Self::Draft { reason, .. } => *reason = Some(message.to_owned()),
+            Self::Move { .. } => {}
+        }
+    }
+
     /// Whether it takes the tenant's order lock: it gives an akt a rank.
-    fn orders(&self) -> bool {
+    pub(super) fn orders(&self) -> bool {
         matches!(self, Self::Create { .. } | Self::Move { .. })
     }
 }
@@ -209,7 +226,7 @@ impl Akter {
 }
 
 /// Runs `operations` as [`Akter::batch`] does, in `conn`'s transaction.
-async fn batch_in(
+pub(super) async fn batch_in(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
     mut operations: Vec<Operation>,
@@ -255,18 +272,23 @@ async fn lock(
     if operations.iter().any(Operation::orders) {
         containers::lock_order(conn, tenant).await?;
     }
-    let mut named: Vec<String> = operations
-        .iter_mut()
-        .flat_map(Operation::numbers_mut)
-        .filter(|n| referred(n).is_none())
-        .map(|n| n.clone())
-        .collect();
+    let mut named = named(operations);
     named.sort();
     named.dedup();
     let refs: Vec<&str> = named.iter().map(String::as_str).collect();
     // Those missing are refused by the operation that names them.
     containers::lock_akter(conn, tenant, &refs).await?;
     Ok(())
+}
+
+/// Every existing akt `operations` name: not those `@<n>` names.
+pub(super) fn named(operations: &mut [Operation]) -> Vec<String> {
+    operations
+        .iter_mut()
+        .flat_map(Operation::numbers_mut)
+        .filter(|n| referred(n).is_none())
+        .map(|n| n.clone())
+        .collect()
 }
 
 /// One operation, run as its mutation would run it, in `conn`'s

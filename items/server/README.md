@@ -127,7 +127,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   revision; `releaseVersion` records the draft as a new revision and names
   it; transitions and membership changes record the latest revision's
   fields, refusing a transition that sets fields. `Akt.draftChanges` lists
-  the draft's changes by author since the latest release, or all of them.
+  the draft's changes by author since the latest release, or all of them,
+  each with a push's message. `Akt.liveState` answers the draft's Yjs state,
+  state vector and base (its Yjs snapshot, which also moves with a change
+  that only deletes), base64-encoded, for clones (`live.state`).
 - Editing live drafts together ([`src/live.rs`](src/live.rs),
   `live.sync`, `live.instances`, `live.presence`): `GET
   /akter/{number}/live` upgrades to a WebSocket speaking the y-websocket
@@ -152,6 +155,18 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Batches: several akt writes run in order in one transaction, all of them
   or none, a later one naming an akt an earlier one created as `@<n>`
   (`akt.batch`).
+- Pushes from clones ([`src/akter/push.rs`](src/akter/push.rs),
+  `clone.server`): `pushClone` takes a one-line message of at most 200
+  characters, each live draft's Yjs update made against the base the
+  clone read, and a batch's operations for other akter, in one
+  transaction, with every lock taken first as a batch takes them. A
+  draft whose base moved on is refused as `STALE` with its `number` and
+  current `base` and `stateVector`; otherwise its update is applied,
+  checked as a WebSocket update is, its diagrams rendered as an edit's
+  are, and kept as one `akt_draft_update` with the message, a `DRAFT`
+  change event, and reaches rooms as any kept update does. The operations
+  run as a batch's, the message their reason. A refusal names the
+  `draft` or `operation`, from 1, and keeps nothing.
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt
@@ -345,6 +360,14 @@ mise run test
   leaving it, releases recording it as a revision and a version and refused
   when it is already released, transitions carrying the last release,
   references checked on the draft at release, and its changes by author.
+- [`tests/clones.rs`](tests/clones.rs), against a fresh database, with
+  updates made by the engine's `LiveDraft` from `liveState` as a clone
+  makes them: a push kept as one change with its author and message, and
+  pushed again from the draft it left; a stale base refused, keeping
+  nothing; a field left invalid refusing two drafts and an operation
+  together; operations as revisions with the message as reason, refused
+  at a stale revision; bad messages; and the live state loading as the
+  server's draft.
 - [`tests/bundles.rs`](tests/bundles.rs), between two fresh databases and
   two tenants of one: a whole tenant moved, reading the same through
   GraphQL (history, hashes, links, contacts, attachments' bytes) and
