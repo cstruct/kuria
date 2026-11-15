@@ -136,16 +136,29 @@ No new term was needed. `mise run lint` passes, Tracey included.
 <!-- akt: PLAN-013-T02 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b3e
-state: todo
+state: done
 in: [PLAN-013]
 links: [Blocked by PLAN-013-T01, Blocks PLAN-013-T05, Resolves PLAN-012-G02]
 title: Filter by a field naming several people
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`filter.rs` allows `multiple` user fields, matching `{"<field>": [<someone>]}` and the contacts linked to a user. Local mode's `--where` matches the same. Home's "My work" asks for such fields again (`work.ts`), and the CLI's `--where` value for them is read as one person.
+A field naming several people is filtered by any one of them, on a server and in an akt directory, and counts in "My work" again.
+
+- **Server** (`graphql/filter.rs`): `multiple` user fields are filterable. A condition naming someone matches by containment of `{"<field>": [<someone>]}`, for the named subject, subjects aliased to them by an import, and the contacts linked to them, as for a single user field.
+- **CLI:** `--where testers=…` reads the value as one person (`@me`, an email or a name). Local mode's matcher (`reads/list.rs`) matches a list of people by any one.
+- **App:** Home's "My work" asks for these fields again (`work.ts`). The list's filter bar already offered every user field, so filtering a type's list by testers works now.
+
+**Tests:**
+- `tests/contacts.rs`: `a_field_naming_several_people_matches_by_any_of_them` covers `me`, including through my linked contact, a contact, and another subject.
+- `tests/local.rs`: testers by `@me` and by email.
+- `work.test.ts`.
+- The Home and test-protocols e2e tests pass.
+
+Lint, `mise run test` (337 Rust, 61 app) pass. The server README is updated.
 
 <!-- field: acceptance -->
 - Server and local tests, including a linked contact; "My work" unit tests.

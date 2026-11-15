@@ -1599,6 +1599,22 @@ fn released(dir: &Dir) {
 fn tests_in_sections_take_verdicts_and_add_up() {
     let dir = Dir::new();
     released(&dir);
+    // r[verify akt.filter]
+    // Testers filter by any one of them.
+    let where_ = |who: &str| {
+        numbers(&dir.ok(&[
+            "ls",
+            "test",
+            "--where",
+            &format!("testers={who}"),
+            "--format",
+            "json",
+        ]))
+    };
+    assert_eq!(where_("bo@kuria.example"), ["PROT-001-T1"]);
+    let mut mine = where_("@me");
+    mine.sort();
+    assert_eq!(mine, ["PROT-001-T1", "PROT-001-T2", "PROT-001-T3"]);
     // Sections place only members, each once.
     let layout = dir.root.parent().unwrap().join("bad.yaml");
     std::fs::write(&layout, "- PROT-001\n").unwrap();

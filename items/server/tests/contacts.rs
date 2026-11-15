@@ -311,7 +311,8 @@ impl World {
         for document in [
             json!({ "key": "doc", "name": "Document", "number": "DOC-{seq}", "states": open,
                     "fields": [{ "key": "owner", "name": "Owner", "kind": "user" },
-                               { "key": "approved", "name": "Approved", "kind": "checkbox" }] }),
+                               { "key": "approved", "name": "Approved", "kind": "checkbox" },
+                               { "key": "reviewers", "name": "Reviewers", "kind": "user", "multiple": true }] }),
             json!({ "key": "folder", "name": "Folder", "number": "F-{seq}", "states": open,
                     "contains": [{ "type": "doc" }, { "type": "summary" }] }),
             json!({ "key": "summary", "name": "Summary", "number": "{parent}-S{seq}",
@@ -602,6 +603,25 @@ impl World {
             .unwrap();
     }
 
+    /// The numbers of the docs whose `field` matches `equals`, sorted.
+    async fn docs_where(&self, field: &str, equals: &str) -> Vec<String> {
+        let answer = self
+            .run(
+                MANAGER,
+                "query($f: String!, $e: String!) { akter(type: \"doc\", where: [{ field: $f, equals: $e }]) { nodes { number } } }",
+                json!({ "f": field, "e": equals }),
+            )
+            .await;
+        let mut numbers: Vec<String> = answer["data"]["akter"]["nodes"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{answer}"))
+            .iter()
+            .map(|a| a["number"].as_str().unwrap().to_owned())
+            .collect();
+        numbers.sort();
+        numbers
+    }
+
     async fn link_by_hand(&self, token: &str, contact: &Value, user: &str) -> Value {
         self.run(
             token,
@@ -777,5 +797,54 @@ async fn me_finds_values_naming_me_or_my_contacts() {
         )
         .await,
         [for_bob]
+    );
+}
+
+// r[verify akt.filter]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_field_naming_several_people_matches_by_any_of_them() {
+    let world = world_with_documents().await;
+    let me: Uuid = support::SUBJECT.parse().unwrap();
+    let colleague = Uuid::now_v7();
+    let mine = world.added("Me, as a contact", None).await;
+    world.link(&mine["id"], me).await;
+    let bob = world.added("Bob", None).await;
+    let number = |v: &Value| {
+        v["data"]["createAkt"]["number"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let with_bob = number(
+        &world
+            .create_doc(
+                &[],
+                json!({ "reviewers": [colleague.to_string(), me.to_string(), { "contact": bob["id"] }] }),
+            )
+            .await,
+    );
+    let my_contact = number(
+        &world
+            .create_doc(&[], json!({ "reviewers": [{ "contact": mine["id"] }] }))
+            .await,
+    );
+    let alone = number(
+        &world
+            .create_doc(&[], json!({ "reviewers": [colleague.to_string()] }))
+            .await,
+    );
+    let mut mine_too = vec![with_bob.clone(), my_contact];
+    mine_too.sort();
+    assert_eq!(world.docs_where("reviewers", "me").await, mine_too);
+    let bob = format!("contact:{}", bob["id"].as_str().unwrap());
+    assert_eq!(
+        world.docs_where("reviewers", &bob).await,
+        std::slice::from_ref(&with_bob)
+    );
+    let mut theirs = vec![with_bob, alone];
+    theirs.sort();
+    assert_eq!(
+        world.docs_where("reviewers", &colleague.to_string()).await,
+        theirs
     );
 }

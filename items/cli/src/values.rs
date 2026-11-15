@@ -329,7 +329,7 @@ pub fn condition_value(field: &FieldDef, text: &str, people: &People) -> Result<
         "DATE" if is_date(text) => Ok(text.to_owned()),
         "DATE" => Err(refused(format!("`{text}` isn't a date as YYYY-MM-DD"))),
         "TEXT" if !field.multiline => Ok(text.to_owned()),
-        "USER" | "CHECKBOX" if !field.multiple => {
+        "USER" | "CHECKBOX" => {
             let who = text.strip_prefix("for:").unwrap_or(text);
             people.resolve(who).map_err(|e| CliError {
                 field: Some(field.key.clone()),

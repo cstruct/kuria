@@ -154,8 +154,9 @@ Not yet: signatures.
   so another list refuses it. `where` filters lists and members of one
   akt type by field values (`src/graphql/filter.rs`), as JSON containment
   on `akt.fields`: choices by key, users and checkboxes by `me` (and the
-  contacts linked to the viewer), a subject or `contact:<id>`, dates and
-  single-line text exactly.
+  contacts linked to the viewer), a subject or `contact:<id>`, a field
+  naming several people by any one of them, dates and single-line text
+  exactly.
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
@@ -381,7 +382,7 @@ mise run test
   searches a page at a time, following cursors while the list changes
   and refusing another list's, and filtering by each kind of field and
   its refusals; `tests/contacts.rs` filters by `me`, contacts linked to
-  the viewer included.
+  the viewer included, also a field naming several people.
 - [`tests/web.rs`](tests/web.rs): the built app and its fallback page,
   CSP and caching; the proxy to Konklav (paths, bodies, Kuria's cookies
   left out, cookies and redirects passed back); and discovering the

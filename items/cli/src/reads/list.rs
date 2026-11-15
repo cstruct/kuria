@@ -231,9 +231,15 @@ fn meets(kind: &str, value: &Json, equals: &str) -> bool {
         "CHOICES" => value
             .as_array()
             .is_some_and(|keys| keys.iter().any(|k| k == equals)),
-        "USER" => value
-            .as_str()
-            .is_some_and(|v| v.eq_ignore_ascii_case(equals)),
+        // One person, or any of several.
+        "USER" => match value {
+            Json::Array(people) => people
+                .iter()
+                .any(|p| p.as_str().is_some_and(|v| v.eq_ignore_ascii_case(equals))),
+            _ => value
+                .as_str()
+                .is_some_and(|v| v.eq_ignore_ascii_case(equals)),
+        },
         "CHECKBOX" => value
             .as_str()
             .and_then(|v| v.strip_prefix("for:"))

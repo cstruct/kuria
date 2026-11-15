@@ -1,20 +1,19 @@
-/** "My work" on Home: the akter whose user fields or checkboxes name the
- * viewer, found by one filtered list per such field (`akt.filter`), and
- * shown by akt type. */
+/** "My work" on Home: the akter whose user fields (one naming several
+ * people too) or checkboxes name the viewer, found by one filtered list
+ * per such field (`akt.filter`), and shown by akt type. */
 // r[impl app.my-work]
 
 interface TypeShape {
 	key: string;
-	fields: readonly { key: string; kind: string; multiple?: boolean }[];
+	fields: readonly { key: string; kind: string }[];
 }
 
-/** The lists to ask for: each user field naming one person, and each
- * checkbox, of each type. A field naming several can't be filtered by
- * (`akt.filter`). */
+/** The lists to ask for: each user field, one naming several people too,
+ * and each checkbox, of each type. */
 export function workQueries(types: readonly TypeShape[]): { type: string; field: string }[] {
 	return types.flatMap((t) =>
 		t.fields
-			.filter((f) => (f.kind === 'USER' && !f.multiple) || f.kind === 'CHECKBOX')
+			.filter((f) => f.kind === 'USER' || f.kind === 'CHECKBOX')
 			.map((f) => ({ type: t.key, field: f.key }))
 	);
 }

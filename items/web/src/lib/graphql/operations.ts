@@ -24,7 +24,6 @@ export const Home = graphql(`
 			fields {
 				key
 				kind
-				multiple
 			}
 		}
 		akter(first: 10) {
