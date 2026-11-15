@@ -142,7 +142,10 @@ pub(crate) async fn receive(
                 Ok(planned) => kept(state, opened, &asked, planned, &quarantine)
                     .await
                     .err()
-                    .map(|why| all_refused(&asked, HashMap::from([(MAIN.to_owned(), why)])))
+                    .map(|why| {
+                        let each = asked.updates.iter().map(|u| (u.name.clone(), why.clone()));
+                        each.collect()
+                    })
                     .unwrap_or_default(),
                 Err(why) => all_refused(&asked, why),
             };
