@@ -346,16 +346,23 @@ Git repositories on object storage (D04), built in a worktree (`5a91797`, `a4de2
 <!-- akt: PLAN-016-T07 -->
 ---
 type: task
-revision: 4
+revision: 7
 rank: b4b
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T04, Blocked by PLAN-016-T06, Blocks PLAN-016-T08]
 title: "main as the drafts: pushes, commits, branches, tags"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`main` and the drafts (D05): a push to `main` merged into drafts as text operations; the app's edits committed on `main` after a quiet minute or a release, by their authors; branches, merges and tags kept; a release tagged.
+`main` as the drafts (D05), built in a worktree (`60c7125`).
+
+- **Kuria's changes become commits** (`git/commits.rs`, `git_mark` in migration `000022`, marking which revision and draft update each akt's file on `main` reflects): a revision or membership change at the next pass; a release at once, from its revision, lightweight-tagged `<number>/v<n>`; a live draft's edits after `Timing.quiet` (a minute) without changes. The tree is rebuilt with the helper's code as Kuria (`Authorizer::kuria()`, read-only, never given to a request); author the latest changer, others `Co-authored-by:`, committer Kuria; pack stored, then `main` moved by compare-and-swap with the marks and tags. Passes run before every git request and every 5 s in the server.
+- **Pushes to `main`:** a fast-forward of `git_ref`'s `main`; each commit along the first parents applied as its change from its first parent; merge commits taken; normal form still required. Live drafts get each changed text field three-way merged (`kuria_engine::merge::merge_text`: by lines, then characters where both changed nearby; overlapping changes go to the push) into the draft as it is; other fields the push's value.
+- **Differences:** merged draft updates are recorded as the authenticated pusher, not the commit's claimed author; dropping unready work on `main` must be `git reset`, not `git revert`, since a reverted commit merged back is a no-op in git; "at once" is the next pass.
+- **The helper** refuses a container with `"git": true`, giving its `…/git/<number>.git` URL and the `git remote set-url` to move (G03); `AktType.git` in GraphQL.
+- **Tests:** `tests/repositories.rs` (12): quiet-period commits with co-authors, a release committed and tagged, a push merged with a concurrent app edit, a merge commit on `main`, the branch workflow end to end, a push behind Kuria's commit refused then taken after rebase, the helper's refusal; merge unit tests.
 
 <!-- field: acceptance -->
 - Server tests: a push merged with a concurrent live edit; app edits becoming commits; a merge commit pushed to `main`.
@@ -407,15 +414,18 @@ Every push adds a packfile to object storage. Fetches slow as packs accumulate. 
 <!-- akt: PLAN-016-G03 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b4f
-state: open
+state: closed
 in: [PLAN-016]
 title: Moving clones off git-remote-kuria
 ---
 
 <!-- field: description -->
 Clones made with `git-remote-kuria` have the helper's commits. Seeding each repository from the same history keeps them valid, but their remote must change to `https://…/git/<number>.git`. Does the helper stay as a shim that forwards to the repository, or is it retired with a note on moving?
+
+<!-- field: resolution -->
+Resolved (T07): `git-remote-kuria` refuses a container whose type has `"git": true`, naming its `https://…/git/<number>.git` and the `git remote set-url` that moves a clone over; repositories are seeded from the helper's history, so the clone's commits stay valid.
 
 <!-- akt: PLAN-016-G04 -->
 ---
