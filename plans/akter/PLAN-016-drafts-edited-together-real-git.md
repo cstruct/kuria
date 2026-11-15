@@ -239,16 +239,22 @@ Every attachment field in akt directories (D01): local mode reads, checks and re
 <!-- akt: PLAN-016-T03 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b4X
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T01, Blocks PLAN-016-T08]
 title: "Pages, page breaks and releases' PDFs in new tabs"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Pages and releases' PDFs (D06): A4 sheets in the app for showing and editing, white in either theme; `<!-- pagebreak -->` in the engine, the editor (Page break) and typst; guides where sheets end; Open PDF in a new tab, the route answering inline.
+Sheets, page breaks and releases' PDFs in new tabs (D06), built in a worktree (`90860c8`).
+
+- **Page breaks:** a top-level line holding only `<!-- pagebreak -->` is `#pagebreak()` in typst, a new sheet in the app (`sheets.ts`: `sheetsOf`, `guideOffsets`), and a `PageBreakNode` in the editor with a Page break button. A break inside a list, quote or footnote is dropped in both, since typst allows none inside containers; one in code or inline stays literal.
+- **Sheets:** `sheets.css` lays a `markdown` field out as 210 mm sheets scaled to the column, 2 cm margins, a Libertinus-first serif at 11 pt; fixed `--sheet-*` tokens in `:root` only, the theme's tokens set to them inside a sheet so links, code, tables and footnotes stay legible on white in dark mode (contrast checked in `theme.test.ts`). Guides every A4 height, from a gradient when shown and an SVG overlay from measured breaks in the editor. Only sheets ended by a break are a full page high.
+- **PDFs:** the route answers inline unless `&download`; the akt page's Download PDF adds it; the versions list has Open PDF per version, in a new tab.
+- **Tests:** engine typst cases, the editor round trip, `sheets.test.ts`, `theme.test.ts`, the server's `a_page_break_starts_a_page_and_a_pdf_opens_unless_downloaded`; `e2e/tests/sheets.spec.ts` written, run after merging. Lint, 400 Rust and 100 app tests pass in its worktree.
 
 <!-- field: acceptance -->
 - Engine and editor round trips with page breaks; a PDF with two pages from one break.
