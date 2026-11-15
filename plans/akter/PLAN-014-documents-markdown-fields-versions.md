@@ -354,16 +354,62 @@ The field kinds list now includes `sections`, `verdict` and `markdown`.
 <!-- akt: PLAN-014-T02 -->
 ---
 type: task
-revision: 6
+revision: 10
 rank: b3s
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocked by PLAN-014-T01, Blocks PLAN-014-T03, Blocks PLAN-014-T04, Blocks PLAN-014-T05, Blocks PLAN-014-T06]
 title: "A markdown field kind, with heading ids and references"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`kuria-config`: the `markdown` kind and its `references` link kind. `kuria-engine`: a `markdown` module on `pulldown-cmark` that gives missing heading ids, keeps existing ones, and lists headings and references. The server and local mode write through it and replace the akt's reference links. `addLink` and `removeLink` refuse that kind. The app renders heading anchors and references, broken ones too. The CLI reads and writes the field as a section of the akt file.
+A `markdown` field kind: its headings keep ids, and its references to akter keep links of a kind the field names.
+
+- **Config:** `FieldKind::Markdown`, and `references` on a field, refused unless it is a `markdown` field naming a link kind the document declares.
+- **Engine:**
+  - `markdown` module on `pulldown-cmark`, with tables, task lists, strikethrough and heading attributes. `headings`, `references`, `Reference::parse`, `slug`, `give_ids`, `heading_ids`, `referenced`, and `broken` with `Target`.
+  - Ids are put into the text in place, so the author's formatting is kept, before an ATX heading's closing `#`s too.
+  - `apply` gives ids across all of an akt's `markdown` fields after the input is applied. It counts a field as changed only if it differs from before, so text sent without the ids it already had changes nothing.
+  - An id that isn't one, or one id on two headings, is refused, naming the field.
+  - `rules::links::check_by_hand` makes `to_add` and `to_remove` refuse a references kind as `INVALID_LINK`. `to_remove` now returns a `Result`.
+- **Server:**
+  - `MarkdownValue` gives `markdown`, `headings` and `references`. Each reference comes with its `akt` if readable, and `broken` saying why.
+  - `Link.byReference`; `Field.references`.
+  - `akter/references.rs` keeps the links on every create and edit, copies included. What changed is recorded in the source's revision (`membership`: `linked`, `unlinked`). The target gets no revision.
+- **CLI:**
+  - A `markdown` field is a section of the akt file, and `--set body=@file` works.
+  - `links` in files and in `cat`'s JSON leave out links references keep, so a target's file doesn't change without a revision.
+  - `show` lists broken references, and its JSON has `references` and each link's `byReference`.
+  - `schema` says the references kind.
+- **Local mode:** reference links are never stored. `answers` works them out from the directory's text, both ways, and works out broken references.
+- **App:**
+  - `references.ts` renders a `markdown` field with heading ids as anchors and references as links to `/akt/<number>[?version=][#heading]`. A broken reference shows its text and "(broken reference: why)".
+  - `markdown.ts` shares one sanitizer, allowing app links and heading ids only for this.
+  - A textarea edits the field until T04.
+  - The links card shows reference links as "From the text", with no remove button, and leaves references kinds out of Add link.
+  - The akt page scrolls to `#heading` once the akt loads.
+- **Spec changes found while building:**
+  - `cli.file.kinds`: files leave out reference links.
+  - `cli.local.references` (new).
+  - `link.read`: links say whether a reference keeps them.
+  - `cli.read`: `show` gives broken references.
+
+**Tests:**
+- Config: `checks_the_link_kind_a_markdown_field_keeps_references_as`.
+- Engine:
+  - `headings_are_given_ids_and_keep_them`: ATX, closing `#`s, setext, digits, non-ASCII, kept ids, uniqueness, code blocks, idempotence.
+  - `refuses_ids_that_clash_or_arent_ids`, `reads_references`, `says_why_a_reference_is_broken`.
+  - `markdown_fields_get_heading_ids_unique_across_the_akt`.
+- Server: `tests/documents.rs`.
+  - `headings_get_ids_that_stay`.
+  - `references_keep_links_and_say_when_broken`: links read from both sides; no revision of the target; `addLink` and `removeLink` refused; another kind still linked by hand; a link taken away from a final target.
+- Local: `markdown_fields_get_heading_ids_and_keep_reference_links`.
+- App: `references.test.ts`, `values.test.ts`, `document.test.ts`.
+
+Lint and `mise run test` (358 Rust, 69 app) pass. The parity, links and akt-page e2e tests pass.
+
+Not yet in a browser test: rendering and the textarea. The editor (T04) and the example (T07) cover them.
 
 <!-- field: acceptance -->
 - Engine table tests: ids given, kept and made unique; references parsed with and without a version or heading.

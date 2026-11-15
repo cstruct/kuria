@@ -504,6 +504,10 @@ type Field {
 	For verdict fields: the key of the user field naming the assignees.
 	"""
 	assignees: String
+	"""
+	For markdown fields: the link kind its references are kept as.
+	"""
+	references: String
 }
 
 """
@@ -535,12 +539,13 @@ enum FieldKind {
 	ATTACHMENT
 	SECTIONS
 	VERDICT
+	MARKDOWN
 }
 
 """
 A field's value, by its kind.
 """
-union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue | UsersValue | SectionsValue | VerdictValue
+union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue | UsersValue | SectionsValue | VerdictValue | MarkdownValue
 
 """
 A commit in a git repository.
@@ -584,6 +589,11 @@ type Link {
 	Whether the link goes from this akt to the other.
 	"""
 	outgoing: Boolean!
+	"""
+	Whether a reference in the source's text keeps it
+	(`link.referenced`), so that it is changed by changing the text.
+	"""
+	byReference: Boolean!
 	"""
 	The other akt.
 	"""
@@ -630,6 +640,58 @@ input LinkInput {
 	"""
 	pinRevision: Int
 	reason: String
+}
+
+"""
+A heading of a `markdown` field.
+"""
+type MarkdownHeading {
+	id: String!
+	"""
+	1 to 6.
+	"""
+	level: Int!
+	text: String!
+}
+
+"""
+A reference in a `markdown` field to an akt, one of its versions and
+one of its headings (`akt.field.markdown.references`).
+"""
+type MarkdownReference {
+	"""
+	As the text says it: `kuria:<number>[@<version>][#<heading>]`.
+	"""
+	destination: String!
+	number: String!
+	version: Int
+	heading: String
+	"""
+	The akt, if it exists and the subject may read it.
+	"""
+	akt: Akt
+	"""
+	Why the reference is broken, if it is.
+	"""
+	broken: String
+}
+
+"""
+A `markdown` field's text, with its headings and references
+(`akt.field.markdown`).
+"""
+type MarkdownValue {
+	field: String!
+	"""
+	The text, every heading with its id.
+	"""
+	markdown: String!
+	headings: [MarkdownHeading!]!
+	"""
+	The references in the text, in order, each once, each with its akt
+	or why it is broken.
+	"""
+	references: [MarkdownReference!]!
 }
 
 """

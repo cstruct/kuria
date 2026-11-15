@@ -271,7 +271,7 @@ pub fn unlink(
 ) -> Result<Answer, CliError> {
     w.akt(target)?;
     let key = kind_key(w, source, kind)?.unwrap_or_else(|| kind.to_owned());
-    let def = links::to_remove(&w.akt_ref(source)?, &key);
+    let def = links::to_remove(&w.akt_ref(source)?, &key)?;
     let existed = w
         .akt(source)?
         .links

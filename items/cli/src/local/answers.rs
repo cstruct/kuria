@@ -1,6 +1,8 @@
 //! What Kuria's GraphQL would answer for the CLI's reads, built from an akt
 //! directory, so that every read renders as it does against a server.
 
+use std::collections::BTreeMap;
+
 use kuria_config::FieldKind;
 use kuria_engine::outcomes::{self, Outcome};
 use serde::Serialize;
@@ -71,6 +73,7 @@ pub fn shape(t: &LocalType) -> Json {
             "multiple": f.multiple,
             "of": f.of,
             "assignees": f.assignees,
+            "references": f.references,
         })).collect::<Vec<_>>(),
         "states": d.states.iter().map(|s| state(t, &s.key)).collect::<Vec<_>>(),
         "transitions": d.transitions.iter().map(|tr| json!({
@@ -163,6 +166,9 @@ fn value(akt: &LocalAkt, t: &LocalType, key: &str, raw: &Json) -> Result<Option<
             json!({ "__typename": "SectionsValue", "value": raw })
         }
         "sections" => return Err(bad("a list of akt numbers and sections")),
+        "markdown" => {
+            json!({ "__typename": "MarkdownValue", "markdown": text()?, "references": [] })
+        }
         "checkbox" => {
             let nobody = json!({ "id": "", "name": "", "email": null });
             let checked_for = match raw {
@@ -289,12 +295,102 @@ pub fn values(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
     let mut answers = Vec::new();
     for field in &t.ty.document().fields {
         if let Some(raw) = akt.values.get(&field.key).filter(|v| !v.is_null())
-            && let Some(answer) = value(akt, t, &field.key, raw)?
+            && let Some(mut answer) = value(akt, t, &field.key, raw)?
         {
+            if answer["__typename"] == "MarkdownValue" {
+                answer["references"] = references(dir, raw.as_str().unwrap_or_default()).into();
+            }
             answers.push(answer);
         }
     }
     Ok(answers)
+}
+
+/// An akt's `markdown` fields as the engine holds them, read from its file,
+/// leaving out any other field.
+fn markdown_of(dir: &AktDir, akt: &LocalAkt) -> BTreeMap<String, kuria_engine::Value> {
+    dir.type_of(akt)
+        .ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Markdown)
+        .filter_map(|f| {
+            let text = akt.values.get(&f.key)?.as_str()?;
+            Some((
+                f.key.clone(),
+                kuria_engine::Value::Markdown(text.to_owned()),
+            ))
+        })
+        .collect()
+}
+
+/// The references in `text`, each with why it is broken, if it is, among
+/// the directory's akter (`akt.field.markdown.references`).
+// r[impl akt.field.markdown.references]
+fn references(dir: &AktDir, text: &str) -> Vec<Json> {
+    use kuria_engine::markdown;
+    markdown::references(text)
+        .iter()
+        .map(|reference| {
+            let target = dir.akt(&reference.number).map(|a| markdown::Target {
+                headings: markdown::heading_ids(&dir.type_of(a).ty, &markdown_of(dir, a)),
+                versions: Vec::new(),
+            });
+            json!({
+                "destination": reference.to_string(),
+                "broken": markdown::broken(reference, target.as_ref()),
+            })
+        })
+        .collect()
+}
+
+/// The links references keep, to and from `akt`, worked out from the
+/// directory's `markdown` fields: they are never stored
+/// (`cli.local.references`).
+// r[impl cli.local.references]
+// r[impl link.referenced]
+fn reference_links(dir: &AktDir, akt: &LocalAkt) -> Vec<Json> {
+    let kept_by = |source: &LocalAkt| {
+        let ty = &dir.type_of(source).ty;
+        kuria_engine::markdown::referenced(ty, &markdown_of(dir, source))
+            .into_iter()
+            .filter_map(|(kind, numbers)| {
+                let def = ty.link(&kind)?.clone();
+                Some((def, numbers))
+            })
+            .collect::<Vec<_>>()
+    };
+    let fits = |def: &kuria_config::LinkDef, source: &LocalAkt, target: &LocalAkt| {
+        source.number != target.number && def.to.contains(&target.type_key)
+    };
+    let link = |def: &kuria_config::LinkDef, outgoing: bool, other_akt: &LocalAkt| {
+        json!({
+            "kind": def.key,
+            "name": if outgoing { &def.name } else { &def.inverse },
+            "outgoing": outgoing,
+            "pinnedRevision": null,
+            "byReference": true,
+            "akt": other(dir, other_akt),
+            "pinned": null,
+        })
+    };
+    let mut answers = Vec::new();
+    for (def, numbers) in kept_by(akt) {
+        for target in numbers.iter().filter_map(|n| dir.akt(n)) {
+            if fits(&def, akt, target) {
+                answers.push(link(&def, true, target));
+            }
+        }
+    }
+    for source in &dir.akter {
+        for (def, numbers) in kept_by(source) {
+            if numbers.contains(&akt.number) && fits(&def, source, akt) {
+                answers.push(link(&def, false, source));
+            }
+        }
+    }
+    answers
 }
 
 /// The akt's title: its type's title field's text.
@@ -381,6 +477,7 @@ pub fn links(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
             "pinned": null,
         }));
     }
+    answers.extend(reference_links(dir, akt));
     Ok(answers)
 }
 

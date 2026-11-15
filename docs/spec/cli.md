@@ -110,7 +110,8 @@ The client MUST offer:
   the container's order (`cli.members`);
 - `show <number>`: an akt's fields, its outcome, containers, members by
   column and type, or in their sections with each section's outcome,
-  links, its versions, and the transitions its state allows, and with
+  links, its broken references (`akt.field.markdown.references`), its
+  versions, and the transitions its state allows, and with
   `--history` its revisions;
 - `cat`, `show` and `pdf` with `--version <n>`: the akt at that version
   (`version.read`);
@@ -147,7 +148,9 @@ the field's value as YAML, akter by number; and a `verdict` field MUST be
 a front-matter mapping of each assignee to their verdict, read-only, given
 with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
 key after `state`. A `markdown` field MUST be a section of its own whose
-body is its value. An akt read at a version MUST have a read-only
+body is its value. `links` MUST leave out the links references keep
+(`link.referenced`), to or from the akt: the text says them, and they
+change without a revision of their target. An akt read at a version MUST have a read-only
 `version` key after `revision`, and `apply` of it MUST be refused as
 `READ_ONLY`.
 
@@ -317,6 +320,11 @@ r[cli.local.lock]
 A write in local mode MUST hold an exclusive lock on the directory for the
 whole change, so that two clients writing at once neither lose a change
 nor read one half made.
+
+r[cli.local.references]
+In local mode the links references keep (`link.referenced`) MUST NOT be
+stored in akt files: they MUST be worked out from the directory's
+`markdown` fields whenever they are read, as a server keeps them.
 
 r[cli.local.versions]
 In local mode an akt's versions MUST be kept in its akt file, as a

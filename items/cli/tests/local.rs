@@ -184,7 +184,7 @@ fn reads_types_and_schemas_from_the_directory() {
         schema["type"]["fields"][3],
         json!({
             "key": "assignee", "name": "Assignee", "kind": "user", "required": false, "multiline": false,
-            "description": null, "options": [], "format": null, "draft": null,
+            "description": null, "options": [], "format": null, "draft": null, "references": null,
         })
     );
     assert_eq!(schema["type"]["presentation"]["icon"], "list_checks");
@@ -1936,4 +1936,108 @@ fn copies_a_protocol_with_the_tests_chosen() {
         ["PROT-003-T1", "PROT-003-T2"]
     );
     dir.ok(&["check"]);
+}
+
+/// A document type with a `markdown` body whose references are kept as
+/// `refers_to` links.
+fn documents(dir: &Dir) {
+    let document = json!({
+        "key": "document", "name": "Document", "number": "DOC-{seq}",
+        "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to" }
+        ],
+        "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }]
+    });
+    std::fs::write(
+        dir.root.join("types/document.json"),
+        serde_json::to_string_pretty(&document).unwrap(),
+    )
+    .unwrap();
+}
+
+// r[verify akt.field.markdown]
+// r[verify akt.field.markdown.references]
+// r[verify cli.local.references]
+// r[verify cli.file.kinds]
+#[test]
+fn markdown_fields_get_heading_ids_and_keep_reference_links() {
+    let dir = Dir::new();
+    documents(&dir);
+    let body = |text: &str| {
+        let file = dir.root.parent().unwrap().join("body.md");
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n\nRun it.\n"),
+    ]);
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("See [install](kuria:DOC-1#install) and [gone](kuria:DOC-1#gone).\n\n# Install\n"),
+    ]);
+    let setup = dir.ok(&["cat", "DOC-1"]).markdown;
+    assert!(
+        setup.contains("<!-- field: body -->\n# Install {#install}\n\nRun it.\n"),
+        "{setup}"
+    );
+    // The text says its links: neither file lists them.
+    let guide = dir.ok(&["cat", "DOC-2"]).markdown;
+    assert!(!guide.contains("links:"), "{guide}");
+    assert!(!setup.contains("links:"), "{setup}");
+    // But they are read, from both sides, and the broken reference says why.
+    let shown = dir.ok(&["show", "DOC-1", "--format", "json"]).json;
+    assert_eq!(
+        shown["akt"]["links"][0]["name"], "Referred to by",
+        "{shown}"
+    );
+    assert_eq!(shown["akt"]["links"][0]["akt"]["number"], "DOC-2");
+    let read = dir.ok(&["show", "DOC-2", "--format", "json"]).json;
+    assert_eq!(
+        read["akt"]["references"],
+        json!([
+            { "field": "body", "destination": "kuria:DOC-1#install", "broken": null },
+            { "field": "body", "destination": "kuria:DOC-1#gone", "broken": "`DOC-1` has no heading `gone`" }
+        ])
+    );
+    let said = dir.ok(&["show", "DOC-2"]).markdown;
+    assert!(
+        said.contains(
+            "## Broken references\n\n- Body: `kuria:DOC-1#gone`: `DOC-1` has no heading `gone`\n"
+        ),
+        "{said}"
+    );
+    // Its file applied unchanged changes nothing; the text owns the links.
+    let file = dir.root.parent().unwrap().join("guide.md");
+    std::fs::write(&file, &guide).unwrap();
+    assert!(
+        dir.ok(&["apply", file.to_str().unwrap()])
+            .markdown
+            .contains("nothing changed")
+    );
+    assert_eq!(
+        dir.refused(&["link", "DOC-2", "refers_to", "DOC-1"]).code,
+        "INVALID_LINK"
+    );
+    assert_eq!(
+        dir.refused(&["set", "DOC-1", &body("# A {#same}\n\n# B {#same}\n")])
+            .code,
+        "REFUSED"
+    );
+    let schema = dir.ok(&["schema", "document"]).markdown;
+    assert!(
+        schema.contains("references kept as `refers_to` links"),
+        "{schema}"
+    );
+    assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
 }

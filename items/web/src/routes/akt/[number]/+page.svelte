@@ -144,6 +144,15 @@
 	let movingOpen = $state(false);
 	// The transition `?transition=` asked for, opened once per akt.
 	let askedFor = $state('');
+	// r[impl app.references]: a reference's heading, scrolled to once the
+	// akt it is in has loaded, since it isn't there when the page opens.
+	let scrolledTo = $state('');
+	$effect(() => {
+		const hash = page.url.hash.slice(1);
+		if (!akt || !hash || scrolledTo === `${number}#${hash}`) return;
+		scrolledTo = `${number}#${hash}`;
+		requestAnimationFrame(() => document.getElementById(hash)?.scrollIntoView());
+	});
 
 	function snapshot(of: Akt): Record<string, Draft> {
 		return Object.fromEntries(

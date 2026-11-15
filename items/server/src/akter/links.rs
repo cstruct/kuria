@@ -129,7 +129,7 @@ pub(super) async fn remove_link_in(
 ) -> Result<AktRow, AktError> {
     let tenant: Uuid = caller.actor.tenant.into();
     let (mut s, mut t) = lock(conn, caller, tenant, source, target).await?;
-    let def = links::to_remove(&akt_ref(&s.ty, &s.akt), kind);
+    let def = links::to_remove(&akt_ref(&s.ty, &s.akt), kind)?;
     let existed = stored::delete(conn, tenant, s.akt.id, kind, t.akt.id).await?;
     links::check_existed(existed, source, kind, target)?;
     let now = Utc::now();

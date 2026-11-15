@@ -34,7 +34,7 @@ pub fn handle_of(someone: &Someone) -> &str {
 #[must_use]
 pub fn text_of(value: &Value) -> String {
     match value {
-        Value::TextValue { text, .. } => text.clone(),
+        Value::TextValue { text, .. } | Value::MarkdownValue { markdown: text, .. } => text.clone(),
         Value::ChoiceValue { option, .. } => option.name.clone(),
         Value::ChoicesValue { options, .. } => options
             .iter()
@@ -170,7 +170,9 @@ fn is(someone: &Someone, user: &User) -> bool {
 #[must_use]
 pub fn file_value(value: &Value) -> Json {
     match value {
-        Value::TextValue { text, .. } => text.clone().into(),
+        Value::TextValue { text, .. } | Value::MarkdownValue { markdown: text, .. } => {
+            text.clone().into()
+        }
         Value::ChoiceValue { option, .. } => option.key.clone().into(),
         Value::ChoicesValue { options, .. } => options.iter().map(|o| o.key.clone()).collect(),
         Value::DateValue { date, .. } => date.clone().into(),
@@ -655,7 +657,7 @@ pub fn set_value(field: &FieldDef, text: &str) -> Result<Json, CliError> {
                 ..CliError::refused("BAD_REQUEST", format!("{} isn't JSON: {e}", field.name))
             })
         }
-        "TEXT" | "SECTIONS" => match text.strip_prefix('@') {
+        "TEXT" | "SECTIONS" | "MARKDOWN" => match text.strip_prefix('@') {
             Some(path) => read(path).map(Json::from),
             None => Ok(text.into()),
         },
@@ -692,6 +694,7 @@ mod tests {
             description: None,
             required: false,
             multiline: false,
+            references: None,
             options: vec![Opt {
                 key: "fix".to_owned(),
                 name: "Bug fix".to_owned(),

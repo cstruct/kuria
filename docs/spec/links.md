@@ -54,5 +54,6 @@ as stale: like arranging members, it takes no revision from the caller.
 
 r[link.read]
 An akt MUST be served with its links: those from it, by kind, and those to
-it, by the kind's inverse name, each with the other akt. A link to or from
+it, by the kind's inverse name, each with the other akt, and whether a
+reference keeps it (`link.referenced`). A link to or from
 an akt the subject may not read MUST be left out.

@@ -399,7 +399,9 @@ pub fn text_of(dir: &AktDir, akt: &LocalAkt, numbered: bool) -> String {
         };
         let text = field.kind == kuria_config::FieldKind::Text;
         match value {
-            Json::String(body) if text && field.multiline => {
+            Json::String(body)
+                if (text && field.multiline) || field.kind == kuria_config::FieldKind::Markdown =>
+            {
                 sections.push((field.key.clone(), body.clone()));
             }
             _ if field.kind == kuria_config::FieldKind::Sections => {

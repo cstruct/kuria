@@ -22,6 +22,7 @@ mod links;
 mod membership;
 mod ordering;
 pub mod outcomes;
+mod references;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
 pub use ordering::Place;
@@ -473,11 +474,9 @@ async fn change_in(
     check_sections(conn, tenant, &stored.ty, Some(akt.id), &outcome).await?;
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
-    store::append_revision(
-        conn,
-        &revision(&akt, actor, transition, reason, &outcome, now),
-    )
-    .await?;
+    let mut recorded = revision(&akt, actor, transition, reason, &outcome, now);
+    references::record(conn, &stored.ty, &akt, &outcome.fields, &mut recorded).await?;
+    store::append_revision(conn, &recorded).await?;
     Ok(akt)
 }
 

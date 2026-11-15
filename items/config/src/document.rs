@@ -248,6 +248,10 @@ pub struct FieldDef {
     /// gives verdicts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignees: Option<String>,
+    /// For `markdown`: the key of the link kind its references are kept
+    /// as, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub references: Option<String>,
 }
 
 /// What files an `attachment` field holds.
@@ -278,6 +282,8 @@ pub enum FieldKind {
     Sections,
     /// Each assignee's verdict.
     Verdict,
+    /// Markdown whose headings keep ids and whose links may name akter.
+    Markdown,
 }
 
 impl FieldKind {

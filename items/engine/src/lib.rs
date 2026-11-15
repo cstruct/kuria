@@ -8,6 +8,7 @@ pub mod board;
 pub mod copying;
 pub mod draft;
 mod hash;
+pub mod markdown;
 pub mod outcomes;
 mod rank;
 pub mod rules;
@@ -203,6 +204,7 @@ fn apply(
     input: &Map<String, Json>,
     change: Change,
 ) -> Result<Applied, Refusal> {
+    let before = fields;
     let mut fields = fields.clone();
     let mut changes = BTreeMap::new();
     // Verdicts last, against the assignees as the input leaves them.
@@ -278,7 +280,60 @@ fn apply(
         let kept = verdicts::only_of(&given, &assignees_of(&fields, def));
         set_verdicts(&mut fields, &mut changes, &def.key, &given, kept);
     }
+    give_heading_ids(ty, before, &mut fields, &mut changes)?;
     Ok((fields, changes))
+}
+
+/// Gives the headings of the akt's `markdown` fields their ids, unique
+/// across them, and counts a field as changed only if it now differs from
+/// `before`, so that text sent without the ids it already had changes
+/// nothing.
+// r[impl akt.field.markdown]
+fn give_heading_ids(
+    ty: &AktType,
+    before: &BTreeMap<String, Value>,
+    fields: &mut BTreeMap<String, Value>,
+    changes: &mut BTreeMap<String, Option<Value>>,
+) -> Result<(), Refusal> {
+    let keys: Vec<String> = ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Markdown && fields.contains_key(&f.key))
+        .map(|f| f.key.clone())
+        .collect();
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let mut texts: Vec<String> = keys
+        .iter()
+        .map(|k| match &fields[k] {
+            Value::Markdown(text) => text.clone(),
+            _ => String::new(),
+        })
+        .collect();
+    // Each field alone first, so a refusal names the field it is in.
+    for (key, text) in keys.iter().zip(&texts) {
+        markdown::give_ids(&mut [&mut text.clone()]).map_err(|reason| Refusal::InvalidValue {
+            field: key.clone(),
+            reason,
+        })?;
+    }
+    let mut all: Vec<&mut String> = texts.iter_mut().collect();
+    markdown::give_ids(&mut all).map_err(|reason| Refusal::InvalidValue {
+        field: keys.last().cloned().unwrap_or_default(),
+        reason,
+    })?;
+    for (key, text) in keys.into_iter().zip(texts) {
+        let value = Value::Markdown(text);
+        if before.get(&key) == Some(&value) {
+            changes.remove(&key);
+        } else {
+            changes.insert(key.clone(), Some(value.clone()));
+        }
+        fields.insert(key, value);
+    }
+    Ok(())
 }
 
 fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {

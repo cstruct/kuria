@@ -90,6 +90,7 @@ fn schema_json(shape: &Shape) -> Json {
             "kind": kind(f),
             "required": f.required,
             "multiline": f.multiline,
+            "references": f.references,
             "description": f.description,
             "options": f.options.iter().map(|o| json!({ "key": o.key, "name": o.name })).collect::<Vec<_>>(),
             "format": f.format.as_deref().map(str::to_ascii_lowercase),
@@ -138,6 +139,9 @@ fn schema_markdown(shape: &Shape) -> String {
             let mut kind = kind(f);
             if f.multiline {
                 kind.push_str(", multiline");
+            }
+            if let Some(references) = &f.references {
+                kind.push_str(&format!(", references kept as `{references}` links"));
             }
             if let Some(format) = &f.format {
                 kind.push_str(&format!(", {}", format.to_ascii_lowercase()));

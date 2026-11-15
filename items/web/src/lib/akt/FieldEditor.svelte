@@ -49,6 +49,9 @@
 		{:else}
 			<input aria-label={field.name} bind:value={draft.text} />
 		{/if}
+	{:else if draft.kind === 'MARKDOWN'}
+		<!-- Markdown, for now; PLAN-014-T04 brings the rich-text editor. -->
+		<textarea aria-label={field.name} rows="12" bind:value={draft.text}></textarea>
 	{:else if draft.kind === 'CHOICE'}
 		<select aria-label={field.name} bind:value={draft.key}>
 			<option value="">None</option>

@@ -289,6 +289,22 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
         ),
         (_, None) => {}
     }
+    // r[impl akt.field.markdown.references]
+    match (field.kind, &field.references) {
+        (FieldKind::Markdown, Some(key)) => {
+            if !document.links.iter().any(|l| &l.key == key) {
+                problems.add(
+                    &format!("{path}.references"),
+                    format!("`{key}` isn't a link kind this akt type declares"),
+                );
+            }
+        }
+        (_, Some(_)) => problems.add(
+            &format!("{path}.references"),
+            "only markdown fields keep references",
+        ),
+        (_, None) => {}
+    }
 }
 
 /// Checks the transitions against the type's fields and states.
@@ -812,6 +828,35 @@ mod tests {
                 "transitions[0].requires[0]: no field `owner`",
                 "transitions[1].from: a transition starts from at least one state",
             ]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.field.markdown.references]
+    #[test]
+    fn checks_the_link_kind_a_markdown_field_keeps_references_as() {
+        let document = |references: serde_json::Value| {
+            json!({
+                "key": "document", "name": "Document", "number": "D-{seq}",
+                "fields": [
+                    { "key": "title", "name": "Title", "kind": "text", "required": true },
+                    { "key": "body", "name": "Body", "kind": "markdown", "references": references },
+                    { "key": "notes", "name": "Notes", "kind": "text", "multiline": true }
+                ],
+                "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+                "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }]
+            })
+        };
+        assert_eq!(problems(document(json!("refers_to"))), Vec::<String>::new());
+        assert_eq!(
+            problems(document(json!("blocks"))),
+            ["fields[1].references: `blocks` isn't a link kind this akt type declares"]
+        );
+        let mut on_text = document(json!("refers_to"));
+        on_text["fields"][2]["references"] = json!("refers_to");
+        assert_eq!(
+            problems(on_text),
+            ["fields[2].references: only markdown fields keep references"]
         );
     }
 

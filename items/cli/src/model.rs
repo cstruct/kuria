@@ -7,7 +7,7 @@ use serde_json::Value as Json;
 /// An akt type's shape: its fields, states, transitions and presentation.
 pub const SHAPE: &str = "fragment Shape on AktType {
   key version name numberPattern
-  fields { key name kind description required multiline multiple of assignees options { key name } format }
+  fields { key name kind description required multiline multiple of assignees references options { key name } format }
   states { key name initial final tone }
   transitions { key name from to requires outcomes }
   presentation { title card list icon colour }
@@ -36,6 +36,7 @@ pub const VALUES: &str = "fragment Values on FieldValue {
   ... on UsersValue { field users { ...Someone } }
   ... on VerdictValue { field verdicts { assignee { ...Someone } verdict by { id name email } at } }
   ... on SectionsValue { field value }
+  ... on MarkdownValue { field markdown references { destination broken } }
 }";
 
 /// An akt as lists show it.
@@ -101,6 +102,20 @@ pub struct FieldDef {
     /// For verdict fields: the user field naming the assignees.
     #[serde(default)]
     pub assignees: Option<String>,
+    /// For markdown fields: the link kind its references are kept as.
+    #[serde(default)]
+    pub references: Option<String>,
+}
+
+impl FieldDef {
+    /// Whether its value is a section of an akt file: a multiline text, a
+    /// `markdown` field or a `sections` field (`cli.file.kinds`).
+    #[must_use]
+    pub fn sectioned(&self) -> bool {
+        (self.kind == "TEXT" && self.multiline)
+            || self.kind == "MARKDOWN"
+            || self.kind == "SECTIONS"
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -242,6 +257,19 @@ pub enum Value {
         /// collapsible, items}`.
         value: Json,
     },
+    MarkdownValue {
+        field: String,
+        markdown: String,
+        #[serde(default)]
+        references: Vec<MarkdownReference>,
+    },
+}
+
+/// A reference in a `markdown` field, and why it is broken, if it is.
+#[derive(Clone, Debug, Deserialize)]
+pub struct MarkdownReference {
+    pub destination: String,
+    pub broken: Option<String>,
 }
 
 /// One assignee's verdict.
@@ -271,7 +299,8 @@ impl Value {
             | Self::AttachmentValue { field, .. }
             | Self::UsersValue { field, .. }
             | Self::VerdictValue { field, .. }
-            | Self::SectionsValue { field, .. } => field,
+            | Self::SectionsValue { field, .. }
+            | Self::MarkdownValue { field, .. } => field,
         }
     }
 }

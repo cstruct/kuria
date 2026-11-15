@@ -27,6 +27,7 @@ pub fn to_add<'a>(
     target: &AktRef<'_>,
     pin: Option<i32>,
 ) -> Result<&'a LinkDef, Broken> {
+    check_by_hand(source, kind)?;
     let def = source.ty.link(kind).ok_or_else(|| {
         Broken::InvalidLink(format!(
             "`{}` has no kind of link `{kind}`",
@@ -71,14 +72,33 @@ pub fn check_new(new: bool, source: &str, kind: &str, target: &str) -> Result<()
 /// The kind of link `kind` from `source`, to unlink by: a kind a newer
 /// version of its type dropped still unlinks, by its key.
 // r[impl link.remove]
-#[must_use]
-pub fn to_remove(source: &AktRef<'_>, kind: &str) -> LinkDef {
-    source.ty.link(kind).cloned().unwrap_or_else(|| LinkDef {
+pub fn to_remove(source: &AktRef<'_>, kind: &str) -> Result<LinkDef, Broken> {
+    check_by_hand(source, kind)?;
+    Ok(source.ty.link(kind).cloned().unwrap_or_else(|| LinkDef {
         key: kind.to_owned(),
         name: kind.to_owned(),
         inverse: kind.to_owned(),
         to: Vec::new(),
-    })
+    }))
+}
+
+/// Refuses linking or unlinking by hand a kind that a `markdown` field of
+/// the source's type keeps its references as: its text owns those links.
+// r[impl link.referenced]
+pub fn check_by_hand(source: &AktRef<'_>, kind: &str) -> Result<(), Broken> {
+    match source
+        .ty
+        .document()
+        .fields
+        .iter()
+        .find(|f| f.references.as_deref() == Some(kind))
+    {
+        Some(field) => Err(Broken::InvalidLink(format!(
+            "`{kind}` links are kept by the references in `{}`: change its text instead",
+            field.key
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// Refuses unlinking a link there was none of (`existed` is false).
@@ -145,7 +165,7 @@ mod tests {
         ));
         assert!(check_not_itself("T-1", "T-1").is_err());
         assert!(check_new(false, "T-1", "blocks", "T-2").is_err());
-        assert_eq!(to_remove(&a, "gone").key, "gone");
+        assert_eq!(to_remove(&a, "gone").unwrap().key, "gone");
         assert!(matches!(
             check_existed(false, "T-1", "blocks", "T-2"),
             Err(Broken::NotLinked { .. })

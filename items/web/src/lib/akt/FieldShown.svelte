@@ -1,6 +1,16 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { renderMarkdown } from './markdown';
+	import { renderReferenced, type Reference } from './references';
 	import { textOf, type Value } from './values';
+
+	/** Where a reference goes in the app: the akt's page, at its version and
+	 * heading if it names them. */
+	function hrefOf(reference: Reference): string {
+		const page = resolve('/akt/[number]', { number: reference.number });
+		const version = reference.version ? `?version=${reference.version}` : '';
+		return `${page}${version}${reference.heading ? `#${reference.heading}` : ''}`;
+	}
 
 	/** `multiline` text is rendered as Markdown. */
 	let { value, multiline = false }: { value: Value; multiline?: boolean } = $props();
@@ -19,6 +29,10 @@
 {:else if value.__typename === 'ReferenceValue'}
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a href={value.url} rel="noreferrer noopener external">{value.label ?? value.url}</a>
+{:else if value.__typename === 'MarkdownValue'}
+	<!-- Sanitized by renderReferenced. -->
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+	<div class="markdown">{@html renderReferenced(value.markdown, value.references, hrefOf)}</div>
 {:else if value.__typename === 'TextValue' && multiline}
 	<!-- Sanitized by renderMarkdown. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -53,6 +67,10 @@
 
 	.markdown :global(p) {
 		margin: var(--space-2) 0;
+	}
+
+	.markdown :global(small) {
+		color: var(--tone-danger-fg);
 	}
 
 	.markdown :global(code) {

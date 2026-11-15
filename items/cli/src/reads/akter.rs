@@ -411,7 +411,11 @@ impl Shown<'_> {
             .iter()
             .filter(|v| Some(v.field()) != title_field)
             .filter(|v| !matches!(v, Value::SectionsValue { .. }))
-            .partition(|v| shape.field(v.field()).is_some_and(|f| f.multiline));
+            .partition(|v| {
+                shape
+                    .field(v.field())
+                    .is_some_and(crate::model::FieldDef::sectioned)
+            });
         if !inline.is_empty() || !sections.is_empty() {
             text.push_str("\n## Fields\n\n");
             for value in &inline {
@@ -452,6 +456,7 @@ impl Shown<'_> {
                 text.push('\n');
             }
         }
+        text.push_str(&broken_references(akt));
         if !allowed.is_empty() {
             text.push_str("\n## Transitions\n\n");
             for t in allowed {
@@ -599,8 +604,12 @@ impl Shown<'_> {
                 json!({
                     "kind": l.kind, "name": l.name, "outgoing": l.outgoing,
                     "akt": other_json(&l.akt), "pinnedRevision": l.pinned_revision,
+                    "byReference": l.by_reference,
                 })
             })
+            .collect();
+        json["references"] = references(akt)
+            .map(|(field, r)| json!({ "field": field, "destination": r.destination, "broken": r.broken }))
             .collect();
         let mut members = json!({
             "akter": listed.iter().map(|o| other_json(o)).collect::<Vec<_>>(),
@@ -724,4 +733,37 @@ pub async fn history(source: Source<'_>, number: &str) -> Result<Answer, CliErro
         markdown,
         json: json!({ "number": number, "revisions": described.iter().map(Described::json).collect::<Vec<_>>() }),
     })
+}
+
+/// The references in an akt's `markdown` fields, each with its field.
+// r[impl akt.field.markdown.references]
+fn references(akt: &file::Akt) -> impl Iterator<Item = (&str, &crate::model::MarkdownReference)> {
+    akt.fields.iter().flat_map(|v| match v {
+        Value::MarkdownValue {
+            field, references, ..
+        } => references
+            .iter()
+            .map(|r| (field.as_str(), r))
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    })
+}
+
+/// An akt's broken references, as `show` says them, if it has any.
+fn broken_references(akt: &file::Akt) -> String {
+    let broken: Vec<String> = references(akt)
+        .filter_map(|(field, r)| {
+            let why = r.broken.as_ref()?;
+            Some(format!(
+                "- {}: `{}`: {why}\n",
+                akt.shape.field_name(field),
+                r.destination
+            ))
+        })
+        .collect();
+    if broken.is_empty() {
+        String::new()
+    } else {
+        format!("\n## Broken references\n\n{}", broken.concat())
+    }
 }

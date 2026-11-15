@@ -158,6 +158,19 @@ export const FieldValues = graphql(`
 			field
 			value
 		}
+		... on MarkdownValue {
+			field
+			markdown
+			headings {
+				id
+				level
+				text
+			}
+			references {
+				destination
+				broken
+			}
+		}
 		... on VerdictValue {
 			field
 			verdicts {
@@ -252,6 +265,7 @@ export const TypeShape = graphql(`
 			multiple
 			of
 			assignees
+			references
 			options {
 				key
 				name
@@ -347,6 +361,7 @@ export const AktPage = graphql(`
 				kind
 				name
 				outgoing
+				byReference
 				pinnedRevision
 				pinned {
 					revision

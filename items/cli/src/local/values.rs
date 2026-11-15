@@ -143,6 +143,7 @@ pub fn input(field: &FieldDef, raw: &Json, ids: &mut Ids) -> Result<Json, CliErr
             "an akt directory holds no attachments",
         ))),
         ("TEXT", Json::String(text)) if field.multiline => Ok(text.trim_end_matches('\n').into()),
+        ("MARKDOWN", Json::String(text)) => Ok(text.trim_end_matches('\n').into()),
         _ => input_of(field, raw, &People::default()),
     }
 }

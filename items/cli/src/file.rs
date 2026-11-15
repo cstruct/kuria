@@ -71,6 +71,17 @@ pub struct Link {
     pub pinned_revision: Option<i64>,
     pub akt: Other,
     pub pinned: Option<Pinned>,
+    /// Whether a reference in its source's text keeps it.
+    #[serde(default)]
+    pub by_reference: bool,
+}
+
+/// The links an akt file says: all but those references keep, which the
+/// text says and which change without a revision of their target
+/// (`cli.file.kinds`).
+// r[impl cli.file.kinds]
+pub fn filed(links: &[Link]) -> impl Iterator<Item = &Link> {
+    links.iter().filter(|l| !l.by_reference)
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -87,7 +98,7 @@ pub const AKT: &str = "number title revision createdAt updatedAt outcome
   fields { ...Values }
   containers { number title type { key name } state { key name } }
   links {
-    kind name outgoing pinnedRevision
+    kind name outgoing pinnedRevision byReference
     akt { number title type { key name } state { key name } }
     pinned { revision title state { key name } }
   }";
@@ -108,7 +119,7 @@ impl Link {
 fn sectioned(shape: &Shape, value: &Value) -> bool {
     match value {
         Value::TextValue { .. } => shape.field(value.field()).is_some_and(|f| f.multiline),
-        Value::SectionsValue { .. } => true,
+        Value::SectionsValue { .. } | Value::MarkdownValue { .. } => true,
         _ => false,
     }
 }
@@ -118,6 +129,7 @@ fn sectioned(shape: &Shape, value: &Value) -> bool {
 fn section_body(value: &Value) -> Option<String> {
     match value {
         Value::TextValue { text, .. } => Some(text.clone()),
+        Value::MarkdownValue { markdown, .. } => Some(markdown.clone()),
         Value::SectionsValue { .. } => Some(crate::values::sections_yaml(&file_value(value))),
         _ => None,
     }
@@ -169,8 +181,8 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
             akt.containers.iter().map(|c| c.number.clone()).collect(),
         ));
     }
-    if !akt.links.is_empty() {
-        front.push(("links", akt.links.iter().map(Link::said).collect()));
+    if filed(&akt.links).next().is_some() {
+        front.push(("links", filed(&akt.links).map(Link::said).collect()));
     }
     let single = akt
         .fields
@@ -228,7 +240,7 @@ pub fn json(akt: &Akt) -> Json {
         "state": akt.state.key,
         "outcome": akt.outcome.as_ref().map(|o| o.to_lowercase()),
         "in": akt.containers.iter().map(|c| c.number.clone()).collect::<Vec<_>>(),
-        "links": akt.links.iter().map(|l| json!({
+        "links": filed(&akt.links).map(|l| json!({
             "kind": l.kind,
             "name": l.name,
             "outgoing": l.outgoing,

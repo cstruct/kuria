@@ -123,6 +123,7 @@ pub(super) async fn create_in(
             "added": parents.iter().map(membership_entry).collect::<Vec<_>>(),
         }));
     }
+    super::references::record(conn, &stored.ty, &akt, &outcome.fields, &mut first).await?;
     store::append_revision(conn, &first).await?;
 
     for (parent, ty) in parents.iter_mut().zip(&parent_types) {

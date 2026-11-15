@@ -1170,6 +1170,7 @@ pub enum FieldKind {
     Attachment,
     Sections,
     Verdict,
+    Markdown,
 }
 
 impl From<ConfigKind> for FieldKind {
@@ -1187,6 +1188,7 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Attachment => Self::Attachment,
             ConfigKind::Sections => Self::Sections,
             ConfigKind::Verdict => Self::Verdict,
+            ConfigKind::Markdown => Self::Markdown,
         }
     }
 }
@@ -1209,6 +1211,8 @@ pub struct Field {
     of: Vec<String>,
     /// For verdict fields: the key of the user field naming the assignees.
     assignees: Option<String>,
+    /// For markdown fields: the link kind its references are kept as.
+    references: Option<String>,
 }
 
 /// What files an attachment field holds.
@@ -1235,6 +1239,7 @@ impl From<&FieldDef> for Field {
             multiple: def.multiple,
             of: def.of.clone(),
             assignees: def.assignees.clone(),
+            references: def.references.clone(),
         }
     }
 }
@@ -1350,6 +1355,7 @@ pub struct Link {
     kind: String,
     name: String,
     outgoing: bool,
+    by_reference: bool,
     pinned_revision: Option<i32>,
     akt: Akt,
 }
@@ -1370,6 +1376,12 @@ impl Link {
     /// Whether the link goes from this akt to the other.
     async fn outgoing(&self) -> bool {
         self.outgoing
+    }
+
+    /// Whether a reference in the source's text keeps it
+    /// (`link.referenced`), so that it is changed by changing the text.
+    async fn by_reference(&self) -> bool {
+        self.by_reference
     }
 
     /// The other akt.
@@ -1745,10 +1757,17 @@ impl Akt {
                     (Some(def), false) => def.inverse.clone(),
                     (None, _) => row.kind.clone(),
                 };
+                let by_reference = source_ty
+                    .ty
+                    .document()
+                    .fields
+                    .iter()
+                    .any(|f| f.references.as_deref() == Some(row.kind.as_str()));
                 links.push(Link {
                     kind: row.kind,
                     name,
                     outgoing,
+                    by_reference,
                     pinned_revision: row.pinned_revision,
                     akt: other,
                 });
@@ -1821,6 +1840,113 @@ pub enum FieldValue {
     Users(UsersValue),
     Sections(SectionsValue),
     Verdict(VerdictValue),
+    Markdown(MarkdownValue),
+}
+
+/// A `markdown` field's text, with its headings and references
+/// (`akt.field.markdown`).
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub struct MarkdownValue {
+    field: String,
+    /// The text, every heading with its id.
+    markdown: String,
+    headings: Vec<MarkdownHeading>,
+    #[graphql(skip)]
+    found: Vec<kuria_engine::markdown::Reference>,
+}
+
+/// A heading of a `markdown` field.
+#[derive(SimpleObject)]
+pub struct MarkdownHeading {
+    id: String,
+    /// 1 to 6.
+    level: i32,
+    text: String,
+}
+
+/// A reference in a `markdown` field to an akt, one of its versions and
+/// one of its headings (`akt.field.markdown.references`).
+#[derive(SimpleObject)]
+pub struct MarkdownReference {
+    /// As the text says it: `kuria:<number>[@<version>][#<heading>]`.
+    destination: String,
+    number: String,
+    version: Option<i32>,
+    heading: Option<String>,
+    /// The akt, if it exists and the subject may read it.
+    akt: Option<Akt>,
+    /// Why the reference is broken, if it is.
+    broken: Option<String>,
+}
+
+impl MarkdownValue {
+    fn new(field: String, text: &str) -> Self {
+        use kuria_engine::markdown;
+        Self {
+            field,
+            markdown: text.to_owned(),
+            headings: markdown::headings(text)
+                .into_iter()
+                .filter_map(|h| {
+                    Some(MarkdownHeading {
+                        id: h.id?,
+                        level: i32::from(h.level),
+                        text: h.text,
+                    })
+                })
+                .collect(),
+            found: markdown::references(text),
+        }
+    }
+}
+
+#[ComplexObject]
+impl MarkdownValue {
+    /// The references in the text, in order, each once, each with its akt
+    /// or why it is broken.
+    // r[impl akt.field.markdown.references]
+    async fn references(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownReference>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut answered = Vec::new();
+        for reference in &self.found {
+            let akt = match store::akt_by_number(&mut conn, tenant, &reference.number)
+                .await
+                .map_err(internal)?
+            {
+                Some(row) => with_types(&mut conn, tenant, vec![row]).await?.pop(),
+                None => None,
+            };
+            let akt = match akt {
+                Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Some(akt),
+                _ => None,
+            };
+            let target = match &akt {
+                Some(akt) => Some(kuria_engine::markdown::Target {
+                    headings: kuria_engine::markdown::heading_ids(
+                        &akt.ty.ty,
+                        &fields_from_json(
+                            &akt.ty.ty,
+                            akt.row.fields.as_object().unwrap_or(&Map::new()),
+                        )
+                        .map_err(internal)?,
+                    ),
+                    versions: Vec::new(),
+                }),
+                None => None,
+            };
+            answered.push(MarkdownReference {
+                destination: reference.to_string(),
+                number: reference.number.clone(),
+                version: reference.version.and_then(|v| i32::try_from(v).ok()),
+                heading: reference.heading.clone(),
+                broken: kuria_engine::markdown::broken(reference, target.as_ref()),
+                akt,
+            });
+        }
+        Ok(answered)
+    }
 }
 
 /// A `multiple` user field's users and contacts, in order.
@@ -1998,6 +2124,7 @@ impl FieldValue {
                 field,
                 text: text.clone(),
             }),
+            Value::Markdown(text) => Self::Markdown(MarkdownValue::new(field, text)),
             Value::Choice(key) => Self::Choice(ChoiceValue {
                 field,
                 option: option(key),
