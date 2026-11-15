@@ -15,6 +15,7 @@ pub mod erasure;
 mod graphql;
 mod http;
 pub mod oidc;
+pub mod pdf;
 pub mod session;
 pub mod web;
 

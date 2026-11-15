@@ -234,6 +234,9 @@ pub struct Answer {
     pub status: StatusCode,
     pub headers: HeaderMap,
     pub body: String,
+    /// The body as it came, for one that isn't text.
+    #[allow(dead_code, reason = "not every test reads binary answers")]
+    pub bytes: Vec<u8>,
 }
 
 impl Answer {
@@ -254,7 +257,8 @@ pub async fn send(router: &Router, mut request: Request<Body>) -> Answer {
     Answer {
         status,
         headers,
-        body: String::from_utf8(bytes.to_vec()).unwrap(),
+        body: String::from_utf8_lossy(&bytes).into_owned(),
+        bytes: bytes.to_vec(),
     }
 }
 

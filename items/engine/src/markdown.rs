@@ -13,7 +13,7 @@ use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 
 /// The Markdown a `markdown` field holds: `CommonMark` with GitHub's
 /// tables, task lists and strikethrough, and heading ids.
-fn options() -> Options {
+pub(crate) fn options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_STRIKETHROUGH

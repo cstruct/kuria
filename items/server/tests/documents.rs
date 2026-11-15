@@ -388,3 +388,120 @@ async fn a_version_reads_as_it_was_released() {
         .await;
     assert!(delete.is_err(), "a version was removed");
 }
+
+/// A PDF of `number`'s body, at `version` if given.
+async fn pdf(world: &World, number: &str, version: Option<i32>) -> support::Answer {
+    let query = version.map(|v| format!("&version={v}")).unwrap_or_default();
+    let request = axum::http::Request::get(format!("/akter/{number}/pdf?field=body{query}"))
+        .header("authorization", "Bearer tenant")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    send(&world.router, request).await
+}
+
+/// The text of every page of `bytes`, a PDF, and its bookmarks' titles.
+fn read_pdf(bytes: &[u8]) -> (String, Vec<String>) {
+    let document = lopdf::Document::load_mem(bytes).unwrap();
+    let pages: Vec<u32> = document.get_pages().keys().copied().collect();
+    let text = document.extract_text(&pages).unwrap();
+    // Words, one space apart, however the PDF breaks its lines.
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut titles = Vec::new();
+    if let Ok(outline) = document.get_toc() {
+        titles = outline.toc.into_iter().map(|t| t.title).collect();
+    }
+    (text, titles)
+}
+
+/// Every `URI` in `object` and what it holds.
+fn uris_in(object: &lopdf::Object, found: &mut Vec<String>) {
+    match object {
+        lopdf::Object::Dictionary(d) => {
+            for (key, value) in d {
+                if key == b"URI"
+                    && let Ok(uri) = value.as_str()
+                {
+                    found.push(String::from_utf8_lossy(uri).into_owned());
+                }
+                uris_in(value, found);
+            }
+        }
+        lopdf::Object::Array(items) => items.iter().for_each(|i| uris_in(i, found)),
+        _ => {}
+    }
+}
+
+// r[verify pdf.render]
+// r[verify pdf.route]
+// r[verify pdf.repeatable]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_markdown_field_is_read_as_a_pdf() {
+    let world = World::new().await;
+    let setup = world.create("Setup", "# Install {#install}\n").await;
+    let guide = world
+        .create(
+            "Guide",
+            &format!(
+                "# Getting started\n\nRead the [setup](kuria:{setup}#install) first.\n\n## Steps\n\n- one\n- two\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n"
+            ),
+        )
+        .await;
+    let answer = pdf(&world, &guide, None).await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    assert_eq!(answer.headers["content-type"], "application/pdf");
+    assert!(
+        answer.headers["content-disposition"]
+            .to_str()
+            .unwrap()
+            .contains(&format!("{guide}.pdf"))
+    );
+    assert!(answer.bytes.starts_with(b"%PDF"));
+    let (text, titles) = read_pdf(&answer.bytes);
+    for words in [
+        "Getting started",
+        "Read the setup first.",
+        "Steps",
+        "one",
+        "two",
+    ] {
+        assert!(text.contains(words), "{words:?} in {text:?}");
+    }
+    assert_eq!(titles, ["Getting started", "Steps"]);
+    // The reference links to the akt's heading in the app.
+    let document = lopdf::Document::load_mem(&answer.bytes).unwrap();
+    let mut uris = Vec::new();
+    for object in document.objects.values() {
+        uris_in(object, &mut uris);
+    }
+    assert!(
+        uris.iter()
+            .any(|u| u.ends_with(&format!("/akt/{setup}#install"))),
+        "{uris:?}"
+    );
+
+    // A version's PDF is of the version, the same each time.
+    world.release("tenant", &guide, None).await;
+    world.edit(&guide, "# Rewritten\n").await;
+    let first = pdf(&world, &guide, Some(1)).await;
+    assert_eq!(first.status, 200, "{}", first.body);
+    assert!(read_pdf(&first.bytes).0.contains("Getting started"));
+    assert_eq!(pdf(&world, &guide, Some(1)).await.bytes, first.bytes);
+    assert!(
+        read_pdf(&pdf(&world, &guide, None).await.bytes)
+            .0
+            .contains("Rewritten")
+    );
+
+    // 404 for what isn't there, or isn't a markdown field.
+    assert_eq!(pdf(&world, &guide, Some(9)).await.status, 404);
+    assert_eq!(pdf(&world, "D-99", None).await.status, 404);
+    let title = send(
+        &world.router,
+        axum::http::Request::get(format!("/akter/{guide}/pdf?field=title"))
+            .header("authorization", "Bearer tenant")
+            .body(axum::body::Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(title.status, 404);
+}

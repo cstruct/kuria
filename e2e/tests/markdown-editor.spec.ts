@@ -74,4 +74,13 @@ test('a markdown field is written in the editor, with a reference to a heading',
 	await link.click();
 	await expect(page.getByTestId('number')).toHaveText(setup);
 	await expect(page.locator('h1#installing')).toBeInViewport();
+
+	// r[verify app.pdf]: its body, downloaded as a PDF.
+	const [download] = await Promise.all([
+		page.waitForEvent('download'),
+		page.getByRole('link', { name: 'Download PDF' }).click()
+	]);
+	expect(download.suggestedFilename()).toBe(`${setup}.pdf`);
+	const bytes = await (await download.createReadStream()).toArray();
+	expect(Buffer.concat(bytes).subarray(0, 4).toString()).toBe('%PDF');
 });

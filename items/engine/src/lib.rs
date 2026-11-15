@@ -14,6 +14,7 @@ mod rank;
 pub mod rules;
 pub mod sbom;
 pub mod sections;
+pub mod typst;
 mod value;
 pub mod verdicts;
 pub mod versions;

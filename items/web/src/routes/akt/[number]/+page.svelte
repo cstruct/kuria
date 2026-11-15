@@ -108,6 +108,16 @@
 	const versioned = $derived(
 		Boolean(akt && (akt.type.document as { versions?: unknown } | null)?.versions)
 	);
+	// r[impl app.pdf]: each markdown field as a PDF, of what is being read.
+	const pdfs = $derived(
+		(akt?.type.fields ?? [])
+			.filter((f) => f.kind === 'MARKDOWN')
+			.map((f, _, all) => ({
+				key: f.key,
+				label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
+				href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}`
+			}))
+	);
 	let comparing = $state<{ from: number; to: number | null } | null>(null);
 	let compareOpen = $state(false);
 
@@ -433,6 +443,10 @@
 				{/if}
 			</div>
 			<div class="actions">
+				{#each pdfs as pdf (pdf.key)}
+					<!-- The server's PDF route, not a page of the app. -->
+					<Button href={pdf.href} download="">{pdf.label}</Button>
+				{/each}
 				<Button
 					disabled={busy || atVersion !== null}
 					onclick={() => {

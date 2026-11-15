@@ -262,6 +262,11 @@ async fn local(root: &Path, command: Command) -> Result<Answer, CliError> {
             "`draft`",
             "drafting looks through a server's akter",
         )),
+        // r[impl cli.local.unsupported]
+        Command::Pdf { .. } => Err(local::unsupported(
+            "`pdf`",
+            "Kuria renders PDFs; the client doesn't carry the renderer",
+        )),
         Command::Export { .. } | Command::Import { .. } => Err(local::unsupported(
             "Bundles",
             "a directory converts to and from a server with `export --to-dir` and `import --from-dir`, signed in",
@@ -313,6 +318,15 @@ fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, 
 /// `verdict` and `copy`, on a server.
 async fn protocol(session: &Session, command: Command) -> Result<Answer, CliError> {
     match command {
+        Command::Release { number, label } => {
+            versions::release(session, &number, label.as_deref()).await
+        }
+        Command::Pdf {
+            number,
+            field,
+            version,
+            output,
+        } => versions::pdf(session, &number, field.as_deref(), version, &output).await,
         Command::Verdict {
             number,
             verdict,
@@ -609,12 +623,10 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             target,
             reason,
         } => writes::unlink(session, &source, &kind, &target, reason.as_deref()).await,
-        command @ (Command::Verdict { .. } | Command::Copy { .. }) => {
-            protocol(session, command).await
-        }
-        Command::Release { number, label } => {
-            versions::release(session, &number, label.as_deref()).await
-        }
+        command @ (Command::Verdict { .. }
+        | Command::Copy { .. }
+        | Command::Release { .. }
+        | Command::Pdf { .. }) => protocol(session, command).await,
         Command::Draft {
             number,
             field,

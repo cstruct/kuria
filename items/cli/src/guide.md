@@ -140,6 +140,7 @@ kuria release <number> [--label 2.0]   # its current revision as its next versio
 kuria versions <number>                # its versions, latest first
 kuria cat <number> --version 2         # as it was at version 2 (read-only)
 kuria diff <number> 1 [2]              # what changed since version 1, or up to 2
+kuria pdf <number> [--version 2] -o doc.pdf   # a markdown field as a PDF
 ```
 
 Values: options by key or name; users and contacts by email, name or

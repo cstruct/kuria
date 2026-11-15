@@ -11,6 +11,53 @@ use crate::reads::Source;
 use crate::session::Session;
 use crate::values::file_value;
 
+/// `kuria pdf <number> [--field] [--version] -o <file>` (`pdf.route`).
+// r[impl pdf.route]
+pub async fn pdf(
+    session: &Session,
+    number: &str,
+    field: Option<&str>,
+    version: Option<i64>,
+    output: &std::path::Path,
+) -> Result<Answer, CliError> {
+    use crate::http::Body;
+    let mut query = Vec::new();
+    if let Some(field) = field {
+        // Field keys are lowercase letters, digits and `_`.
+        query.push(format!("field={field}"));
+    }
+    if let Some(version) = version {
+        query.push(format!("version={version}"));
+    }
+    let url = format!("{}/akter/{number}/pdf?{}", session.url, query.join("&"));
+    let response = session
+        .http
+        .send(
+            reqwest::Method::GET,
+            &url,
+            Some(session.access_token()),
+            &Body::Empty,
+        )
+        .await?;
+    let status = response.status();
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Err(CliError::from_server(
+            "NOT_FOUND",
+            format!("No PDF of {number}: no such akt, version or markdown field"),
+            None,
+        ));
+    }
+    if !status.is_success() {
+        return Err(CliError::unavailable(format!("Kuria failed ({status})")));
+    }
+    let bytes = response.bytes().await?;
+    std::fs::write(output, &bytes).map_err(|e| crate::profile::io_error(output, &e))?;
+    Ok(Answer {
+        markdown: format!("Wrote {}: {} bytes.", output.display(), bytes.len()),
+        json: json!({ "number": number, "version": version, "path": output, "bytes": bytes.len() }),
+    })
+}
+
 /// `kuria release <number> [--label]` against a server.
 // r[impl version.release]
 pub async fn release(

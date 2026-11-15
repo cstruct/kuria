@@ -69,6 +69,15 @@ pub async fn at_version(
     Ok(Some((row, version)))
 }
 
+/// The akt type version `akt` was created with.
+pub async fn type_of_akt(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    akt: &AktRow,
+) -> Result<StoredType, AktError> {
+    type_of(conn, tenant, akt).await
+}
+
 /// What the akt `number` has for a reference to it, as a subject `auth`
 /// allows to read it: `None` if it doesn't exist or they may not read it.
 pub async fn target(

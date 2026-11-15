@@ -537,16 +537,43 @@ G02 (images, footnotes, merged cells) stays open: none of them is offered.
 <!-- akt: PLAN-014-T05 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b3v
-state: todo
+state: done
 in: [PLAN-014]
 links: [Blocked by PLAN-014-T02, Blocks PLAN-014-T07]
 title: PDFs of markdown fields
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Markdown to typst markup through the engine's parser. Compile with the `typst` crate and bundled fonts. `GET /akter/<number>/pdf` for the living version and versions, `kuria pdf`, and the app's Download PDF action.
+A `markdown` field is a PDF of its body, of the living version or of a version, rendered by the server with typst.
+
+- **Engine (`typst.rs`):** `markup` turns the field's Markdown into typst markup through the same parser.
+  - Headings become typst headings, so they are the PDF's bookmarks.
+  - Emphasis, strong, strikethrough, inline code, code blocks with their language, lists, ordered lists, task lists (☐ ☒), quotes, tables (header row strong) and rules.
+  - Links, and references to the address `link_of` gives.
+  - Text is escaped for typst.
+  - A small writer keeps its methods under the length lint.
+- **Server (`pdf.rs`):**
+  - `GET /akter/{number}/pdf?field=&version=`, authenticated as `/graphql` is.
+  - 404 for an akt the subject may not read, a field that isn't `markdown`, or a missing version. Without `field`, it takes the type's only `markdown` field.
+  - At a version, references follow its pins.
+  - Rendered with typst 0.14.0 (the newest on Rust 1.88), typst-pdf and typst-assets' bundled fonts, on a blocking thread. Links point to `KURIA_PUBLIC_URL`.
+  - Answers `application/pdf` as `<number>[-v<n>].pdf`.
+- **Browser sessions:** the session cookie now authenticates `/akter/`, like `/graphql` and `/attachments`, so the app's link works. Without it, a download was refused.
+- **CLI:** `kuria pdf <number> [--field] [--version] -o <file>`, refused in local mode as `LOCAL_UNSUPPORTED`. In `guide`.
+- **App:** Download PDF in the akt page's actions, one per `markdown` field ("<Field> as PDF" if there are several), at the version being read.
+
+**Tests:**
+- Engine: `markdown_becomes_typst` on ten cases.
+- Server: `a_markdown_field_is_read_as_a_pdf`.
+  - Type and file name; text and bookmarks read back with `lopdf`; the reference's link to the app's heading.
+  - A version's PDF is of the version, and byte-identical twice.
+  - 404s.
+- e2e: `markdown-editor.spec.ts` downloads the PDF and checks it starts with `%PDF`.
+
+Lint and `mise run test` (366 Rust, 80 app) pass.
 
 <!-- field: acceptance -->
 - Engine tests of the conversion.

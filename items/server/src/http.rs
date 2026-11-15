@@ -92,6 +92,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         login_proxy,
         cli_relay,
     } = options;
+    let pdf_base = public_url.clone();
     let konklav = Konklav::builder(host.clone())
         // r[impl auth.dpop]
         .public_url(move |parts: &Parts| format!("{public_url}{}", parts.uri.path()))
@@ -141,6 +142,14 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             decider: decider.clone(),
         });
 
+    // r[impl pdf.route]
+    let pdf_routes = Router::new()
+        .route(
+            "/akter/{number}/pdf",
+            get(crate::pdf::pdf).route_layer(api.route(&Policy::new())?),
+        )
+        .with_state(crate::pdf::state(pool.clone(), decider.clone(), pdf_base));
+
     let mut router = Router::new()
         // r[impl auth.health]
         .route(
@@ -163,6 +172,7 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
             decider,
         })
         .merge(attachment_routes)
+        .merge(pdf_routes)
         .merge(bundle_routes);
     if let Some(relay) = cli_relay {
         router = router.merge(crate::cli_relay::router(relay)?);

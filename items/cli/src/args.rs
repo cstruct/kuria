@@ -136,6 +136,19 @@ pub enum Command {
     },
     /// An akt's versions, latest first.
     Versions { number: String },
+    /// A `markdown` field as a PDF: of the living version, or a version.
+    Pdf {
+        number: String,
+        /// The field, if its type has more than one `markdown` field.
+        #[arg(long)]
+        field: Option<String>,
+        /// The version to render.
+        #[arg(long)]
+        version: Option<i64>,
+        /// Where to write it.
+        #[arg(long, short)]
+        output: PathBuf,
+    },
     /// What changed in an akt between two versions, or since a version.
     Diff {
         number: String,
