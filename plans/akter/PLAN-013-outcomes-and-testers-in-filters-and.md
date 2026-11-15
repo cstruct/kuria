@@ -1,9 +1,9 @@
 ---
 number: PLAN-013
 type: plan
-revision: 11
+revision: 12
 rank: b3a
-state: active
+state: done
 title: Outcomes and testers in filters and transitions
 owner: albin@mattsson.io
 ---

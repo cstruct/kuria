@@ -194,9 +194,9 @@ Settled in PLAN-012-T01: a section has an optional Markdown `text` beside its op
 <!-- akt: PLAN-012-G02 -->
 ---
 type: gap
-revision: 5
+revision: 6
 rank: b3R
-state: open
+state: closed
 in: [PLAN-012]
 links: [Resolved by PLAN-013-T02, Resolved by PLAN-013-T03, Resolved by PLAN-013-T04]
 title: Outcomes in filters and transitions
@@ -206,6 +206,9 @@ title: Outcomes in filters and transitions
 An outcome is derived on read (PLAN-012-D05), so it can't yet be filtered on (`akt.filter`) or required by a transition, such as a protocol that can only be finished when no test is pending, or a release that needs a passed protocol. Both need the outcome computed in queries and in transition checks.
 
 Filtering by a field that names several people (a test case's testers) isn't supported either, so a tester's test cases don't show in their "My work" on Home, which leaves such fields out (PLAN-012-T06). Filtering by one of them, as `--where testers=@me` would, would fix both.
+
+<!-- field: resolution -->
+PLAN-013 built it: fields naming several people filter by any one of them (T02), a transition can require an outcome (T03), and lists filter by outcome (T04).
 
 <!-- akt: PLAN-012-G03 -->
 ---
