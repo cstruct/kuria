@@ -11,7 +11,9 @@ the foot of the page that first refers to it, numbered in that order. Each headi
 nested by level. A reference MUST be shown by its text, as a link to the
 akt in the app (`app.references`). An embedded image MUST be drawn as its
 picture, as the PDF's version reads it, and a broken one as its alt text.
-A diagram block MUST be drawn from its source, as a vector drawing.
+A diagram block MUST be drawn from its source, as a vector drawing. A page
+break MUST start a new page. The PDF of an akt with a live draft MUST be of
+its live draft, unless a version is asked for.
 
 r[render.limits]
 Kuria MUST render each PDF and each diagram in a process of its own, which
@@ -32,7 +34,8 @@ it.
 r[pdf.route]
 `GET /akter/{number}/pdf?field=<key>` MUST answer the PDF of the akt's
 `markdown` field `key`, and with `&version=<n>` of that field at the
-akt's version `n` (`version.read`). It MUST be authenticated as `/graphql`
+akt's version `n` (`version.read`), to be shown where it opens, or with
+`&download` to be saved. It MUST be authenticated as `/graphql`
 is, and answer 404 for an akt the subject may not read, as if it did not
 exist, and for a field that isn't `markdown` or a version the akt doesn't
 have.

@@ -19,7 +19,8 @@ akt whose type version doesn't declare `versions` MUST be refused as
 
 r[version.release]
 `releaseVersion` MUST name the akt's current revision as its next
-version, with an optional label, a single line of at most 100
+version, or for an akt with a live draft record its live draft as a new
+revision and name that (`live.release`), with an optional label, a single line of at most 100
 characters. It MUST take the revision the caller read, and refuse a
 revision that isn't the akt's current one as `STALE`
 (`akt.revision.concurrency`). It MUST refuse a revision that is already a

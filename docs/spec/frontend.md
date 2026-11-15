@@ -97,7 +97,21 @@ two versions, or a version and the living version (`version.diff`).
 
 r[app.pdf]
 The app MUST offer a `markdown` field as a PDF, of the living version or
-of the version being read (`pdf.route`).
+of the version being read (`pdf.route`), to download, and each version's
+PDF opening in a new tab from the versions list.
+
+r[app.sheets]
+The app MUST show and edit a `markdown` field as A4 sheets, white with
+dark text whatever the theme, with the PDF's margins, starting a new sheet
+at each page break, and marking where a sheet would otherwise end. The
+editor MUST offer inserting a page break.
+
+r[app.live]
+The app MUST show an akt with a live draft as its live draft, and edit it
+together with everyone else editing it (`live.sync`): each person's edits
+appearing to the others as they make them, without saving, and who else
+is editing, and where, shown (`live.presence`). Releasing it MUST release
+the live draft as it is (`live.release`).
 
 r[app.transitions]
 The app MUST offer the transitions an akt's state allows, asking for the

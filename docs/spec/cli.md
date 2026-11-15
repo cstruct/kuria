@@ -336,9 +336,19 @@ the akt has changes git hasn't committed, and reading an akt at a version
 MUST read it from the latest commit at which it had the version's
 revision (`cli.local.history`).
 
+r[cli.local.attachments]
+In an akt directory, an attachment MUST be a file under
+`attachments/<number>/<name>`, which the akt file's value for an
+`attachment` field names by that path from the directory. Local mode MUST
+check that the file exists, that its media type, by its extension, is one
+its field takes (`attachment.media-types`), and that a field holding SBOMs
+holds one (`attachment.sbom`), and MUST read pictures from those files
+(`akt.field.markdown.images`). A value naming anything else MUST be
+refused.
+
 r[cli.local.unsupported]
-In local mode `login`, `logout`, `users`, `contacts`, `draft`, attachments,
-`pdf`, `export` and `import` of bundles MUST be refused as
+In local mode `login`, `logout`, `users`, `contacts`, `draft`, uploading
+attachments, `pdf`, `export` and `import` of bundles MUST be refused as
 `LOCAL_UNSUPPORTED`, saying why. `whoami` MUST answer the directory and who `@me` is.
 
 r[cli.local.check]
@@ -358,14 +368,16 @@ r[cli.local.convert]
 write the selected akt types and their akter as a new akt directory, in
 the server's order, each akt reading through `cat` as it does on the
 server, refusing an akt that doesn't fit its type's latest document, which
-is the one an akt directory keeps, and one holding an attachment. Each
+is the one an akt directory keeps. Each attachment MUST be written as
+its file (`cli.local.attachments`). Each
 akt's versions MUST be written into its directory file's `versions`
 (`cli.local.versions`), each with the headings it had at its revision; a
 version's text stays with the server, since git holds none of the
 revisions before the directory's.
 `kuria import --from-dir <path>` MUST import a directory `kuria check`
 finds consistent as a bundle of its types and akter (`bundle.import.*`),
-keeping their numbers, memberships, links, pins and versions. Since git
+keeping their numbers, memberships, links, pins, versions and
+attachments, each uploaded from its file. Since git
 holds a directory's history, each akt MUST get revisions numbered up to its
 file's `revision`, each recording the akt as git's latest commit at that
 revision holds it, else as at the next revision git has, and its file as it

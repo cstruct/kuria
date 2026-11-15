@@ -127,6 +127,21 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `bundled package`
   - A typst package vendored in Kuria, unmodified with its license, the only kind a diagram or a PDF can import: fletcher, cetz and cetz-plot.
 
+- `live draft`
+  - The fields of an akt whose type says `"live_drafts": true`, edited together, live, with Yjs. Edits change the live draft only; a release records it as a revision. Not to be confused with a `draft`, which a recipe fills a field with.
+
+- `repository`
+  - A container whose type says `"git": true`, kept as a git repository Kuria hosts at `/git/<number>.git`, with its commits, branches and tags as pushed.
+
+- `main`
+  - A repository's branch that is its akter: the live drafts and the rest. A push to it changes them; changes made in Kuria become commits on it.
+
+- `page break`
+  - A line holding only `<!-- pagebreak -->` in a `markdown` field: a new page in its PDF, a new sheet in the app.
+
+- `sheet`
+  - One A4 page of a `markdown` field as the app shows and edits it, white whatever the theme.
+
 - `living version`
   - An akt as it is now, which edits change; as opposed to its versions.
 
@@ -191,7 +206,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - How strongly, and in which sense, a state is shown: `neutral`, `active`, `success`, `warning` or `danger`.
 
 - `draft`
-  - Text a field is filled with from the akter around its akt, by the recipe its field declares, such as release notes from the items a release shipped. A draft is an ordinary edit.
+  - Text a field is filled with from the akter around its akt, by the recipe its field declares, such as release notes from the items a release shipped. A draft is an ordinary edit. Not to be confused with a `live draft`.
 
 - `parent` (in a number pattern)
   - The container an akt was created in, whose akt number `{parent}` renders, as in `RELEASE-2026-0001-RC-0001`.

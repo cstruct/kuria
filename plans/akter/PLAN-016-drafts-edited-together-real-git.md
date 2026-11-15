@@ -1,9 +1,9 @@
 ---
 number: PLAN-016
 type: plan
-revision: 19
+revision: 21
 rank: b4O
-state: draft
+state: active
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
 owner: albin@mattsson.io
 ---
@@ -11,7 +11,7 @@ owner: albin@mattsson.io
 <!-- field: goal -->
 Documents written together, released as they are, and worked on with real git.
 
-- **A living draft, edited together:** an akt type may opt in to drafts. Its akter then have one draft, all their fields, edited live by everyone allowed, with [Yjs](https://github.com/yjs/yjs). Edits never make revisions: each revision is a release, which records the draft as it is.
+- **A living draft, edited together:** an akt type may opt in to live drafts. Its akter then have one draft, all their fields, edited live by everyone allowed, with [Yjs](https://github.com/yjs/yjs). Edits never make revisions: each revision is a release, which records the draft as it is.
 - **Real git:** each container that opts in, such as a document index, is a git repository Kuria hosts, its objects in object storage (S3) and its refs in Postgres. `git clone https://kuria.example/git/DOCS-1.git` gives the index and all its documents. Branches, merges and tags are kept as pushed. `main` is the drafts: the app's edits become commits on it, and a push to it flows into the drafts.
 - **The branch workflow works:** make many edits, branch to keep them, revert on `main` what isn't ready, release, then merge the branch back to recover the rest.
 - **Pages:** a document is shown and edited as white A4 pages, whatever the theme, with page breaks written `<!-- pagebreak -->`, as its PDF lays them out.
@@ -34,13 +34,13 @@ Success: the documents walkthrough runs in `mise run e2e` with two people editin
 - Local mode checks the file exists, its media type against `media_types`, and an SBOM field's SBOM, with the engine's SBOM reading. A local release resolves pictures from these files.
 - `export --to-dir` writes each attachment's bytes there; `import --from-dir` puts them in the bundle it imports.
 
-## Drafts (PLAN-016-D02, D03)
+## Live drafts (PLAN-016-D02, D03)
 
-- **Opting in:** an akt type says `"drafts": true`. Every field of its akter is in the draft. Other types are as now.
+- **Opting in:** an akt type says `"live_drafts": true`. Every field of its akter is in the draft. Other types are as now.
 - **Revisions are releases:** for such an akt, edits change its draft only. Releasing records the draft's fields as a revision and names it as the next version, as versions do now, with its reference checks and pins. A transition or membership change is a revision too, carrying the last release's fields. Reading an akt answers its draft, and its revisions as before.
 - **The draft is a Yjs document** the server reads and writes with `yrs`: each `markdown` and multiline `text` field a `Y.Text` of its Markdown or text, every other field a value in a `Y.Map`, last writer wins. Rich-text structure isn't in the CRDT, so the server can read, check, render and merge it (PLAN-016-D03).
 - **Kept** as `akt_draft` (its encoded state) and `akt_draft_update` (each update, with who sent it and when), compacted into the state now and then; the akt's history shows the draft's changes by author, between releases.
-- **Collaboration:** the y-websocket sync and awareness protocols at `GET /akter/{number}/draft` over WebSocket, authenticated as `/graphql` is, read-only to readers. Updates between server instances go through Valkey, as change events do.
+- **Collaboration:** the y-websocket sync and awareness protocols at `GET /akter/{number}/live` over WebSocket, authenticated as `/graphql` is, read-only to readers. Updates between server instances go through Valkey, as change events do.
 - **The editor** binds Lexical to the field's `Y.Text`: a local change becomes the minimal text edit of its Markdown; a remote change re-imports the blocks it touched, keeping the selection where it was. Other fields bind to the map. Who else is editing shows as presence.
 
 ## Git repositories (PLAN-016-D04, D05)
@@ -64,7 +64,7 @@ Success: the documents walkthrough runs in `mise run e2e` with two people editin
 
 ## The example
 
-- `document` says `"drafts": true`; `document_index` says `"git": true`.
+- `document` says `"live_drafts": true`; `document_index` says `"git": true`.
 
 <!-- field: verification -->
 - `mise run lint` and `mise run test`: local mode's attachments; the draft's `yrs` reading and writing, releases making revisions, pushes merged into drafts with concurrent edits; refs' compare-and-swap; the editor's binding to `Y.Text` both ways.
@@ -93,7 +93,7 @@ It is how clones keep pictures, so both kinds of directory read alike, and it se
 <!-- akt: PLAN-016-D02 -->
 ---
 type: decision
-revision: 2
+revision: 3
 rank: b4Q
 state: decided
 in: [PLAN-016]
@@ -105,7 +105,7 @@ decided_by: albin@mattsson.io
 Documents should be edited by several people at once, and a revision should mean something: what was released.
 
 <!-- field: decision -->
-An akt type may say `"drafts": true`. Its akter have one draft holding all their fields, edited live; edits change only the draft, and a release records it as a revision and names it as the next version. Transitions and membership changes are revisions carrying the last release's fields. Other types keep a revision per write.
+An akt type may say `"live_drafts": true`. Its akter have one draft holding all their fields, edited live; edits change only the draft, and a release records it as a revision and names it as the next version. Transitions and membership changes are revisions carrying the last release's fields. Other types keep a revision per write.
 
 <!-- field: why -->
 Opting in keeps planning and release management as they are. Keeping versions, now made by every release, keeps references, pins, PDFs and tags working unchanged. All fields, not only the body, so that a title edited live is in the same draft.
@@ -193,24 +193,27 @@ HTML pages stay editable in place. An HTML comment keeps the Markdown readable e
 <!-- akt: PLAN-016-T01 -->
 ---
 type: task
-revision: 5
+revision: 9
 rank: b4V
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocks PLAN-016-T02, Blocks PLAN-016-T03, Blocks PLAN-016-T04, Blocks PLAN-016-T06]
 title: "Spec drafts, repositories, pages and directory attachments"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 The spec says what PLAN-016 builds. No implementation yet.
 
-- `docs/nomenclature.md`: `draft`, `release` (as revisions now are, for types with drafts), `repository`, `main`, `page break`, `sheet`.
-- `docs/spec/akter.md`: `drafts` on akt types, revisions of akter with drafts; `docs/spec/versions.md`: releases making revisions.
-- New `docs/spec/drafts.md`: the draft, its Yjs types, the sync route, presence, history by author.
-- `docs/spec/git.md`: repositories, storage, smart HTTP, the credential helper, `main` and drafts, branches and tags, moving from the helper.
-- `docs/spec/cli.md`: attachments in akt directories.
-- `docs/spec/frontend.md`: sheets and page breaks, the draft live, releases' PDFs in new tabs; `docs/spec/pdf.md`: page breaks, inline PDFs.
-- `docs/requirements.md`, `docs/architecture.md`.
+- **Naming:** `draft` already names a field filled by its recipe (`drafts.md`), so the collaborative draft is a `live draft`, declared `"live_drafts": true`, with its rules in a new `docs/spec/live-drafts.md` (`live.declare`, `live.fields`, `live.edit`, `live.read`, `live.release`, `live.revisions`, `live.history`, `live.sync` at `GET /akter/{number}/live`, `live.instances`, `live.presence`). The plan's design and D02 say so too.
+- `docs/nomenclature.md`: `live draft`, `repository`, `main`, `page break`, `sheet`; `draft` points at `live draft`.
+- `akter.md`: `akt.revision.record` excepts live drafts; validation lists `live_drafts` and `git`; a page break line. `versions.md`: `version.release` for live drafts.
+- `git.md`: a Repositories section (`git.repo.declare`, `.storage`, `.serve`, `.push`, `.main`, `.commits`, `.branches`, `.seed`).
+- `cli.md`: `cli.local.attachments`; `cli.local.unsupported` and `cli.local.convert` take attachments.
+- `pdf.md`: page breaks, a live draft's PDF, inline unless `&download`. `frontend.md`: `app.pdf` opens versions in new tabs; new `app.sheets`, `app.live`.
+- `requirements.md`, `architecture.md`.
+
+`mise run lint` passes.
 
 <!-- field: acceptance -->
 - `mise run lint` passes, tracey listing the new rules as uncovered.

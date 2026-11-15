@@ -100,3 +100,54 @@ r[git.fmt]
 `kuria fmt` in a clone MUST put its files in normal form, changing no
 value but the heading ids it gives, and moving each file to where the
 container's `sections` field puts it.
+
+## Repositories
+
+A container may instead be a git repository Kuria hosts: cloned, fetched
+and pushed over HTTPS with plain git, its commits, branches, merges and
+tags kept as pushed.
+
+r[git.repo.declare]
+An akt type document that contains akt types MAY say `"git": true`; each
+akt of it is then a repository, of it and its members, at
+`/git/<number>.git`.
+
+r[git.repo.storage]
+A repository's objects MUST be kept in object storage as packfiles, never
+changed once kept, and its refs in Kuria's database, each moved only by a
+compare-and-swap in the transaction that writes what its push changed, so
+that two pushes racing to one ref can't both succeed.
+
+r[git.repo.serve]
+Kuria MUST serve each repository over git's smart HTTP protocol,
+authenticated as `/graphql` is: fetching to a subject who may read its
+akt, pushing to one who may edit it. `kuria git-credential` MUST give git
+the credentials of the CLI's sign-in.
+
+r[git.repo.push]
+A push MUST be checked before any of it is kept: a push to `main` as
+`git.repo.main` says, any other ref only for being a branch or tag. A
+refused push MUST keep nothing.
+
+r[git.repo.main]
+`main` MUST hold the container and its members as `git.tree` and
+`git.pictures` lay them out, in normal form (`git.push.normal`). A push to
+`main` MUST change in Kuria what its commits changed: an akt with a live
+draft by merging into its live draft, as text, the change from each
+commit's parent to it, so that edits made meanwhile are kept; any other
+akt as `git.push` does. Merge commits MUST be taken.
+
+r[git.repo.commits]
+Changes made in Kuria to a repository's akter, through the app or the
+API, MUST become commits on `main`, by whoever made them: a live draft's
+after a minute without changes, or when it is released; any other change
+as it is made. Each release MUST be tagged `<number>/v<n>` at its commit.
+
+r[git.repo.branches]
+Branches other than `main`, and tags, MUST be kept as pushed, and MUST
+change nothing in Kuria.
+
+r[git.repo.seed]
+A repository MUST start from the history `git-remote-kuria` builds for its
+container (`git.history`), so that clones made through the helper have the
+same commits.

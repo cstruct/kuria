@@ -44,7 +44,9 @@ Kuria MUST refuse an akt type document, saying why, unless:
   declares (`akt.field.markdown.references`);
 - every `attachment` field's `media_types` are valid
   (`akt.field.attachment`);
-- its `versions` are valid (`version.declare`).
+- its `versions` are valid (`version.declare`);
+- `live_drafts` comes with `versions` (`live.declare`);
+- `git` is on a type that contains akt types (`git.repo.declare`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or
@@ -148,6 +150,9 @@ sections in the same change. An akt type MUST have at most one `sections`
 field.
 
 r[akt.field.markdown]
+A line holding only `<!-- pagebreak -->` in a `markdown` field is a page
+break (`pdf.render`, `app.sheets`).
+
 A `markdown` field MUST hold CommonMark text, with GitHub's tables, task
 lists, strikethrough and footnotes, and is without a value when empty. A
 footnote is referred to as `[^<label>]` and defined, anywhere in the text,
@@ -369,7 +374,8 @@ one transaction (`akt.batch.atomic`).
 ## Akt revisions
 
 r[akt.revision.record]
-Every change to an akt MUST append an akt revision, numbered from 1 without
+Every change to an akt, save one to the live draft of an akt that has one
+(`live.edit`), MUST append an akt revision, numbered from 1 without
 gaps, recording the subject who made it, the transition if there was one,
 the reason if one was given, the field values it changed, the resulting
 state, and the SHA-256 hash of the akt's resulting state and field values.
