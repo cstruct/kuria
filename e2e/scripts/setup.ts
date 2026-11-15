@@ -149,7 +149,7 @@ const people = {
 		'reader',
 		{
 			role: 'developer-work',
-			at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'document']
+			at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'document', 'image']
 		}
 	]),
 	releaseManager: await person(tenant, 'rm@shop.example', [

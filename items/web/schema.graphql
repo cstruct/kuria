@@ -214,6 +214,14 @@ enum AktTypeIcon {
 	ZAP
 }
 
+"""
+Where the app's sidebar lists an akt type.
+"""
+enum AktTypeNavigation {
+	MAIN
+	MORE
+}
+
 type Attachment {
 	id: ID!
 	"""
@@ -930,6 +938,10 @@ type Presentation {
 	The colour the type is shown in.
 	"""
 	colour: AktTypeColour!
+	"""
+	Where the app's sidebar lists the type (`app.navigation`).
+	"""
+	navigation: AktTypeNavigation!
 }
 
 type Query {

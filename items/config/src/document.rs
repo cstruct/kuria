@@ -114,6 +114,21 @@ pub struct PresentationDef {
     /// The colour the type is shown in; `neutral` if not given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<Colour>,
+    /// Where the sidebar lists the type; `main` if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation: Option<Navigation>,
+}
+
+/// Where the app's sidebar lists an akt type (`app.navigation`).
+// r[impl akt.type.presentation]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Navigation {
+    /// With the others.
+    #[default]
+    Main,
+    /// Under "Show more".
+    More,
 }
 
 impl PresentationDef {

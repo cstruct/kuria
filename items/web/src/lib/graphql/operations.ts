@@ -654,6 +654,9 @@ export const Shell = graphql(`
 		aktTypes {
 			...TypeMark
 			akterCount
+			presentation {
+				navigation
+			}
 		}
 	}
 `);

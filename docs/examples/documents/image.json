@@ -1,0 +1,23 @@
+{
+  "key": "image",
+  "name": "Image",
+  "number": "IMG-{seq}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "file", "name": "File", "kind": "attachment",
+      "description": "The picture: PNG, JPEG, SVG or WebP." },
+    { "key": "caption", "name": "Caption", "kind": "text" }
+  ],
+  "states": [
+    { "key": "current", "name": "Current", "initial": true },
+    { "key": "retired", "name": "Retired", "final": true }
+  ],
+  "transitions": [
+    { "key": "retire", "name": "Retire", "from": ["current"], "to": "retired" }
+  ],
+  "presentation": {
+    "icon": "layers", "colour": "teal",
+    "navigation": "more",
+    "tones": { "current": "active", "retired": "neutral" }
+  }
+}

@@ -5,6 +5,8 @@
 	import Users from '@lucide/svelte/icons/users';
 	import Home from '@lucide/svelte/icons/house';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+	import { moreWasOpen, rememberMore, splitTypes } from './shell';
 	import type { ShellQuery } from '#lib/graphql/generated/graphql.ts';
 
 	interface Props {
@@ -19,7 +21,35 @@
 
 	const here = (href: string) =>
 		page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
+
+	// r[impl app.navigation]
+	const split = $derived(splitTypes(types));
+	// Reading `localStorage` itself throws where site data is blocked.
+	const storage = () => {
+		try {
+			return typeof localStorage === 'undefined' ? undefined : localStorage;
+		} catch {
+			return undefined;
+		}
+	};
+	let moreOpen = $state(moreWasOpen(storage()));
+	function toggleMore() {
+		moreOpen = !moreOpen;
+		rememberMore(storage(), moreOpen);
+	}
 </script>
+
+{#snippet typeLinks(listed: ShellQuery['aktTypes'])}
+	{#each listed as type (type.key)}
+		{@const href = resolve('/types/[key]', { key: type.key })}
+		<li>
+			<a {href} aria-current={here(href) ? 'page' : undefined} onclick={onNavigate}>
+				<span class="name"><TypeMark {type} named /></span>
+				{#if type.akterCount !== null}<span class="count">{type.akterCount}</span>{/if}
+			</a>
+		</li>
+	{/each}
+{/snippet}
 
 <nav class="sidebar" aria-label="Kuria">
 	<a class="brand" href={resolve('/')} onclick={onNavigate}>Kuria</a>
@@ -44,16 +74,24 @@
 
 	<h2 id="types-heading">Akt types</h2>
 	<ul aria-labelledby="types-heading">
-		{#each types as type (type.key)}
-			{@const href = resolve('/types/[key]', { key: type.key })}
-			<li>
-				<a {href} aria-current={here(href) ? 'page' : undefined} onclick={onNavigate}>
-					<span class="name"><TypeMark {type} named /></span>
-					{#if type.akterCount !== null}<span class="count">{type.akterCount}</span>{/if}
-				</a>
-			</li>
-		{/each}
+		{@render typeLinks(split.main)}
 	</ul>
+	{#if split.more.length > 0}
+		<button
+			type="button"
+			class="more"
+			aria-expanded={moreOpen}
+			aria-controls="more-types"
+			onclick={toggleMore}
+		>
+			<ChevronRight size={14} aria-hidden={true} />
+			<span>Show more</span>
+			<span class="count">{split.more.length}</span>
+		</button>
+		<ul id="more-types" aria-label="More akt types" hidden={!moreOpen}>
+			{@render typeLinks(split.more)}
+		</ul>
+	{/if}
 
 	<ul class="end">
 		<li>
@@ -126,6 +164,41 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
+	}
+
+	.more {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2);
+		border: 0;
+		border-radius: var(--radius-md);
+		background: none;
+		color: var(--text-muted);
+		font: inherit;
+		font-size: var(--text-sm);
+		cursor: pointer;
+	}
+
+	.more:hover {
+		background: var(--bg-muted);
+	}
+
+	.more span:first-of-type {
+		flex: 1;
+		text-align: start;
+	}
+
+	.more :global(svg) {
+		transition: transform 0.15s;
+	}
+
+	.more[aria-expanded='true'] :global(svg) {
+		transform: rotate(90deg);
+	}
+
+	ul[hidden] {
+		display: none;
 	}
 
 	.end {

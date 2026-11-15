@@ -1141,8 +1141,19 @@ mod tests {
                 "{expected} not in {found:?}"
             );
         }
-        document["presentation"] = json!({ "tones": { "open": "loud" } });
-        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+        document["presentation"] = json!({ "navigation": "more" });
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert_eq!(
+            ty.document().presentation.navigation,
+            Some(crate::Navigation::More)
+        );
+        for wrong in [
+            json!({ "tones": { "open": "loud" } }),
+            json!({ "navigation": "hidden" }),
+        ] {
+            document["presentation"] = wrong;
+            assert!(serde_json::from_value::<AktTypeDocument>(document.clone()).is_err());
+        }
     }
 
     // r[verify akt.type.presentation]

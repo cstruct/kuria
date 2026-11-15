@@ -1173,6 +1173,7 @@ impl AktType {
             list: presentation.list.clone(),
             icon: presentation.icon.map(Into::into),
             colour: presentation.colour.unwrap_or_default().into(),
+            navigation: presentation.navigation.unwrap_or_default().into(),
         }
     }
 
@@ -1396,6 +1397,13 @@ mirrored! {
     }
 }
 
+mirrored! {
+    /// Where the app's sidebar lists an akt type.
+    AktTypeNavigation from kuria_config::Navigation {
+        Main, More,
+    }
+}
+
 /// How an akt type's akter are shown.
 #[derive(SimpleObject)]
 pub struct Presentation {
@@ -1409,6 +1417,8 @@ pub struct Presentation {
     icon: Option<AktTypeIcon>,
     /// The colour the type is shown in.
     colour: AktTypeColour,
+    /// Where the app's sidebar lists the type (`app.navigation`).
+    navigation: AktTypeNavigation,
 }
 
 #[derive(SimpleObject)]

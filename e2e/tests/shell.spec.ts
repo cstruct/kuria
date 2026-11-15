@@ -2,7 +2,8 @@
 // narrow screen, and signing out.
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { defineExample } from '../support/example.ts';
+import AxeBuilder from '@axe-core/playwright';
+import { defineDocuments, defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
@@ -17,11 +18,16 @@ test.beforeAll(async () => {
 // r[verify app.search]
 test('search finds an akt by its title and opens it', async ({ browser }) => {
 	const page = await signIn(browser, seeded().people.developer);
-	await expect(page.getByRole('navigation', { name: 'Kuria' }).getByRole('link', { name: /^Backlog( \d+)?$/ })).toBeVisible();
+	await expect(
+		page.getByRole('navigation', { name: 'Kuria' }).getByRole('link', { name: /^Backlog( \d+)?$/ })
+	).toBeVisible();
 	await page.keyboard.press('/');
 	const search = page.getByRole('dialog', { name: 'Search' });
 	await search.getByLabel('Search by number or title').fill('shell backlog');
-	await search.getByRole('option', { name: /Shell backlog/ }).first().click();
+	await search
+		.getByRole('option', { name: /Shell backlog/ })
+		.first()
+		.click();
 	await expect(page).toHaveURL(/\/akt\/BACKLOG-/);
 	// The top bar says where we are.
 	await expect(page.getByRole('navigation', { name: 'You are here' })).toContainText('Backlog');
@@ -53,4 +59,34 @@ test('signing out ends the session', async ({ browser }) => {
 	// The login page's own Konklav session ended too: it asks again.
 	await page.getByRole('link', { name: 'Sign in again' }).click();
 	await expect(page.getByRole('heading', { name: /Sign in to continue/ })).toBeVisible();
+});
+
+// r[verify app.navigation]
+test('akt types that say so are listed under Show more, which stays as left', async ({ browser }) => {
+	await defineDocuments();
+	const page = await signIn(browser, seeded().people.developer);
+	const sidebar = page.getByRole('navigation', { name: 'Kuria' });
+	const more = sidebar.getByRole('button', { name: /^Show more/ });
+	await expect(more).toHaveAttribute('aria-expanded', 'false');
+	await expect(sidebar.getByRole('link', { name: /^Document( \d+)?$/ })).toBeVisible();
+	await expect(sidebar.getByRole('link', { name: /^Image( \d+)?$/ })).toBeHidden();
+	await more.click();
+	await expect(more).toHaveAttribute('aria-expanded', 'true');
+	const image = sidebar.getByRole('list', { name: 'More akt types' }).getByRole('link', { name: /^Image( \d+)?$/ });
+	await expect(image).toBeVisible();
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the sidebar, opened'
+	).toEqual([]);
+	await image.click();
+	await expect(page).toHaveURL(/\/types\/image$/);
+	// Remembered in the browser.
+	await page.reload();
+	await expect(sidebar.getByRole('button', { name: /^Show more/ })).toHaveAttribute('aria-expanded', 'true');
+	await sidebar.getByRole('button', { name: /^Show more/ }).click();
+	await page.reload();
+	await expect(sidebar.getByRole('button', { name: /^Show more/ })).toHaveAttribute('aria-expanded', 'false');
+	// Home lists it as before.
+	await page.getByRole('link', { name: 'Home' }).click();
+	await expect(page.getByRole('main').getByText('Image', { exact: true }).first()).toBeVisible();
 });

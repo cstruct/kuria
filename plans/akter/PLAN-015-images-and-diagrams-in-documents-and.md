@@ -208,16 +208,21 @@ The spec says what PLAN-015 builds. No implementation yet.
 <!-- akt: PLAN-015-T02 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b4E
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocked by PLAN-015-T01, Blocks PLAN-015-T07]
 title: Akt types under Show more in the sidebar
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`presentation.navigation` (`main` or `more`) in `kuria-config`, validated, answered by GraphQL on `AktType`. The sidebar lists `more` types under a "Show more" disclosure with their count, closed by default, its state kept per browser.
+`presentation.navigation` (`main` or `more`) in `kuria-config` (`Navigation`), refused otherwise by the document's reading, answered by GraphQL as `Presentation.navigation` (`AktTypeNavigation`). The sidebar lists `more` types after the others under a "Show more" button (`aria-expanded`, with how many), closed by default; whether it is open is kept in `localStorage`, and a browser that refuses storage starts closed (`shell.ts`: `splitTypes`, `moreWasOpen`, `rememberMore`).
+
+The documents example gains `image.json` (title, file, caption, under "Show more"); T03 gives it media types and its picture. The e2e developer may work on `image`.
+
+Tests: config (`checks_the_presentation`), `shell.test.ts`, and `shell.spec.ts`'s Show more test (open, axe, follow, remembered across reloads, Home unchanged). Lint, 375 Rust and 85 app tests pass.
 
 <!-- field: acceptance -->
 - Config tests refuse another value.
