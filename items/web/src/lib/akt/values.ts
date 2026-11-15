@@ -36,6 +36,8 @@ export type Draft =
 			text: string;
 			/** Each embedded image's picture, by destination, for the editor. */
 			pictures: [string, string][];
+			/** Each diagram block's rendering, by source, for the editor. */
+			drawings: [string, string][];
 	  }
 	// Shown here, and given elsewhere: verdicts, with their buttons
 	// (`app.verdicts`).
@@ -82,6 +84,14 @@ export function draftOf(field: FieldDef, value: Value | undefined): Draft {
 						? value.images.flatMap((i) =>
 								i.attachment && !i.broken
 									? [[i.destination, i.attachment.url] as [string, string]]
+									: []
+							)
+						: [],
+				drawings:
+					value?.__typename === 'MarkdownValue'
+						? value.diagrams.flatMap((d) =>
+								d.attachment
+									? [[d.source.replace(/\n$/, ''), d.attachment.url] as [string, string]]
 									: []
 							)
 						: []

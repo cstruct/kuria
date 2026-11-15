@@ -7,21 +7,23 @@ import {
 	$isFootnoteDefinitionNode,
 	$isImageNode,
 	$isFootnoteReferenceNode,
+	$isDiagramNode,
 	$nextFootnoteLabel,
 	$toMarkdown,
 	atx,
 	NODES
 } from './markdown';
 
-/** `markdown` through the editor and back. */
-function roundTrip(markdown: string): string {
+/** `markdown` through the editor and back, as a field that allows diagrams
+ * if `diagrams`. */
+function roundTrip(markdown: string, diagrams = false): string {
 	const editor = createHeadlessEditor({
 		nodes: NODES,
 		onError: (e) => {
 			throw e;
 		}
 	});
-	editor.update(() => $fromMarkdown(markdown), { discrete: true });
+	editor.update(() => $fromMarkdown(markdown, new Map(), { diagrams }), { discrete: true });
 	return editor.getEditorState().read(() => $toMarkdown());
 }
 
@@ -106,5 +108,35 @@ describe('the editor’s Markdown', () => {
 				['kuria:IMG-9', 'gone', null]
 			]);
 		});
+	});
+
+	// r[verify app.diagrams]
+	it('hold diagram blocks as pictures where the field allows them, unchanged either way', () => {
+		const markdown =
+			'Before.\n\n```diagram\n#diagram(node((0, 0), [A]), edge("-|>"), node((1, 0), [B]))\n```\n\n```rust\nfn x() {}\n```';
+		expect(roundTrip(markdown, true)).toBe(markdown);
+		expect(roundTrip(markdown, false)).toBe(markdown);
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(() => $fromMarkdown(markdown, new Map(), { diagrams: true }), { discrete: true });
+		editor.getEditorState().read(() => {
+			const kinds = $getRoot()
+				.getChildren()
+				.map((n) => ($isDiagramNode(n) ? `diagram:${n.getSource().slice(0, 8)}` : n.getType()));
+			expect(kinds).toEqual(['paragraph', 'diagram:#diagram', 'code']);
+		});
+		// Shown as code, and back, it is the same block.
+		editor.update(
+			() => {
+				const diagram = $getRoot().getChildren()[1];
+				if ($isDiagramNode(diagram)) diagram.toCode();
+			},
+			{ discrete: true }
+		);
+		expect(editor.getEditorState().read(() => $toMarkdown())).toBe(markdown);
 	});
 });

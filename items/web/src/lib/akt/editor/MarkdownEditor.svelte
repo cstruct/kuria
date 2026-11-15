@@ -30,6 +30,7 @@
 		$createParagraphNode as createParagraph,
 		$createTextNode as createText,
 		$getRoot as getRoot,
+		$getNodeByKey as getNodeByKey,
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
 		$setSelection as setSelection,
@@ -44,11 +45,20 @@
 	import Combobox, { type Option } from '#lib/ui/Combobox.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import { getClient } from '#lib/graphql/context.svelte.ts';
-	import { AktReferable, CreateAkt, ImagePicture, ImageTypes } from '#lib/graphql/operations.ts';
+	import {
+		AktReferable,
+		CreateAkt,
+		ImagePicture,
+		ImageTypes,
+		RenderDiagram
+	} from '#lib/graphql/operations.ts';
+	import { $isCodeNode as isCodeNode } from '@lexical/code';
 	import { upload } from '../upload';
 	import { pickable } from '../pickers';
 	import { destinationOf } from '../references';
 	import {
+		$toDiagram as toDiagram,
+		setDiagramRenderer,
 		$createImageNode as createImage,
 		$createFootnoteDefinitionNode as createFootnoteDefinition,
 		$createFootnoteReferenceNode as createFootnoteReference,
@@ -72,9 +82,98 @@
 		label: string;
 		/** Each embedded image's picture, by destination. */
 		pictures?: [string, string][];
+		/** Each diagram block's rendering, by source. */
+		drawings?: [string, string][];
+		/** Whether the field's `diagram` blocks are diagrams. */
+		diagrams?: boolean;
 	}
 
-	let { text = $bindable(), label, pictures = [] }: Props = $props();
+	let {
+		text = $bindable(),
+		label,
+		pictures = [],
+		drawings = [],
+		diagrams = false
+	}: Props = $props();
+
+	// r[impl app.editor]: diagrams shown as their pictures, rendered without
+	// being stored (`diagram.preview`), each source once.
+	// A cache, not state: nothing is shown from it until a render resolves.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const rendered = new Map<string, Promise<{ src: string } | { error: string }>>();
+	function renderDiagram(source: string): Promise<{ src: string } | { error: string }> {
+		const known = drawings.find(([s]) => s === source.replace(/\n$/, ''));
+		if (known) return Promise.resolve({ src: known[1] });
+		let found = rendered.get(source);
+		if (!found) {
+			found = client
+				.query(RenderDiagram, { source }, { requestPolicy: 'network-only' })
+				.toPromise()
+				.then((result) => {
+					const drawn = result.data?.renderDiagram;
+					if (drawn?.svg) {
+						const bytes = new TextEncoder().encode(drawn.svg);
+						let binary = '';
+						for (const b of bytes) binary += String.fromCharCode(b);
+						return { src: `data:image/svg+xml;base64,${btoa(binary)}` };
+					}
+					return { error: drawn?.error ?? result.error?.message ?? 'it couldn’t be rendered' };
+				});
+			rendered.set(source, found);
+		}
+		return found;
+	}
+
+	/** The diagram code block the cursor is in, if any, and its preview. */
+	let diagramCode = $state<string | null>(null);
+	let diagramSource = $state('');
+	let diagramPreview = $state<{ src: string } | { error: string } | null>(null);
+	let previewTimer: ReturnType<typeof setTimeout> | undefined;
+	function followDiagramCode() {
+		const found = editor?.getEditorState().read(() => {
+			const selection = getSelection();
+			// Losing focus, as to a button of the preview, keeps the block.
+			if (!isRangeSelection(selection)) {
+				const kept = diagramCode ? getNodeByKey(diagramCode) : null;
+				return isCodeNode(kept) ? { key: kept.getKey(), source: kept.getTextContent() } : null;
+			}
+			const top = selection.anchor.getNode().getTopLevelElement();
+			return isCodeNode(top) && top.getLanguage() === 'diagram'
+				? { key: top.getKey(), source: top.getTextContent() }
+				: null;
+		});
+		diagramCode = found?.key ?? null;
+		if (!found || found.source === diagramSource) return;
+		diagramSource = found.source;
+		clearTimeout(previewTimer);
+		// Typing re-renders after a pause.
+		previewTimer = setTimeout(() => {
+			void renderDiagram(found.source).then((drawn) => {
+				if (diagramSource === found.source) diagramPreview = drawn;
+			});
+		}, 500);
+	}
+
+	function showDiagram() {
+		const key = diagramCode;
+		editor?.update(() => {
+			const node = key ? getNodeByKey(key) : null;
+			if (node) toDiagram(node);
+		});
+		diagramCode = null;
+		diagramPreview = null;
+		diagramSource = '';
+	}
+
+	function insertDiagram() {
+		editor?.update(() => {
+			const code = createCode('diagram');
+			code.append(createText('#diagram(node((0, 0), [Start]), edge("-|>"), node((1, 0), [End]))'));
+			insertAtRoot(code);
+			code.selectEnd();
+		});
+		editor?.focus();
+	}
 	const client = getClient();
 
 	/** Akter to reference, found by number or title. */
@@ -122,6 +221,7 @@
 		});
 		instance.setRootElement(root);
 		editor = instance;
+		setDiagramRenderer(instance, renderDiagram);
 		const unregister = mergeRegister(
 			registerRichText(instance),
 			registerHistory(instance, createEmptyHistoryState(), 300),
@@ -138,12 +238,15 @@
 				COMMAND_PRIORITY_EDITOR
 			)
 		);
-		instance.update(() => fromMarkdown(original, new Map(pictures)), { discrete: true });
+		instance.update(() => fromMarkdown(original, new Map(pictures), { diagrams }), {
+			discrete: true
+		});
 		// Opened and saved unchanged, the value is what it was, as written.
 		const unchanged = instance.getEditorState().read(() => toMarkdown());
 		const stop = instance.registerUpdateListener(({ editorState }) => {
 			const now = editorState.read(() => toMarkdown());
 			text = now === unchanged ? original : now;
+			if (diagrams) followDiagramCode();
 		});
 		return () => {
 			stop();
@@ -435,6 +538,9 @@
 		>
 		<Button size="sm" variant="ghost" onclick={footnote}>Footnote</Button>
 		<Button size="sm" variant="ghost" onclick={openImage}>Image</Button>
+		{#if diagrams}
+			<Button size="sm" variant="ghost" onclick={insertDiagram}>Diagram</Button>
+		{/if}
 	</div>
 	<div
 		class="content markdown"
@@ -445,6 +551,21 @@
 		aria-label={label}
 		tabindex="0"
 	></div>
+	{#if diagramCode}
+		<section class="diagram-preview" aria-label="Diagram preview">
+			<div class="preview-head">
+				<span>Diagram preview</span>
+				<Button size="sm" variant="ghost" onclick={showDiagram}>Show diagram</Button>
+			</div>
+			{#if diagramPreview && 'src' in diagramPreview}
+				<img src={diagramPreview.src} alt={diagramSource} />
+			{:else if diagramPreview}
+				<p role="alert">The diagram doesn’t compile: {diagramPreview.error}</p>
+			{:else}
+				<p>Rendering the diagram…</p>
+			{/if}
+		</section>
+	{/if}
 </div>
 
 <Dialog
@@ -644,6 +765,53 @@
 	.content :global(.header) {
 		font-weight: 600;
 		background: var(--bg-muted);
+	}
+
+	.content :global(.diagram) {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-1);
+		margin: var(--space-2) 0;
+		padding: var(--space-2);
+		border: 1px dashed var(--border);
+		border-radius: var(--radius-sm);
+	}
+
+	.content :global(.diagram img) {
+		max-width: 100%;
+	}
+
+	.content :global(.diagram-toggle) {
+		font: inherit;
+		font-size: var(--text-sm);
+		padding: var(--space-1) var(--space-2);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-sm);
+		background: var(--surface);
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.diagram-preview {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-3);
+		border-top: 1px solid var(--border);
+	}
+
+	.diagram-preview img {
+		max-width: 100%;
+		align-self: flex-start;
+	}
+
+	.preview-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
 	}
 
 	.content :global(.image img) {

@@ -263,3 +263,33 @@ impl World {
         Self { _db: db, router }
     }
 }
+
+// r[verify pdf.render]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pdf_draws_its_diagrams_from_their_source() {
+    let world = World::new().await;
+    let created = world
+        .create(json!({
+            "title": "Flow",
+            "body": format!("# Flow\n\n{}\n```diagram\n#set text(fill: red)\n#diagram(node((0, 0), [Kept]))\n```\n\nAfter.\n", block(FLOW)),
+            "notes": block(FLOW),
+        }))
+        .await;
+    assert!(created.get("errors").is_none(), "{created}");
+    let number = created["data"]["createAkt"]["number"].as_str().unwrap();
+    let answer = world.get(&format!("/akter/{number}/pdf?field=body")).await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let document = lopdf::Document::load_mem(&answer.bytes).unwrap();
+    let pages: Vec<u32> = document.get_pages().keys().copied().collect();
+    let text = document.extract_text(&pages).unwrap();
+    for words in ["Write", "Release", "Kept", "After."] {
+        assert!(text.contains(words), "{words:?} in {text:?}");
+    }
+    // A field without diagrams shows the block as code.
+    let notes = world.get(&format!("/akter/{number}/pdf?field=notes")).await;
+    assert_eq!(notes.status, 200, "{}", notes.body);
+    let document = lopdf::Document::load_mem(&notes.bytes).unwrap();
+    let pages: Vec<u32> = document.get_pages().keys().copied().collect();
+    let text = document.extract_text(&pages).unwrap();
+    assert!(text.contains("#diagram"), "{text:?}");
+}

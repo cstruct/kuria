@@ -28,6 +28,14 @@ const DIAGRAM_PAGE: &str = "#set page(width: auto, height: auto, margin: 4pt, fi
 #set text(font: \"Libertinus Serif\", size: 11pt)
 ";
 
+/// A diagram block's `source` as typst puts it in a page: in a block of its
+/// own, so that it is drawn the same on its own and in a PDF, and set
+/// rules in it stay in it.
+#[must_use]
+pub fn block(source: &str) -> String {
+    format!("#align(center, block[\n{}\n])\n", source.trim_end())
+}
+
 /// typst's fonts, read once.
 fn fonts() -> &'static (LazyHash<FontBook>, Vec<Font>) {
     static FONTS: OnceLock<(LazyHash<FontBook>, Vec<Font>)> = OnceLock::new();
@@ -172,7 +180,7 @@ pub fn pdf(markup: String, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, Str
 // r[impl akt.field.markdown.diagrams]
 // r[impl pdf.packages]
 pub fn diagram(source: &str) -> Result<String, String> {
-    let markup = format!("{DIAGRAM_PAGE}{IMPORTS}{source}");
+    let markup = format!("{DIAGRAM_PAGE}{IMPORTS}{}", block(source));
     let document = compile(&Doc::new(markup, Vec::new()))?;
     if document.pages.is_empty() {
         return Err("the diagram draws nothing".to_owned());

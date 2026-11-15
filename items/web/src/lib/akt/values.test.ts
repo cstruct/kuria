@@ -8,6 +8,7 @@ function field(kind: FieldDef['kind'], extra: Partial<FieldDef> = {}): FieldDef 
 		kind,
 		description: null,
 		required: false,
+		diagrams: false,
 		multiline: false,
 		multiple: false,
 		of: [],
@@ -128,12 +129,18 @@ describe('markdown fields', () => {
 			markdown: '# Scope {#scope}\n',
 			headings: [{ id: 'scope', level: 1, text: 'Scope' }],
 			references: [],
-			images: []
+			images: [],
+			diagrams: []
 		};
 		const draft = draftOf(field('MARKDOWN'), value);
-		expect(draft).toEqual({ kind: 'MARKDOWN', text: '# Scope {#scope}\n', pictures: [] });
+		expect(draft).toEqual({
+			kind: 'MARKDOWN',
+			text: '# Scope {#scope}\n',
+			pictures: [],
+			drawings: []
+		});
 		expect(inputOf(draft)).toBe('# Scope {#scope}\n');
-		expect(inputOf({ kind: 'MARKDOWN', text: '  \n', pictures: [] })).toBeNull();
+		expect(inputOf({ kind: 'MARKDOWN', text: '  \n', pictures: [], drawings: [] })).toBeNull();
 		expect(textOf(value)).toBe('# Scope {#scope}\n');
 	});
 });

@@ -35,7 +35,13 @@
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a href={value.url} rel="noreferrer noopener external">{value.label ?? value.url}</a>
 {:else if value.__typename === 'MarkdownValue'}
-	{@const html = renderReferenced(value.markdown, value.references, hrefOf, value.images)}
+	{@const html = renderReferenced(
+		value.markdown,
+		value.references,
+		hrefOf,
+		value.images,
+		value.diagrams
+	)}
 	<!-- Sanitized by renderReferenced. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 	<div class="markdown">{@html html}</div>

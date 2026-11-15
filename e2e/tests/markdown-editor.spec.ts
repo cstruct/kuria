@@ -171,3 +171,68 @@ test('an image is uploaded from the editor, embedded and shown', async ({ browse
 	await open(page, image!);
 	await expect(page.getByRole('img', { name: `chart-${stamp}.png` })).toBeVisible();
 });
+
+// r[verify app.editor]
+// r[verify app.diagrams]
+// r[verify diagram.preview]
+test('a diagram is written as code, previewed, toggled to its picture and saved', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Diagrams ${stamp}` } }
+		)
+	).createAkt.number;
+	const guide = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON, $in: [String!]!) { createAkt(input: { type: "document", fields: $f, in: $in }) { number } }',
+			{ f: { title: `Flow ${stamp}`, body: 'The flow:\n' }, in: [index] }
+		)
+	).createAkt.number;
+
+	const page = await signIn(browser, seeded().people.developer);
+	await open(page, guide);
+	await page.getByRole('button', { name: 'Edit Body' }).click();
+	const editor = page.getByRole('textbox', { name: 'Body' });
+	await editor.click();
+	await page.keyboard.press('End');
+	await page.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Diagram' }).click();
+	// As code, with a preview that follows typing.
+	const preview = page.getByRole('region', { name: 'Diagram preview' });
+	await expect(preview.getByRole('img')).toBeVisible();
+	await page.keyboard.press('End');
+	await page.keyboard.type('(');
+	await expect(preview.getByRole('alert')).toContainText('The diagram doesn’t compile');
+	await page.keyboard.press('Backspace');
+	await expect(preview.getByRole('img')).toBeVisible();
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the diagram as code'
+	).toEqual([]);
+	// As its picture, and back.
+	await preview.getByRole('button', { name: 'Show diagram' }).click();
+	await expect(preview).toBeHidden();
+	const picture = editor.locator('.diagram');
+	await expect(picture.getByRole('img')).toBeVisible();
+	await picture.getByRole('button', { name: 'Show code' }).click();
+	await expect(preview).toBeVisible();
+	await preview.getByRole('button', { name: 'Show diagram' }).click();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+
+	// Saved as a diagram block, shown as its rendering.
+	const shown = page.locator('dd[data-field="body"]');
+	await expect(shown.getByRole('figure').getByRole('img')).toBeVisible();
+	const saved = await admin.graphql<{ akt: { fields: { markdown?: string }[] } }>(
+		'query($n: String!) { akt(number: $n) { fields { ... on MarkdownValue { markdown } } } }',
+		{ n: guide }
+	);
+	expect(saved.akt.fields.find((f) => f?.markdown)?.markdown?.trimEnd()).toBe(
+		'The flow:\n\n```diagram\n#diagram(node((0, 0), [Start]), edge("-|>"), node((1, 0), [End]))\n```'
+	);
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the body with its diagram'
+	).toEqual([]);
+});

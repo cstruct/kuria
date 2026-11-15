@@ -7,8 +7,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Serving the GraphQL endpoint (`POST /graphql`), GraphQL subscriptions over
   WebSocket (`GET /graphql/ws`, `graphql-transport-ws`), attachments
   (`POST /attachments`, `GET /attachments/{id}`), `markdown` fields as
-  PDFs (`GET /akter/{number}/pdf`, rendered with typst in
-  [`src/pdf.rs`](src/pdf.rs)), and a health check (`GET /healthz`).
+  PDFs (`GET /akter/{number}/pdf`, [`src/pdf.rs`](src/pdf.rs)), and a
+  health check (`GET /healthz`). PDFs and diagram blocks, rendered when
+  written ([`src/akter/diagrams.rs`](src/akter/diagrams.rs)), go through
+  [`kuria-typst`](../typst), with its bundled fonts and packages.
 - Publishing every change event from the outbox to Valkey, and delivering
   them to `changes` subscriptions in order, after catching a client up from
   its cursor.

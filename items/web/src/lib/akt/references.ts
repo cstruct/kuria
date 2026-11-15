@@ -32,6 +32,13 @@ export interface ShownImage {
 	attachment?: { url: string } | null;
 }
 
+/** A diagram block as the server answers it: its source and its
+ * rendering, in a field that allows diagrams (`app.diagrams`). */
+export interface ShownDiagram {
+	source: string;
+	attachment?: { url: string } | null;
+}
+
 const ID = /\s*\{#([a-z][a-z0-9_-]*)\}\s*$/;
 
 /** Reads a link's destination, as the engine does; `null` if it isn't a
@@ -155,8 +162,14 @@ export function renderReferenced(
 	text: string,
 	references: readonly ShownReference[],
 	hrefOf: (reference: Reference) => string,
-	images: readonly ShownImage[] = []
+	images: readonly ShownImage[] = [],
+	diagrams: readonly ShownDiagram[] = []
 ): string {
+	const drawn = new Map(
+		diagrams.flatMap((d) =>
+			d.attachment ? [[d.source.replace(/\n$/, ''), d.attachment.url] as const] : []
+		)
+	);
 	const shown = new Map(references.map((r) => [r.destination, r]));
 	const pictures = new Map(images.map((i) => [i.destination, i]));
 	/** An embedded image's picture, or why it isn't shown (`app.images`). */
@@ -188,6 +201,12 @@ export function renderReferenced(
 		renderer: {
 			image(token) {
 				return picture(token);
+			},
+			// r[impl app.diagrams]
+			code(token) {
+				const url = token.lang === 'diagram' ? drawn.get(token.text.replace(/\n$/, '')) : undefined;
+				if (!url) return false;
+				return `<figure><img src="${escaped(url)}" alt="${escaped(token.text)}"></figure>\n`;
 			},
 			paragraph(token) {
 				// An image alone in its paragraph is a figure, captioned by its alt text.

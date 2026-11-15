@@ -61,6 +61,9 @@ struct Writer<'a> {
     lists: Vec<Option<u64>>,
     /// A code block's language and text, while in one.
     code: Option<(String, String)>,
+    /// How a diagram block is drawn, if the field allows them: from its
+    /// source, as typst.
+    diagram_of: Option<&'a dyn Fn(&str) -> String>,
     /// A table's rows of cells, while in one.
     table: Option<Vec<Vec<String>>>,
     /// A table cell's typst, while in one.
@@ -106,6 +109,11 @@ impl Writer<'_> {
             }
             Event::End(TagEnd::CodeBlock) => {
                 let (lang, body) = self.code.take().unwrap_or_default();
+                if let Some(diagram_of) = self.diagram_of.filter(|_| lang == "diagram") {
+                    let drawn = diagram_of(&body);
+                    let _ = writeln!(self.out, "{drawn}");
+                    return;
+                }
                 let lang = if lang.is_empty() {
                     "none".to_owned()
                 } else {
@@ -348,11 +356,13 @@ fn label_of(label: &str) -> String {
 fn writer<'a>(
     link_of: &'a dyn Fn(&Reference) -> String,
     picture_of: &'a dyn Fn(&Reference) -> Option<String>,
+    diagram_of: Option<&'a dyn Fn(&str) -> String>,
 ) -> Writer<'a> {
     Writer {
         out: String::new(),
         link_of,
         picture_of,
+        diagram_of,
         image: None,
         paragraph: None,
         lists: Vec::new(),
@@ -366,23 +376,33 @@ fn writer<'a>(
     }
 }
 
-/// `text`, a `markdown` field's value, as a typst document: `link_of`
-/// gives the address a reference links to in the app, and `picture_of`
-/// the file an embedded image's picture is read from, if it has one.
-/// Footnotes are read first, so that each is written where it is first
-/// referred to.
+/// How a `markdown` field's value is drawn in a PDF: where references link
+/// to in the app, the file an embedded image's picture is read from, if it
+/// has one, and, for a field that allows diagrams, how a diagram block is
+/// drawn from its source.
+#[derive(Clone, Copy)]
+pub struct Drawn<'a> {
+    pub link_of: &'a dyn Fn(&Reference) -> String,
+    pub picture_of: &'a dyn Fn(&Reference) -> Option<String>,
+    pub diagram_of: Option<&'a dyn Fn(&str) -> String>,
+}
+
+/// `text`, a `markdown` field's value, as a typst document, drawn as
+/// `drawn` says. Footnotes are read first, so that each is written where
+/// it is first referred to.
 // r[impl pdf.render]
 #[must_use]
-pub fn markup(
-    text: &str,
-    link_of: &dyn Fn(&Reference) -> String,
-    picture_of: &dyn Fn(&Reference) -> Option<String>,
-) -> String {
-    let mut reading = writer(link_of, picture_of);
+pub fn markup(text: &str, drawn: &Drawn<'_>) -> String {
+    let Drawn {
+        link_of,
+        picture_of,
+        diagram_of,
+    } = *drawn;
+    let mut reading = writer(link_of, picture_of, diagram_of);
     for event in Parser::new_ext(text, crate::markdown::options()) {
         reading.event(event);
     }
-    let mut writing = writer(link_of, picture_of);
+    let mut writing = writer(link_of, picture_of, diagram_of);
     writing.notes = reading.notes;
     writing.out = format!("{PREAMBLE}\n");
     for event in Parser::new_ext(text, crate::markdown::options()) {
@@ -407,17 +427,36 @@ mod tests {
         (r.number == "IMG-1").then(|| "/pictures/1.png".to_owned())
     }
 
+    fn diagram(source: &str) -> String {
+        format!("#block[{}]", source.trim_end())
+    }
+
     fn body(text: &str) -> String {
-        markup(text, &link, &picture)
-            .trim_start_matches(PREAMBLE)
-            .trim()
-            .to_owned()
+        markup(
+            text,
+            &Drawn {
+                link_of: &link,
+                picture_of: &picture,
+                diagram_of: Some(&diagram),
+            },
+        )
+        .trim_start_matches(PREAMBLE)
+        .trim()
+        .to_owned()
     }
 
     // r[verify pdf.render]
     #[test]
     fn markdown_becomes_typst() {
-        let cases: [(&str, &str); 16] = [
+        let cases: [(&str, &str); 18] = [
+            (
+                "```diagram\n#diagram(node((0, 0), [A]))\n```",
+                "#block[#diagram(node((0, 0), [A]))]",
+            ),
+            (
+                "```typst\n#diagram()\n```",
+                "#raw(block: true, lang: \"typst\", \"#diagram()\")",
+            ),
             (
                 "![The chart](kuria:IMG-1)",
                 "#figure(image(\"/pictures/1.png\", alt: \"The chart\"), caption: [#\"The chart\"])",

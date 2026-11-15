@@ -75,7 +75,7 @@ pub(crate) async fn pdf(
     };
     let tenant: Uuid = principal.tenant.into();
     let found = wanted(&state, &authorizer, tenant, &number, &asked);
-    let (text, pins, pictures) = match found.await {
+    let (text, pins, pictures, diagrams) = match found.await {
         Ok(Some(found)) => found,
         Ok(None) => return (StatusCode::NOT_FOUND, "not found").into_response(),
         Err(AktError::Unavailable(e)) => {
@@ -91,25 +91,7 @@ pub(crate) async fn pdf(
             return (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response();
         }
     };
-    let base = state.public_url.trim_end_matches('/').to_owned();
-    let link_of = move |r: &Reference| {
-        let (version, _) = as_pinned(r, &pins);
-        format!(
-            "{base}/akt/{}{}{}",
-            r.number,
-            version.map(|v| format!("?version={v}")).unwrap_or_default(),
-            r.heading
-                .as_ref()
-                .map(|h| format!("#{h}"))
-                .unwrap_or_default()
-        )
-    };
-    let files: HashMap<String, String> = pictures
-        .iter()
-        .map(|(destination, path, _)| (destination.clone(), path.clone()))
-        .collect();
-    let picture_of = move |r: &Reference| files.get(&r.to_string()).cloned();
-    let markup = kuria_engine::typst::markup(&text, &link_of, &picture_of);
+    let markup = markup_of(&state.public_url, &text, &pins, &pictures, diagrams);
     let files = pictures
         .into_iter()
         .map(|(_, path, bytes)| (path, bytes))
@@ -146,16 +128,58 @@ pub(crate) async fn pdf(
     response
 }
 
-/// The field's Markdown, the pins it is read with, and the pictures of
-/// the images it embeds, if the subject may read it: `None` for an akt,
-/// field or version that isn't there.
+/// `text` as typst, its references linking into the app at `public_url`,
+/// its images drawn from `pictures`, and its diagram blocks drawn, with
+/// what they have imported, if the field allows them.
+fn markup_of(
+    public_url: &str,
+    text: &str,
+    pins: &[Pin],
+    pictures: &[Picture],
+    diagrams: bool,
+) -> String {
+    let base = public_url.trim_end_matches('/');
+    let link_of = |r: &Reference| {
+        let (version, _) = as_pinned(r, pins);
+        format!(
+            "{base}/akt/{}{}{}",
+            r.number,
+            version.map(|v| format!("?version={v}")).unwrap_or_default(),
+            r.heading
+                .as_ref()
+                .map(|h| format!("#{h}"))
+                .unwrap_or_default()
+        )
+    };
+    let files: HashMap<String, String> = pictures
+        .iter()
+        .map(|(destination, path, _)| (destination.clone(), path.clone()))
+        .collect();
+    let picture_of = |r: &Reference| files.get(&r.to_string()).cloned();
+    let diagram_of = |source: &str| kuria_typst::block(source);
+    let drawn = kuria_engine::typst::Drawn {
+        link_of: &link_of,
+        picture_of: &picture_of,
+        diagram_of: diagrams.then_some(&diagram_of as &dyn Fn(&str) -> String),
+    };
+    let body = kuria_engine::typst::markup(text, &drawn);
+    if diagrams {
+        format!("{}{body}", kuria_typst::IMPORTS)
+    } else {
+        body
+    }
+}
+
+/// The field's Markdown, the pins it is read with, the pictures of the
+/// images it embeds, and whether it allows diagrams, if the subject may
+/// read it: `None` for an akt, field or version that isn't there.
 async fn wanted(
     state: &PdfState,
     authorizer: &crate::authorize::Authorizer,
     tenant: Uuid,
     number: &str,
     asked: &Asked,
-) -> Result<Option<(String, Vec<Pin>, Vec<Picture>)>, AktError> {
+) -> Result<Option<(String, Vec<Pin>, Vec<Picture>, bool)>, AktError> {
     let mut conn = state.pool.get().await?;
     let Some(akt) = store::akt_by_number(&mut conn, tenant, number).await? else {
         return Ok(None);
@@ -204,7 +228,7 @@ async fn wanted(
         _ => String::new(),
     };
     let pictures = pictures_of(state, &mut conn, authorizer, tenant, &text, &pins).await?;
-    Ok(Some((text, pins, pictures)))
+    Ok(Some((text, pins, pictures, field.diagrams)))
 }
 
 /// The pictures of the images `text` embeds, as read with `pins`: each one

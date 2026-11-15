@@ -179,6 +179,12 @@ export const FieldValues = graphql(`
 					mediaType
 				}
 			}
+			diagrams {
+				source
+				attachment {
+					url
+				}
+			}
 		}
 		... on VerdictValue {
 			field
@@ -275,6 +281,7 @@ export const TypeShape = graphql(`
 			of
 			assignees
 			references
+			diagrams
 			options {
 				key
 				name
@@ -783,6 +790,15 @@ export const ImagePicture = graphql(`
 					}
 				}
 			}
+		}
+	}
+`);
+
+export const RenderDiagram = graphql(`
+	query RenderDiagram($source: String!) {
+		renderDiagram(source: $source) {
+			svg
+			error
 		}
 	}
 `);

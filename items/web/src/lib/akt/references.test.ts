@@ -108,3 +108,24 @@ describe('embedded images', () => {
 		expect(html).not.toContain('onerror');
 	});
 });
+
+// r[verify app.diagrams]
+describe('diagram blocks', () => {
+	const id = '0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b';
+	it('are shown as their rendering, and as code where there is none', () => {
+		const html = renderReferenced(
+			'```diagram\n#diagram(node((0, 0), [A]))\n```\n\n```diagram\n#canvas({})\n```\n',
+			[],
+			href,
+			[],
+			[
+				{ source: '#diagram(node((0, 0), [A]))\n', attachment: { url: `/attachments/${id}` } },
+				{ source: '#canvas({})\n', attachment: null }
+			]
+		);
+		expect(html).toContain(
+			`<figure><img src="/attachments/${id}" alt="#diagram(node((0, 0), [A]))"></figure>`
+		);
+		expect(html).toContain('<pre><code>#canvas({})');
+	});
+});

@@ -6,7 +6,7 @@
  * type.
  */
 // r[impl app.editor]
-import { CodeHighlightNode, CodeNode } from '@lexical/code';
+import { $createCodeNode, $isCodeNode, CodeHighlightNode, CodeNode } from '@lexical/code';
 import {
 	$createHorizontalRuleNode,
 	$isHorizontalRuleNode,
@@ -48,6 +48,10 @@ import {
 	TableRowNode
 } from '@lexical/table';
 import {
+	$getNodeByKey,
+	$getSelection,
+	$setSelection,
+	type LexicalEditor,
 	$applyNodeReplacement,
 	DecoratorNode,
 	type SerializedLexicalNode,
@@ -296,8 +300,143 @@ export function $isImageNode(node: LexicalNode | null | undefined): node is Imag
 	return node instanceof ImageNode;
 }
 
+/** What shows a diagram's picture: its source as an image's `src`, or
+ * typst's message (`diagram.preview`). */
+export type DiagramRenderer = (source: string) => Promise<{ src: string } | { error: string }>;
+
+const renderers = new WeakMap<LexicalEditor, DiagramRenderer>();
+
+/** Has `editor` show its diagrams' pictures through `render`. */
+export function setDiagramRenderer(editor: LexicalEditor, render: DiagramRenderer): void {
+	renderers.set(editor, render);
+}
+
+/** Fills `into` with `source`'s picture, or typst's message, once `editor`'s
+ * renderer has it; with the source itself where it has none. */
+function preview(editor: LexicalEditor, source: string, into: HTMLElement) {
+	const render = renderers.get(editor);
+	if (!render) {
+		into.textContent = source;
+		return;
+	}
+	into.textContent = 'Rendering the diagram…';
+	void render(source).then((drawn) => {
+		into.replaceChildren();
+		if ('src' in drawn) {
+			const img = document.createElement('img');
+			img.src = drawn.src;
+			img.alt = source;
+			into.append(img);
+		} else {
+			const said = document.createElement('p');
+			said.setAttribute('role', 'alert');
+			said.textContent = `The diagram doesn’t compile: ${drawn.error}`;
+			into.append(said);
+		}
+	});
+}
+
+type SerializedDiagram = Spread<{ source: string }, SerializedLexicalNode>;
+
+/** A diagram block shown as its picture, with a button to show its code
+ * instead (`app.editor`, `app.diagrams`). */
+export class DiagramNode extends DecoratorNode<null> {
+	__source: string;
+
+	static getType(): string {
+		return 'kuria-diagram';
+	}
+
+	static clone(node: DiagramNode): DiagramNode {
+		return new DiagramNode(node.__source, node.__key);
+	}
+
+	constructor(source: string, key?: NodeKey) {
+		super(key);
+		this.__source = source;
+	}
+
+	static importJSON(json: SerializedDiagram): DiagramNode {
+		return $createDiagramNode(json.source);
+	}
+
+	exportJSON(): SerializedDiagram {
+		return { ...super.exportJSON(), source: this.__source };
+	}
+
+	createDOM(_config: EditorConfig, editor: LexicalEditor): HTMLElement {
+		const dom = document.createElement('div');
+		dom.className = 'diagram';
+		dom.contentEditable = 'false';
+		const picture = document.createElement('div');
+		picture.className = 'diagram-picture';
+		const toggle = document.createElement('button');
+		toggle.type = 'button';
+		toggle.className = 'diagram-toggle';
+		toggle.textContent = 'Show code';
+		const key = this.__key;
+		toggle.addEventListener('click', () =>
+			editor.update(() => {
+				const node = $getNodeByKey(key);
+				if ($isDiagramNode(node)) node.toCode();
+			})
+		);
+		dom.append(picture, toggle);
+		preview(editor, this.__source, picture);
+		return dom;
+	}
+
+	updateDOM(previous: DiagramNode): boolean {
+		return previous.__source !== this.__source;
+	}
+
+	decorate(): null {
+		return null;
+	}
+
+	isInline(): false {
+		return false;
+	}
+
+	getSource(): string {
+		return this.getLatest().__source;
+	}
+
+	getTextContent(): string {
+		return this.__source;
+	}
+
+	/** Itself as a code block of its source, where typing goes on. */
+	toCode(): void {
+		const code = $createCodeNode('diagram');
+		code.append($createTextNode(this.getSource()));
+		this.replace(code);
+		code.selectEnd();
+	}
+}
+
+export function $createDiagramNode(source: string): DiagramNode {
+	return $applyNodeReplacement(new DiagramNode(source));
+}
+
+export function $isDiagramNode(node: LexicalNode | null | undefined): node is DiagramNode {
+	return node instanceof DiagramNode;
+}
+
+/** The diagram code block `node`, as its picture. A selection in it is
+ * let go of, since the text it pointed into is gone. */
+export function $toDiagram(node: LexicalNode): void {
+	if (!$isCodeNode(node) || node.getLanguage() !== 'diagram') return;
+	const selection = $getSelection();
+	if (selection?.getNodes().some((n) => n.is(node) || n.getParent()?.is(node))) {
+		$setSelection(null);
+	}
+	node.replace($createDiagramNode(node.getTextContent()));
+}
+
 /** The nodes the editor offers. */
 export const NODES: Klass<LexicalNode>[] = [
+	DiagramNode,
 	ImageNode,
 	FootnoteReferenceNode,
 	FootnoteDefinitionNode,
@@ -477,9 +616,24 @@ export function $nextFootnoteLabel(): string {
 	return String(Math.max(0, ...numbers) + 1);
 }
 
+/** A diagram block, written as the code block it came from. */
+const DIAGRAM: ElementTransformer = {
+	dependencies: [DiagramNode],
+	export: (node) => {
+		if (!$isDiagramNode(node)) return null;
+		const source = node.getSource();
+		return `\`\`\`diagram${source ? `\n${source}` : ''}\n\`\`\``;
+	},
+	// Read as a code block, then shown as a diagram ($fromMarkdown).
+	regExp: /(?!)/,
+	replace: () => {},
+	type: 'element'
+};
+
 /** The transformers between the editor and Markdown, in the order they
  * are tried. */
 export const TRANSFORMERS: Transformer[] = [
+	DIAGRAM,
 	FOOTNOTE_DEFINITION,
 	TABLE,
 	HORIZONTAL_RULE,
@@ -513,10 +667,12 @@ export function atx(text: string): string {
 }
 
 /** Fills the editor's root, in an update, from a field's Markdown, each
- * embedded image showing its picture from `pictures`, by destination. */
+ * embedded image showing its picture from `pictures`, by destination, and,
+ * if the field allows them, each diagram block as its picture. */
 export function $fromMarkdown(
 	markdown: string,
-	pictures: ReadonlyMap<string, string> = new Map()
+	pictures: ReadonlyMap<string, string> = new Map(),
+	{ diagrams = false } = {}
 ): void {
 	$convertFromMarkdownString(atx(markdown), TRANSFORMERS, undefined, false);
 	// Each heading's id, from its last text, onto its node.
@@ -537,6 +693,7 @@ export function $fromMarkdown(
 		else last.remove();
 	}
 	$showPictures(pictures);
+	if (diagrams) $getRoot().getChildren().forEach($toDiagram);
 }
 
 /** The editor's root, in a read, as a field's Markdown. */

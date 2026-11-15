@@ -315,20 +315,24 @@ Tests: `kuria-typst` (every package imports; a fletcher diagram and a plot rende
 <!-- akt: PLAN-015-T06 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b4I
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocked by PLAN-015-T05, Blocks PLAN-015-T07]
 title: "Diagrams in the app, the editor and PDFs"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 Diagrams in the app, the editor and PDFs.
 
-- App: each diagram block shown as its SVG.
-- Editor: a diagram block shows its picture through `renderDiagram`, with a toggle per block to its code; typing re-renders after a pause, showing typst's error until it compiles. The round trip keeps the block as written.
-- PDF: each block drawn from its source, with the same imports.
+- **App:** `renderReferenced` takes the field's diagrams: a `diagram` block with a rendering is a figure of an `<img>` of its SVG, its source as the alt text; one without, and every block in a field without diagrams, stays code. The fragment asks for `diagrams` and `Field.diagrams`.
+- **Editor:** `DiagramNode`, a block shown as its picture with a Show code button; `$toDiagram` turns a `diagram` code block into one, letting go of a selection inside it (the browser test caught the update being dropped otherwise), and `toCode` turns it back. In a field with diagrams, opening it shows every block as its picture; the Diagram button inserts a starting fletcher diagram as code. While the cursor is in a diagram's code, a preview under the editor re-renders after a pause through `renderDiagram`, showing typst's message until it compiles, with Show diagram. Renderings are cached per source and the field's own come from its diagrams; a preview is a data URL of the SVG in an `<img>`, never inlined. The round trip keeps the block as written, either way.
+- **PDF:** the typst writer draws a `diagram` block, in a field that allows them, as `kuria_typst::block(source)` (`Drawn` gathers what the writer is given); the route puts `IMPORTS` first. `kuria_typst::diagram` wraps the source the same way, so what compiled when written compiles in the PDF, and set rules stay in the block.
+- **Example:** `document.body` says `"diagrams": true`.
+
+Tests: engine typst cases, `a_pdf_draws_its_diagrams_from_their_source` (text of two diagrams in the body's PDF, the block as code in a field without diagrams), app (`references.test.ts`, the editor round trip and toggle), and `markdown-editor.spec.ts`'s diagram test (insert, preview, a compile error and back, toggle both ways, save, figure, axe). Lint, 392 Rust, 92 app and the editor browser tests pass.
 
 <!-- field: acceptance -->
 - Editor round trip; an app test of the toggle.

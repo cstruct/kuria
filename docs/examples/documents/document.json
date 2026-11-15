@@ -6,8 +6,8 @@
   "fields": [
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "owner", "name": "Owner", "kind": "user" },
-    { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to",
-      "description": "The document. Link to another document, or a heading in it, with Reference." }
+    { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to", "diagrams": true,
+      "description": "The document. Link to another document, or a heading in it, with Reference; add a picture with Image, and a fletcher diagram or a cetz plot with Diagram." }
   ],
   "states": [
     { "key": "draft", "name": "Draft", "initial": true },
