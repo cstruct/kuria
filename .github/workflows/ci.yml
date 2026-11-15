@@ -30,6 +30,11 @@ jobs:
           persist-credentials: false
 
       # Rust, Node and tracey, as pinned in mise.toml.
+      # The CLI keeps its sign-in in the Secret Service on Linux, through
+      # libdbus, which it links against.
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+
       - name: Install tools
         uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
 
@@ -80,6 +85,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The CLI keeps its sign-in in the Secret Service on Linux, through
+      # libdbus, which it links against.
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
 
       - name: Install tools
         uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5.2.5
