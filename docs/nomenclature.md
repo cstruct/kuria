@@ -112,6 +112,18 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `broken reference`
   - A reference to an akt that doesn't exist or the reader can't read, a version it doesn't have, or a heading it doesn't have.
 
+- `image` (akt)
+  - An akt whose type names, as `presentation.image`, an attachment field taking only image media types: its picture is that field's value. Not a field kind.
+
+- `embedded image`
+  - An image in a `markdown` field whose destination is a reference, `![Alt text](kuria:IMG-1)`: the image akt's picture shown in the text. A reference like any other.
+
+- `diagram block`
+  - A fenced code block with the language `diagram`, in a `markdown` field that says `"diagrams": true`: typst markup drawing a fletcher diagram or a cetz plot, rendered to SVG when the field is written.
+
+- `bundled package`
+  - A typst package vendored in Kuria, unmodified with its license, the only kind a diagram or a PDF can import: fletcher, cetz and cetz-plot.
+
 - `living version`
   - An akt as it is now, which edits change; as opposed to its versions.
 

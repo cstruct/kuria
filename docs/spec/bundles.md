@@ -36,7 +36,9 @@ A bundle that holds akter MUST hold, for them:
 - the tenant's number counters;
 - the contacts their values name, and the people their revisions and
   values name: subject, recorded name and email;
-- the attachments they hold, with their metadata and bytes.
+- the attachments they hold, in fields and as diagrams, with their
+  metadata and bytes, and which akt holds each diagram, for which field
+  and source (`akt.field.markdown.diagrams`).
 
 A bundle without akter MUST hold the latest version of each selected akt
 type's document only.

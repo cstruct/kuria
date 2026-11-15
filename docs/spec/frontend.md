@@ -62,8 +62,15 @@ scripts, styles, frames, forms or event handlers, and links only to
 r[app.editor]
 The app MUST edit a `markdown` field in a rich-text editor offering
 headings, paragraphs, emphasis, strikethrough, lists, task lists, quotes,
-code, tables, horizontal rules, links, references and footnotes of one
-paragraph each, and nothing the field's Markdown can't hold. Inserting a
+code, tables, horizontal rules, links, references, footnotes of one
+paragraph each, embedded images and, in a field that allows them, diagram
+blocks, and nothing the field's Markdown can't hold. Inserting an image
+MUST let a person find an image akt (`app.pickers`), or upload a file,
+which creates an image akt of an image type they choose, at the top
+level, titled by the file's name. A diagram block MUST be shown as its
+picture, rendered without being stored (`diagram.preview`), or as its
+code, as the person toggles it, showing typst's message while it doesn't
+compile. Inserting a
 footnote MUST put the next unused number at the cursor and its
 definition at the end, starting plain, where typing goes on. Saving MUST give the field as Markdown, and
 opening and saving an unchanged value MUST change nothing, its heading ids
@@ -128,6 +135,25 @@ Dropping a card on another column of a board MUST offer the transitions
 from the member's state to a state that column names for its akt type,
 and perform the one chosen as `app.transitions` does, asking for the fields
 it requires. A column no such transition leads to MUST refuse the drop.
+
+r[app.navigation]
+The sidebar MUST list the akt types whose `navigation` is `more`
+(`akt.type.presentation`) after the others, under a "Show more"
+disclosure saying how many there are, closed until opened, remembering in
+the browser whether it was. Every other place that lists akt types MUST
+list them as before.
+
+r[app.images]
+The app MUST show an embedded image (`akt.field.markdown.images`) as a
+figure of its picture, its alt text as the picture's text and caption,
+and a broken one as broken, saying why. A picture MUST only ever be an
+image of its attachment's download, never markup put in the page, so
+that an SVG's scripts never run. An image akt's page and cards MUST show
+its picture.
+
+r[app.diagrams]
+The app MUST show a diagram block (`akt.field.markdown.diagrams`) as the
+picture of its rendering, its source as the picture's text.
 
 r[app.type-identity]
 Wherever the app names an akt type, in the sidebar, on Home, in an akt's

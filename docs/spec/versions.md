@@ -42,7 +42,9 @@ reference by field and destination, while any reference in the revision's
 - an akt that doesn't exist, or that the releaser may not read;
 - a version the target doesn't have;
 - a heading id the target doesn't have: in the version named, if the
-  reference names one, else in the target's current revision.
+  reference names one, else in the target's current revision;
+- for an embedded image, an akt that isn't an image or has no picture,
+  or a heading (`akt.field.markdown.images`).
 
 r[version.pins]
 A version MUST record, for each of its references that names no version,
@@ -65,7 +67,8 @@ An akt MUST be readable at one of its versions: its fields, state and
 title as they were at the revision the version names, by a subject who
 may read the akt. Its references MUST be served as the version reads
 them: one that names a version, at that version; one the version pinned,
-at its pin.
+at its pin. An embedded image MUST show its picture as it was there, and
+each diagram block the rendering the akt held for it.
 
 r[version.diff]
 Two versions of an akt, or a version and its living version, MUST be

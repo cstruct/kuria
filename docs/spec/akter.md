@@ -42,6 +42,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - its presentation is valid (`akt.type.presentation`);
 - every `markdown` field's `references` names a link kind the document
   declares (`akt.field.markdown.references`);
+- every `attachment` field's `media_types` are valid
+  (`akt.field.attachment`);
 - its `versions` are valid (`version.declare`).
 
 r[akt.type.tenant]
@@ -73,6 +75,8 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `tones` | Per state key, a tone: `neutral`, `active`, `success`, `warning` or `danger`. |
 | `icon` | An icon shown with the type's name: `archive`, `book-open`, `box`, `bug`, `calendar`, `circle-check`, `clipboard-check`, `file-text`, `flag`, `flask-conical`, `git-branch`, `layers`, `list-checks`, `milestone`, `notebook-pen`, `package`, `rocket`, `shield-check`, `tag`, `target`, `triangle-alert`, `users`, `wrench` or `zap`. |
 | `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
+| `navigation` | Where the app's sidebar lists the type: `main`, the default, or `more`, under "Show more" (`app.navigation`). |
+| `image` | The key of an `attachment` field whose `media_types` are all images: an akt of the type is an image, and that field's value is its picture (`akt.field.markdown.images`). |
 
 Every key MUST name a field or state the type defines, each at most once
 in its list, and the title a single-line `text` field; otherwise the
@@ -80,7 +84,10 @@ document MUST be refused. Without a `title`, an akt's title MUST be the
 value of the type's first required single-line `text` field, if it has
 one. A state without a tone MUST be shown as `neutral`. An icon or colour
 not in its list MUST be refused; without one, a type MUST be shown without
-an icon, in `neutral`.
+an icon, in `neutral`. A `navigation` other than `main` or `more` MUST be
+refused, and an `image` naming a field that isn't an `attachment` field,
+or one that doesn't list media types, or lists one that isn't `image/png`,
+`image/jpeg`, `image/svg+xml` or `image/webp`.
 
 ## Fields
 
@@ -117,8 +124,11 @@ checked.
 r[akt.field.attachment]
 An `attachment` field MUST only hold an attachment of the akt's tenant. A
 field that says `"format": "sbom"` MUST only hold an attachment Kuria
-recognised as an SBOM ([attachments](attachments.md)). `format` MUST be
-refused on any other kind of field.
+recognised as an SBOM ([attachments](attachments.md)). A field MAY list,
+as `media_types`, the media types it takes: it MUST then only hold an
+attachment of one of them (`attachment.media-types`). `format` and
+`media_types` MUST be refused on any other kind of field, and an empty
+`media_types` list or one naming a type twice MUST be refused.
 
 r[akt.field.multiple]
 A `user` field that says `multiple` MUST hold a list of distinct users and
@@ -160,7 +170,38 @@ kind the akter its `markdown` fields reference that exist and are of a
 type the kind's `to` names, each once, unpinned. Any other reference is
 broken. A write MUST NOT be refused for a broken reference; a release is
 (`version.references`). `references` MUST be refused on any other kind of
-field.
+field. An image whose destination is a reference embeds it
+(`akt.field.markdown.images`), and is a reference like any other.
+
+r[akt.field.markdown.images]
+An image in a `markdown` field, `![<alt text>](kuria:<number>[@<version>])`,
+embeds that akt's picture: the value, at the revision read, of the field
+its type names as `image` (`akt.type.presentation`). An embedded image
+MUST be served with the attachment it shows and that attachment's media
+type, or as broken, saying why: the akt doesn't exist or the reader may
+not read it, it isn't an image, it has no picture at that revision, it
+doesn't have the version named, or the destination names a heading.
+
+r[akt.field.markdown.diagrams]
+A `markdown` field MAY say `"diagrams": true`. In such a field, a fenced
+code block whose language is `diagram` is a diagram block: typst markup
+in which fletcher 0.5.8 (`fletcher`, with `diagram`, `node` and `edge`),
+cetz 0.5.2 (`cetz`, with `canvas` and `draw`) and cetz-plot 0.1.4 (`plot`
+and `chart`) are imported, and nothing else can be imported or read
+(`pdf.packages`). Every write of the field MUST render each of its
+diagram blocks to SVG, sized to the diagram, and MUST be refused as
+`INVALID_DIAGRAM`, naming the field, the block by its number counting
+from 1, and typst's message, when one doesn't compile. Each rendering
+MUST be kept as an attachment the akt holds as a diagram, by the field
+and the block's source, and never let go of, so that every revision and
+version is shown with its diagrams. A diagram block MUST be served with
+its source and the attachment of its SVG. In any other field a `diagram`
+block is code. `diagrams` MUST be refused on any other kind of field.
+
+r[diagram.preview]
+`renderDiagram(source)` MUST answer the SVG a diagram block with that
+source renders to, or typst's message when it doesn't compile, to any
+authenticated subject, storing nothing.
 
 r[akt.field.verdict]
 A `verdict` field MUST name, as `assignees`, a `multiple` `user` field of

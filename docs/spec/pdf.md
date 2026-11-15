@@ -9,7 +9,16 @@ paragraphs, emphasis, lists, task lists, quotes, code, tables,
 horizontal rules and footnotes, in the field's order, each footnote at
 the foot of the page that first refers to it, numbered in that order. Each heading MUST be a bookmark,
 nested by level. A reference MUST be shown by its text, as a link to the
-akt in the app (`app.references`).
+akt in the app (`app.references`). An embedded image MUST be drawn as its
+picture, as the PDF's version reads it, and a broken one as its alt text.
+A diagram block MUST be drawn from its source, as a vector drawing.
+
+r[pdf.packages]
+typst MUST be run with Kuria's bundled fonts and packages only: fletcher
+0.5.8, cetz 0.3.4 and 0.5.2, and cetz-plot 0.1.4, vendored unmodified
+with their licenses. It MUST NOT read any other package, the network or
+the file system; the only files it reads are the pictures Kuria gives
+it.
 
 r[pdf.route]
 `GET /akter/{number}/pdf?field=<key>` MUST answer the PDF of the akt's

@@ -34,8 +34,9 @@ with testers' verdicts adding up to each test's, section's and protocol's
 outcome: see [the test-protocols example](examples/test-protocols/README.md).
 Documents too: written in a rich-text editor as Markdown, linked to each
 other down to a heading, released as versions that never change once no
-link is broken, read as PDFs, and cloned and pushed with git: see [the
-documents example](examples/documents/README.md).
+link is broken, read as PDFs, and cloned and pushed with git, with images
+that are akter of their own and diagrams and plots written as typst in
+the text: see [the documents example](examples/documents/README.md).
 Not yet: other link kinds and traceability, signatures, structured tables,
 computed fields, deadlines, obligations, reporting and the frontend.
 

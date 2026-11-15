@@ -1,9 +1,9 @@
 ---
 number: PLAN-015
 type: plan
-revision: 15
+revision: 16
 rank: b47
-state: draft
+state: active
 title: "Images and diagrams in documents, and types under Show more"
 owner: albin@mattsson.io
 ---
@@ -179,25 +179,28 @@ Vendoring keeps rendering offline and every server rendering the same diagram th
 <!-- akt: PLAN-015-T01 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b4D
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocks PLAN-015-T02, Blocks PLAN-015-T03, Blocks PLAN-015-T05]
 title: "Spec images, diagrams and types under Show more"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 The spec says what PLAN-015 builds. No implementation yet.
 
-- `docs/nomenclature.md`: `image` (an akt shown as a picture), `embedded image`, `diagram`, `diagram block`, `bundled package`.
-- `docs/spec/akter.md`: `akt.type.presentation` gains `navigation` and `image`; `akt.field.kinds` lets an `attachment` field list `media_types`; `akt.field.markdown.images` (embedding, what is broken); `akt.field.markdown.diagrams` (blocks, imports, rendering on write, `INVALID_DIAGRAM`); validation.
-- `docs/spec/attachments.md`: `attachment.media-types`; `attachment.download` covers diagrams.
-- `docs/spec/versions.md`: embedded images are pinned like references.
-- `docs/spec/pdf.md`: images and diagrams in a PDF; the `World` and its packages (`pdf.packages`).
-- `docs/spec/frontend.md`: `app.akt-types` and "Show more"; `app.images`; `app.diagrams`; `app.editor` gains images and diagrams.
-- `docs/spec/bundles.md`: diagrams' attachments and `akt_diagram`.
-- `docs/requirements.md` and `docs/architecture.md`: images and diagrams.
+- `docs/nomenclature.md`: `image` (akt), `embedded image`, `diagram block`, `bundled package`.
+- `docs/spec/akter.md`: `akt.type.presentation` gains `navigation` and `image`, validated; `akt.field.attachment` gains `media_types`; `akt.field.markdown.references` says an image with a reference embeds it; new `akt.field.markdown.images`, `akt.field.markdown.diagrams` (with `INVALID_DIAGRAM`) and `diagram.preview`; `akt.type.validation` lists `media_types`.
+- `docs/spec/attachments.md`: new `attachment.media-types` (refused as `REFUSED`, as other values that don't fit are); `attachment.download` covers diagrams.
+- `docs/spec/versions.md`: `version.references` covers embedded images; `version.read` shows images and diagrams as they were.
+- `docs/spec/pdf.md`: `pdf.render` draws images and diagrams; new `pdf.packages`.
+- `docs/spec/frontend.md`: new `app.navigation`, `app.images`, `app.diagrams`; `app.editor` gains images and diagram blocks.
+- `docs/spec/bundles.md`: `bundle.contents` carries diagrams and which akt holds them.
+- `docs/requirements.md`, `docs/architecture.md`: images and diagrams.
+
+`mise run lint` passes.
 
 <!-- field: acceptance -->
 - `mise run lint` passes, tracey listing the new rules as uncovered.
