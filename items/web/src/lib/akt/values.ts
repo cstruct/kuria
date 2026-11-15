@@ -31,7 +31,12 @@ export type Draft =
 	| { kind: 'ATTACHMENT'; id: string | null; name: string | null }
 	| { kind: 'USERS'; who: Who[] }
 	| { kind: 'SECTIONS'; items: Item[] }
-	| { kind: 'MARKDOWN'; text: string }
+	| {
+			kind: 'MARKDOWN';
+			text: string;
+			/** Each embedded image's picture, by destination, for the editor. */
+			pictures: [string, string][];
+	  }
 	// Shown here, and given elsewhere: verdicts, with their buttons
 	// (`app.verdicts`).
 	| { kind: 'SHOWN' };
@@ -71,7 +76,15 @@ export function draftOf(field: FieldDef, value: Value | undefined): Draft {
 		case 'MARKDOWN':
 			return {
 				kind: 'MARKDOWN',
-				text: value?.__typename === 'MarkdownValue' ? value.markdown : ''
+				text: value?.__typename === 'MarkdownValue' ? value.markdown : '',
+				pictures:
+					value?.__typename === 'MarkdownValue'
+						? value.images.flatMap((i) =>
+								i.attachment && !i.broken
+									? [[i.destination, i.attachment.url] as [string, string]]
+									: []
+							)
+						: []
 			};
 		case 'CHECKBOX': {
 			if (value?.__typename !== 'CheckboxValue')

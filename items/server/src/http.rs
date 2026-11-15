@@ -138,17 +138,18 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
         )
         .with_state(AttachmentState {
             pool: pool.clone(),
-            storage,
+            storage: storage.clone(),
             decider: decider.clone(),
         });
 
     // r[impl pdf.route]
+    let pdf_state = crate::pdf::state(pool.clone(), storage, decider.clone(), pdf_base);
     let pdf_routes = Router::new()
         .route(
             "/akter/{number}/pdf",
             get(crate::pdf::pdf).route_layer(api.route(&Policy::new())?),
         )
-        .with_state(crate::pdf::state(pool.clone(), decider.clone(), pdf_base));
+        .with_state(pdf_state);
 
     let mut router = Router::new()
         // r[impl auth.health]

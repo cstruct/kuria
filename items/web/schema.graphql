@@ -968,6 +968,11 @@ type Presentation {
 	Where the app's sidebar lists the type (`app.navigation`).
 	"""
 	navigation: AktTypeNavigation!
+	"""
+	The `attachment` field holding each akt's picture, if its akter are
+	images (`akt.field.markdown.images`).
+	"""
+	image: String
 }
 
 type Query {

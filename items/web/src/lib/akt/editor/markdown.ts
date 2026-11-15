@@ -49,6 +49,9 @@ import {
 } from '@lexical/table';
 import {
 	$applyNodeReplacement,
+	DecoratorNode,
+	type SerializedLexicalNode,
+	type Spread,
 	$createParagraphNode,
 	$createTextNode,
 	$getRoot,
@@ -190,8 +193,112 @@ export function $isFootnoteDefinitionNode(
 	return node instanceof FootnoteDefinitionNode;
 }
 
+type SerializedImage = Spread<
+	{ destination: string; alt: string; src: string | null },
+	SerializedLexicalNode
+>;
+
+/** An embedded image, `![alt](kuria:IMG-1)`, shown as its picture when the
+ * editor knows it (`app.editor`, `app.images`). */
+export class ImageNode extends DecoratorNode<null> {
+	__destination: string;
+	__alt: string;
+	__src: string | null;
+
+	static getType(): string {
+		return 'kuria-image';
+	}
+
+	static clone(node: ImageNode): ImageNode {
+		return new ImageNode(node.__destination, node.__alt, node.__src, node.__key);
+	}
+
+	constructor(destination: string, alt: string, src: string | null, key?: NodeKey) {
+		super(key);
+		this.__destination = destination;
+		this.__alt = alt;
+		this.__src = src;
+	}
+
+	static importJSON(json: SerializedImage): ImageNode {
+		return $createImageNode(json.destination, json.alt, json.src);
+	}
+
+	exportJSON(): SerializedImage {
+		return {
+			...super.exportJSON(),
+			destination: this.__destination,
+			alt: this.__alt,
+			src: this.__src
+		};
+	}
+
+	createDOM(): HTMLElement {
+		const span = document.createElement('span');
+		span.className = 'image';
+		this.fill(span);
+		return span;
+	}
+
+	updateDOM(previous: ImageNode, dom: HTMLElement): boolean {
+		if (previous.__src !== this.__src || previous.__alt !== this.__alt) this.fill(dom);
+		return false;
+	}
+
+	/** The picture, else its alt text and where it points. */
+	private fill(dom: HTMLElement) {
+		dom.replaceChildren();
+		if (this.__src) {
+			const img = document.createElement('img');
+			img.src = this.__src;
+			img.alt = this.__alt;
+			dom.append(img);
+		} else {
+			dom.textContent = `${this.__alt} (${this.__destination})`;
+		}
+	}
+
+	decorate(): null {
+		return null;
+	}
+
+	isInline(): boolean {
+		return true;
+	}
+
+	getDestination(): string {
+		return this.getLatest().__destination;
+	}
+
+	getAlt(): string {
+		return this.getLatest().__alt;
+	}
+
+	/** Shows the picture at `src`, once the editor knows it. */
+	setSrc(src: string | null): void {
+		this.getWritable().__src = src;
+	}
+
+	getTextContent(): string {
+		return this.__alt;
+	}
+}
+
+export function $createImageNode(
+	destination: string,
+	alt: string,
+	src: string | null = null
+): ImageNode {
+	return $applyNodeReplacement(new ImageNode(destination, alt, src));
+}
+
+export function $isImageNode(node: LexicalNode | null | undefined): node is ImageNode {
+	return node instanceof ImageNode;
+}
+
 /** The nodes the editor offers. */
 export const NODES: Klass<LexicalNode>[] = [
+	ImageNode,
 	FootnoteReferenceNode,
 	FootnoteDefinitionNode,
 	HeadingNode,
@@ -315,6 +422,36 @@ const FOOTNOTE_DEFINITION: ElementTransformer = {
 	type: 'element'
 };
 
+/** An embedded image's alt text, as Markdown writes it in `![…]`. */
+function altText(alt: string): string {
+	return alt.replace(/[[\]\\]/g, (c) => `\\${c}`);
+}
+
+const IMAGE: TextMatchTransformer = {
+	dependencies: [ImageNode],
+	export: (node) =>
+		$isImageNode(node) ? `![${altText(node.getAlt())}](${node.getDestination()})` : null,
+	importRegExp: /!\[((?:[^\]\\]|\\.)*)\]\((kuria:[^)\s]+)\)/,
+	regExp: /!\[((?:[^\]\\]|\\.)*)\]\((kuria:[^)\s]+)\)$/,
+	replace: (node, match) => {
+		node.replace($createImageNode(match[2], match[1].replace(/\\(.)/g, '$1')));
+	},
+	trigger: ')',
+	type: 'text-match'
+};
+
+/** Shows each image's picture, as `pictures` gives it by destination. */
+export function $showPictures(pictures: ReadonlyMap<string, string>): void {
+	const visit = (node: LexicalNode) => {
+		if ($isImageNode(node)) {
+			const src = pictures.get(node.getDestination()) ?? null;
+			if (src !== node.__src) node.setSrc(src);
+		}
+		if (node instanceof ElementNode) node.getChildren().forEach(visit);
+	};
+	visit($getRoot());
+}
+
 const FOOTNOTE_REFERENCE: TextMatchTransformer = {
 	dependencies: [FootnoteReferenceNode],
 	export: (node) => ($isFootnoteReferenceNode(node) ? `[^${node.getLabel()}]` : null),
@@ -359,6 +496,7 @@ export const TRANSFORMERS: Transformer[] = [
 	ITALIC_UNDERSCORE,
 	STRIKETHROUGH,
 	FOOTNOTE_REFERENCE,
+	IMAGE,
 	LINK
 ];
 
@@ -374,8 +512,12 @@ export function atx(text: string): string {
 		.join('');
 }
 
-/** Fills the editor's root, in an update, from a field's Markdown. */
-export function $fromMarkdown(markdown: string): void {
+/** Fills the editor's root, in an update, from a field's Markdown, each
+ * embedded image showing its picture from `pictures`, by destination. */
+export function $fromMarkdown(
+	markdown: string,
+	pictures: ReadonlyMap<string, string> = new Map()
+): void {
 	$convertFromMarkdownString(atx(markdown), TRANSFORMERS, undefined, false);
 	// Each heading's id, from its last text, onto its node.
 	const headings = (node: LexicalNode): LexicalNode[] =>
@@ -394,6 +536,7 @@ export function $fromMarkdown(markdown: string): void {
 		if (rest) last.setTextContent(rest);
 		else last.remove();
 	}
+	$showPictures(pictures);
 }
 
 /** The editor's root, in a read, as a field's Markdown. */

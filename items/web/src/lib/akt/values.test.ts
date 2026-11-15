@@ -131,9 +131,9 @@ describe('markdown fields', () => {
 			images: []
 		};
 		const draft = draftOf(field('MARKDOWN'), value);
-		expect(draft).toEqual({ kind: 'MARKDOWN', text: '# Scope {#scope}\n' });
+		expect(draft).toEqual({ kind: 'MARKDOWN', text: '# Scope {#scope}\n', pictures: [] });
 		expect(inputOf(draft)).toBe('# Scope {#scope}\n');
-		expect(inputOf({ kind: 'MARKDOWN', text: '  \n' })).toBeNull();
+		expect(inputOf({ kind: 'MARKDOWN', text: '  \n', pictures: [] })).toBeNull();
 		expect(textOf(value)).toBe('# Scope {#scope}\n');
 	});
 });

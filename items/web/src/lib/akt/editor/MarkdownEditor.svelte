@@ -44,10 +44,12 @@
 	import Combobox, { type Option } from '#lib/ui/Combobox.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import { getClient } from '#lib/graphql/context.svelte.ts';
-	import { AktReferable } from '#lib/graphql/operations.ts';
+	import { AktReferable, CreateAkt, ImagePicture, ImageTypes } from '#lib/graphql/operations.ts';
+	import { upload } from '../upload';
 	import { pickable } from '../pickers';
 	import { destinationOf } from '../references';
 	import {
+		$createImageNode as createImage,
 		$createFootnoteDefinitionNode as createFootnoteDefinition,
 		$createFootnoteReferenceNode as createFootnoteReference,
 		$fromMarkdown as fromMarkdown,
@@ -68,9 +70,11 @@
 		/** The field's Markdown. */
 		text: string;
 		label: string;
+		/** Each embedded image's picture, by destination. */
+		pictures?: [string, string][];
 	}
 
-	let { text = $bindable(), label }: Props = $props();
+	let { text = $bindable(), label, pictures = [] }: Props = $props();
 	const client = getClient();
 
 	/** Akter to reference, found by number or title. */
@@ -134,7 +138,7 @@
 				COMMAND_PRIORITY_EDITOR
 			)
 		);
-		instance.update(() => fromMarkdown(original), { discrete: true });
+		instance.update(() => fromMarkdown(original, new Map(pictures)), { discrete: true });
 		// Opened and saved unchanged, the value is what it was, as written.
 		const unchanged = instance.getEditorState().read(() => toMarkdown());
 		const stop = instance.registerUpdateListener(({ editorState }) => {
@@ -214,6 +218,117 @@
 			}
 		});
 		editor?.focus();
+	}
+
+	// r[impl app.editor]: an image akt found, or a file uploaded as a new
+	// one, embedded at the cursor.
+	interface ImageType {
+		key: string;
+		name: string;
+		title: string | null;
+		image: string;
+	}
+	let imageOpen = $state(false);
+	let imageTypes = $state<ImageType[]>([]);
+	let imageType = $state('');
+	let picked = $state<{ number: string; title: string | null; url: string | null } | null>(null);
+	let file = $state<File | null>(null);
+	let alt = $state('');
+	let imageError = $state('');
+	let imageBusy = $state(false);
+
+	async function openImage() {
+		keepSelection();
+		picked = null;
+		file = null;
+		alt = '';
+		imageError = '';
+		imageOpen = true;
+		const result = await client.query(ImageTypes, {}).toPromise();
+		imageTypes = (result.data?.aktTypes ?? []).flatMap((t) =>
+			t.presentation.image
+				? [
+						{
+							key: t.key,
+							name: t.name,
+							title: t.presentation.title ?? null,
+							image: t.presentation.image
+						}
+					]
+				: []
+		);
+		imageType = imageTypes[0]?.key ?? '';
+	}
+
+	/** Image akter to embed, found by number or title. */
+	const searchImages = (typed: string) =>
+		pickable(
+			client,
+			typed,
+			[],
+			imageTypes.map((t) => t.key)
+		);
+
+	async function pickImage(option: Option) {
+		file = null;
+		const result = await client
+			.query(ImagePicture, { number: option.value }, { requestPolicy: 'network-only' })
+			.toPromise();
+		const akt = result.data?.akt;
+		const key = akt?.type.presentation.image;
+		const value = akt?.fields.find((f) => 'field' in f && f.field === key);
+		picked = {
+			number: option.value,
+			title: akt?.title ?? null,
+			url: value && 'attachment' in value ? value.attachment.url : null
+		};
+		alt = alt || (akt?.title ?? option.label);
+	}
+
+	function chooseFile(chosen: File | null) {
+		file = chosen;
+		if (chosen) {
+			picked = null;
+			alt = alt || chosen.name.replace(/\.[^.]+$/, '');
+		}
+	}
+
+	/** The picked image, or a new image akt holding the uploaded file. */
+	async function imageToEmbed(): Promise<{ number: string; url: string | null } | null> {
+		if (picked) return picked;
+		const type = imageTypes.find((t) => t.key === imageType);
+		if (!file || !type) return null;
+		const uploaded = await upload(file);
+		const fields: Record<string, unknown> = { [type.image]: uploaded.id };
+		if (type.title) fields[type.title] = file.name.replace(/\.[^.]+$/, '') || file.name;
+		const created = await client
+			.mutation(CreateAkt, { input: { type: type.key, in: [], fields } })
+			.toPromise();
+		if (created.error || !created.data)
+			throw new Error(created.error?.message ?? 'The image wasn’t created.');
+		return { number: created.data.createAkt.number, url: `/attachments/${uploaded.id}` };
+	}
+
+	async function insertImage() {
+		imageBusy = true;
+		imageError = '';
+		try {
+			const image = await imageToEmbed();
+			if (!image) return;
+			editor?.update(() => {
+				if (saved) setSelection(saved.clone());
+				const selection = getSelection();
+				if (!isRangeSelection(selection)) return;
+				selection.insertNodes([
+					createImage(`kuria:${image.number}`, alt.trim() || image.number, image.url)
+				]);
+			});
+			imageOpen = false;
+		} catch (e) {
+			imageError = e instanceof Error ? e.message : String(e);
+		} finally {
+			imageBusy = false;
+		}
 	}
 
 	let linkOpen = $state(false);
@@ -319,6 +434,7 @@
 			}}>Reference</Button
 		>
 		<Button size="sm" variant="ghost" onclick={footnote}>Footnote</Button>
+		<Button size="sm" variant="ghost" onclick={openImage}>Image</Button>
 	</div>
 	<div
 		class="content markdown"
@@ -330,6 +446,65 @@
 		tabindex="0"
 	></div>
 </div>
+
+<Dialog
+	bind:open={imageOpen}
+	title="Image"
+	onCloseAutoFocus={backToEditor}
+	description="An image akt, found or made from a file you upload, shown here."
+>
+	<form
+		id="image-form"
+		aria-label="Image"
+		onsubmit={(e) => {
+			e.preventDefault();
+			void insertImage();
+		}}
+	>
+		{#if imageTypes.length === 0}
+			<p>No akt type holds images.</p>
+		{:else}
+			<Combobox
+				label="Find an image"
+				placeholder="Number or title"
+				search={searchImages}
+				onPick={pickImage}
+			/>
+			{#if picked}
+				<p>{picked.title ?? picked.number} <span class="hint">{picked.number}</span></p>
+			{/if}
+			<label>
+				Or upload a file
+				<input
+					type="file"
+					accept="image/png,image/jpeg,image/svg+xml,image/webp"
+					onchange={(e) => chooseFile(e.currentTarget.files?.[0] ?? null)}
+				/>
+			</label>
+			{#if file && imageTypes.length > 1}
+				<label>
+					As a new
+					<select bind:value={imageType}>
+						{#each imageTypes as t (t.key)}
+							<option value={t.key}>{t.name}</option>
+						{/each}
+					</select>
+				</label>
+			{/if}
+			<label>Alt text <input bind:value={alt} /></label>
+			{#if imageError}<p role="alert">{imageError}</p>{/if}
+		{/if}
+	</form>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (imageOpen = false)}>Cancel</Button>
+		<Button
+			variant="primary"
+			type="submit"
+			form="image-form"
+			disabled={imageBusy || (!picked && !file)}>Insert</Button
+		>
+	{/snippet}
+</Dialog>
 
 <Dialog bind:open={linkOpen} title="Link" onCloseAutoFocus={backToEditor}>
 	<form
@@ -469,6 +644,12 @@
 	.content :global(.header) {
 		font-weight: 600;
 		background: var(--bg-muted);
+	}
+
+	.content :global(.image img) {
+		max-width: 100%;
+		max-height: 16rem;
+		vertical-align: middle;
 	}
 
 	.content :global(.footnote-reference) {

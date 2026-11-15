@@ -101,3 +101,73 @@ test('a markdown field is written in the editor, with a reference to a heading',
 	const bytes = await (await download.createReadStream()).toArray();
 	expect(Buffer.concat(bytes).subarray(0, 4).toString()).toBe('%PDF');
 });
+
+/** A one-pixel red PNG. */
+const PNG = Buffer.from(
+	'89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de0000000c4944415478' +
+		'9c63f8cfc00000030101' +
+		'00c9fe92ef0000000049454e44ae426082',
+	'hex'
+);
+
+// r[verify app.editor]
+// r[verify app.images]
+test('an image is uploaded from the editor, embedded and shown', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Pictures ${stamp}` } }
+		)
+	).createAkt.number;
+	const guide = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON, $in: [String!]!) { createAkt(input: { type: "document", fields: $f, in: $in }) { number } }',
+			{ f: { title: `Illustrated ${stamp}`, body: 'Look:\n' }, in: [index] }
+		)
+	).createAkt.number;
+
+	const page = await signIn(browser, seeded().people.developer);
+	await open(page, guide);
+	await page.getByRole('button', { name: 'Edit Body' }).click();
+	const editor = page.getByRole('textbox', { name: 'Body' });
+	await editor.click();
+	await page.keyboard.press('End');
+	await page.keyboard.press('Enter');
+	await page.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Image' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Image' });
+	await dialog
+		.getByLabel('Or upload a file')
+		.setInputFiles({ name: `chart-${stamp}.png`, mimeType: 'image/png', buffer: PNG });
+	await dialog.getByLabel('Alt text').fill('The chart');
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the image dialog'
+	).toEqual([]);
+	await dialog.getByRole('button', { name: 'Insert' }).click();
+	await expect(dialog).toBeHidden();
+	await expect(editor.getByRole('img', { name: 'The chart' })).toBeVisible();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+
+	// Saved as a reference to a new image akt, shown as a figure.
+	const shown = page.locator('dd[data-field="body"]');
+	const figure = shown.getByRole('figure');
+	await expect(figure.getByRole('img', { name: 'The chart' })).toBeVisible();
+	await expect(figure).toContainText('The chart');
+	const saved = await admin.graphql<{ akt: { fields: { markdown?: string }[] } }>(
+		'query($n: String!) { akt(number: $n) { fields { ... on MarkdownValue { markdown } } } }',
+		{ n: guide }
+	);
+	const markdown = saved.akt.fields.find((f) => f?.markdown)?.markdown ?? '';
+	const image = markdown.match(/!\[The chart\]\(kuria:(IMG-\d+)\)/)?.[1];
+	expect(image, markdown).toBeTruthy();
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the body with its figure'
+	).toEqual([]);
+	// The image akt's page shows its picture.
+	await open(page, image!);
+	await expect(page.getByRole('img', { name: `chart-${stamp}.png` })).toBeVisible();
+});

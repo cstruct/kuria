@@ -51,7 +51,7 @@
 			<input aria-label={field.name} bind:value={draft.text} />
 		{/if}
 	{:else if draft.kind === 'MARKDOWN'}
-		<MarkdownEditor bind:text={draft.text} label={field.name} />
+		<MarkdownEditor bind:text={draft.text} pictures={draft.pictures} label={field.name} />
 	{:else if draft.kind === 'CHOICE'}
 		<select aria-label={field.name} bind:value={draft.key}>
 			<option value="">None</option>

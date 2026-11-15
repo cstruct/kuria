@@ -1,6 +1,7 @@
 //! `markdown` fields as PDFs (`pdf.*`): of the living version or of a
 //! version, rendered with typst and its bundled fonts.
 
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 use axum::extract::{Path, Query, State};
@@ -25,25 +26,38 @@ use typst::{Library, LibraryExt, World};
 use uuid::Uuid;
 
 use crate::akter::AktError;
+use crate::attachments::Storage;
 use crate::authorize::{Decider, Permission};
 use crate::http::caller;
 
 #[derive(Clone)]
 pub(crate) struct PdfState {
     pub pool: Pool,
+    /// Where embedded images' pictures are read from.
+    pub storage: Storage,
     pub decider: Arc<dyn Decider>,
     /// Kuria's public URL, that references link to.
     pub public_url: String,
 }
 
 /// The PDF route's state.
-pub(crate) fn state(pool: Pool, decider: Arc<dyn Decider>, public_url: String) -> PdfState {
+pub(crate) fn state(
+    pool: Pool,
+    storage: Storage,
+    decider: Arc<dyn Decider>,
+    public_url: String,
+) -> PdfState {
     PdfState {
         pool,
+        storage,
         decider,
         public_url,
     }
 }
+
+/// An embedded image's picture, for typst: the reference's destination,
+/// the file it is read from, and its bytes.
+type Picture = (String, String, Vec<u8>);
 
 #[derive(Deserialize)]
 pub(crate) struct Asked {
@@ -62,10 +76,12 @@ fn fonts() -> &'static (LazyHash<FontBook>, Vec<Font>) {
     })
 }
 
-/// One typst document, with nothing to read but itself.
+/// One typst document, with nothing to read but itself and the pictures
+/// it is given (`pdf.packages`).
 struct Doc {
     library: LazyHash<Library>,
     main: Source,
+    files: HashMap<FileId, Bytes>,
 }
 
 impl World for Doc {
@@ -89,8 +105,8 @@ impl World for Doc {
         }
     }
 
-    fn file(&self, _id: FileId) -> FileResult<Bytes> {
-        Err(FileError::AccessDenied)
+    fn file(&self, id: FileId) -> FileResult<Bytes> {
+        self.files.get(&id).cloned().ok_or(FileError::AccessDenied)
     }
 
     fn font(&self, index: usize) -> Option<Font> {
@@ -102,12 +118,21 @@ impl World for Doc {
     }
 }
 
-/// `markup`, typst, as a PDF.
+/// `markup`, typst, as a PDF, reading only `files`, by path.
 // r[impl pdf.repeatable]
-pub fn render(markup: String) -> Result<Vec<u8>, String> {
+pub fn render(markup: String, files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
     let doc = Doc {
         library: LazyHash::new(Library::default()),
         main: Source::new(FileId::new(None, VirtualPath::new("/main.typ")), markup),
+        files: files
+            .into_iter()
+            .map(|(path, bytes)| {
+                (
+                    FileId::new(None, VirtualPath::new(&path)),
+                    Bytes::new(bytes),
+                )
+            })
+            .collect(),
     };
     let said = |errors: &[typst::diag::SourceDiagnostic]| {
         errors
@@ -137,7 +162,7 @@ pub(crate) async fn pdf(
     };
     let tenant: Uuid = principal.tenant.into();
     let found = wanted(&state, &authorizer, tenant, &number, &asked);
-    let (text, pins) = match found.await {
+    let (text, pins, pictures) = match found.await {
         Ok(Some(found)) => found,
         Ok(None) => return (StatusCode::NOT_FOUND, "not found").into_response(),
         Err(AktError::Unavailable(e)) => {
@@ -166,8 +191,17 @@ pub(crate) async fn pdf(
                 .unwrap_or_default()
         )
     };
-    let markup = kuria_engine::typst::markup(&text, &link_of);
-    let rendered = tokio::task::spawn_blocking(move || render(markup)).await;
+    let files: HashMap<String, String> = pictures
+        .iter()
+        .map(|(destination, path, _)| (destination.clone(), path.clone()))
+        .collect();
+    let picture_of = move |r: &Reference| files.get(&r.to_string()).cloned();
+    let markup = kuria_engine::typst::markup(&text, &link_of, &picture_of);
+    let files = pictures
+        .into_iter()
+        .map(|(_, path, bytes)| (path, bytes))
+        .collect();
+    let rendered = tokio::task::spawn_blocking(move || render(markup, files)).await;
     let bytes = match rendered {
         Ok(Ok(bytes)) => bytes,
         Ok(Err(e)) => {
@@ -199,15 +233,16 @@ pub(crate) async fn pdf(
     response
 }
 
-/// The field's Markdown and the pins it is read with, if the subject may
-/// read it: `None` for an akt, field or version that isn't there.
+/// The field's Markdown, the pins it is read with, and the pictures of
+/// the images it embeds, if the subject may read it: `None` for an akt,
+/// field or version that isn't there.
 async fn wanted(
     state: &PdfState,
     authorizer: &crate::authorize::Authorizer,
     tenant: Uuid,
     number: &str,
     asked: &Asked,
-) -> Result<Option<(String, Vec<Pin>)>, AktError> {
+) -> Result<Option<(String, Vec<Pin>, Vec<Picture>)>, AktError> {
     let mut conn = state.pool.get().await?;
     let Some(akt) = store::akt_by_number(&mut conn, tenant, number).await? else {
         return Ok(None);
@@ -255,5 +290,70 @@ async fn wanted(
         Some(Value::Markdown(text)) => text.clone(),
         _ => String::new(),
     };
-    Ok(Some((text, pins)))
+    let pictures = pictures_of(state, &mut conn, authorizer, tenant, &text, &pins).await?;
+    Ok(Some((text, pins, pictures)))
+}
+
+/// The pictures of the images `text` embeds, as read with `pins`: each one
+/// that isn't broken, with its bytes (`pdf.render`).
+async fn pictures_of(
+    state: &PdfState,
+    conn: &mut kuria_store::Connection,
+    authorizer: &crate::authorize::Authorizer,
+    tenant: Uuid,
+    text: &str,
+    pins: &[Pin],
+) -> Result<Vec<Picture>, AktError> {
+    let mut pictures = Vec::new();
+    for reference in kuria_engine::markdown::images(text) {
+        let target =
+            crate::akter::versions::target(conn, tenant, authorizer, &reference.number).await?;
+        let (pinned_version, pinned_revision) = as_pinned(&reference, pins);
+        let version = reference.version.or(pinned_version);
+        let as_read = Reference {
+            version,
+            ..reference.clone()
+        };
+        if target.is_none()
+            || (pinned_revision.is_none()
+                && kuria_engine::markdown::broken_image(&as_read, target.as_ref()).is_some())
+        {
+            continue;
+        }
+        let Some(id) = crate::akter::versions::picture_at(
+            conn,
+            tenant,
+            &reference.number,
+            version,
+            pinned_revision,
+        )
+        .await?
+        else {
+            continue;
+        };
+        let Some(row) = kuria_store::attachments::find(conn, tenant, &[id])
+            .await?
+            .pop()
+        else {
+            continue;
+        };
+        let extension = match row.media_type.as_str() {
+            "image/png" => "png",
+            "image/jpeg" => "jpg",
+            "image/svg+xml" => "svg",
+            "image/webp" => "webp",
+            _ => continue,
+        };
+        let bytes = state
+            .storage
+            .get(tenant, &row.sha256)
+            .await
+            .map_err(|e| AktError::Internal(format!("reading attachment {id}: {e}")))?;
+        pictures.push((
+            reference.to_string(),
+            format!("/pictures/{id}.{extension}"),
+            bytes,
+        ));
+    }
+    Ok(pictures)
 }

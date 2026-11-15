@@ -55,7 +55,8 @@ const IMAGES: &str = "query($n: String!, $v: Int) { akt(number: $n, version: $v)
       attachment { id mediaType } } } } } }";
 
 const SVG: &[u8] = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"4\" height=\"4\"/>";
-const PNG: &[u8] = b"\x89PNG\r\n\x1a\n";
+/// A one-pixel red PNG.
+const PNG: &[u8] = b"\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48\x44\x52\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90\x77\x53\xde\x00\x00\x00\x0c\x49\x44\x41\x54\x78\x9c\x63\xf8\xcf\xc0\x00\x00\x03\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00\x49\x45\x4e\x44\xae\x42\x60\x82";
 
 impl World {
     async fn new() -> Self {
@@ -271,4 +272,48 @@ async fn a_version_shows_the_picture_it_was_released_with() {
     let answer = world.download(&first).await;
     assert_eq!(answer.status, 200, "{}", answer.body);
     assert_eq!(answer.bytes, PNG);
+}
+
+// r[verify pdf.render]
+// r[verify pdf.packages]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pdf_draws_its_embedded_pictures() {
+    let world = World::new().await;
+    let png = world.upload("chart.png", "image/png", PNG).await;
+    let chart = world
+        .created("image", json!({ "title": "Chart", "file": png }))
+        .await;
+    let svg = world.upload("logo.svg", "image/svg+xml", SVG).await;
+    let logo = world
+        .created("image", json!({ "title": "Logo", "file": svg }))
+        .await;
+    let guide = world
+        .created(
+            "document",
+            json!({ "title": "Guide", "body": format!(
+                "# Pictures\n\n![The chart](kuria:{chart})\n\nA logo ![logo](kuria:{logo}) inline, and ![Missing](kuria:IMG-99).\n"
+            ) }),
+        )
+        .await;
+    let answer = send(
+        &world.router,
+        Request::get(format!("/akter/{guide}/pdf"))
+            .header("authorization", "Bearer tenant")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let document = lopdf::Document::load_mem(&answer.bytes).unwrap();
+    let images = document
+        .objects
+        .values()
+        .filter(|o| {
+            o.as_stream().is_ok_and(|s| {
+                s.dict.get(b"Subtype").and_then(lopdf::Object::as_name).ok()
+                    == Some(b"Image".as_slice())
+            })
+        })
+        .count();
+    assert!(images >= 1, "the PNG is an image in the PDF");
 }

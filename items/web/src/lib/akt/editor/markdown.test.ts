@@ -5,6 +5,7 @@ import { $getRoot, $isElementNode } from 'lexical';
 import {
 	$fromMarkdown,
 	$isFootnoteDefinitionNode,
+	$isImageNode,
 	$isFootnoteReferenceNode,
 	$nextFootnoteLabel,
 	$toMarkdown,
@@ -37,6 +38,7 @@ describe('the editor’s Markdown', () => {
 		['links and references', '[web](https://example.com) and [setup](kuria:DOCS-1-D04@2#install)'],
 		['tables', '| Name | Value |\n| --- | --- |\n| a | 1 |\n| b | 2 |'],
 		['rules', 'Above\n\n---\n\nBelow'],
+		['images', '![The chart](kuria:IMG-1) inline, and ![a \\[bracket\\]](kuria:IMG-2@3).'],
 		[
 			'footnotes',
 			'Said[^1], and *done*[^note].\n\n[^1]: First, with a [link](kuria:D-4#run).\n\n[^note]: Second **note**.'
@@ -75,6 +77,34 @@ describe('the editor’s Markdown', () => {
 			expect($isFootnoteDefinitionNode(one) && one.getLabel()).toBe('1');
 			expect($isFootnoteDefinitionNode(ex) && ex.getLabel()).toBe('x');
 			expect($nextFootnoteLabel()).toBe('2');
+		});
+	});
+
+	// r[verify app.images]
+	it('show an embedded image as its picture, once it knows it', () => {
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(
+			() =>
+				$fromMarkdown(
+					'A ![chart](kuria:IMG-1) and ![gone](kuria:IMG-9).',
+					new Map([['kuria:IMG-1', '/attachments/x']])
+				),
+			{ discrete: true }
+		);
+		editor.getEditorState().read(() => {
+			const [paragraph] = $getRoot().getChildren();
+			const images = ($isElementNode(paragraph) ? paragraph.getChildren() : []).filter(
+				$isImageNode
+			);
+			expect(images.map((i) => [i.getDestination(), i.getAlt(), i.__src])).toEqual([
+				['kuria:IMG-1', 'chart', '/attachments/x'],
+				['kuria:IMG-9', 'gone', null]
+			]);
 		});
 	});
 });

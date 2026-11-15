@@ -751,3 +751,38 @@ export const AktReferable = graphql(`
 		}
 	}
 `);
+
+export const ImageTypes = graphql(`
+	query ImageTypes {
+		aktTypes {
+			key
+			name
+			presentation {
+				title
+				image
+			}
+		}
+	}
+`);
+
+export const ImagePicture = graphql(`
+	query ImagePicture($number: String!) {
+		akt(number: $number) {
+			number
+			title
+			type {
+				presentation {
+					image
+				}
+			}
+			fields {
+				... on AttachmentValue {
+					field
+					attachment {
+						url
+					}
+				}
+			}
+		}
+	}
+`);

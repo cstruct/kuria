@@ -1174,6 +1174,7 @@ impl AktType {
             icon: presentation.icon.map(Into::into),
             colour: presentation.colour.unwrap_or_default().into(),
             navigation: presentation.navigation.unwrap_or_default().into(),
+            image: presentation.image.clone(),
         }
     }
 
@@ -1419,6 +1420,9 @@ pub struct Presentation {
     colour: AktTypeColour,
     /// Where the app's sidebar lists the type (`app.navigation`).
     navigation: AktTypeNavigation,
+    /// The `attachment` field holding each akt's picture, if its akter are
+    /// images (`akt.field.markdown.images`).
+    image: Option<String>,
 }
 
 #[derive(SimpleObject)]

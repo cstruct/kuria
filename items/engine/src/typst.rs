@@ -51,6 +51,12 @@ fn level(level: HeadingLevel) -> usize {
 struct Writer<'a> {
     out: String,
     link_of: &'a dyn Fn(&Reference) -> String,
+    /// The file an embedded image's picture is read from, if it has one.
+    picture_of: &'a dyn Fn(&Reference) -> Option<String>,
+    /// An image's destination and alt text, while in one.
+    image: Option<(String, String)>,
+    /// Where the paragraph being written started in `out`.
+    paragraph: Option<usize>,
     /// Each list it is in, with its start if it is ordered.
     lists: Vec<Option<u64>>,
     /// A code block's language and text, while in one.
@@ -81,7 +87,7 @@ impl Writer<'_> {
     }
 
     fn event(&mut self, event: Event<'_>) {
-        if self.footnote(&event) {
+        if self.footnote(&event) || self.picture(&event) {
             return;
         }
         if self.code.is_some() {
@@ -210,6 +216,58 @@ impl Writer<'_> {
         true
     }
 
+    /// An image: its picture, as a figure captioned by its alt text when it
+    /// is alone in its paragraph; its alt text, in italics, when it has
+    /// none. Whether it was one, or its alt text.
+    fn picture(&mut self, event: &Event<'_>) -> bool {
+        match event {
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                self.image = Some((dest_url.to_string(), String::new()));
+            }
+            Event::Text(t) | Event::Code(t) if self.image.is_some() => {
+                if let Some((_, alt)) = self.image.as_mut() {
+                    alt.push_str(t);
+                }
+            }
+            Event::End(TagEnd::Image) => {
+                let (destination, alt) = self.image.take().unwrap_or_default();
+                let file = Reference::parse(&destination).and_then(|r| (self.picture_of)(&r));
+                match file {
+                    Some(file) => self.put(&format!(
+                        "#box(image({}, alt: {}))",
+                        string(&file),
+                        string(&alt)
+                    )),
+                    None => self.put(&format!("#emph[{}]", escaped(&alt))),
+                }
+            }
+            Event::Start(Tag::Paragraph) if self.cell.is_none() => {
+                self.paragraph = Some(self.out.len());
+                return false;
+            }
+            Event::End(TagEnd::Paragraph) if self.cell.is_none() => {
+                if let Some(start) = self.paragraph.take()
+                    && let Some(inner) = self.out[start..]
+                        .strip_prefix("#box(image(")
+                        .and_then(|rest| rest.strip_suffix("))"))
+                        .filter(|inner| !inner.contains("#box("))
+                {
+                    // Alone in its paragraph: a figure, captioned by its alt text.
+                    let alt = inner
+                        .rsplit_once(", alt: ")
+                        .map(|(_, alt)| alt.to_owned())
+                        .unwrap_or_default();
+                    let figure = format!("#figure(image({inner}), caption: [#{alt}])");
+                    self.out.truncate(start);
+                    self.out.push_str(&figure);
+                }
+                return false;
+            }
+            _ => return false,
+        }
+        true
+    }
+
     /// A footnote's definition, kept in `notes` instead of written, and a
     /// reference to one: the note at its first, the same note's number at
     /// each later one, and its text if it names none; whether it was one.
@@ -287,10 +345,16 @@ fn label_of(label: &str) -> String {
         .collect()
 }
 
-fn writer(link_of: &dyn Fn(&Reference) -> String) -> Writer<'_> {
+fn writer<'a>(
+    link_of: &'a dyn Fn(&Reference) -> String,
+    picture_of: &'a dyn Fn(&Reference) -> Option<String>,
+) -> Writer<'a> {
     Writer {
         out: String::new(),
         link_of,
+        picture_of,
+        image: None,
+        paragraph: None,
         lists: Vec::new(),
         code: None,
         table: None,
@@ -303,16 +367,22 @@ fn writer(link_of: &dyn Fn(&Reference) -> String) -> Writer<'_> {
 }
 
 /// `text`, a `markdown` field's value, as a typst document: `link_of`
-/// gives the address a reference links to in the app. Footnotes are read
-/// first, so that each is written where it is first referred to.
+/// gives the address a reference links to in the app, and `picture_of`
+/// the file an embedded image's picture is read from, if it has one.
+/// Footnotes are read first, so that each is written where it is first
+/// referred to.
 // r[impl pdf.render]
 #[must_use]
-pub fn markup(text: &str, link_of: &dyn Fn(&Reference) -> String) -> String {
-    let mut reading = writer(link_of);
+pub fn markup(
+    text: &str,
+    link_of: &dyn Fn(&Reference) -> String,
+    picture_of: &dyn Fn(&Reference) -> Option<String>,
+) -> String {
+    let mut reading = writer(link_of, picture_of);
     for event in Parser::new_ext(text, crate::markdown::options()) {
         reading.event(event);
     }
-    let mut writing = writer(link_of);
+    let mut writing = writer(link_of, picture_of);
     writing.notes = reading.notes;
     writing.out = format!("{PREAMBLE}\n");
     for event in Parser::new_ext(text, crate::markdown::options()) {
@@ -333,8 +403,12 @@ mod tests {
         )
     }
 
+    fn picture(r: &Reference) -> Option<String> {
+        (r.number == "IMG-1").then(|| "/pictures/1.png".to_owned())
+    }
+
     fn body(text: &str) -> String {
-        markup(text, &link)
+        markup(text, &link, &picture)
             .trim_start_matches(PREAMBLE)
             .trim()
             .to_owned()
@@ -343,7 +417,19 @@ mod tests {
     // r[verify pdf.render]
     #[test]
     fn markdown_becomes_typst() {
-        let cases: [(&str, &str); 13] = [
+        let cases: [(&str, &str); 16] = [
+            (
+                "![The chart](kuria:IMG-1)",
+                "#figure(image(\"/pictures/1.png\", alt: \"The chart\"), caption: [#\"The chart\"])",
+            ),
+            (
+                "See ![logo](kuria:IMG-1) here.",
+                "See #box(image(\"/pictures/1.png\", alt: \"logo\")) here.",
+            ),
+            (
+                "![Gone](kuria:IMG-9) and ![web](https://x.example/a.png)",
+                "#emph[Gone] and #emph[web]",
+            ),
             (
                 "# Install {#install}\n\nRun *it* **now** ~~not~~.",
                 "= Install\n\nRun #emph[it] #strong[now] #strike[not].",

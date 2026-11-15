@@ -261,19 +261,23 @@ Tests: config (`checks_the_presentation`), engine (`reads_embedded_images_as_ref
 <!-- akt: PLAN-015-T04 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b4G
-state: todo
+state: done
 in: [PLAN-015]
 links: [Blocked by PLAN-015-T03, Blocks PLAN-015-T07]
 title: Images in the editor and PDFs
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
 Images in the editor and PDFs.
 
-- Editor: an image node, with its transformer `![alt](kuria:…)`. The Image button picks an image akt (`app.pickers`, limited to image types), or uploads a file and creates an image akt of a chosen image type, titled by the file's name, and embeds it.
-- PDF: the server reads each embedded picture before rendering; the `World` answers them as files; the markup draws them with their alt text.
+- **Editor:** `ImageNode`, an inline decorator showing the picture (or its alt text and destination while the editor doesn't know it), with its transformer `![alt](kuria:…)` (alt text with `[`, `]` and `\` escaped). The Markdown draft carries each embedded image's picture from `MarkdownValue.images`, so an opened field shows them. The Image button opens a dialog: find an image akt (`app.pickers`, limited to image types, `ImageTypes`, `ImagePicture`), or upload a file, which creates an image akt of a chosen image type at the top level, titled by the file's name; alt text defaults to the title or the file's name.
+- **GraphQL:** `Presentation.image`.
+- **PDF:** the typst writer draws an embedded image as `#box(image(…))`, one alone in its paragraph as a figure captioned by its alt text, and one without a picture as its alt text in italics. The PDF route reads each embedded picture as the PDF's version reads it (pins included), only where the reader may read the image, from storage; the `World` answers those files and nothing else.
+
+Tests: the editor's round trip with images and a picture test; engine typst cases; `a_pdf_draws_its_embedded_pictures` (a PNG and an SVG); `markdown-editor.spec.ts`'s new test uploads a PNG from the Image dialog, embeds it, saves, sees the figure and the image akt's picture, with axe. Lint, 381 Rust, 90 app tests and the editor browser tests pass.
 
 <!-- field: acceptance -->
 - Editor round trip with images.
