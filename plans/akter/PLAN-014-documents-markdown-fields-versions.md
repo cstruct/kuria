@@ -1,7 +1,7 @@
 ---
 number: PLAN-014
 type: plan
-revision: 20
+revision: 22
 rank: b3k
 state: active
 title: "Documents: markdown fields, versions, references, PDFs and a git remote"
@@ -715,25 +715,72 @@ A clone is of one container: a document shows in the directories that container'
 <!-- akt: PLAN-014-G04 -->
 ---
 type: gap
-revision: 1
+revision: 3
 rank: b41
-state: open
+state: closed
 in: [PLAN-014]
+links: [Resolved by PLAN-014-T08]
 title: Versions in bundles and directory conversion
 ---
 
 <!-- field: description -->
 Bundles (`bundle.contents`) and converting between a server and an akt directory (`cli.local.convert`) carry akter, revisions, links and pins, but not versions (`akt_version`, or a directory file's `versions`). An exported tenant, or a directory imported to a server, loses its releases. Each format needs versions, with their pins, and an import must keep their numbers and the revisions they name.
 
+<!-- field: resolution -->
+Resolved (T08). Bundles are format 2: each akt carries its versions with their pins, and each revision the git commit it was pushed in; format 1 still imports. Converting to a directory writes versions into the files with the headings they had; converting from one builds revisions from git's commits, so a version reads on the server as it was released.
+
 <!-- akt: PLAN-014-G05 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b42
 state: open
 in: [PLAN-014]
+links: [Resolved by PLAN-014-T09]
 title: Fetching rebuilds the whole history
 ---
 
 <!-- field: description -->
 `git-remote-kuria` rebuilds a container's whole history on every fetch and every push check. It reads each akt's revisions, and each akt at each revision, one GraphQL query apiece. That is fine for an index of tens of documents with hundreds of revisions, and slow beyond. Building only the commits after the last fetch needs the clone to keep where it got to (the change events seen, and the files at the tip), and a way to ask Kuria for the revisions of many akter at once.
+
+<!-- akt: PLAN-014-T08 -->
+---
+type: task
+revision: 6
+rank: b43
+state: done
+in: [PLAN-014]
+links: [Resolves PLAN-014-G04]
+title: Versions and commits in bundles and directory conversion
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+Bundles and conversion between a server and an akt directory keep versions, and the git commits pushes came from (PLAN-014-G04).
+
+- **Bundles (format 2):** each bundle akt holds its versions (number, revision, label, who released it and when, pins), and each revision the commit it was pushed in (`git.identity`), so a clone of an imported tenant builds the same commits. Kuria reads formats 1 and 2: format 1 is format 2 without either. An import refuses, as `INVALID_BUNDLE`, versions not numbered from 1 in order, naming a revision the akt lacks or another version names, or with pins that don't read. It writes them as recorded, without change events of their own.
+- **To a directory:** each akt's versions go into its file's `versions`, with the headings each had at its revision, replayed from the bundle's revisions, so references to a version still check. A version's text stays with the server: git has none of the revisions before the directory's.
+- **From a directory:** each revision now records the akt as git's latest commit at that revision holds it, else as at the next revision git has, the first whole and each later one what changed. Before, every revision after the first changed nothing, so a version would have read on the server as the akt is now. A version naming a revision git lacks refuses the import as `NOT_FOUND`.
+- **Code:** `kuria_store::versions::{of_akter, commits_of_akter, insert_imported}`; `bundles/format.rs` (`BundleAktVersion`, `BundleRevision.commit`, `READS`), `export.rs` (`history_of`), `import.rs` (`check_versions`, `insert_versions`); `local/convert.rs` (`versions_in`, `snapshots`, `history_of`, `bundled_versions`); `Times::revision_at`.
+- **Spec:** `bundle.format`, `bundle.contents`, `bundle.import.history`, `cli.local.convert`. Docs: the CLI README and guide, `docs/architecture.md`.
+- **Tests:** `versions_and_commits_move_with_their_akter` and `versions_that_dont_fit_their_akt_are_refused` (server bundles), `versions_go_to_a_bundle_and_back` (local).
+
+Lint, 372 Rust and 80 app tests pass.
+
+<!-- akt: PLAN-014-T09 -->
+---
+type: task
+revision: 2
+rank: b44
+state: todo
+in: [PLAN-014]
+links: [Resolves PLAN-014-G05]
+title: Fetch with a cache of files and batched queries
+---
+
+<!-- field: description -->
+`git-remote-kuria` fetches faster without changing the server (PLAN-014-G05, a first step).
+
+- **A cache in the clone:** an akt at a revision never changes, so its clone file, title and sections are kept under `.git/kuria/`, keyed by number and revision. A later fetch reads only revisions it hasn't seen.
+- **Batched queries:** the revisions of many akter, and akter at revisions, are asked for several to a GraphQL request, by aliases, within the server's complexity limit.
+- The history built is the same, commit for commit; only the queries change.

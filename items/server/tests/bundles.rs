@@ -305,7 +305,7 @@ async fn a_whole_tenant_moves_to_another_kuria_as_it_was() {
     let unpacked = archive::unpack(&archive).unwrap();
     assert_eq!(unpacked.attachments.len(), 1);
     let bundle: Value = serde_json::from_slice(&unpacked.bundle).unwrap();
-    assert_eq!(bundle["format"], 1);
+    assert_eq!(bundle["format"], 2);
     assert_eq!(bundle["scope"], "tenant");
     assert_eq!(bundle["people"][0]["email"], "ada@shop.example");
     assert_eq!(bundle["signedIn"][0]["subject"], SUBJECT);
@@ -641,4 +641,178 @@ async fn copies_keep_their_origins_when_the_tenant_moves() {
     assert_eq!(there, here);
     assert_eq!(there["copiedFrom"]["number"], json!(plan));
     assert_eq!(there["members"]["nodes"].as_array().unwrap().len(), 2);
+}
+
+fn document() -> Value {
+    json!({
+        "key": "document", "name": "Document", "number": "D-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to" }
+        ],
+        "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+        "links": [
+            { "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }
+        ],
+        "versions": { "action": "documents:release" }
+    })
+}
+
+const RELEASED: &str = "query($n: String!) { akt(number: $n) {
+    versions { number revision label releasedBy { id } releasedAt
+      pins { destination number version revision } }
+    revisions { revision commit } } }";
+
+/// Two documents, the second referring to the first; each released, and
+/// the second then edited by a pushed commit.
+async fn released(kuria: &Kuria) -> (String, String) {
+    kuria.define("tenant", document()).await;
+    let setup = kuria
+        .create(
+            "tenant",
+            "document",
+            json!({ "title": "Setup", "body": "# Install {#install}\n" }),
+            &[],
+        )
+        .await;
+    let guide = kuria
+        .create(
+            "tenant",
+            "document",
+            json!({ "title": "Guide", "body": format!("See [install](kuria:{setup}#install).\n") }),
+            &[],
+        )
+        .await;
+    for (number, label) in [(&setup, Some("first")), (&guide, None)] {
+        kuria
+            .ok(
+                "tenant",
+                "mutation($n: String!, $l: String) { releaseVersion(input: { number: $n, revision: 1, label: $l }) { number } }",
+                json!({ "n": number, "l": label }),
+            )
+            .await;
+    }
+    kuria
+        .ok(
+            "tenant",
+            "mutation($o: [OperationInput!]!, $c: JSON) { batch(input: { operations: $o, commit: $c }) { number } }",
+            json!({
+                "o": [{ "editAkt": { "number": guide, "revision": 1, "fields": { "body": "Rewritten.\n" } } }],
+                "c": { "author": "A <a@example.com> 1700000000 +0000", "committer": "A <a@example.com> 1700000000 +0000", "message": "Rewrite\n" }
+            }),
+        )
+        .await;
+    (setup, guide)
+}
+
+// r[verify bundle.contents]
+// r[verify bundle.import.history]
+#[tokio::test(flavor = "multi_thread")]
+async fn versions_and_commits_move_with_their_akter() {
+    let source = Kuria::new().await;
+    let (setup, guide) = released(&source).await;
+    let target = Kuria::new().await;
+    let archive = source.exported("tenant", "tenant=true").await;
+    let (status, imported) = target.import("tenant", archive).await;
+    assert_eq!(status, StatusCode::OK, "{imported}");
+    for number in [&setup, &guide] {
+        let here = source.ok("tenant", RELEASED, json!({ "n": number })).await;
+        let there = target.ok("tenant", RELEASED, json!({ "n": number })).await;
+        assert_eq!(there, here, "{number}");
+    }
+    let here = source.ok("tenant", RELEASED, json!({ "n": guide })).await;
+    assert_eq!(
+        here["akt"]["versions"][0]["pins"][0]["version"],
+        json!(1),
+        "{here}"
+    );
+    assert_eq!(
+        here["akt"]["revisions"][1]["commit"]["message"],
+        json!("Rewrite\n"),
+        "{here}"
+    );
+
+    // A version reads at the revision it names.
+    let at = "query($n: String!) { akt(number: $n, version: 1) { revision } }";
+    assert_eq!(
+        target.ok("tenant", at, json!({ "n": guide })).await,
+        json!({ "akt": { "revision": 1 } })
+    );
+}
+
+// r[verify bundle.import.format]
+// r[verify bundle.import.history]
+#[tokio::test(flavor = "multi_thread")]
+async fn versions_that_dont_fit_their_akt_are_refused() {
+    let source = Kuria::new().await;
+    released(&source).await;
+    let archive = source.exported("tenant", "tenant=true").await;
+    let guide = |b: &mut Value| -> usize {
+        b["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .position(|a| a["versions"].is_array() && a["revisions"].as_array().unwrap().len() == 2)
+            .unwrap()
+    };
+    let target = Kuria::new().await;
+    for (why, broken) in [
+        (
+            "a revision the akt lacks",
+            changed(
+                &archive,
+                |b| {
+                    let i = guide(b);
+                    b["akter"][i]["versions"][0]["revision"] = json!(9);
+                },
+                None,
+            ),
+        ),
+        (
+            "a version numbered out of order",
+            changed(
+                &archive,
+                |b| {
+                    let i = guide(b);
+                    b["akter"][i]["versions"][0]["number"] = json!(2);
+                },
+                None,
+            ),
+        ),
+        (
+            "pins that don't read",
+            changed(
+                &archive,
+                |b| {
+                    let i = guide(b);
+                    b["akter"][i]["versions"][0]["pins"] = json!("x");
+                },
+                None,
+            ),
+        ),
+    ] {
+        let (status, refused) = target.import("tenant", broken).await;
+        assert_eq!(
+            (status, code(&refused)),
+            (StatusCode::BAD_REQUEST, "INVALID_BUNDLE"),
+            "{why}: {refused}"
+        );
+    }
+
+    // A format 1 bundle, which has neither, still imports.
+    let older = changed(
+        &archive,
+        |b| {
+            b["format"] = json!(1);
+            for a in b["akter"].as_array_mut().unwrap() {
+                a.as_object_mut().unwrap().remove("versions");
+                for r in a["revisions"].as_array_mut().unwrap() {
+                    r.as_object_mut().unwrap().remove("commit");
+                }
+            }
+        },
+        None,
+    );
+    let (status, imported) = target.import("tenant", older).await;
+    assert_eq!(status, StatusCode::OK, "{imported}");
 }

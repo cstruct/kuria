@@ -5,8 +5,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use uuid::Uuid;
 
-/// The bundle format this server writes and reads.
-pub const FORMAT: u32 = 1;
+/// The bundle format this server writes. Format 1 is the same without
+/// versions and commits, so it reads both.
+pub const FORMAT: u32 = 2;
+
+/// The formats this server reads.
+pub const READS: [u32; 2] = [1, 2];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -99,6 +103,24 @@ pub struct BundleAkt {
     /// copy of one there (`akt.copy.record`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copied_from: Option<Uuid>,
+    /// Its versions, oldest first (`version.*`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub versions: Vec<BundleAktVersion>,
+}
+
+/// A version of an akt: a revision it named by releasing it.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleAktVersion {
+    pub number: i32,
+    pub revision: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub released_by: Uuid,
+    pub released_at: DateTime<Utc>,
+    /// What each reference naming no version meant at release
+    /// (`version.pins`), as stored.
+    pub pins: Json,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -114,6 +136,9 @@ pub struct BundleRevision {
     pub hash: String,
     pub created_at: DateTime<Utc>,
     pub membership: Option<Json>,
+    /// The git commit a pushed batch made it from (`git.identity`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<Json>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

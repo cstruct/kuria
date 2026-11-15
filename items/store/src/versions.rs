@@ -119,3 +119,62 @@ pub async fn commits_of(
         .load(conn)
         .await
 }
+
+/// Every version of `akter`, oldest first per akt (`bundle.contents`).
+pub async fn of_akter(conn: &mut Connection, akter: &[Uuid]) -> QueryResult<Vec<VersionRow>> {
+    akt_version::table
+        .filter(akt_version::akt_id.eq_any(akter))
+        .order((akt_version::akt_id, akt_version::number))
+        .select(VersionRow::as_select())
+        .load(conn)
+        .await
+}
+
+/// The commits kept with the revisions of `akter`, as (akt, revision,
+/// commit), oldest first per akt (`bundle.contents`).
+pub async fn commits_of_akter(
+    conn: &mut Connection,
+    akter: &[Uuid],
+) -> QueryResult<Vec<(Uuid, i32, Json)>> {
+    akt_commit::table
+        .filter(akt_commit::akt_id.eq_any(akter))
+        .order((akt_commit::akt_id, akt_commit::revision))
+        .select((akt_commit::akt_id, akt_commit::revision, akt_commit::commit))
+        .load(conn)
+        .await
+}
+
+/// Stores imported versions and commits as they were, without change
+/// events of their own: the import records one per akt
+/// (`bundle.import.history`).
+pub async fn insert_imported(
+    conn: &mut Connection,
+    versions: &[VersionRow],
+    commits: &[(Uuid, Uuid, i32, Json)],
+) -> QueryResult<()> {
+    // Postgres takes at most 65535 parameters to a statement.
+    for chunk in versions.chunks(4000) {
+        diesel::insert_into(akt_version::table)
+            .values(chunk)
+            .execute(conn)
+            .await?;
+    }
+    for chunk in commits.chunks(8000) {
+        let rows: Vec<_> = chunk
+            .iter()
+            .map(|(tenant, akt, revision, commit)| {
+                (
+                    akt_commit::tenant_id.eq(*tenant),
+                    akt_commit::akt_id.eq(*akt),
+                    akt_commit::revision.eq(*revision),
+                    akt_commit::commit.eq(commit),
+                )
+            })
+            .collect();
+        diesel::insert_into(akt_commit::table)
+            .values(&rows)
+            .execute(conn)
+            .await?;
+    }
+    Ok(())
+}

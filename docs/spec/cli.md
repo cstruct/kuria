@@ -358,9 +358,17 @@ r[cli.local.convert]
 write the selected akt types and their akter as a new akt directory, in
 the server's order, each akt reading through `cat` as it does on the
 server, refusing an akt that doesn't fit its type's latest document, which
-is the one an akt directory keeps, and one holding an attachment.
+is the one an akt directory keeps, and one holding an attachment. Each
+akt's versions MUST be written into its directory file's `versions`
+(`cli.local.versions`), each with the headings it had at its revision; a
+version's text stays with the server, since git holds none of the
+revisions before the directory's.
 `kuria import --from-dir <path>` MUST import a directory `kuria check`
 finds consistent as a bundle of its types and akter (`bundle.import.*`),
-keeping their numbers, memberships, links and pins. Since git holds a
-directory's history, each akt MUST get revisions numbered up to its file's
-`revision`: the first recording it as it is, the rest changing nothing.
+keeping their numbers, memberships, links, pins and versions. Since git
+holds a directory's history, each akt MUST get revisions numbered up to its
+file's `revision`, each recording the akt as git's latest commit at that
+revision holds it, else as at the next revision git has, and its file as it
+is for its own; the first records it whole, and each later one what
+changed. An import MUST be refused as `NOT_FOUND` when git has no commit at
+a revision one of its versions names.

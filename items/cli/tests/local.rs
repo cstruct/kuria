@@ -2150,3 +2150,137 @@ fn documents_are_released_and_read_at_their_versions() {
     );
     assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
 }
+
+/// A bundle's `revisions` replayed as the server's import replays them,
+/// checking each hash is that of what the changes so far result in;
+/// answers the fields they end with.
+fn replayed(ty: &kuria_config::AktType, revisions: &[Value]) -> serde_json::Map<String, Value> {
+    let mut raw = serde_json::Map::new();
+    for r in revisions {
+        for (k, v) in r["changes"].as_object().unwrap() {
+            if v.is_null() {
+                raw.remove(k);
+            } else {
+                raw.insert(k.clone(), v.clone());
+            }
+        }
+        let fields = kuria_engine::fields_from_json(ty, &raw).unwrap();
+        let hash = kuria_engine::state_hash(r["state"].as_str().unwrap(), &fields)
+            .iter()
+            .fold(String::new(), |mut s, b| {
+                write!(s, "{b:02x}").unwrap();
+                s
+            });
+        assert_eq!(r["hash"], hash.as_str(), "revision {}", r["revision"]);
+    }
+    raw
+}
+
+// r[verify cli.local.convert]
+// r[verify cli.local.versions]
+#[test]
+fn versions_go_to_a_bundle_and_back() {
+    let dir = Dir::new();
+    documents(&dir);
+    let file = dir.root.parent().unwrap().join("body.md");
+    let body = |text: &str| {
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n"),
+    ]);
+    dir.commit("Setup");
+    dir.ok(&["release", "DOC-1", "--label", "1.0"]);
+    dir.commit("Release DOC-1");
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("[install](kuria:DOC-1#install)\n"),
+    ]);
+    dir.commit("Guide");
+    dir.ok(&["release", "DOC-2"]);
+    dir.commit("Release DOC-2");
+    dir.ok(&["set", "DOC-1", &body("# Running {#run}\n")]);
+    dir.commit("Rewrite the setup");
+
+    let bundle =
+        kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
+            .unwrap();
+    assert_eq!(bundle["format"], 2);
+    let akt = |number: &str| {
+        bundle["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["number"] == number)
+            .unwrap()
+            .clone()
+    };
+    // Each revision is what git holds at it, so a version reads on the
+    // server as it was released.
+    let setup = akt("DOC-1");
+    let revisions = setup["revisions"].as_array().unwrap();
+    assert_eq!(revisions.len(), 2, "{setup}");
+    assert_eq!(revisions[0]["changes"]["body"], "# Install {#install}");
+    assert_eq!(
+        revisions[1]["changes"],
+        json!({ "body": "# Running {#run}" })
+    );
+    // As the server's import replays them: each hash is that of what the
+    // changes so far result in.
+    let doc: kuria_config::AktTypeDocument = serde_json::from_value(
+        bundle["aktTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["key"] == "document")
+            .unwrap()["versions"][0]["definition"]
+            .clone(),
+    )
+    .unwrap();
+    let ty = kuria_config::validate(doc).unwrap();
+    let raw = replayed(&ty, revisions);
+    assert_eq!(json!(raw), setup["fields"]);
+    assert_eq!(
+        setup["versions"],
+        json!([{
+            "number": 1, "revision": 1, "label": "1.0",
+            "releasedBy": setup["versions"][0]["releasedBy"],
+            "releasedAt": setup["versions"][0]["releasedAt"],
+            "pins": []
+        }])
+    );
+    let guide = akt("DOC-2");
+    assert_eq!(guide["versions"][0]["pins"][0]["version"], 1, "{guide}");
+
+    // And back: the versions are listed, and a pin still finds the heading
+    // the version it names had.
+    let again = dir.root.parent().unwrap().join("again");
+    kuria_cli::local::convert::to_dir(&bundle, &again).unwrap();
+    let back = Dir {
+        _temp: tempfile::tempdir().unwrap(),
+        root: again.clone(),
+    };
+    for number in ["DOC-1", "DOC-2"] {
+        assert_eq!(
+            back.ok(&["versions", number, "--format", "json"]).json,
+            dir.ok(&["versions", number, "--format", "json"]).json,
+            "{number}"
+        );
+    }
+    let pinned = back.ok(&["show", "DOC-2", "--format", "json"]).json;
+    assert_eq!(
+        pinned["akt"]["references"][0]["broken"],
+        "`DOC-1` has no heading `install`"
+    );
+    assert_eq!(back.ok(&["check"]).json["problems"], json!([]));
+}

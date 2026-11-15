@@ -234,12 +234,14 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   `cli.local.convert`), signed in, by way of a bundle:
   `export --types <key>,… --to-dir <path>` writes the bundle of those types
   and their akter as a new directory (each type's latest document, links
-  ordered as the server lists them, people by email or name), then checks
-  it. `import --from-dir <path>` sends a consistent directory as a `types`
-  bundle: each akt with revisions numbered up to its file's `revision`,
-  the first recording it as it is and the rest changing nothing, so that
-  every hash matches and pins hold; each person as a subject named by
-  their email, which the import maps to a user who has signed in.
+  ordered as the server lists them, people by email or name, versions with
+  the headings they had), then checks it. `import --from-dir <path>` sends
+  a consistent directory as a `types` bundle: each akt with revisions
+  numbered up to its file's `revision`, each as git's latest commit at that
+  revision holds it, so that every hash matches, pins hold and each
+  version reads as it was released; its versions; each person as a
+  subject named by their email, which the import maps to a user who has
+  signed in.
 - **People** are text: `@me` is `KURIA_ME`, else git's `user.email`. On
   their way through the engine, each name or email stands in as a subject
   derived from its text ([`src/local/values.rs`](src/local/values.rs)); a

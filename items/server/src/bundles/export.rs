@@ -15,9 +15,9 @@ use uuid::Uuid;
 use super::BundleError;
 use super::archive;
 use super::format::{
-    Bundle, BundleAkt, BundleAttachment, BundleContact, BundleCounter, BundleHeld, BundleLink,
-    BundleMembership, BundlePerson, BundleRevision, BundleSignedIn, BundleType, BundleVersion,
-    FORMAT, Scope,
+    Bundle, BundleAkt, BundleAktVersion, BundleAttachment, BundleContact, BundleCounter,
+    BundleHeld, BundleLink, BundleMembership, BundlePerson, BundleRevision, BundleSignedIn,
+    BundleType, BundleVersion, FORMAT, Scope,
 };
 use crate::akter::StoredType;
 use crate::attachments::{Storage, hex};
@@ -195,6 +195,59 @@ async fn origins_within(
         .collect())
 }
 
+/// The revisions of `ids`, with the commits kept with them, and their
+/// versions, by akt; adds whom they name to `named`.
+async fn history_of(
+    conn: &mut Connection,
+    ids: &[Uuid],
+    named: &mut Named,
+) -> Result<
+    (
+        HashMap<Uuid, Vec<BundleRevision>>,
+        HashMap<Uuid, Vec<BundleAktVersion>>,
+    ),
+    BundleError,
+> {
+    let mut revisions: HashMap<Uuid, Vec<BundleRevision>> = HashMap::new();
+    let mut commits: HashMap<(Uuid, i32), Json> =
+        kuria_store::versions::commits_of_akter(conn, ids)
+            .await?
+            .into_iter()
+            .map(|(akt, revision, commit)| ((akt, revision), commit))
+            .collect();
+    for r in store::revisions_of(conn, ids).await? {
+        named.subjects.insert(r.author);
+        revisions.entry(r.akt_id).or_default().push(BundleRevision {
+            revision: r.revision,
+            author: r.author,
+            transition: r.transition,
+            reason: r.reason,
+            changes: r.changes,
+            state: r.state,
+            hash: hex(&r.hash),
+            created_at: r.created_at,
+            membership: r.membership,
+            commit: commits.remove(&(r.akt_id, r.revision)),
+        });
+    }
+    let mut released: HashMap<Uuid, Vec<BundleAktVersion>> = HashMap::new();
+    for v in kuria_store::versions::of_akter(conn, ids).await? {
+        named.subjects.insert(v.released_by);
+        released
+            .entry(v.akt_id)
+            .or_default()
+            .push(BundleAktVersion {
+                number: v.number,
+                revision: v.revision,
+                label: v.label,
+                released_by: v.released_by,
+                released_at: v.released_at,
+                pins: v.pins,
+            });
+    }
+    Ok((revisions, released))
+}
+
 /// The akter of `versions`, with their revisions, memberships, links and
 /// attachments held, refusing a selection that leaves out an akt they name;
 /// answers who and what they name.
@@ -235,21 +288,7 @@ async fn gather_akter(
 
     let mut named = Named::default();
     named.subjects.extend(versions.iter().map(|v| v.created_by));
-    let mut revisions: HashMap<Uuid, Vec<BundleRevision>> = HashMap::new();
-    for r in store::revisions_of(conn, &ids).await? {
-        named.subjects.insert(r.author);
-        revisions.entry(r.akt_id).or_default().push(BundleRevision {
-            revision: r.revision,
-            author: r.author,
-            transition: r.transition,
-            reason: r.reason,
-            changes: r.changes,
-            state: r.state,
-            hash: hex(&r.hash),
-            created_at: r.created_at,
-            membership: r.membership,
-        });
-    }
+    let (mut revisions, mut released) = history_of(conn, &ids, &mut named).await?;
     let mut held: HashMap<Uuid, Vec<BundleHeld>> = HashMap::new();
     for h in store::held_by(conn, &ids).await? {
         named.attachments.insert(h.attachment_id);
@@ -279,6 +318,7 @@ async fn gather_akter(
             revisions,
             attachments: held.remove(&akt.id).unwrap_or_default(),
             copied_from: origins.get(&akt.id).copied(),
+            versions: released.remove(&akt.id).unwrap_or_default(),
         });
     }
     for m in memberships {

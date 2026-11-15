@@ -299,6 +299,17 @@ impl Times {
         (created, changed)
     }
 
+    /// When git's latest commit at `revision` of the akt `number` was made.
+    #[must_use]
+    pub fn revision_at(&self, number: &str, revision: i32) -> Option<String> {
+        self.changes
+            .get(number)?
+            .iter()
+            .rev()
+            .find(|(_, r)| *r == revision)
+            .map(|(c, _)| c.at.clone())
+    }
+
     /// The commits that changed `akt`, oldest first, each with its revision
     /// after it, and whether it has changes not committed yet; `None`
     /// outside a work tree.

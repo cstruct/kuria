@@ -38,7 +38,7 @@ in that shape, rather than editing the directory's files by hand.
   there (`LOCAL_UNSUPPORTED`, exit 1). Signed in, `kuria export --types
   <key>,… --to-dir <path>` makes a directory from a server's akter, and
   `kuria import --from-dir <path>` takes one to a server that lacks its
-  types, keeping numbers.
+  types, keeping numbers and versions.
 
 ## Finding your way
 
