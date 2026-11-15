@@ -826,10 +826,11 @@ Lint, 375 Rust, 83 app and 33 browser tests pass.
 <!-- akt: PLAN-014-G06 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b46
 state: open
 in: [PLAN-014]
+links: [Resolved by PLAN-015-D02]
 title: Images in documents
 ---
 
