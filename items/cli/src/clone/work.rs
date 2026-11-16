@@ -1,5 +1,5 @@
-//! A clone's working files against its base, offline: `kuria status`,
-//! `kuria diff` and `kuria add` (`clone.status`, `clone.add`).
+//! A clone's working files against its base, offline: `kuria docs status`,
+//! `kuria docs diff` and `kuria docs add` (`clone.status`, `clone.add`).
 
 use std::io::{BufRead, Write};
 use std::path::Path;
@@ -88,7 +88,7 @@ fn listed(title: &str, paths: &[String], how: &str) -> String {
     text
 }
 
-/// `kuria status`: each file staged, each changed but not staged, each
+/// `kuria docs status`: each file staged, each changed but not staged, each
 /// removed, each holding conflict markers (`clone.status`).
 // r[impl clone.status]
 pub fn status(here: &Path) -> Result<Answer, CliError> {
@@ -105,22 +105,22 @@ pub fn status(here: &Path) -> Result<Answer, CliError> {
         local.recorded.number, local.recorded.url
     );
     markdown.push_str(&listed(
-        "Staged, to push with `kuria push -m <message>`:",
+        "Staged, to push with `kuria docs push -m <message>`:",
         &s.staged,
         "changed: ",
     ));
     markdown.push_str(&listed(
-        "Holding conflict markers; resolve them, then `kuria add`:",
+        "Holding conflict markers; resolve them, then `kuria docs add`:",
         &s.conflicted,
         "conflicted: ",
     ));
     markdown.push_str(&listed(
-        "Not staged; stage with `kuria add`:",
+        "Not staged; stage with `kuria docs add`:",
         &unstaged,
         "changed: ",
     ));
     markdown.push_str(&listed(
-        "Removed; akter are removed in Kuria, so `kuria pull` brings them back:",
+        "Removed; akter are removed in Kuria, so `kuria docs pull` brings them back:",
         &s.removed,
         "removed: ",
     ));
@@ -204,7 +204,7 @@ pub fn unified(path: &str, old: Option<&str>, new: Option<&str>) -> String {
         .to_string()
 }
 
-/// `kuria diff [--staged] [<path>…]`: the working files against what is
+/// `kuria docs diff [--staged] [<path>…]`: the working files against what is
 /// staged of them, else their base; with `staged`, what is staged against
 /// the base (`clone.status`).
 // r[impl clone.status]
@@ -254,12 +254,12 @@ fn stageable(path: &str, working: Option<&Vec<u8>>) -> Result<(), CliError> {
         None => Err(CliError::refused(
             "BAD_REQUEST",
             format!(
-                "{path} is removed: akter are removed in Kuria; `kuria pull` brings it back until then"
+                "{path} is removed: akter are removed in Kuria; `kuria docs pull` brings it back until then"
             ),
         )),
         Some(bytes) if conflicted(bytes) => Err(CliError::refused(
             "CONFLICTED",
-            format!("{path} holds conflict markers: resolve them, then `kuria add` it"),
+            format!("{path} holds conflict markers: resolve them, then `kuria docs add` it"),
         )),
         Some(_) => Ok(()),
     }
@@ -301,7 +301,7 @@ fn stage(local: &Local, path: &str, text: &str) -> Result<(), CliError> {
     }
 }
 
-/// `kuria add <path>…`: stages each file as it now is, a directory's
+/// `kuria docs add <path>…`: stages each file as it now is, a directory's
 /// changed files for a directory; the working files stay as they are
 /// (`clone.add`).
 // r[impl clone.add]
@@ -310,7 +310,7 @@ pub fn add(here: &Path, given: &[String]) -> Result<Answer, CliError> {
     if given.is_empty() {
         return Err(CliError::refused(
             "BAD_REQUEST",
-            "Name the files to stage, `.` for every one, or `kuria add -p` to choose hunks",
+            "Name the files to stage, `.` for every one, or `kuria docs add -p` to choose hunks",
         ));
     }
     let files = to_stage(&local, here, given)?;
@@ -395,7 +395,7 @@ d - stage none of the file's later hunks
 ? - say this
 ";
 
-/// `kuria add -p [<path>…]`: offers each changed hunk of each file in turn
+/// `kuria docs add -p [<path>…]`: offers each changed hunk of each file in turn
 /// and stages only those chosen, reading each answer as a line of `input`
 /// and asking on `prompts` (`clone.add`). The working files stay as they
 /// are.

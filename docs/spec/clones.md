@@ -1,7 +1,7 @@
 # Clones
 
 A clone is a container and its members as files on someone's machine,
-worked on with any editor and synced with Kuria through `kuria`: clone
+worked on with any editor and synced with Kuria through `kuria docs`: clone
 records a base, edits are staged, a push sends them after fetching what
 changed, and a pull brings others' changes in, marking conflicts. An akt
 with a live draft ([live drafts](live-drafts.md)) is synced with its live
@@ -34,13 +34,13 @@ r[clone.normal]
 A clone's files are in normal form when they are as Kuria would write
 them: every heading with an id (`akt.field.markdown`), each file where the
 container's `sections` puts it, and the pictures of the images they embed.
-`kuria fmt` MUST put them in normal form, changing no value but the
+`kuria docs fmt` MUST put them in normal form, changing no value but the
 heading ids it gives, and writing or removing pictures.
 
 ## Working
 
 r[clone.clone]
-`kuria clone <number> [<dir>]` MUST write the container `number` and its
+`kuria docs clone <number> [<dir>]` MUST write the container `number` and its
 members as files in `<dir>`, by default a directory named as its file is,
 and record in `<dir>/.kuria/` the base: each file as cloned, each akt's
 revision, and, for each akt with a live draft, its live draft's state
@@ -48,19 +48,19 @@ revision, and, for each akt with a live draft, its live draft's state
 be refused, saying why.
 
 r[clone.status]
-`kuria status` MUST name each file whose working text differs from the
+`kuria docs status` MUST name each file whose working text differs from the
 base, staged or not, each file staged, and each file the base has that is
-gone; `kuria diff` MUST show those differences, unstaged against staged,
+gone; `kuria docs diff` MUST show those differences, unstaged against staged,
 or with `--staged` staged against the base.
 
 r[clone.add]
-`kuria add <path>…` MUST stage each file as it now is; `kuria add -p`
+`kuria docs add <path>…` MUST stage each file as it now is; `kuria docs add -p`
 MUST offer each changed hunk of each file in turn and stage only the hunks
 chosen. Staging MUST NOT change the working file. A file holding conflict
 markers MUST NOT be staged.
 
 r[clone.push]
-`kuria push -m <message>` MUST first fetch the container and its members,
+`kuria docs push -m <message>` MUST first fetch the container and its members,
 and MUST be refused, staging nothing away, unless the base is still Kuria's
 current state, saying to pull. Otherwise it MUST send what is staged as one
 push (`clone.server`): for an akt with a live draft, the change from the
@@ -71,7 +71,7 @@ and removed in Kuria. When the push is taken, the base MUST become what was
 pushed, and what wasn't staged stays as it is in the working files.
 
 r[clone.pull]
-`kuria pull` MUST fetch the container and its members and, for each file,
+`kuria docs pull` MUST fetch the container and its members and, for each file,
 merge three ways: from the base to Kuria's current text, into the working
 file. Where Kuria and the working file changed the same text differently,
 it MUST write conflict markers (`<<<<<<< ours`, `=======`, `>>>>>>>

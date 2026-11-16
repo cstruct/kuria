@@ -129,16 +129,19 @@ order.
 
 ## A container as files: clones
 
+`kuria docs` works on a clone, run in it; it needs a server, so not
+`--dir`.
+
 ```sh
-kuria clone <container> [<dir>]   # it and its members as files, the base in <dir>/.kuria/
-cd <dir>                          # then edit the files with any editor
-kuria status                      # staged, changed, removed, conflicted
-kuria diff [<path>…]              # what isn't staged; --staged: what is
-kuria add <path>…                 # stage files as they are now; `.` for all
-kuria add -p [<path>…]            # choose hunks: y, n, q, a, d, ?
-kuria push -m "Why"               # send what is staged, as one push
-kuria pull                        # Kuria's changes merged into the files
-kuria fmt                         # the files as Kuria writes them
+kuria docs clone <container> [<dir>]   # it and its members as files, the base in <dir>/.kuria/
+cd <dir>                               # then edit the files with any editor
+kuria docs status                      # staged, changed, removed, conflicted
+kuria docs diff [<path>…]              # what isn't staged; --staged: what is
+kuria docs add <path>…                 # stage files as they are now; `.` for all
+kuria docs add -p [<path>…]            # choose hunks: y, n, q, a, d, ?
+kuria docs push -m "Why"               # send what is staged, as one push
+kuria docs pull                        # Kuria's changes merged into the files
+kuria docs fmt                         # the files as Kuria writes them
 ```
 
 - A clone is the container's file at its root, each member's in a
@@ -153,18 +156,18 @@ kuria fmt                         # the files as Kuria writes them
   meanwhile, kept as one change with your message; any other akt's as an
   edit, a revision with your message as its reason. New or removed files
   and changed pictures are refused: akter and pictures are made in Kuria.
-  A file not in normal form is refused too: `kuria fmt`, then add it again.
+  A file not in normal form is refused too: `kuria docs fmt`, then add it
+  again.
 - `pull` merges three ways into the files, and where both changed the same
   text writes `<<<<<<< ours`, `=======`, `>>>>>>> kuria` around both and
-  names the file. Resolve, then `kuria add`: a file holding markers can't
-  be staged.
-- In a clone, `kuria add` and `kuria diff` take paths; outside one, a
-  container and members, and an akt and versions.
+  names the file. Resolve, then `kuria docs add`: a file holding markers
+  can't be staged.
 - git, if the clone is also a repository, is yours: Kuria sees only the
   files. To push part of your work, `git branch keep`, take the rest out
   of the working files (`git reset --hard <commit>`, or `git revert`),
-  `kuria add` and `kuria push`; later bring it back (`git merge keep`, or
-  revert the revert), `kuria add`, `kuria push`.
+  `kuria docs add` and `kuria docs push`; later bring it back
+  (`git merge keep`, or revert the revert), `kuria docs add`,
+  `kuria docs push`.
 
 ## Changing things with verbs
 

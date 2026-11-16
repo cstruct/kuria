@@ -15,8 +15,8 @@
 //! - [`writes`]: `new`, `apply`, `set`, `do`, `draft`, `add`, `remove`,
 //!   `transfer`, `move`, `link`, `unlink`, `types export` and `define`, and
 //!   bundles' `export` and `import`.
-//! - [`clone`]: clones, `clone`, `status`, `diff`, `add`, `pull`, `push`
-//!   and `fmt` on a container's files.
+//! - [`clone`]: clones, `docs clone`, `status`, `diff`, `add`, `pull`,
+//!   `push` and `fmt` on a container's files.
 //! - [`output`] and [`error`]: answers, refusals and exit codes.
 #![expect(
     clippy::missing_panics_doc,
@@ -51,7 +51,7 @@ pub mod writes;
 
 use std::process::ExitCode;
 
-use args::{Cli, Command, TypesCommand};
+use args::{Cli, Command, DocsCommand, TypesCommand};
 use error::CliError;
 use output::Answer;
 use profile::{Asked, Config, config_dir};
@@ -105,20 +105,18 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         .dir
         .clone()
         .or_else(|| env("KURIA_DIR").map(PathBuf::from));
-    if root.is_none() || is_clone_command(&cli.command) {
-        let here = std::env::current_dir().map_err(|e| CliError::unavailable(e.to_string()))?;
-        if let Some(command) = for_clone(&cli.command, &here) {
-            if root.is_some() {
-                return Err(local::unsupported(
-                    "Clones",
-                    "a clone syncs with a server; leave out `--dir`",
-                ));
-            }
-            if context.target.url.is_none() {
-                context.target.url = clone::sync::url_of(&here);
-            }
-            return in_clone(&context, cli.command, command, &here).await;
+    if let Command::Docs { action } = cli.command {
+        if root.is_some() {
+            return Err(local::unsupported(
+                "Clones",
+                "a clone syncs with a server; leave out `--dir`",
+            ));
         }
+        let here = std::env::current_dir().map_err(|e| CliError::unavailable(e.to_string()))?;
+        if context.target.url.is_none() {
+            context.target.url = clone::sync::url_of(&here);
+        }
+        return docs(&context, action, &here).await;
     }
     match (cli.command, root) {
         (Command::Guide, _) => Ok(guide()),
@@ -155,124 +153,30 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
     }
 }
 
-/// What a command does in a clone.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum InClone {
-    Clone,
-    Status,
-    Diff,
-    Add,
-    Pull,
-    Push,
-    Fmt,
-}
-
-/// Whether `command` is one only clones take.
-fn is_clone_command(command: &Command) -> bool {
-    matches!(
-        command,
-        Command::Clone { .. }
-            | Command::Status
-            | Command::Pull
-            | Command::Push { .. }
-            | Command::Fmt
-    ) || matches!(command, Command::Add { patch: true, .. })
-        || matches!(command, Command::Diff { staged: true, .. })
-}
-
-/// What `command`, run in `here`, does in a clone, if it is a clone's:
-/// `add` and `diff` are when given `-p` or `--staged`, or run in a clone
-/// with paths, or nothing, rather than akter and versions.
-fn for_clone(command: &Command, here: &Path) -> Option<InClone> {
-    let in_one = || clone::sync::in_clone(here);
-    let paths = |args: &[String]| args.iter().all(|a| here.join(a).exists());
-    match command {
-        Command::Clone { .. } => Some(InClone::Clone),
-        Command::Status => Some(InClone::Status),
-        Command::Pull => Some(InClone::Pull),
-        Command::Push { .. } => Some(InClone::Push),
-        Command::Fmt => Some(InClone::Fmt),
-        Command::Add { args, patch, .. } => {
-            (*patch || in_one() && paths(args)).then_some(InClone::Add)
-        }
-        Command::Diff { args, staged } => {
-            let versions = (2..=3).contains(&args.len())
-                && args[1..].iter().all(|a| a.parse::<i64>().is_ok())
-                && !here.join(&args[0]).exists();
-            (*staged || in_one() && !versions).then_some(InClone::Diff)
-        }
-        _ => None,
-    }
-}
-
-/// A clone's command, run in `here` (`clone.*`).
-async fn in_clone(
-    context: &Context,
-    command: Command,
-    what: InClone,
-    here: &Path,
-) -> Result<Answer, CliError> {
-    match (what, command) {
-        (InClone::Status, _) => clone::work::status(here),
-        (InClone::Diff, Command::Diff { args, staged }) => clone::work::diff(here, staged, &args),
-        (
-            InClone::Add,
-            Command::Add {
-                args, patch: true, ..
-            },
-        ) => {
+/// `kuria docs`: a clone's command, run in `here` (`clone.*`).
+async fn docs(context: &Context, action: DocsCommand, here: &Path) -> Result<Answer, CliError> {
+    match action {
+        DocsCommand::Status => clone::work::status(here),
+        DocsCommand::Diff { paths, staged } => clone::work::diff(here, staged, &paths),
+        DocsCommand::Add { paths, patch: true } => {
             let stdin = std::io::stdin();
-            clone::work::add_patch(here, &args, &mut stdin.lock(), &mut std::io::stderr())
+            clone::work::add_patch(here, &paths, &mut stdin.lock(), &mut std::io::stderr())
         }
-        (InClone::Add, Command::Add { args, .. }) => clone::work::add(here, &args),
-        (_, command) => {
+        DocsCommand::Add { paths, .. } => clone::work::add(here, &paths),
+        action => {
             let session = Session::open(context).await?;
-            let answer = match command {
-                Command::Clone { number, into } => {
+            let answer = match action {
+                DocsCommand::Clone { number, into } => {
                     clone::sync::clone(&session, &number, into.as_deref(), here).await
                 }
-                Command::Pull => clone::sync::pull(&session, here).await,
-                Command::Push { message } => clone::sync::push(&session, here, &message).await,
+                DocsCommand::Pull => clone::sync::pull(&session, here).await,
+                DocsCommand::Push { message } => clone::sync::push(&session, here, &message).await,
                 // r[impl clone.normal]
                 _ => clone::fmt::fmt(&session, here).await,
             };
             session.close().await;
             answer
         }
-    }
-}
-
-/// `add`'s arguments for a container: the container, then its members.
-fn container_and_members(args: Vec<String>) -> Result<(String, Vec<String>), CliError> {
-    let mut args = args.into_iter();
-    match (args.next(), args.as_slice()) {
-        (Some(container), [_, ..]) => Ok((container, args.collect())),
-        _ => Err(CliError::refused(
-            "BAD_REQUEST",
-            "Name the container and its members: `kuria add <container> <member>…`",
-        )),
-    }
-}
-
-/// `diff`'s arguments for versions: the akt, and the versions from and to.
-fn versions_of(args: &[String]) -> Result<(String, i64, Option<i64>), CliError> {
-    let refused = || {
-        CliError::refused(
-            "BAD_REQUEST",
-            "Name the akt and versions: `kuria diff <number> <from> [<to>]`, or run `kuria diff` in a clone",
-        )
-    };
-    match args {
-        [number, from, rest @ ..] if rest.len() <= 1 => {
-            let from = from.parse().map_err(|_| refused())?;
-            let to = rest
-                .first()
-                .map(|t| t.parse())
-                .transpose()
-                .map_err(|_| refused())?;
-            Ok((number.clone(), from, to))
-        }
-        _ => Err(refused()),
     }
 }
 
@@ -379,8 +283,7 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             version,
         } => reads::show(source, &number, history, version).await,
         Command::Versions { number } => crate::versions::list(source, &number).await,
-        Command::Diff { args, .. } => {
-            let (number, from, to) = versions_of(&args)?;
+        Command::Diff { number, from, to } => {
             crate::versions::diff(source, &number, from, to).await
         }
         Command::History { number } => reads::history(source, &number).await,
@@ -530,16 +433,17 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             sets,
             reason,
         } => edits::perform(&mut w, &number, &transition, &sets, reason.as_deref()),
-        Command::Add { args, reason, .. } => {
-            let (container, members) = container_and_members(args)?;
-            arrange::membership(
-                &mut w,
-                writes::Membership::Add,
-                &container,
-                &members,
-                reason.as_deref(),
-            )
-        }
+        Command::Add {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            &mut w,
+            writes::Membership::Add,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
         Command::Remove {
             container,
             members,
@@ -711,8 +615,11 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             sets,
             reason,
         } => writes::perform(session, &number, &transition, &sets, reason.as_deref()).await,
-        Command::Add { args, reason, .. } => {
-            let (container, members) = container_and_members(args)?;
+        Command::Add {
+            container,
+            members,
+            reason,
+        } => {
             writes::membership(
                 session,
                 writes::Membership::Add,

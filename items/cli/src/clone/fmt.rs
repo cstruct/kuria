@@ -1,4 +1,4 @@
-//! `kuria fmt` (`clone.normal`): a clone's files put in normal form, each
+//! `kuria docs fmt` (`clone.normal`): a clone's files put in normal form, each
 //! where the container's `sections` puts it, with the pictures of the
 //! images they embed and no others.
 //!
@@ -121,7 +121,7 @@ async fn container_of(
         _ => Err(CliError::refused(
             "BAD_REQUEST",
             format!(
-                "`kuria fmt` runs in a clone, whose root holds its container's file; {} holds {}",
+                "`kuria docs fmt` runs in a clone, whose root holds its container's file; {} holds {}",
                 root.display(),
                 if candidates.is_empty() {
                     "no akt file".to_owned()
@@ -133,7 +133,7 @@ async fn container_of(
     }
 }
 
-/// `kuria fmt` in the clone `dir` is in: its files in normal form, where
+/// `kuria docs fmt` in the clone `dir` is in: its files in normal form, where
 /// the container's `sections` puts them, and the pictures of the images
 /// they embed (`clone.normal`, `clone.pictures`).
 // r[impl clone.normal]

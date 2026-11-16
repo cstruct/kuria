@@ -5,12 +5,12 @@
 //!   and a file in normal form (`clone.normal`).
 //! - [`pictures`]: the pictures of the images the files embed
 //!   (`clone.pictures`).
-//! - [`fmt`]: `kuria fmt`, a clone's files put in normal form.
+//! - [`fmt`]: `kuria docs fmt`, a clone's files put in normal form.
 //! - [`base`]: what a clone keeps in `.kuria/`: its base and what is
 //!   staged (`clone.clone`).
-//! - [`work`]: `kuria status`, `diff` and `add`, offline (`clone.status`,
+//! - [`work`]: `kuria docs status`, `diff` and `add`, offline (`clone.status`,
 //!   `clone.add`).
-//! - [`sync`]: `kuria clone`, `pull` and `push` (`clone.clone`,
+//! - [`sync`]: `kuria docs clone`, `pull` and `push` (`clone.clone`,
 //!   `clone.pull`, `clone.push`).
 //!
 //! [`CloneOf`] reads what a clone holds from Kuria.

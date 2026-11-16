@@ -150,18 +150,13 @@ pub enum Command {
         output: PathBuf,
     },
     /// What changed in an akt between two versions, or since a version:
-    /// `kuria diff <number> <from> [<to>]`. In a clone, the working files
-    /// against what is staged, or with `--staged` what is staged against
-    /// the base: `kuria diff [--staged] [<path>…]`.
+    /// `kuria diff <number> <from> [<to>]`.
     Diff {
-        /// The akt, the version to compare from, and the version to
-        /// compare to, the living version if left out; in a clone, the
-        /// files to compare, every one if none.
-        #[arg(value_name = "NUMBER FROM [TO] | PATH")]
-        args: Vec<String>,
-        /// In a clone: what is staged against the base.
-        #[arg(long)]
-        staged: bool,
+        number: String,
+        /// The version to compare from.
+        from: i64,
+        /// The version to compare to; the living version if left out.
+        to: Option<i64>,
     },
     /// An akt's revisions: who changed what, and when.
     History { number: String },
@@ -213,18 +208,11 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Add members to a container: `kuria add <container> <member>…`. In a
-    /// clone, stage files to push: `kuria add <path>…`, or with `-p` the
-    /// hunks chosen.
+    /// Add members to a container.
     Add {
-        /// The container, then its new members; in a clone, the files to
-        /// stage, a directory for its changed files.
-        #[arg(value_name = "CONTAINER MEMBER | PATH")]
-        args: Vec<String>,
-        /// In a clone: offer each changed hunk in turn, and stage those
-        /// chosen.
-        #[arg(short = 'p', long = "patch")]
-        patch: bool,
+        container: String,
+        #[arg(required = true, value_name = "MEMBER")]
+        members: Vec<String>,
         #[arg(long)]
         reason: Option<String>,
     },
@@ -285,31 +273,12 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Clone a container and its members as files, recording the base
-    /// they were cloned from in `<dir>/.kuria/`.
-    Clone {
-        number: String,
-        /// Where to write it; a new directory named as its file is, if
-        /// left out. (Not `dir`, which would be the global `--dir`.)
-        #[arg(value_name = "DIR")]
-        into: Option<PathBuf>,
+    /// A container's documents as files on this machine: a clone, worked
+    /// on with any editor and synced with Kuria.
+    Docs {
+        #[command(subcommand)]
+        action: DocsCommand,
     },
-    /// In a clone: the files staged, changed, removed, and holding
-    /// conflict markers.
-    Status,
-    /// In a clone: Kuria's changes merged into the files, conflicts
-    /// marked.
-    Pull,
-    /// In a clone: what is staged, sent to Kuria as one push.
-    Push {
-        /// What the push changes, on one line.
-        #[arg(short, long)]
-        message: String,
-    },
-    /// In a clone: its files as Kuria writes them, each where its
-    /// container's sections put it, with the pictures of the images they
-    /// embed.
-    Fmt,
     /// Release an akt's current revision as its next version, once none
     /// of its references is broken.
     Release {
@@ -392,6 +361,53 @@ pub enum Command {
     },
 }
 
+/// `kuria docs`: a clone's commands (`clone.*`).
+#[derive(Debug, Subcommand)]
+pub enum DocsCommand {
+    /// Clone a container and its members as files, recording the base
+    /// they were cloned from in `<dir>/.kuria/`.
+    Clone {
+        number: String,
+        /// Where to write it; a new directory named as its file is, if
+        /// left out. (Not `dir`, which would be the global `--dir`.)
+        #[arg(value_name = "DIR")]
+        into: Option<PathBuf>,
+    },
+    /// The files staged, changed, removed, and holding conflict markers.
+    Status,
+    /// The working files against what is staged, or with `--staged` what
+    /// is staged against the base.
+    Diff {
+        /// The files to compare; every one if none.
+        #[arg(value_name = "PATH")]
+        paths: Vec<String>,
+        /// What is staged against the base.
+        #[arg(long)]
+        staged: bool,
+    },
+    /// Stage files to push, a directory for its changed files, or with
+    /// `-p` the hunks chosen.
+    Add {
+        /// The files to stage.
+        #[arg(value_name = "PATH")]
+        paths: Vec<String>,
+        /// Offer each changed hunk in turn, and stage those chosen.
+        #[arg(short = 'p', long = "patch")]
+        patch: bool,
+    },
+    /// Kuria's changes merged into the files, conflicts marked.
+    Pull,
+    /// What is staged, sent to Kuria as one push.
+    Push {
+        /// What the push changes, on one line.
+        #[arg(short, long)]
+        message: String,
+    },
+    /// The files as Kuria writes them, each where its container's sections
+    /// put it, with the pictures of the images they embed.
+    Fmt,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum TypesCommand {
     /// The documents the akt types were defined by, as JSON.
@@ -446,34 +462,66 @@ mod tests {
     }
 
     #[test]
-    fn add_and_diff_take_a_clone_s_paths_too() {
+    fn a_clone_s_commands_are_under_docs() {
+        let docs = |args: &[&str]| match Cli::try_parse_from(args).unwrap().command {
+            Command::Docs { action } => action,
+            command => panic!("not a docs command: {command:?}"),
+        };
+        assert!(matches!(
+            docs(&["kuria", "docs", "add", "-p"]),
+            DocsCommand::Add { patch: true, paths } if paths.is_empty()
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "add", "a.md", "b.md"]),
+            DocsCommand::Add { patch: false, paths } if paths == ["a.md", "b.md"]
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "diff", "--staged", "a.md"]),
+            DocsCommand::Diff { staged: true, paths } if paths == ["a.md"]
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "push", "-m", "Why"]),
+            DocsCommand::Push { message } if message == "Why"
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "status"]),
+            DocsCommand::Status
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "pull"]),
+            DocsCommand::Pull
+        ));
+        assert!(matches!(docs(&["kuria", "docs", "fmt"]), DocsCommand::Fmt));
+        assert!(Cli::try_parse_from(["kuria", "docs", "push"]).is_err());
+        for gone in ["clone", "status", "pull", "push", "fmt"] {
+            assert!(Cli::try_parse_from(["kuria", gone]).is_err(), "{gone}");
+        }
+    }
+
+    #[test]
+    fn add_and_diff_take_akter_and_versions() {
         let parsed = |args: &[&str]| Cli::try_parse_from(args).unwrap().command;
         assert!(matches!(
-            parsed(&["kuria", "add", "-p"]),
-            Command::Add { patch: true, args, .. } if args.is_empty()
-        ));
-        assert!(matches!(
             parsed(&["kuria", "add", "D-1", "D-2", "--reason", "Why"]),
-            Command::Add { patch: false, args, reason: Some(_) } if args == ["D-1", "D-2"]
+            Command::Add { container, members, reason: Some(_) } if container == "D-1" && members == ["D-2"]
         ));
+        assert!(Cli::try_parse_from(["kuria", "add", "D-1"]).is_err());
+        assert!(Cli::try_parse_from(["kuria", "add", "-p"]).is_err());
         assert!(matches!(
-            parsed(&["kuria", "diff", "--staged", "a.md"]),
-            Command::Diff { staged: true, args } if args == ["a.md"]
+            parsed(&["kuria", "diff", "D-1", "1", "2"]),
+            Command::Diff { number, from: 1, to: Some(2) } if number == "D-1"
         ));
-        assert!(matches!(
-            parsed(&["kuria", "push", "-m", "Why"]),
-            Command::Push { message } if message == "Why"
-        ));
-        assert!(Cli::try_parse_from(["kuria", "push"]).is_err());
+        assert!(Cli::try_parse_from(["kuria", "diff", "--staged"]).is_err());
+        assert!(Cli::try_parse_from(["kuria", "diff", "D-1", "one"]).is_err());
     }
 
     #[test]
     fn a_clone_s_directory_is_not_the_global_dir() {
-        let cli = Cli::try_parse_from(["kuria", "clone", "DOCS-1", "handbook"]).unwrap();
+        let cli = Cli::try_parse_from(["kuria", "docs", "clone", "DOCS-1", "handbook"]).unwrap();
         assert!(cli.dir.is_none());
         assert!(matches!(
             cli.command,
-            Command::Clone { number, into: Some(into) } if number == "DOCS-1" && into == std::path::Path::new("handbook")
+            Command::Docs { action: DocsCommand::Clone { number, into: Some(into) } } if number == "DOCS-1" && into == std::path::Path::new("handbook")
         ));
     }
 

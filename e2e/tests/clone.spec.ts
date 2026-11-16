@@ -40,7 +40,7 @@ test('a clone pushes and pulls while a document is edited live', async ({ browse
 		return ran.stdout;
 	};
 	const here = mkdtempSync(join(tmpdir(), 'kuria-clone-'));
-	await ok(['clone', index, 'handbook'], here);
+	await ok(['docs', 'clone', index, 'handbook'], here);
 	const root = join(here, 'handbook');
 	const file = readdirSync(root).find((f) => f.startsWith(`${guide}-`))!;
 	expect(file).toBe(`${guide}-guide.md`);
@@ -59,21 +59,21 @@ test('a clone pushes and pulls while a document is edited live', async ({ browse
 	// The clone changes its start, staged and pushed: refused, behind.
 	const path = join(root, file);
 	writeFileSync(path, readFileSync(path, 'utf8').replace('Install it.', 'Install it first.'));
-	expect(JSON.parse(await ok(['status', '--format', 'json'], root)).unstaged).toEqual([file]);
-	await ok(['add', file], root);
-	const behind = await cli.run(['push', '-m', 'Install first', '--format', 'json'], {}, root);
+	expect(JSON.parse(await ok(['docs', 'status', '--format', 'json'], root)).unstaged).toEqual([file]);
+	await ok(['docs', 'add', file], root);
+	const behind = await cli.run(['docs', 'push', '-m', 'Install first', '--format', 'json'], {}, root);
 	expect(behind.code, behind.stderr).toBe(3);
 	expect(JSON.parse(behind.stderr).error.code).toBe('STALE');
 
 	// Pulled, merged, and pushed: the browser has both.
-	await ok(['pull'], root);
+	await ok(['docs', 'pull'], root);
 	const merged = readFileSync(path, 'utf8');
 	expect(merged).toContain('Install it first.');
 	expect(merged).toContain('Use it. Typed live.');
-	await ok(['push', '-m', 'Install first'], root);
+	await ok(['docs', 'push', '-m', 'Install first'], root);
 	await expect(editor).toContainText('Install it first.');
 	await expect(editor).toContainText('Use it. Typed live.');
-	const status = JSON.parse(await ok(['status', '--format', 'json'], root));
+	const status = JSON.parse(await ok(['docs', 'status', '--format', 'json'], root));
 	expect(status).toMatchObject({ staged: [], unstaged: [], conflicted: [] });
 	const changes = await admin.graphql<{ akt: { draftChanges: { message: string | null }[] } }>(
 		'query($n: String!) { akt(number: $n) { draftChanges(all: true) { message } } }',
