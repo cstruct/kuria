@@ -82,7 +82,13 @@ export async function addMembers(page: Page, ...members: string[]) {
 
 /** Adds the open akt to `container`. */
 export async function addTo(page: Page, container: string) {
-	await pick(page, 'Add to a container', container);
+	// The akt's own menu, in its header, before any member's.
+	await page.getByRole('button', { name: /^More actions for / }).first().click();
+	await page.getByRole('menuitem', { name: 'Attach to…' }).click();
+	// r[verify app.dialog-focus]: its search takes what is typed at once.
+	await expect(page.getByRole('combobox', { name: 'Container', exact: true })).toBeFocused();
+	await pick(page, 'Container', container);
+	await expect(page.getByRole('dialog', { name: 'Attach to a container' })).toBeHidden();
 	await expect(page.getByRole('list', { name: 'Containers' }).getByRole('link', { name: container })).toBeVisible();
 }
 

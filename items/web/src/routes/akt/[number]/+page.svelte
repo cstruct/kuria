@@ -8,6 +8,7 @@
 	import ArchiveRestore from '@lucide/svelte/icons/archive-restore';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Copy from '@lucide/svelte/icons/copy';
+	import Link2 from '@lucide/svelte/icons/link-2';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
@@ -255,6 +256,7 @@
 	let refusal = $state<Refusal | null>(null);
 	let busy = $state(false);
 	let transferOpen = $state(false);
+	let attachOpen = $state(false);
 	let transferFrom = $state('');
 	let addOpen = $state(false);
 	// A member dropped on another column, and the transitions that lead there.
@@ -477,7 +479,9 @@
 	}
 
 	async function join(container: string) {
-		await run(() => mutate(client, AddToContainer, { input: { container, member: number } }));
+		if (await run(() => mutate(client, AddToContainer, { input: { container, member: number } }))) {
+			attachOpen = false;
+		}
 	}
 
 	async function leave(container: string) {
@@ -630,6 +634,13 @@
 						label="More actions for {akt.number}"
 						items={[
 							{
+								label: 'Attach to…',
+								icon: Link2,
+								disabled: busy,
+								onSelect: () => (attachOpen = true)
+							},
+							{
+								separated: true,
 								label: 'Archive…',
 								icon: Archive,
 								disabled: busy,
@@ -804,25 +815,16 @@
 							{/each}
 						</ul>
 					{/if}
-					{#if !akt.archived}<div class="container-tools">
-							<Combobox
-								label="Add to a container"
-								placeholder="Add to a container…"
-								search={(text) =>
-									pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
-								onPick={(option) => join(option.value)}
-							/>
-							{#if akt.containers.length > 0}
-								<Button
-									size="sm"
-									onclick={() => {
-										transferFrom = akt.containers[0].number;
-										transferOpen = true;
-									}}
-								>
-									<ArrowRightLeft size={14} aria-hidden={true} /> Move to another container
-								</Button>
-							{/if}
+					{#if !akt.archived && akt.containers.length > 0}<div class="container-tools">
+							<Button
+								size="sm"
+								onclick={() => {
+									transferFrom = akt.containers[0].number;
+									transferOpen = true;
+								}}
+							>
+								<ArrowRightLeft size={14} aria-hidden={true} /> Move to another container
+							</Button>
 						</div>{/if}
 				</Card>
 
@@ -934,6 +936,20 @@
 					>{archiving === 'unarchive' ? 'Unarchive' : 'Archive'}</Button
 				>
 			{/snippet}
+		</Dialog>
+
+		<Dialog
+			bind:open={attachOpen}
+			title="Attach to a container"
+			description="Makes it a member of a container, such as a backlog, an epic or a release."
+		>
+			<Combobox
+				label="Container"
+				placeholder="Number or title…"
+				search={(text) =>
+					pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
+				onPick={(option) => join(option.value)}
+			/>
 		</Dialog>
 
 		<Dialog
@@ -1229,10 +1245,6 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: var(--space-2);
-	}
-
-	.container-tools :global(.combobox) {
-		align-self: stretch;
 	}
 
 	.from {

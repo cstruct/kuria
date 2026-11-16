@@ -235,6 +235,11 @@ an akt changed elsewhere without the person reloading.
 r[app.accessible]
 Every control MUST have an accessible role and name.
 
+r[app.dialog-focus]
+A dialog that asks for something, such as a container to attach an akt to,
+MUST put focus in its first field when it opens, so the person can type at
+once. One with no field MUST put focus inside it.
+
 r[app.themes]
 The app MUST follow the system's light or dark appearance, with text and
 controls contrasting with their background as WCAG 2.2 level AA requires.

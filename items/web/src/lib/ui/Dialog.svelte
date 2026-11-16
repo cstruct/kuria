@@ -25,12 +25,26 @@
 		onOpenChange,
 		onCloseAutoFocus
 	}: Props = $props();
+
+	let body = $state<HTMLElement>();
+
+	// r[impl app.dialog-focus]: its first field, rather than the Close button
+	// before it; with none, the first thing that takes focus, as bits-ui does.
+	const fields =
+		'input:not([type="hidden"], :disabled), select:not(:disabled), textarea:not(:disabled), [contenteditable="true"]';
+
+	function onOpenAutoFocus(event: Event) {
+		const field = body?.querySelector<HTMLElement>(fields);
+		if (!field) return;
+		event.preventDefault();
+		field.focus();
+	}
 </script>
 
 <Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Portal>
 		<Dialog.Overlay class="dialog-overlay" />
-		<Dialog.Content class="dialog-content" {onCloseAutoFocus}>
+		<Dialog.Content class="dialog-content" {onOpenAutoFocus} {onCloseAutoFocus}>
 			<header>
 				<Dialog.Title class="dialog-title">{title}</Dialog.Title>
 				<Dialog.Close class="dialog-close" aria-label="Close">
@@ -40,7 +54,7 @@
 			{#if description}
 				<Dialog.Description class="dialog-description">{description}</Dialog.Description>
 			{/if}
-			<div class="dialog-body">{@render children()}</div>
+			<div class="dialog-body" bind:this={body}>{@render children()}</div>
 			{#if footer}<footer>{@render footer()}</footer>{/if}
 		</Dialog.Content>
 	</Dialog.Portal>
