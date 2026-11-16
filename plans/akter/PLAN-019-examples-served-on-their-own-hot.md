@@ -1,9 +1,9 @@
 ---
 number: PLAN-019
 type: plan
-revision: 5
+revision: 6
 rank: b5K
-state: active
+state: done
 title: "Examples served on their own, hot-reloading and fast"
 owner: albin@mattsson.io
 ---
