@@ -3143,14 +3143,21 @@ dependencies = [
 name = "kuria-cli"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "base64 0.22.1",
  "chrono",
  "clap",
  "getrandom 0.3.4",
  "keyring",
+ "konklav-authz",
+ "konklav-axum",
+ "konklav-relying-client",
  "konklav-token",
  "kuria-config",
  "kuria-engine",
+ "kuria-server",
+ "kuria-test-support",
+ "kuria-typst",
  "p256",
  "reqwest",
  "serde",

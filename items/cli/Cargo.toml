@@ -36,7 +36,15 @@ uuid = { version = "1", features = ["serde", "v5"] }
 webbrowser = "1"
 
 [dev-dependencies]
+axum = "0.8"
+konklav-authz = "=1.8.0"
+konklav-axum = "=1.8.0"
+konklav-relying-client = "=1.8.0"
+kuria-server = { path = "../server" }
+kuria-test-support = { path = "../test-support" }
+kuria-typst = { path = "../typst" }
 tempfile = "3"
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "net"] }
 
 [lints]
 workspace = true

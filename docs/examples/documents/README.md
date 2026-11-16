@@ -62,7 +62,8 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
 - **PDFs:** a document's body, of the living version or a version, its
   pictures and diagrams drawn in it.
 - **Clones:** an index as files, its folders as directories, each document
-  a Markdown file, to edit with any editor (coming with `kuria clone`).
+  a Markdown file, to edit with any editor and sync with `kuria pull` and
+  `kuria push` (below).
 
 ## In the app
 
@@ -90,18 +91,60 @@ kuria pdf DOCS-1-D02 --version 1 -o guide.pdf
 
 ## With kuria clone
 
-`kuria clone`, `status`, `diff`, `add`, `pull` and `push` are coming
-([clones](../../spec/clones.md)): an index and its documents as files,
-synced with Kuria, live drafts included. The index's file is at the root,
-and each document's file is in the directories its folders give; a file is
-the akt file without `revision`, `in`, `links` and `outcome`. The pictures
-of the images the documents embed are in `attachments/`, as
-`attachments/IMG-1.png`, and a document links to its pictures relatively,
-`![The flow at a glance](../attachments/IMG-1.png)`, so editors and git
-hosts show them. Diagrams stay as their code.
+An index and its documents as files, synced with Kuria
+([clones](../../spec/clones.md)), live drafts included:
 
-`kuria fmt`, run in such a directory, already puts its files as Kuria
-writes them: it gives headings their ids, puts each file where its index's
+```sh
+kuria clone DOCS-1            # into DOCS-1-handbook/, the base in .kuria/
+cd DOCS-1-handbook
+# edit guides/DOCS-1-D02-setup.md with any editor
+kuria status                  # what changed, what is staged
+kuria diff                    # what isn't staged yet
+kuria add guides/DOCS-1-D02-setup.md    # or `kuria add -p` for some hunks
+kuria push -m "Explain the install"
+kuria pull                    # what others changed, merged in
+```
+
+The index's file is at the root, and each document's file is in the
+directories its folders give; a file is the akt file without `revision`,
+`in`, `links` and `outcome`. The pictures of the images the documents
+embed are in `attachments/`, as `attachments/IMG-1.png`, and a document
+links to its pictures relatively,
+`![The flow at a glance](../attachments/IMG-1.png)`, so editors and git
+hosts show them. Diagrams stay as their code. `.kuria/` holds the base:
+each file as last pulled, each akt's revision and each live draft's
+state. It ignores itself in git.
+
+- **A push** fetches first, and is refused unless what it pushes is still
+  as the base has it: `kuria pull`, then push again. A document's staged
+  change goes to its live draft as one change, merged with whatever is
+  being typed in the app meanwhile, and kept with your message in its
+  history; the index's goes as a revision with the message as its reason.
+  Documents and images are created and removed in Kuria, and pictures
+  uploaded there: a new or removed file, or a changed picture, is refused.
+- **A pull** merges Kuria's changes into your files. Where you and Kuria
+  changed the same text, the file holds both, between `<<<<<<< ours`,
+  `=======` and `>>>>>>> kuria`, and `kuria status` names it: edit it to
+  what it should say, then `kuria add` it (a file still holding markers
+  isn't staged). What you had staged is staged again, or unstaged where
+  it conflicts.
+- **With git:** a clone can also be a git repository of your own; Kuria
+  sees only the files. To push part of your work and keep the rest:
+
+  ```sh
+  git init && git add -A && git commit -m "Clone"   # once
+  # …work, committing as you go…
+  git branch keep               # everything, kept on a branch
+  git reset --hard HEAD~1       # the unready commits out of the working copy
+                                # (or `git revert` them: Kuria sees only files)
+  kuria add . && kuria push -m "Ready part"
+  kuria release DOCS-1-D02 --label 1.0     # or release it in the app
+  git merge keep                # the rest back (after a revert, revert the revert)
+  kuria add . && kuria push -m "The rest"
+  ```
+
+`kuria fmt`, run in a clone, puts its files as Kuria writes them, as a
+push needs them: it gives headings their ids, puts each file where its index's
 folders say, and fetches the pictures of images newly embedded, putting
 back any changed.
 

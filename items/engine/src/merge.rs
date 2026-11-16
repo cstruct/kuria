@@ -7,6 +7,10 @@
 //! very same characters differently, the change being merged in wins,
 //! being the later; where both inserted at the same place, both are kept,
 //! the text's own first.
+//!
+//! [`merge_marked`] instead reports where both changed the same text
+//! differently, writing both between conflict markers, as a clone's pull
+//! does (`clone.pull`).
 
 use std::hash::Hash;
 use std::time::{Duration, Instant};
@@ -54,6 +58,105 @@ pub fn merge_text(base: &str, ours: &str, theirs: &str) -> String {
         },
     );
     merged.concat()
+}
+
+/// The line a conflict starts with, before our side.
+pub const OURS: &str = "<<<<<<< ours";
+/// The line between our side of a conflict and theirs.
+pub const BETWEEN: &str = "=======";
+/// The line a conflict ends with, after their side.
+pub const THEIRS: &str = ">>>>>>> kuria";
+
+/// A three-way merge that marks conflicts: its text, and how many
+/// conflicts it marked.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Marked {
+    pub text: String,
+    pub conflicts: usize,
+}
+
+/// `ours` with the change from `base` to `theirs` merged in, as
+/// [`merge_text`] merges, except that where both changed the same text
+/// differently both are kept, the lines they changed written between
+/// [`OURS`], [`BETWEEN`] and [`THEIRS`] (`clone.pull`). Changes to
+/// different lines merge; changes to the same lines merge by characters
+/// when they change different characters, and conflict when they don't.
+// r[impl clone.pull]
+#[must_use]
+pub fn merge_marked(base: &str, ours: &str, theirs: &str) -> Marked {
+    if ours == base || ours == theirs {
+        return Marked {
+            text: theirs.to_owned(),
+            conflicts: 0,
+        };
+    }
+    if theirs == base {
+        return Marked {
+            text: ours.to_owned(),
+            conflicts: 0,
+        };
+    }
+    let lines =
+        |text: &'_ str| -> Vec<String> { text.split_inclusive('\n').map(str::to_owned).collect() };
+    let mut conflicts = 0;
+    let merged = merge(
+        &lines(base),
+        &lines(ours),
+        &lines(theirs),
+        false,
+        &mut |base, ours, theirs| {
+            let chars = |lines: &[String]| -> Vec<char> { lines.concat().chars().collect() };
+            let mut overlapping = false;
+            let by_chars: String = merge(
+                &chars(base),
+                &chars(ours),
+                &chars(theirs),
+                false,
+                &mut |_, _, theirs| {
+                    overlapping = true;
+                    theirs.to_vec()
+                },
+            )
+            .into_iter()
+            .collect();
+            if !overlapping {
+                return vec![by_chars];
+            }
+            conflicts += 1;
+            let side = |lines: &[String]| {
+                let mut text = lines.concat();
+                if !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                text
+            };
+            vec![format!(
+                "{OURS}\n{}{BETWEEN}\n{}{THEIRS}\n",
+                side(ours),
+                side(theirs)
+            )]
+        },
+    );
+    Marked {
+        text: merged.concat(),
+        conflicts,
+    }
+}
+
+/// Whether `text` holds a conflict [`merge_marked`] marked: a line that
+/// is [`OURS`] and one after it that is [`THEIRS`].
+#[must_use]
+pub fn has_conflict(text: &str) -> bool {
+    let mut opened = false;
+    for line in text.lines() {
+        let line = line.trim_end();
+        if line == OURS {
+            opened = true;
+        } else if opened && line == THEIRS {
+            return true;
+        }
+    }
+    false
 }
 
 /// One side's change of the base: `base[start..end]` replaced by `with`.
@@ -232,5 +335,52 @@ mod tests {
             merge_text("a\nb\nc\n", "a\nc\n", "a\nb\nc\nd\n"),
             "a\nc\nd\n"
         );
+    }
+
+    // r[verify clone.pull]
+    #[test]
+    fn marks_what_both_changed_alike() {
+        let base = "# Title\n\nOne.\n\nTwo.\n";
+        let ours = "# Title\n\nOne, mine.\n\nTwo.\n";
+        let theirs = "# Title\n\nOne, theirs.\n\nTwo, theirs.\n";
+        let merged = merge_marked(base, ours, theirs);
+        assert_eq!(merged.conflicts, 1);
+        assert_eq!(
+            merged.text,
+            "# Title\n\n<<<<<<< ours\nOne, mine.\n=======\nOne, theirs.\n>>>>>>> kuria\n\nTwo, theirs.\n"
+        );
+        assert!(has_conflict(&merged.text));
+        // At the end, without a line break.
+        let end = merge_marked("a\nb", "a\nc", "a\nd");
+        assert_eq!(end.text, "a\n<<<<<<< ours\nc\n=======\nd\n>>>>>>> kuria\n");
+    }
+
+    // r[verify clone.pull]
+    #[test]
+    fn merges_without_markers_what_doesn_t_overlap() {
+        let marked = |b: &str, o: &str, t: &str| {
+            let m = merge_marked(b, o, t);
+            assert_eq!(m.conflicts, 0, "{}", m.text);
+            assert!(!has_conflict(&m.text));
+            m.text
+        };
+        // Different lines.
+        assert_eq!(marked("a\nb\nc\n", "A\nb\nc\n", "a\nb\nC\n"), "A\nb\nC\n");
+        // One line, different words.
+        assert_eq!(
+            marked(
+                "The quick brown fox jumps.\n",
+                "The quick red fox jumps.\n",
+                "The quick brown fox leaps.\n"
+            ),
+            "The quick red fox leaps.\n"
+        );
+        // The same change on both sides; one side alone.
+        assert_eq!(marked("a\n", "b\n", "b\n"), "b\n");
+        assert_eq!(marked("a\n", "a\n", "b\n"), "b\n");
+        assert_eq!(marked("a\n", "b\n", "a\n"), "b\n");
+        // Both inserting at one place conflicts.
+        assert_eq!(merge_marked("a\n", "a\nx\n", "a\ny\n").conflicts, 1);
+        assert!(!has_conflict("<<<<<<< ours\nno end\n"));
     }
 }

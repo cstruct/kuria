@@ -107,6 +107,10 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   moved from `shop` to `lab`; selected types converted to an akt
   directory and back into `lab`; and the planning example, defined from
   `docs/examples/planning` and worked as `kuria guide` says.
+- [`tests/clone.spec.ts`](tests/clone.spec.ts): a document index cloned
+  with the binary while its document is typed in in the app: a push
+  behind the live edit refused as stale, a pull merging it, and the push
+  shown in the browser as it is typed in.
 - [`tests/parity.spec.ts`](tests/parity.spec.ts): local mode's parity
   with a server. One sequence of some thirty commands (types, creation,
   edits, transitions, links with pins, order, membership, transfers, and

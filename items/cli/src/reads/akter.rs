@@ -70,7 +70,7 @@ pub enum WithMembers<'a> {
 /// The direct members of `container`, in its order, with their types'
 /// keys.
 // r[impl cli.members]
-async fn members_of(
+pub(crate) async fn members_of(
     source: Source<'_>,
     container: &str,
 ) -> Result<Vec<(String, String)>, CliError> {
