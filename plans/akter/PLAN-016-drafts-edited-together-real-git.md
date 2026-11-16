@@ -671,16 +671,23 @@ What a version's link means is then always something released, read the same by 
 <!-- akt: PLAN-016-T14 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b4r
-state: doing
+state: done
 in: [PLAN-016]
 title: "Releases check released versions, and go together"
 assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-D09: a reference naming no version to a versioned target checked against and pinned to its latest version, a never-released one broken; `releaseVersions` releasing several akter all or nothing, references within the group checked against what each is released as and pinned to the version it gets; `kuria release A B`; the app's release dialog offering to release together the akter a refusal names.
+Releases check released versions and go together (D09), in `2338e6f` and the commit after it.
+
+- **Engine:** `Target.versioned`; a reference naming no version to a versioned target is checked as naming its latest version, broken while it has none ("has no version yet: release it first, or together"), and pinned to it. `Broken.together` names the target when releasing it together would mend the reference.
+- **Server:** `releaseVersions(input: { akter })`, all or nothing, a member named twice refused; members locked together, each checked as a single release, references to members checked against what each is released as at the version it gets; broken references prefixed by their akt's number; `BROKEN_REFERENCES` carries `together`. `releaseVersion` is a group of one.
+- **App:** the release dialog offers **Release together with** each akt `together` names, chosen by default; the label goes on each.
+- **CLI:** `kuria release <number>…`, against a server and in local mode; a refusal names what to release together.
+- **Spec:** `version.references`, `version.pins`, new `version.together`, `app.versions`; nomenclature `release together`.
+- **Tests:** engine, server (`documents_referring_to_each_other_are_released_together`, the live-draft one), CLI local, app unit, and e2e (documents walkthrough releases the guide together with the setup; parity). Lint, 455 Rust, 111 app and 39 browser tests pass.
 
 <!-- field: acceptance -->
 - Engine, server and e2e tests: a link to an unreleased versioned target refused; a group of two documents referring to each other's new headings released, each pinned to the other's new version; a refusal keeps nothing; lint, tests and e2e pass.
@@ -688,16 +695,16 @@ D09: a reference naming no version to a versioned target checked against and pin
 <!-- akt: PLAN-016-T15 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b4s
-state: doing
+state: done
 in: [PLAN-016]
 title: Clone commands under kuria docs
 assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`kuria docs clone/status/diff/add/pull/push/fmt`; top-level `add` and `diff` only their akt meaning again.
+Clone commands under `kuria docs` (`869f5b1`, built in a worktree, merged): `kuria docs clone/status/diff/add [-p]/pull/push -m/fmt`; top-level `add` and `diff` only their akt meaning again (clap's usage error for wrong arguments, as `remove`); every hint, the guide, READMEs, `clones.md`, `cli.md`, nomenclature, architecture and the e2e tests updated. Lint, tests and the full e2e pass.
 
 <!-- field: acceptance -->
 - Lint, tests and e2e pass with the commands moved and every mention updated.
