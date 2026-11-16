@@ -241,6 +241,7 @@ async fn lock<const N: usize>(
             .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
         let ty = type_of(conn, tenant, &akt).await?;
         require_read(caller.auth, &ty, number).await?;
+        super::archive::writable(&akt)?;
         locked.push(Locked { akt, ty });
     }
     Ok(locked

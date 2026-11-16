@@ -98,6 +98,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
+        AktError::Archived(_) => coded(message, "ARCHIVED"),
         AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
         AktError::AlreadyMember { .. } => coded(message, "ALREADY_MEMBER"),
         AktError::NotMember { .. } => coded(message, "NOT_MEMBER"),
@@ -336,11 +337,15 @@ impl AkterQuery {
             desc = "Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field."
         )]
         outcome: Option<OutcomeKind>,
+        #[graphql(desc = "Live akter (the default), archived ones, or both.")] archived: Option<
+            ArchivedFilter,
+        >,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
         let conditions = conditions.unwrap_or_default();
         let where_key = serde_json::to_string(&conditions).map_err(internal)?;
+        let archived = archived.unwrap_or_default();
         let list = List::new(
             if search.is_some() { "search" } else { "akter" },
             &[
@@ -349,6 +354,7 @@ impl AkterQuery {
                 search.as_deref(),
                 Some(&where_key),
                 outcome.map(OutcomeKind::key),
+                Some(archived_key(archived)),
             ],
         );
         let after = match list.after(after.as_deref())? {
@@ -392,6 +398,7 @@ impl AkterQuery {
         }
         let listing = store::Listing {
             keys: &readable,
+            archived: archived.into(),
             state: state.as_deref(),
             conditions: &conditions,
             after,
@@ -479,6 +486,7 @@ async fn matching(
 struct Members<'a> {
     container: Uuid,
     keys: &'a [String],
+    archived: store::Archived,
     conditions: &'a [store::Condition],
 }
 
@@ -505,6 +513,7 @@ impl Members<'_> {
                 tenant,
                 self.container,
                 self.keys,
+                self.archived,
                 self.conditions,
                 after.as_deref(),
                 CHUNK,
@@ -1068,6 +1077,24 @@ impl AkterMutation {
         Ok(rows.iter().map(Version::from).collect())
     }
 
+    /// Archives a live akt (`archive.act`).
+    async fn archive_akt(
+        &self,
+        ctx: &Context<'_>,
+        input: ArchiveAktInput,
+    ) -> async_graphql::Result<Akt> {
+        set_archived(ctx, input, true).await
+    }
+
+    /// Makes an archived akt live again (`archive.act`).
+    async fn unarchive_akt(
+        &self,
+        ctx: &Context<'_>,
+        input: ArchiveAktInput,
+    ) -> async_graphql::Result<Akt> {
+        set_archived(ctx, input, false).await
+    }
+
     /// Moves an akt along one of its akt type's transitions.
     async fn perform_transition(
         &self,
@@ -1445,7 +1472,13 @@ impl AktType {
     /// How many akter of this type the tenant has, to a subject who may
     /// read them; `null` to anyone else.
     // r[impl authz.read]
-    async fn akter_count(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<i64>> {
+    async fn akter_count(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Live akter (the default), archived ones, or both.")] archived: Option<
+            ArchivedFilter,
+        >,
+    ) -> async_graphql::Result<Option<i64>> {
         let key = self.0.ty.key();
         if !reads(ctx, key).await? {
             return Ok(None);
@@ -1453,7 +1486,7 @@ impl AktType {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
         Ok(Some(
-            store::count_akter(&mut conn, tenant, key)
+            store::count_akter(&mut conn, tenant, key, archived.unwrap_or_default().into())
                 .await
                 .map_err(internal)?,
         ))
@@ -1462,6 +1495,39 @@ impl AktType {
     async fn created_by(&self) -> ID {
         ID(self.0.row.created_by.to_string())
     }
+}
+
+/// Which akter a read answers (`archive.read`).
+#[derive(Enum, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ArchivedFilter {
+    /// Live akter only, the default.
+    #[default]
+    Live,
+    /// Archived akter only.
+    Archived,
+    /// Both.
+    All,
+}
+
+impl From<ArchivedFilter> for store::Archived {
+    fn from(filter: ArchivedFilter) -> Self {
+        match filter {
+            ArchivedFilter::Live => Self::Live,
+            ArchivedFilter::Archived => Self::Archived,
+            ArchivedFilter::All => Self::All,
+        }
+    }
+}
+
+/// How an akt is archived (`archive.flag`).
+#[derive(SimpleObject)]
+pub struct Archived {
+    at: DateTime<Utc>,
+    /// Who archived it; `null` when a rule did.
+    by: Option<User>,
+    /// The kind of rule that archived it, if one did (`archive.rules`).
+    rule: Option<String>,
+    reason: Option<String>,
 }
 
 #[derive(Enum, Clone, Copy, PartialEq, Eq)]
@@ -1810,6 +1876,7 @@ impl Akt {
         &self,
         ctx: &Context<'_>,
         key: Option<&str>,
+        archived: store::Archived,
         limit: i32,
     ) -> async_graphql::Result<Vec<Akt>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
@@ -1825,6 +1892,7 @@ impl Akt {
             tenant,
             &[self.row.id],
             &readable,
+            archived,
             i64::from(limit),
         )
         .await
@@ -1866,6 +1934,23 @@ impl Akt {
     #[graphql(name = "type")]
     async fn akt_type(&self) -> AktType {
         AktType(self.ty.clone())
+    }
+
+    /// When, by whom and why it is archived; `null` while it is live
+    /// (`archive.read`).
+    // r[impl archive.read]
+    async fn archived(&self) -> Option<Archived> {
+        let at = self.row.archived_at?;
+        let by = self.row.archived_by.as_ref();
+        Some(Archived {
+            at,
+            by: by
+                .and_then(|b| b["subject"].as_str())
+                .and_then(|s| s.parse().ok())
+                .map(User),
+            rule: by.and_then(|b| b["rule"].as_str()).map(str::to_owned),
+            reason: self.row.archive_reason.clone(),
+        })
     }
 
     async fn state(&self) -> async_graphql::Result<State> {
@@ -1944,6 +2029,10 @@ impl Akt {
     /// after the cursor `after`.
     // r[impl authz.members]
     // r[impl akt.page]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is one of the field's GraphQL arguments"
+    )]
     async fn members(
         &self,
         ctx: &Context<'_>,
@@ -1959,12 +2048,16 @@ impl Akt {
             desc = "Only members with this outcome, as it is now; `type` must be given, and have outcomes."
         )]
         outcome: Option<OutcomeKind>,
+        #[graphql(desc = "Live members (the default), archived ones, or both.")] archived: Option<
+            ArchivedFilter,
+        >,
     ) -> async_graphql::Result<AktConnection> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let size = page_size(first);
         let container = self.row.id.to_string();
         let conditions = conditions.unwrap_or_default();
         let where_key = serde_json::to_string(&conditions).map_err(internal)?;
+        let archived = archived.unwrap_or_default();
         let list = List::new(
             "members",
             &[
@@ -1972,6 +2065,7 @@ impl Akt {
                 key.as_deref(),
                 Some(&where_key),
                 outcome.map(OutcomeKind::key),
+                Some(archived_key(archived)),
             ],
         );
         let after = match list.after(after.as_deref())? {
@@ -2005,6 +2099,7 @@ impl Akt {
                 let page = Members {
                     container: self.row.id,
                     keys: &readable,
+                    archived: archived.into(),
                     conditions: &conditions,
                 };
                 page.held(&mut conn, tenant, &types, wanted, after, size + 1)
@@ -2019,6 +2114,7 @@ impl Akt {
                     tenant,
                     self.row.id,
                     &readable,
+                    archived.into(),
                     &conditions,
                     after.as_deref(),
                     size + 1,
@@ -2045,9 +2141,47 @@ impl Akt {
     /// most).
     // r[impl board.placement]
     // r[impl board.visibility]
-    async fn board(&self, ctx: &Context<'_>, first: Option<i32>) -> async_graphql::Result<Board> {
+    /// How many of its members the subject may read are archived
+    /// (`app.archive`).
+    async fn archived_member_count(&self, ctx: &Context<'_>) -> async_graphql::Result<i64> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut readable = Vec::new();
+        for contained in self.ty.ty.document().contains.iter().map(|c| &c.akt_type) {
+            if reads(ctx, contained).await? {
+                readable.push(contained.clone());
+            }
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        containers::count_members(
+            &mut conn,
+            tenant,
+            self.row.id,
+            &readable,
+            store::Archived::Archived,
+        )
+        .await
+        .map_err(internal)
+    }
+
+    // r[impl archive.board]
+    async fn board(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<i32>,
+        #[graphql(
+            desc = "Live members (the default, unless the container is archived, when all are), archived ones, or both."
+        )]
+        archived: Option<ArchivedFilter>,
+    ) -> async_graphql::Result<Board> {
         let limit = first.unwrap_or(500).clamp(1, MAX_BOARD);
-        let members = self.readable_members(ctx, None, limit).await?;
+        let archived = archived.unwrap_or(if self.row.archived {
+            ArchivedFilter::All
+        } else {
+            ArchivedFilter::Live
+        });
+        let members = self
+            .readable_members(ctx, None, archived.into(), limit)
+            .await?;
         let config = self.ty.ty.board();
         let mut columns: Vec<BoardColumn> = config
             .map(|board| board.columns.as_slice())
@@ -2603,6 +2737,33 @@ pub struct ReleaseVersionInput {
     label: Option<String>,
 }
 
+/// What archiving or unarchiving an akt takes.
+#[derive(InputObject)]
+pub struct ArchiveAktInput {
+    number: String,
+    /// Why, one line of at most 200 characters.
+    reason: Option<String>,
+}
+
+async fn set_archived(
+    ctx: &Context<'_>,
+    input: ArchiveAktInput,
+    archive: bool,
+) -> async_graphql::Result<Akt> {
+    let caller = Caller {
+        actor: principal(ctx)?.actor(),
+        auth: authorizer(ctx)?,
+        storage: akter(ctx)?.storage(),
+        renderer: akter(ctx)?.renderer(),
+    };
+    let akter = akter(ctx)?;
+    let row = akter
+        .set_archived(caller, &input.number, archive, input.reason)
+        .await
+        .map_err(error)?;
+    reload(ctx, akter, row).await
+}
+
 /// What releasing several akter together takes.
 #[derive(InputObject)]
 pub struct ReleaseVersionsInput {
@@ -3050,5 +3211,14 @@ impl AktRevision {
 
     async fn created_at(&self) -> DateTime<Utc> {
         self.row.created_at
+    }
+}
+
+/// An archived filter as a list's cursor keeps it.
+fn archived_key(archived: ArchivedFilter) -> &'static str {
+    match archived {
+        ArchivedFilter::Live => "live",
+        ArchivedFilter::Archived => "archived",
+        ArchivedFilter::All => "all",
     }
 }

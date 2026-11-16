@@ -14,6 +14,7 @@
 //! tenant's order lock, then akt rows (by id), then number counters, then
 //! the change-event counter.
 
+pub(crate) mod archive;
 mod batch;
 mod copy;
 mod create;
@@ -105,6 +106,8 @@ pub enum AktError {
     },
     #[error("not permitted")]
     Forbidden,
+    #[error("{0} is archived: unarchive it first")]
+    Archived(String),
     #[error("`{container}` can't contain akter of the type `{member}`")]
     NotContainable { container: String, member: String },
     #[error("`{member}` is already a member of `{container}`")]
@@ -552,6 +555,7 @@ async fn change_in(
     if !auth.allows(&permission(&stored.ty)).await? {
         return Err(AktError::Forbidden);
     }
+    archive::writable(&akt)?;
     // r[impl live.edit]
     // An edit of a live draft changes the draft only, which merges, so the
     // revision it was based on isn't checked: revisions don't move with it.

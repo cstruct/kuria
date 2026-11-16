@@ -376,6 +376,7 @@ async fn prepare(
     let revision = one.revision;
     let ty = type_of(conn, tenant, &akt).await?;
     require_read(caller.auth, &ty, &number).await?;
+    super::archive::writable(&akt)?;
     let Some(declared) = &ty.ty.document().versions else {
         return Err(AktError::BadRequest(format!(
             "`{}` akter don't release versions",

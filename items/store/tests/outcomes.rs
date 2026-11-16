@@ -101,6 +101,7 @@ async fn the_outcome_filter_agrees_with_the_engine() {
             outcome: outcome.as_str().to_owned(),
         }])];
         let listing = Listing {
+            archived: akter::Archived::Live,
             keys: &keys,
             state: None,
             conditions: &conditions,

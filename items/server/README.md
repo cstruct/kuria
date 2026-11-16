@@ -278,7 +278,7 @@ Not yet: signatures.
 
 Konklav's catalog must declare Kuria's actions, `kuria:akt_types:define`,
 `kuria:akter:read`, `kuria:akter:create`, `kuria:akter:edit`,
-`kuria:akter:transition`, `kuria:contacts:read`,
+`kuria:akter:transition`, `kuria:akter:archive`, `kuria:contacts:read`,
 `kuria:contacts:manage`, `kuria:tenant:export` and `kuria:tenant:import`,
 the scope kind `kuria_akt_type`, and any action an
 akt type's transitions name. Roles grant them tenant-wide or at one akt type

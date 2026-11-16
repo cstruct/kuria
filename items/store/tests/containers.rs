@@ -217,9 +217,16 @@ async fn lists_members_in_rank_order_by_readable_type() {
             .await
             .unwrap();
     }
-    let members = containers::members_of(&mut conn, TENANT, &[board.id], &["item".to_owned()], 10)
-        .await
-        .unwrap();
+    let members = containers::members_of(
+        &mut conn,
+        TENANT,
+        &[board.id],
+        &["item".to_owned()],
+        akter::Archived::Live,
+        10,
+    )
+    .await
+    .unwrap();
     let numbers: Vec<_> = members.iter().map(|(_, row)| row.number.as_str()).collect();
     assert_eq!(numbers, ["I-2", "I-1"]);
     let first = containers::members_of(
@@ -227,6 +234,7 @@ async fn lists_members_in_rank_order_by_readable_type() {
         TENANT,
         &[board.id],
         &["item".to_owned(), "bug".to_owned()],
+        akter::Archived::Live,
         2,
     )
     .await

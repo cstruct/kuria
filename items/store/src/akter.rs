@@ -153,6 +153,74 @@ pub async fn latest_type_versions(
         .await
 }
 
+/// Which akter a read answers (`archive.read`): live ones, the default,
+/// archived ones, or both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Archived {
+    #[default]
+    Live,
+    Archived,
+    All,
+}
+
+impl Archived {
+    /// The values of `akt.archived` it reads, so that a live read reads
+    /// only the live partitions (`archive.storage.live`).
+    #[must_use]
+    pub fn values(self) -> &'static [bool] {
+        match self {
+            Self::Live => &[false],
+            Self::Archived => &[true],
+            Self::All => &[false, true],
+        }
+    }
+}
+
+/// How an akt is archived: when, by whom (`{"subject": id}` or
+/// `{"rule": kind}`) and why.
+#[derive(Clone, Debug)]
+pub struct Archive {
+    pub at: DateTime<Utc>,
+    pub by: Json,
+    pub reason: Option<String>,
+}
+
+/// Archives the akt `id`, or makes it live again with `None`, moving it
+/// with its history between partitions (`archive.storage`); `kept` marks an
+/// akt a person unarchived after a rule archived it (`archive.rules.kept`).
+// r[impl archive.storage]
+pub async fn set_archived(
+    conn: &mut Connection,
+    tenant: Uuid,
+    id: Uuid,
+    archive: Option<&Archive>,
+    kept: bool,
+) -> QueryResult<bool> {
+    // The append-only triggers let the delete half of a move through only
+    // while archiving.
+    diesel::sql_query("select set_config('kuria.archiving', 'on', true)")
+        .execute(conn)
+        .await?;
+    let updated = diesel::update(
+        akt::table
+            .filter(akt::tenant_id.eq(tenant))
+            .filter(akt::id.eq(id)),
+    )
+    .set((
+        akt::archived.eq(archive.is_some()),
+        akt::archived_at.eq(archive.map(|a| a.at)),
+        akt::archived_by.eq(archive.map(|a| a.by.clone())),
+        akt::archive_reason.eq(archive.and_then(|a| a.reason.clone())),
+        akt::archive_kept.eq(kept),
+    ))
+    .execute(conn)
+    .await?;
+    diesel::sql_query("select set_config('kuria.archiving', '', true)")
+        .execute(conn)
+        .await?;
+    Ok(updated == 1)
+}
+
 /// An akt's current state, as stored. Its default is live, as a new akt
 /// is.
 #[derive(Clone, Debug, Default, Insertable, Queryable, Selectable)]
@@ -444,6 +512,8 @@ impl ChangedAfter {
 pub struct Listing<'a> {
     /// The akt types listed, by key.
     pub keys: &'a [String],
+    /// Live akter, archived ones, or both (`archive.read`).
+    pub archived: Archived,
     /// Only akter in this state, if given.
     pub state: Option<&'a str>,
     /// Conditions every akt must meet.
@@ -464,6 +534,7 @@ pub async fn list_akter(
 ) -> QueryResult<Vec<AktRow>> {
     let Listing {
         keys,
+        archived,
         state,
         conditions,
         after,
@@ -472,6 +543,7 @@ pub async fn list_akter(
     let mut query = akt::table
         .inner_join(akt_type_version::table)
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(akt_type_version::key.eq_any(keys))
         .select(AktRow::as_select())
         .order((akt::updated_at.desc(), akt::id.desc()))
@@ -493,11 +565,18 @@ pub async fn list_akter(
     query.load(conn).await
 }
 
-/// How many akter of the akt type `key` the tenant has, in any version.
-pub async fn count_akter(conn: &mut Connection, tenant: Uuid, key: &str) -> QueryResult<i64> {
+/// How many akter of the akt type `key` the tenant has, in any version,
+/// live, archived or both.
+pub async fn count_akter(
+    conn: &mut Connection,
+    tenant: Uuid,
+    key: &str,
+    archived: Archived,
+) -> QueryResult<i64> {
     akt::table
         .inner_join(akt_type_version::table)
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(akt_type_version::key.eq(key))
         .count()
         .get_result(conn)
@@ -528,6 +607,7 @@ pub async fn search_akter(
 
     let Listing {
         keys,
+        archived,
         state,
         conditions,
         after,
@@ -547,6 +627,7 @@ pub async fn search_akter(
     }
     let mut matching = akt::table
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(number.or(title))
         .filter(
             akt::type_version_id.eq_any(

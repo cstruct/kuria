@@ -178,6 +178,7 @@ async fn lock_containers(
                 .position(|row| &row.number == number)
                 .map(|i| locked.swap_remove(i))
                 .ok_or_else(|| AktError::NotFound(number.clone()))
+                .and_then(|row| super::archive::writable(&row).map(|()| row))
         })
         .collect()
 }

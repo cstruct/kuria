@@ -220,7 +220,8 @@ impl Client {
                 self.rooms.published_update(&self.room).await;
                 Handled::Reply(vec![denied(&reason)])
             }
-            Err(AktError::Forbidden) => {
+            // r[impl archive.readonly]
+            Err(AktError::Forbidden | AktError::Archived(_)) => {
                 self.may_edit = false;
                 Handled::Reply(vec![denied(READ_ONLY)])
             }

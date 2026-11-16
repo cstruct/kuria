@@ -216,16 +216,17 @@ Migration `000025_archive_partitions`: `akt_number` (id, tenant, number) unparti
 <!-- akt: PLAN-017-T03 -->
 ---
 type: task
-revision: 5
+revision: 10
 rank: b52
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T02, Blocks PLAN-017-T04, Blocks PLAN-017-T06, Blocks PLAN-017-T07]
 title: Archive and unarchive on the server
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`archiveAkt`, `unarchiveAkt` under `kuria:akter:archive`, revisions and change events, `ARCHIVED` refusals for every write (edits, batches, transitions, links, members, releases, live drafts, pushes), `Akt.archived`, and `archived: ArchivedFilter` on every read.
+`archiveAkt` and `unarchiveAkt` (`akter/archive.rs`): `kuria:akter:archive` at the type, a reason of one line, a revision `archive`/`unarchive` with no field changes and its change event, then the move (unarchive moves first); `By::Rule` authored by the nil subject for T04; kept set when a person unarchives what a rule archived. `ARCHIVED` refusals after every write's lock: edits, transitions (and drafts and verdicts through them), links, memberships, creating in an archived container, moves, releases, live-draft updates (the socket turns read-only) and clone pushes. Reads: `ArchivedFilter` (`LIVE` default, `ARCHIVED`, `ALL`) on `akter` (search too), `members`, `board` (all when the container is archived), `akterCount`; `Akt.archived { at by rule reason }`, `Akt.archivedMemberCount`. Ranks are computed against all akter, so an unarchived akt's rank is never taken. The action is in the authorization spec, both setup scripts (release-work gets it) and the server README. Server tests (`tests/archive.rs`, 3). 462 Rust tests pass.
 
 <!-- field: acceptance -->
 - Server tests for each, every write refused, every read filtered.

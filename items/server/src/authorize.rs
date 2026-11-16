@@ -24,6 +24,8 @@ pub const CREATE: &str = "kuria:akter:create";
 pub const EDIT: &str = "kuria:akter:edit";
 /// Performing an akt type's transitions.
 pub const TRANSITION: &str = "kuria:akter:transition";
+/// Archiving and unarchiving an akt type's akter (`archive.authz`).
+pub const ARCHIVE: &str = "kuria:akter:archive";
 /// Listing contacts, with their emails, tenant-wide.
 pub const READ_CONTACTS: &str = "kuria:contacts:read";
 /// Adding, editing, erasing and listing contacts, tenant-wide.
@@ -62,6 +64,7 @@ pub enum Permission {
     Edit { key: String },
     Transition { key: String, action: Option<String> },
     Release { key: String, action: Option<String> },
+    Archive { key: String },
     ReadContacts,
     ManageContacts,
     Export,
@@ -95,6 +98,8 @@ impl Permission {
             Self::Read { key } => at_type(key, &[READ]),
             Self::Create { key } => at_type(key, &[CREATE]),
             Self::Edit { key } => at_type(key, &[EDIT]),
+            // r[impl archive.authz]
+            Self::Archive { key } => at_type(key, &[ARCHIVE]),
             // r[impl authz.transition-action]
             Self::Transition { key, action } => {
                 let mut actions = vec![TRANSITION];

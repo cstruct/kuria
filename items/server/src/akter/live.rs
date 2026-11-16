@@ -204,7 +204,8 @@ pub(crate) async fn open_in(
     Ok(Opened {
         akt: akt.id,
         number: akt.number,
-        may_edit: caller.auth.allows(&Permission::Edit { key }).await?,
+        // r[impl archive.readonly]: an archived akt's draft is read only.
+        may_edit: !akt.archived && caller.auth.allows(&Permission::Edit { key }).await?,
     })
 }
 
@@ -252,6 +253,7 @@ pub(crate) async fn take_in(
     if !caller.auth.allows(&Permission::Edit { key }).await? {
         return Err(AktError::Forbidden);
     }
+    super::archive::writable(&akt)?;
     let now = Utc::now();
     let by: Uuid = caller.actor.subject.into();
     let mut loaded = load(conn, &ty, &akt).await?;
@@ -362,6 +364,7 @@ pub(crate) async fn push_in(
     if !caller.auth.allows(&Permission::Edit { key }).await? {
         return Err(AktError::Forbidden);
     }
+    super::archive::writable(&akt)?;
     let now = Utc::now();
     let mut loaded = load(conn, &ty, &akt).await?;
     let current = loaded

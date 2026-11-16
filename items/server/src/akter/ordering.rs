@@ -66,6 +66,7 @@ pub(super) async fn move_akt_in(
         .ok_or_else(|| AktError::NotFound(neighbour_number.to_owned()))?;
     let ty = type_of(conn, tenant, &akt).await?;
     require_read(auth, &ty, &akt.number).await?;
+    super::archive::writable(&akt)?;
     let neighbour_type = type_of(conn, tenant, &neighbour).await?;
     require_read(auth, &neighbour_type, &neighbour.number).await?;
     require(
