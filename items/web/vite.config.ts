@@ -33,14 +33,12 @@ export default defineConfig({
 				'/v1',
 				'/.well-known',
 				'/healthz'
-			].map(
-				(path) => [
-					path,
-					// Subscriptions, and live drafts (`/akter/{number}/live`), over
-					// WebSockets.
-					{ target: server, ws: path === '/graphql' || path === '/akter', changeOrigin: false }
-				]
-			)
+			].map((path) => [
+				path,
+				// Subscriptions, and live drafts (`/akter/{number}/live`), over
+				// WebSockets.
+				{ target: server, ws: path === '/graphql' || path === '/akter', changeOrigin: false }
+			])
 		)
 	},
 	test: {
