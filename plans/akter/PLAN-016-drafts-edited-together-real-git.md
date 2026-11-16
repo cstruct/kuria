@@ -583,16 +583,24 @@ Pull and push on the server (`clone.server`, `live.state`), built in a worktree 
 <!-- akt: PLAN-016-T12 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b4n
-state: todo
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T11, Blocked by PLAN-016-T10, Blocks PLAN-016-T13]
 title: "The CLI's clone workflow"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The CLI's clone workflow: `kuria clone <number> [dir]`, `status`, `diff`, `add [-p]`, `pull`, `push -m`, with the base and staged files in `.kuria/`, Yjs updates made with the engine's `LiveDraft` against the base, three-way pulls with conflict markers, pictures kept read-only, and `kuria fmt` kept.
+The CLI's clone workflow (`clone.clone`, `.status`, `.add`, `.push`, `.pull`), built in a worktree (`406ac10`).
+
+- **`.kuria/`:** `clone.json` (`url`, `number`), `base.json` (each akt's path, revision and, for a live draft, its state and base), `base/` and `staged/` files, and a `.gitignore` of `*`.
+- **`push -m`:** fetches the staged akter first, refused as `STALE` (with a hint to pull) unless each is as the base has it; a live draft's change goes as a Yjs update made with `LiveDraft` against the base's state, texts merged by characters; other akter's as `editAkt` at the base's revision; all in one `pushClone`. New and removed files, changed pictures, changed read-only keys and files not in normal form are refused. The live state after a push is computed locally.
+- **`pull`:** three-way merges each file with the engine's new `merge_marked`, writing `<<<<<<< ours` / `=======` / `>>>>>>> kuria` where both changed the same text; a file with markers can't be staged. Adds and removes members, restages or unstages.
+- **`add` and `diff`:** inside a clone they take paths (`add -p` stages hunks); elsewhere a container and members, and an akt and versions.
+- **Docs:** reverting unready edits with `git revert` means a later `git merge` won't bring them back; `git reset` is advised.
+- **Tests:** `tests/clones.rs` against a server on a local port (clone, stage a hunk, push; stale push refused and merged by pull; conflict markers resolved and pushed; the branch workflow with local git), `merge_marked` unit tests, and `e2e/tests/clone.spec.ts` (run in T13). 449 Rust and 110 app tests pass after merging.
 
 <!-- field: acceptance -->
 - CLI tests against a test server: clone, edit, stage a hunk, push; a push behind a live edit refused, pull merging it; a conflict written as markers, resolved and pushed; the branch workflow with local git.
