@@ -1,0 +1,2452 @@
+{
+  "aktTypes": [
+    {
+      "key": "test_case",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T10:48:07.483376Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "created_in": [
+              "test_protocol"
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "description": "What to do, in order.",
+                "key": "steps",
+                "kind": "text",
+                "multiline": true,
+                "name": "Steps"
+              },
+              {
+                "key": "expected",
+                "kind": "text",
+                "multiline": true,
+                "name": "Expected result"
+              },
+              {
+                "description": "Who runs it; each gives a verdict.",
+                "key": "testers",
+                "kind": "user",
+                "multiple": true,
+                "name": "Testers"
+              },
+              {
+                "assignees": "testers",
+                "key": "verdict",
+                "kind": "verdict",
+                "name": "Verdict"
+              },
+              {
+                "description": "What was seen, such as why it failed.",
+                "key": "notes",
+                "kind": "text",
+                "multiline": true,
+                "name": "Notes"
+              }
+            ],
+            "key": "test_case",
+            "name": "Test case",
+            "number": "{parent}-C{seq:2}",
+            "presentation": {
+              "card": [
+                "testers"
+              ],
+              "colour": "blue",
+              "icon": "flask-conical",
+              "list": [
+                "testers"
+              ]
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "open",
+                "name": "Open"
+              }
+            ],
+            "transitions": []
+          },
+          "id": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "test_protocol",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T10:48:07.488155Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "contains": [
+              {
+                "type": "test_case"
+              }
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "description": "What it tests, and against what build or system.",
+                "key": "scope",
+                "kind": "text",
+                "multiline": true,
+                "name": "Scope"
+              },
+              {
+                "description": "Its test cases in sections.",
+                "key": "layout",
+                "kind": "sections",
+                "name": "Layout",
+                "of": [
+                  "test_case"
+                ]
+              },
+              {
+                "key": "owner",
+                "kind": "user",
+                "name": "Owner"
+              },
+              {
+                "description": "What the run showed, and what follows from it.",
+                "key": "conclusion",
+                "kind": "text",
+                "multiline": true,
+                "name": "Conclusion"
+              }
+            ],
+            "key": "test_protocol",
+            "name": "Test protocol",
+            "number": "TP-{seq:3}",
+            "presentation": {
+              "colour": "purple",
+              "icon": "clipboard-check",
+              "list": [
+                "owner"
+              ],
+              "tones": {
+                "done": "success",
+                "running": "active",
+                "template": "neutral",
+                "withdrawn": "neutral"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "draft",
+                "name": "Draft"
+              },
+              {
+                "key": "template",
+                "name": "Template"
+              },
+              {
+                "key": "running",
+                "name": "Running"
+              },
+              {
+                "final": true,
+                "key": "done",
+                "name": "Done"
+              },
+              {
+                "final": true,
+                "key": "withdrawn",
+                "name": "Withdrawn"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "draft"
+                ],
+                "key": "keep",
+                "name": "Keep as template",
+                "to": "template"
+              },
+              {
+                "from": [
+                  "template"
+                ],
+                "key": "revise",
+                "name": "Revise",
+                "to": "draft"
+              },
+              {
+                "from": [
+                  "draft"
+                ],
+                "key": "start",
+                "name": "Start",
+                "to": "running"
+              },
+              {
+                "from": [
+                  "running"
+                ],
+                "key": "finish",
+                "name": "Finish",
+                "outcomes": [
+                  "pass",
+                  "fail",
+                  "skip"
+                ],
+                "requires": [
+                  "conclusion"
+                ],
+                "to": "done"
+              },
+              {
+                "from": [
+                  "draft",
+                  "template",
+                  "running"
+                ],
+                "key": "withdraw",
+                "name": "Withdraw",
+                "to": "withdrawn"
+              }
+            ]
+          },
+          "id": "01a1e3f8-ac40-72e3-b6b4-90386726d41f",
+          "version": 1
+        }
+      ]
+    }
+  ],
+  "akter": [
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.493818Z",
+      "fields": {
+        "layout": [
+          {
+            "items": [
+              "TP-001-C01",
+              "TP-001-C02"
+            ],
+            "title": "Shopping"
+          },
+          {
+            "items": [
+              "TP-001-C03"
+            ],
+            "text": "With the payment provider's *test* card.",
+            "title": "Checkout"
+          },
+          {
+            "collapsible": true,
+            "items": [
+              "TP-001-C04",
+              "TP-001-C05"
+            ],
+            "title": "Accounts"
+          }
+        ],
+        "owner": "01900000-0000-7000-8000-00000000d002",
+        "scope": "A release candidate of the web shop, on staging, before it is accepted.",
+        "title": "Shop acceptance test"
+      },
+      "id": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "number": "TP-001",
+      "rank": "a0",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "owner": "01900000-0000-7000-8000-00000000d002",
+            "scope": "A release candidate of the web shop, on staging, before it is accepted.",
+            "title": "Shop acceptance test"
+          },
+          "createdAt": "2026-11-16T10:48:07.493818Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": null,
+          "reason": "The protocol every candidate runs",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.503310Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ac4f-73ad-84bf-f18e311338bf",
+                "number": "TP-001-C01"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 2,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.513877Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ac5a-72c1-9fa5-a3de039ff25a",
+                "number": "TP-001-C02"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 3,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.524535Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ac65-7735-acaf-898a56366b95",
+                "number": "TP-001-C03"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 4,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.534400Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ac6e-7235-bd13-6df6bd353a44",
+                "number": "TP-001-C04"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 5,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.543898Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ac78-715a-b0d3-285e3bd08af0",
+                "number": "TP-001-C05"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 6,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "layout": [
+              {
+                "items": [
+                  "TP-001-C01",
+                  "TP-001-C02"
+                ],
+                "title": "Shopping"
+              },
+              {
+                "items": [
+                  "TP-001-C03"
+                ],
+                "text": "With the payment provider's *test* card.",
+                "title": "Checkout"
+              },
+              {
+                "collapsible": true,
+                "items": [
+                  "TP-001-C04",
+                  "TP-001-C05"
+                ],
+                "title": "Accounts"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.555246Z",
+          "hash": "9452bb9105534a78ed4a294e13c3a5ef4a635e469e18970f05524588bc6d5214",
+          "membership": null,
+          "reason": "Sections for the cases",
+          "revision": 7,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.563662Z",
+          "hash": "de10832c023d834283caff47627bdb7fd4eca691bca0d75047d9761e2d63356b",
+          "membership": null,
+          "reason": "Reviewed: a template now",
+          "revision": 8,
+          "state": "template",
+          "transition": "keep"
+        }
+      ],
+      "state": "template",
+      "title": "Shop acceptance test",
+      "typeVersion": "01a1e3f8-ac40-72e3-b6b4-90386726d41f",
+      "updatedAt": "2026-11-16T10:48:07.563662Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.503310Z",
+      "fields": {
+        "expected": "Results in under a second; the product page shows price and stock.",
+        "steps": "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Browse and search"
+      },
+      "id": "01a1e3f8-ac4f-73ad-84bf-f18e311338bf",
+      "number": "TP-001-C01",
+      "rank": "a1",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Results in under a second; the product page shows price and stock.",
+            "steps": "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Browse and search"
+          },
+          "createdAt": "2026-11-16T10:48:07.503310Z",
+          "hash": "17c3a2fc13240659b474cbdf2bbc401217bb17e3abc7e90b91c57a537f88a101",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+                "number": "TP-001"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Browse and search",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.503310Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.513877Z",
+      "fields": {
+        "expected": "The total follows every change.",
+        "steps": "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Fill the basket"
+      },
+      "id": "01a1e3f8-ac5a-72c1-9fa5-a3de039ff25a",
+      "number": "TP-001-C02",
+      "rank": "a2",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "The total follows every change.",
+            "steps": "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Fill the basket"
+          },
+          "createdAt": "2026-11-16T10:48:07.513877Z",
+          "hash": "464a81e0bbfccb9a85e45004c1c0661ed2df3b3106b437d8fbe9a2e007d8cbac",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+                "number": "TP-001"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Fill the basket",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.513877Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.524535Z",
+      "fields": {
+        "expected": "An order confirmation, by email too.",
+        "steps": "1. Check out without signing in.\n2. Pay with the test card.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Pay as a guest"
+      },
+      "id": "01a1e3f8-ac65-7735-acaf-898a56366b95",
+      "number": "TP-001-C03",
+      "rank": "a3",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "An order confirmation, by email too.",
+            "steps": "1. Check out without signing in.\n2. Pay with the test card.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Pay as a guest"
+          },
+          "createdAt": "2026-11-16T10:48:07.524535Z",
+          "hash": "aebffc43e6b599c3be003639314e6232a7bfb26330ba53c870cd1d2d7e15364f",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+                "number": "TP-001"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Pay as a guest",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.524535Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.534400Z",
+      "fields": {
+        "expected": "Signed in, without a password.",
+        "steps": "1. Sign in.\n2. Choose the passkey.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Sign in with a passkey"
+      },
+      "id": "01a1e3f8-ac6e-7235-bd13-6df6bd353a44",
+      "number": "TP-001-C04",
+      "rank": "a4",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Signed in, without a password.",
+            "steps": "1. Sign in.\n2. Choose the passkey.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Sign in with a passkey"
+          },
+          "createdAt": "2026-11-16T10:48:07.534400Z",
+          "hash": "3d1ffeb43e8f5c329f8b86647e5204e52c7f56d7d80cc105a95bc1f927caa486",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+                "number": "TP-001"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Sign in with a passkey",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.534400Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.543898Z",
+      "fields": {
+        "expected": "Signed in with the new password; the link no longer works.",
+        "steps": "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Reset a password"
+      },
+      "id": "01a1e3f8-ac78-715a-b0d3-285e3bd08af0",
+      "number": "TP-001-C05",
+      "rank": "a5",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Signed in with the new password; the link no longer works.",
+            "steps": "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Reset a password"
+          },
+          "createdAt": "2026-11-16T10:48:07.543898Z",
+          "hash": "1342c2b312c5961d7ad86f84bac4188a72dffec3f63c11cc2000b55011e35d6b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+                "number": "TP-001"
+              }
+            ]
+          },
+          "reason": "Add the protocol's cases",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Reset a password",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.543898Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "createdAt": "2026-11-16T10:48:07.579351Z",
+      "fields": {
+        "conclusion": "Passed: 4.2.0-rc.2 is fit to release.",
+        "layout": [
+          {
+            "items": [
+              "TP-002-C01",
+              "TP-002-C02"
+            ],
+            "title": "Shopping"
+          },
+          {
+            "items": [
+              "TP-002-C03"
+            ],
+            "text": "With the payment provider's *test* card.",
+            "title": "Checkout"
+          },
+          {
+            "collapsible": true,
+            "items": [
+              "TP-002-C04",
+              "TP-002-C05"
+            ],
+            "title": "Accounts"
+          }
+        ],
+        "owner": "01900000-0000-7000-8000-00000000d002",
+        "scope": "A release candidate of the web shop, on staging, before it is accepted.",
+        "title": "Shop acceptance test: 4.2.0-rc.2"
+      },
+      "id": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+      "number": "TP-002",
+      "rank": "a6",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "owner": "01900000-0000-7000-8000-00000000d002",
+            "scope": "A release candidate of the web shop, on staging, before it is accepted.",
+            "title": "Shop acceptance test"
+          },
+          "createdAt": "2026-11-16T10:48:07.579351Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": null,
+          "reason": "Run it for RC-2 (copied from TP-001)",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.586846Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aca3-7478-9bcf-8ed4192b9bf1",
+                "number": "TP-002-C01"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C01)",
+          "revision": 2,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.597783Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-acae-723f-9be7-24f2357fc0aa",
+                "number": "TP-002-C02"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C02)",
+          "revision": 3,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.607480Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-acb8-763d-acf7-5c1fe97f9ef1",
+                "number": "TP-002-C03"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C03)",
+          "revision": 4,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.616394Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-acc0-7619-90f6-c716de65d841",
+                "number": "TP-002-C04"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C04)",
+          "revision": 5,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.625207Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-acc9-700f-80c4-043e0a353cd2",
+                "number": "TP-002-C05"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C05)",
+          "revision": 6,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "layout": [
+              {
+                "items": [
+                  "TP-002-C01",
+                  "TP-002-C02"
+                ],
+                "title": "Shopping"
+              },
+              {
+                "items": [
+                  "TP-002-C03"
+                ],
+                "text": "With the payment provider's *test* card.",
+                "title": "Checkout"
+              },
+              {
+                "collapsible": true,
+                "items": [
+                  "TP-002-C04",
+                  "TP-002-C05"
+                ],
+                "title": "Accounts"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.632749Z",
+          "hash": "8e33d46aaa023a9d77717c7699fdc752b84f1c7a0fb739bf5183fef866e716cd",
+          "membership": null,
+          "reason": "Run it for RC-2 (sections copied from TP-001)",
+          "revision": 7,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "title": "Shop acceptance test: 4.2.0-rc.2"
+          },
+          "createdAt": "2026-11-16T10:48:07.641788Z",
+          "hash": "3183a24e6cd99a0d90858df54c9182e6f1077119c31396fac40849a8ebe065bb",
+          "membership": null,
+          "reason": "Name the run",
+          "revision": 8,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.652626Z",
+          "hash": "7eb05ad8de9716ebbc592a577b0725cd30674d459e0ab9610d16c5fb90bce55f",
+          "membership": null,
+          "reason": "Testing on staging",
+          "revision": 9,
+          "state": "running",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "conclusion": "Passed: 4.2.0-rc.2 is fit to release."
+          },
+          "createdAt": "2026-11-16T10:48:07.741611Z",
+          "hash": "179e2c2387905fd99584b3df7f052cac9fe1c2fb74c79ba259adab180b4e93bf",
+          "membership": null,
+          "reason": "All cases passed",
+          "revision": 10,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Shop acceptance test: 4.2.0-rc.2",
+      "typeVersion": "01a1e3f8-ac40-72e3-b6b4-90386726d41f",
+      "updatedAt": "2026-11-16T10:48:07.741611Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac4f-73ad-84bf-f18e311338bf",
+      "createdAt": "2026-11-16T10:48:07.586846Z",
+      "fields": {
+        "expected": "Results in under a second; the product page shows price and stock.",
+        "steps": "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Browse and search",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.660231Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.666772Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-aca3-7478-9bcf-8ed4192b9bf1",
+      "number": "TP-002-C01",
+      "rank": "a7",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Results in under a second; the product page shows price and stock.",
+            "steps": "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Browse and search"
+          },
+          "createdAt": "2026-11-16T10:48:07.586846Z",
+          "hash": "17c3a2fc13240659b474cbdf2bbc401217bb17e3abc7e90b91c57a537f88a101",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+                "number": "TP-002"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C01)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.660231Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.660231Z",
+          "hash": "0e2d844bc1566b46ed0ce7315905fe60cdf6372c4e4822248ba2150c64c41913",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.660231Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.666772Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.666772Z",
+          "hash": "6f6ed55c8086e3f46131271b6962c86d618b6c762ee56ec25f725b793fe4e1d0",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Browse and search",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.666772Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac5a-72c1-9fa5-a3de039ff25a",
+      "createdAt": "2026-11-16T10:48:07.597783Z",
+      "fields": {
+        "expected": "The total follows every change.",
+        "steps": "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Fill the basket",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.673263Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.679940Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-acae-723f-9be7-24f2357fc0aa",
+      "number": "TP-002-C02",
+      "rank": "a8",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "The total follows every change.",
+            "steps": "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Fill the basket"
+          },
+          "createdAt": "2026-11-16T10:48:07.597783Z",
+          "hash": "464a81e0bbfccb9a85e45004c1c0661ed2df3b3106b437d8fbe9a2e007d8cbac",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+                "number": "TP-002"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C02)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.673263Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.673263Z",
+          "hash": "0d32950a520260751714e30e831734a33857d8ed87ec58d3745e0a7397b6ec99",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.673263Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.679940Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.679940Z",
+          "hash": "4119e839b1d34ac02af59670e5a195a552caf6a61810148c8453adecfafe24b4",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Fill the basket",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.679940Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac65-7735-acaf-898a56366b95",
+      "createdAt": "2026-11-16T10:48:07.607480Z",
+      "fields": {
+        "expected": "An order confirmation, by email too.",
+        "steps": "1. Check out without signing in.\n2. Pay with the test card.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Pay as a guest",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.686623Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.693783Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-acb8-763d-acf7-5c1fe97f9ef1",
+      "number": "TP-002-C03",
+      "rank": "a9",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "An order confirmation, by email too.",
+            "steps": "1. Check out without signing in.\n2. Pay with the test card.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Pay as a guest"
+          },
+          "createdAt": "2026-11-16T10:48:07.607480Z",
+          "hash": "aebffc43e6b599c3be003639314e6232a7bfb26330ba53c870cd1d2d7e15364f",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+                "number": "TP-002"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C03)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.686623Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.686623Z",
+          "hash": "3e4f9455d6b1eb1a4733c6ab3e7980dc7d8fb441b4645ccda55ecdea929c30c9",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.686623Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.693783Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.693783Z",
+          "hash": "3cb86fdf493fcbba8f1d8c448aa3edc989d412def5940eba736bcd5f7a9ca52a",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Pay as a guest",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.693783Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac6e-7235-bd13-6df6bd353a44",
+      "createdAt": "2026-11-16T10:48:07.616394Z",
+      "fields": {
+        "expected": "Signed in, without a password.",
+        "notes": "No passkey on my test phone; Devi covered it.",
+        "steps": "1. Sign in.\n2. Choose the passkey.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Sign in with a passkey",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.700461Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.706882Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "skip"
+          }
+        ]
+      },
+      "id": "01a1e3f8-acc0-7619-90f6-c716de65d841",
+      "number": "TP-002-C04",
+      "rank": "aA",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Signed in, without a password.",
+            "steps": "1. Sign in.\n2. Choose the passkey.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Sign in with a passkey"
+          },
+          "createdAt": "2026-11-16T10:48:07.616394Z",
+          "hash": "3d1ffeb43e8f5c329f8b86647e5204e52c7f56d7d80cc105a95bc1f927caa486",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+                "number": "TP-002"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C04)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.700461Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.700461Z",
+          "hash": "7bb0a4cf65693d0679e788d1f60c0fe8814553b23858cd4161645751cff8d480",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.700461Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.706882Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "skip"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.706882Z",
+          "hash": "39dff81fc14620a0c30baf91ceb5b103e9eb7824f78030a39f63e30c5e60e89a",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "notes": "No passkey on my test phone; Devi covered it."
+          },
+          "createdAt": "2026-11-16T10:48:07.713726Z",
+          "hash": "1f933faa696b2567c095a4f0bee1bc26666b2a24c425f760265cb64e4f885384",
+          "membership": null,
+          "reason": "Why skipped",
+          "revision": 4,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Sign in with a passkey",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.713726Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac78-715a-b0d3-285e3bd08af0",
+      "createdAt": "2026-11-16T10:48:07.625207Z",
+      "fields": {
+        "expected": "Signed in with the new password; the link no longer works.",
+        "steps": "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Reset a password",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.720362Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.727639Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-acc9-700f-80c4-043e0a353cd2",
+      "number": "TP-002-C05",
+      "rank": "aB",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Signed in with the new password; the link no longer works.",
+            "steps": "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Reset a password"
+          },
+          "createdAt": "2026-11-16T10:48:07.625207Z",
+          "hash": "1342c2b312c5961d7ad86f84bac4188a72dffec3f63c11cc2000b55011e35d6b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+                "number": "TP-002"
+              }
+            ]
+          },
+          "reason": "Run it for RC-2 (copied from TP-001-C05)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.720362Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.720362Z",
+          "hash": "578505b1ea17daebd69eef9006c08644c641a489987b60dfd73af258de9af28d",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.720362Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.727639Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.727639Z",
+          "hash": "6241b2e764f587a216e008e4bc610ac492347b5264ed1e42f46c1cffd71f2955",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Reset a password",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.727639Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "createdAt": "2026-11-16T10:48:07.755316Z",
+      "fields": {
+        "conclusion": "Failed: search is too slow; the candidate is rejected.",
+        "layout": [
+          {
+            "items": [
+              "TP-003-C01",
+              "TP-003-C02"
+            ],
+            "title": "Shopping"
+          },
+          {
+            "items": [
+              "TP-003-C03"
+            ],
+            "text": "With the payment provider's *test* card.",
+            "title": "Checkout"
+          },
+          {
+            "collapsible": true,
+            "items": [
+              "TP-003-C04",
+              "TP-003-C05"
+            ],
+            "title": "Accounts"
+          }
+        ],
+        "owner": "01900000-0000-7000-8000-00000000d002",
+        "scope": "A release candidate of the web shop, on staging, before it is accepted.",
+        "title": "Shop acceptance test: 4.2.0-rc.1"
+      },
+      "id": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+      "number": "TP-003",
+      "rank": "aC",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "owner": "01900000-0000-7000-8000-00000000d002",
+            "scope": "A release candidate of the web shop, on staging, before it is accepted.",
+            "title": "Shop acceptance test"
+          },
+          "createdAt": "2026-11-16T10:48:07.755316Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": null,
+          "reason": "Run it for RC-1 (copied from TP-001)",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.761771Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ad52-75cf-95ed-75a8a7ed0fb0",
+                "number": "TP-003-C01"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C01)",
+          "revision": 2,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.769901Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ad5a-72f4-886d-3c45be294295",
+                "number": "TP-003-C02"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C02)",
+          "revision": 3,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.778048Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ad62-726c-a567-5163bf49bad8",
+                "number": "TP-003-C03"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C03)",
+          "revision": 4,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.786695Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ad6b-7325-8f33-95c45f1bdd16",
+                "number": "TP-003-C04"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C04)",
+          "revision": 5,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.795057Z",
+          "hash": "77f2ae83b883c2be0c8d8a1b832510479e62d19db9e09182d03458d79857b643",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-ad73-76ab-b118-e43cfcc56a60",
+                "number": "TP-003-C05"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C05)",
+          "revision": 6,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "layout": [
+              {
+                "items": [
+                  "TP-003-C01",
+                  "TP-003-C02"
+                ],
+                "title": "Shopping"
+              },
+              {
+                "items": [
+                  "TP-003-C03"
+                ],
+                "text": "With the payment provider's *test* card.",
+                "title": "Checkout"
+              },
+              {
+                "collapsible": true,
+                "items": [
+                  "TP-003-C04",
+                  "TP-003-C05"
+                ],
+                "title": "Accounts"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.802410Z",
+          "hash": "5405cffce5b6664faea1894d6c33bc7c5e6d30bc64d9076dc8520c6ae92dce15",
+          "membership": null,
+          "reason": "Run it for RC-1 (sections copied from TP-001)",
+          "revision": 7,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "title": "Shop acceptance test: 4.2.0-rc.1"
+          },
+          "createdAt": "2026-11-16T10:48:07.810931Z",
+          "hash": "37389b6878a25c5ba9849ac98555e7cbc762dd550594e6ad2a8235ddaa801c6e",
+          "membership": null,
+          "reason": "Name the run",
+          "revision": 8,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.818008Z",
+          "hash": "755947085c60d2e6dccd2dcc5e3bb5e8d50c0b92388ccb420128fbd755176aee",
+          "membership": null,
+          "reason": "Testing on staging",
+          "revision": 9,
+          "state": "running",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "conclusion": "Failed: search is too slow; the candidate is rejected."
+          },
+          "createdAt": "2026-11-16T10:48:07.907117Z",
+          "hash": "91462bfaa7b0d0eeb0f5e5eda6ac942f96805bd8d2088809729d21142271b5b9",
+          "membership": null,
+          "reason": "A case failed",
+          "revision": 10,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Shop acceptance test: 4.2.0-rc.1",
+      "typeVersion": "01a1e3f8-ac40-72e3-b6b4-90386726d41f",
+      "updatedAt": "2026-11-16T10:48:07.907117Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac4f-73ad-84bf-f18e311338bf",
+      "createdAt": "2026-11-16T10:48:07.761771Z",
+      "fields": {
+        "expected": "Results in under a second; the product page shows price and stock.",
+        "notes": "Search took 5 s with the new ranking.",
+        "steps": "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Browse and search",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.826639Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "fail"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.833262Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "fail"
+          }
+        ]
+      },
+      "id": "01a1e3f8-ad52-75cf-95ed-75a8a7ed0fb0",
+      "number": "TP-003-C01",
+      "rank": "aD",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Results in under a second; the product page shows price and stock.",
+            "steps": "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Browse and search"
+          },
+          "createdAt": "2026-11-16T10:48:07.761771Z",
+          "hash": "17c3a2fc13240659b474cbdf2bbc401217bb17e3abc7e90b91c57a537f88a101",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+                "number": "TP-003"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C01)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.826639Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "fail"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.826639Z",
+          "hash": "92eefcd4ec569ef4e6bdf006c8ae41a472eabdf8adc8c951f786319819a55b98",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.826639Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "fail"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.833262Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "fail"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.833262Z",
+          "hash": "f494a1870fa1ebe2e000f556538906c1895672c34fcfec4d9fc7ee07470802e6",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "notes": "Search took 5 s with the new ranking."
+          },
+          "createdAt": "2026-11-16T10:48:07.839907Z",
+          "hash": "2913e896bf1698499139563dbece8063e8760bc49728c14f06d610cfab8a51f5",
+          "membership": null,
+          "reason": "What failed",
+          "revision": 4,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Browse and search",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.839907Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac5a-72c1-9fa5-a3de039ff25a",
+      "createdAt": "2026-11-16T10:48:07.769901Z",
+      "fields": {
+        "expected": "The total follows every change.",
+        "steps": "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Fill the basket",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.846672Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.853160Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-ad5a-72f4-886d-3c45be294295",
+      "number": "TP-003-C02",
+      "rank": "aE",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "The total follows every change.",
+            "steps": "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Fill the basket"
+          },
+          "createdAt": "2026-11-16T10:48:07.769901Z",
+          "hash": "464a81e0bbfccb9a85e45004c1c0661ed2df3b3106b437d8fbe9a2e007d8cbac",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+                "number": "TP-003"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C02)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.846672Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.846672Z",
+          "hash": "b036d6998ffb634edb9cb9900214d588862cb978fdc834b250da268dcee03c51",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.846672Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.853160Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.853160Z",
+          "hash": "cd989da2539d19f12e3193e68b8ce9abe594eea20f90713a03e77bb30d722cb0",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Fill the basket",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.853160Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac65-7735-acaf-898a56366b95",
+      "createdAt": "2026-11-16T10:48:07.778048Z",
+      "fields": {
+        "expected": "An order confirmation, by email too.",
+        "steps": "1. Check out without signing in.\n2. Pay with the test card.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Pay as a guest",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.860335Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.866823Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-ad62-726c-a567-5163bf49bad8",
+      "number": "TP-003-C03",
+      "rank": "aF",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "An order confirmation, by email too.",
+            "steps": "1. Check out without signing in.\n2. Pay with the test card.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Pay as a guest"
+          },
+          "createdAt": "2026-11-16T10:48:07.778048Z",
+          "hash": "aebffc43e6b599c3be003639314e6232a7bfb26330ba53c870cd1d2d7e15364f",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+                "number": "TP-003"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C03)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.860335Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.860335Z",
+          "hash": "d09352444e6a6d7e263d1aeeb43850b4f6bc7db9ffe453af17fe91a5bf8a4758",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.860335Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.866823Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.866823Z",
+          "hash": "f0c9b293b075765354d690d3ec864dc02068bed830bf528dc5fcfe15891bd6c6",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Pay as a guest",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.866823Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac6e-7235-bd13-6df6bd353a44",
+      "createdAt": "2026-11-16T10:48:07.786695Z",
+      "fields": {
+        "expected": "Signed in, without a password.",
+        "steps": "1. Sign in.\n2. Choose the passkey.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Sign in with a passkey",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.873086Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.879649Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-ad6b-7325-8f33-95c45f1bdd16",
+      "number": "TP-003-C04",
+      "rank": "aG",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Signed in, without a password.",
+            "steps": "1. Sign in.\n2. Choose the passkey.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Sign in with a passkey"
+          },
+          "createdAt": "2026-11-16T10:48:07.786695Z",
+          "hash": "3d1ffeb43e8f5c329f8b86647e5204e52c7f56d7d80cc105a95bc1f927caa486",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+                "number": "TP-003"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C04)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.873086Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.873086Z",
+          "hash": "1ec44340e59542c8823721604a8011de7fa3f4ed24dee995cd9613d0a8888423",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.873086Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.879649Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.879649Z",
+          "hash": "1c41930aafe1d987498fcd20aba4cbde0a5d4f473610e0041e4ec80a5db2a1fd",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Sign in with a passkey",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.879649Z"
+    },
+    {
+      "attachments": [],
+      "copiedFrom": "01a1e3f8-ac78-715a-b0d3-285e3bd08af0",
+      "createdAt": "2026-11-16T10:48:07.795057Z",
+      "fields": {
+        "expected": "Signed in with the new password; the link no longer works.",
+        "steps": "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001",
+          "01900000-0000-7000-8000-00000000d003"
+        ],
+        "title": "Reset a password",
+        "verdict": [
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "at": "2026-11-16T10:48:07.886407Z",
+            "by": "01900000-0000-7000-8000-00000000d001",
+            "verdict": "pass"
+          },
+          {
+            "assignee": "01900000-0000-7000-8000-00000000d003",
+            "at": "2026-11-16T10:48:07.893664Z",
+            "by": "01900000-0000-7000-8000-00000000d003",
+            "verdict": "pass"
+          }
+        ]
+      },
+      "id": "01a1e3f8-ad73-76ab-b118-e43cfcc56a60",
+      "number": "TP-003-C05",
+      "rank": "aH",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "expected": "Signed in with the new password; the link no longer works.",
+            "steps": "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001",
+              "01900000-0000-7000-8000-00000000d003"
+            ],
+            "title": "Reset a password"
+          },
+          "createdAt": "2026-11-16T10:48:07.795057Z",
+          "hash": "1342c2b312c5961d7ad86f84bac4188a72dffec3f63c11cc2000b55011e35d6b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+                "number": "TP-003"
+              }
+            ]
+          },
+          "reason": "Run it for RC-1 (copied from TP-001-C05)",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.886407Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.886407Z",
+          "hash": "18f40d8b3b2a54ab2db124b5fdc5a80192a1f75e4624baef1e97e503bf9a866c",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "verdict": [
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d001",
+                "at": "2026-11-16T10:48:07.886407Z",
+                "by": "01900000-0000-7000-8000-00000000d001",
+                "verdict": "pass"
+              },
+              {
+                "assignee": "01900000-0000-7000-8000-00000000d003",
+                "at": "2026-11-16T10:48:07.893664Z",
+                "by": "01900000-0000-7000-8000-00000000d003",
+                "verdict": "pass"
+              }
+            ]
+          },
+          "createdAt": "2026-11-16T10:48:07.893664Z",
+          "hash": "a7a51d7ca30cf5cb3a1c31a791a3d1ca29acf683292c9a733532d41a3651abfe",
+          "membership": null,
+          "reason": "Tested",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Reset a password",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.893664Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.914096Z",
+      "fields": {
+        "owner": "01900000-0000-7000-8000-00000000d001",
+        "scope": "The summer release's wish lists.",
+        "title": "Wish list test"
+      },
+      "id": "01a1e3f8-adea-7515-b8b4-e2474faa22c5",
+      "number": "TP-004",
+      "rank": "aI",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "owner": "01900000-0000-7000-8000-00000000d001",
+            "scope": "The summer release's wish lists.",
+            "title": "Wish list test"
+          },
+          "createdAt": "2026-11-16T10:48:07.914096Z",
+          "hash": "d17acc6dbe0e2d7f07e85d024a74a7419d72cf0cecd4e79f93a3510a316bdf3c",
+          "membership": null,
+          "reason": "Start the wish list protocol",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.921011Z",
+          "hash": "d17acc6dbe0e2d7f07e85d024a74a7419d72cf0cecd4e79f93a3510a316bdf3c",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-adf1-772b-b531-819314847301",
+                "number": "TP-004-C01"
+              }
+            ]
+          },
+          "reason": "First case",
+          "revision": 2,
+          "state": "draft",
+          "transition": null
+        }
+      ],
+      "state": "draft",
+      "title": "Wish list test",
+      "typeVersion": "01a1e3f8-ac40-72e3-b6b4-90386726d41f",
+      "updatedAt": "2026-11-16T10:48:07.921011Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.921011Z",
+      "fields": {
+        "expected": "It is in the wish list.",
+        "steps": "1. Open a product.\n2. Tap the heart.",
+        "testers": [
+          "01900000-0000-7000-8000-00000000d001"
+        ],
+        "title": "Save a product for later"
+      },
+      "id": "01a1e3f8-adf1-772b-b531-819314847301",
+      "number": "TP-004-C01",
+      "rank": "aJ",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "expected": "It is in the wish list.",
+            "steps": "1. Open a product.\n2. Tap the heart.",
+            "testers": [
+              "01900000-0000-7000-8000-00000000d001"
+            ],
+            "title": "Save a product for later"
+          },
+          "createdAt": "2026-11-16T10:48:07.921011Z",
+          "hash": "46563de93e774c8ce5d51b7fa8bcaf43cd9a5ad5f60bb7673a5dbb7351c244f2",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-adea-7515-b8b4-e2474faa22c5",
+                "number": "TP-004"
+              }
+            ]
+          },
+          "reason": "First case",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Save a product for later",
+      "typeVersion": "01a1e3f8-ac3c-7508-99b4-c3c6b5f09670",
+      "updatedAt": "2026-11-16T10:48:07.921011Z"
+    }
+  ],
+  "attachments": [],
+  "contacts": [],
+  "counters": [],
+  "exportedAt": "2026-11-16T10:48:07.928950Z",
+  "format": 2,
+  "holdsAkter": true,
+  "links": [],
+  "memberships": [
+    {
+      "addedAt": "2026-11-16T10:48:07.503310Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "member": "01a1e3f8-ac4f-73ad-84bf-f18e311338bf"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.513877Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "member": "01a1e3f8-ac5a-72c1-9fa5-a3de039ff25a"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.524535Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "member": "01a1e3f8-ac65-7735-acaf-898a56366b95"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.534400Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "member": "01a1e3f8-ac6e-7235-bd13-6df6bd353a44"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.543898Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac46-7017-bad8-afb607ec64fc",
+      "member": "01a1e3f8-ac78-715a-b0d3-285e3bd08af0"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.586846Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+      "member": "01a1e3f8-aca3-7478-9bcf-8ed4192b9bf1"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.597783Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+      "member": "01a1e3f8-acae-723f-9be7-24f2357fc0aa"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.607480Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+      "member": "01a1e3f8-acb8-763d-acf7-5c1fe97f9ef1"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.616394Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+      "member": "01a1e3f8-acc0-7619-90f6-c716de65d841"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.625207Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ac9c-73e8-a8e2-2afd9bbf3778",
+      "member": "01a1e3f8-acc9-700f-80c4-043e0a353cd2"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.761771Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+      "member": "01a1e3f8-ad52-75cf-95ed-75a8a7ed0fb0"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.769901Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+      "member": "01a1e3f8-ad5a-72f4-886d-3c45be294295"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.778048Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+      "member": "01a1e3f8-ad62-726c-a567-5163bf49bad8"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.786695Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+      "member": "01a1e3f8-ad6b-7325-8f33-95c45f1bdd16"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.795057Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-ad4c-7253-91e7-1bc65695308f",
+      "member": "01a1e3f8-ad73-76ab-b118-e43cfcc56a60"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.921011Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e3f8-adea-7515-b8b4-e2474faa22c5",
+      "member": "01a1e3f8-adf1-772b-b531-819314847301"
+    }
+  ],
+  "people": [
+    {
+      "email": "dev@shop.example",
+      "name": "Devi Larsen",
+      "subject": "01900000-0000-7000-8000-00000000d001"
+    },
+    {
+      "email": "rm@shop.example",
+      "name": "Rami Moberg",
+      "subject": "01900000-0000-7000-8000-00000000d002"
+    },
+    {
+      "email": "hedda@shop.example",
+      "name": "Hedda Lund",
+      "subject": "01900000-0000-7000-8000-00000000d003"
+    }
+  ],
+  "scope": "types",
+  "signedIn": [],
+  "types": [
+    "test_case",
+    "test_protocol"
+  ]
+}

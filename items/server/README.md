@@ -391,6 +391,13 @@ mise run test
   akter or a contact, or one bootstrapped already, refused and left as it
   was; another tenant's data not counting; subjects mapped; an unreadable
   bundle failing (`bundle.bootstrap.*`).
+- [`tests/examples.rs`](tests/examples.rs) imports every example's bundle
+  ([`docs/examples`](../../docs/examples/README.md)) into a fresh database
+  by bootstrapping, and checks it holds the example's akt types as their
+  files define them (`bundle.examples`). Its ignored
+  `write_example_bundles` makes each example's akter through GraphQL as
+  the end-to-end seed's people, and writes the bundles again: `mise run
+  examples:bundles`.
 - [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
   Valkey: the relay keeping a code or an error until it is collected once,
   the first redirect for a `state` winning, forgetting an uncollected code,

@@ -86,12 +86,22 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-018-T03 -->
 ---
 type: task
-revision: 1
+revision: 5
 rank: b4x
-state: todo
+state: done
 in: [PLAN-018]
 title: "Example bundles, made through the API and checked to import"
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+- `items/server/tests/examples.rs`: `write_example_bundles` (ignored; `mise run examples:bundles`) defines each example's akt types in a fresh database and makes its akter through GraphQL as Devi Larsen (dev@), Rami Moberg (rm@), Hedda Lund (hedda@shop.example) and the build pipeline, fixed subjects `01900000-0000-7000-8000-00000000d00{1..4}`, then exports a `types` bundle with akter to `docs/examples/<example>/bundle/`:
+  - release-management: spring released with a rejected and an accepted candidate, artifacts with an SBOM, approved notes, the go given for the head of product, a deployed hotfix, closed; summer being planned (28 akter).
+  - documents: a quality manual in folders, documents referring to each other and to a diagram image, released, one twice and one retired; an archived handbook (9).
+  - planning: an active plan with tasks in every state, `blocks` links, a closed gap resolved by a decision, a superseded decision; a done plan and a dropped one (15).
+  - test-protocols: a template with sections, two runs copied from it with verdicts from two testers, one passed and one failed, and a draft (20).
+- `every_example_s_bundle_imports_into_a_fresh_database` bootstraps each into a fresh database, checks its akt types are the example's files (compared as `AktTypeDocument`, which the server normalizes to) and that every akter reads back.
+- Verified: `mise run examples:bundles` then `cargo test -p kuria-server --test examples`; clippy and `tracey query validate` clean.
 
 <!-- field: acceptance -->
 `docs/examples/{release-management,documents,planning,test-protocols}/bundle/` each hold a `types` bundle of the example's akt types with realistic akter and history, written through GraphQL by `items/server/tests/examples.rs` (ignored test, `mise run examples:bundles`). Its other test imports each into a fresh database by bootstrapping and checks the types match the example's files.

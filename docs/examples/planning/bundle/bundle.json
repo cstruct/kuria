@@ -1,0 +1,1911 @@
+{
+  "aktTypes": [
+    {
+      "key": "decision",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T10:48:06.780971Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "created_in": [
+              "plan"
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "description": "What made a decision necessary.",
+                "key": "context",
+                "kind": "text",
+                "multiline": true,
+                "name": "Context"
+              },
+              {
+                "key": "decision",
+                "kind": "text",
+                "multiline": true,
+                "name": "Decision"
+              },
+              {
+                "description": "Why this, and not the alternatives.",
+                "key": "why",
+                "kind": "text",
+                "multiline": true,
+                "name": "Why"
+              },
+              {
+                "key": "decided_by",
+                "kind": "user",
+                "name": "Decided by"
+              }
+            ],
+            "key": "decision",
+            "links": [
+              {
+                "inverse": "Superseded by",
+                "key": "supersedes",
+                "name": "Supersedes",
+                "to": [
+                  "decision"
+                ]
+              }
+            ],
+            "name": "Decision",
+            "number": "{parent}-D{seq:2}",
+            "presentation": {
+              "colour": "purple",
+              "icon": "milestone",
+              "list": [
+                "decided_by"
+              ],
+              "tones": {
+                "decided": "success",
+                "superseded": "neutral"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "proposed",
+                "name": "Proposed"
+              },
+              {
+                "key": "decided",
+                "name": "Decided"
+              },
+              {
+                "final": true,
+                "key": "superseded",
+                "name": "Superseded"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "proposed"
+                ],
+                "key": "decide",
+                "name": "Decide",
+                "requires": [
+                  "context",
+                  "decision",
+                  "why"
+                ],
+                "to": "decided"
+              },
+              {
+                "from": [
+                  "decided"
+                ],
+                "key": "supersede",
+                "name": "Supersede",
+                "to": "superseded"
+              }
+            ]
+          },
+          "id": "01a1e3f8-a97d-74d1-b63b-b393cf49fa0b",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "gap",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T10:48:06.776150Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "created_in": [
+              "plan"
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "key": "description",
+                "kind": "text",
+                "multiline": true,
+                "name": "Description"
+              },
+              {
+                "description": "How it was closed: decided, built, or left out, and why.",
+                "key": "resolution",
+                "kind": "text",
+                "multiline": true,
+                "name": "Resolution"
+              }
+            ],
+            "key": "gap",
+            "links": [
+              {
+                "inverse": "Resolves",
+                "key": "resolved_by",
+                "name": "Resolved by",
+                "to": [
+                  "task",
+                  "decision"
+                ]
+              }
+            ],
+            "name": "Gap",
+            "number": "{parent}-G{seq:2}",
+            "presentation": {
+              "colour": "amber",
+              "icon": "triangle-alert",
+              "tones": {
+                "closed": "success",
+                "open": "warning"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "final": true,
+                "key": "closed",
+                "name": "Closed"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "open"
+                ],
+                "key": "close",
+                "name": "Close",
+                "requires": [
+                  "resolution"
+                ],
+                "to": "closed"
+              }
+            ]
+          },
+          "id": "01a1e3f8-a978-74f5-8e96-bc77deee4bfb",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "plan",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T10:48:06.766971Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "board": {
+              "columns": [
+                {
+                  "key": "todo",
+                  "name": "To do",
+                  "states": {
+                    "task": [
+                      "todo"
+                    ]
+                  }
+                },
+                {
+                  "key": "doing",
+                  "name": "Doing",
+                  "states": {
+                    "task": [
+                      "doing"
+                    ]
+                  }
+                },
+                {
+                  "key": "review",
+                  "name": "In review",
+                  "states": {
+                    "task": [
+                      "review"
+                    ]
+                  }
+                },
+                {
+                  "key": "done",
+                  "name": "Done",
+                  "states": {
+                    "task": [
+                      "done",
+                      "dropped"
+                    ]
+                  }
+                }
+              ]
+            },
+            "contains": [
+              {
+                "type": "task"
+              },
+              {
+                "type": "gap"
+              },
+              {
+                "type": "decision"
+              }
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "description": "What becomes possible, and how anyone will know.",
+                "key": "goal",
+                "kind": "text",
+                "multiline": true,
+                "name": "Goal"
+              },
+              {
+                "description": "How it will be built.",
+                "key": "design",
+                "kind": "text",
+                "multiline": true,
+                "name": "Design"
+              },
+              {
+                "description": "How it is checked.",
+                "key": "verification",
+                "kind": "text",
+                "multiline": true,
+                "name": "Verification"
+              },
+              {
+                "key": "owner",
+                "kind": "user",
+                "name": "Owner"
+              }
+            ],
+            "key": "plan",
+            "name": "Plan",
+            "number": "PLAN-{seq:3}",
+            "presentation": {
+              "card": [
+                "owner"
+              ],
+              "colour": "blue",
+              "icon": "target",
+              "list": [
+                "owner"
+              ],
+              "tones": {
+                "active": "active",
+                "done": "success",
+                "dropped": "neutral"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "draft",
+                "name": "Draft"
+              },
+              {
+                "key": "active",
+                "name": "Active"
+              },
+              {
+                "final": true,
+                "key": "done",
+                "name": "Done"
+              },
+              {
+                "final": true,
+                "key": "dropped",
+                "name": "Dropped"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "draft"
+                ],
+                "key": "activate",
+                "name": "Activate",
+                "requires": [
+                  "goal"
+                ],
+                "to": "active"
+              },
+              {
+                "from": [
+                  "active"
+                ],
+                "key": "finish",
+                "name": "Finish",
+                "to": "done"
+              },
+              {
+                "from": [
+                  "draft",
+                  "active"
+                ],
+                "key": "drop",
+                "name": "Drop",
+                "to": "dropped"
+              }
+            ]
+          },
+          "id": "01a1e3f8-a96f-76b2-96b3-17ebbac8ccbc",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "task",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T10:48:06.771858Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "created_in": [
+              "plan"
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "key": "description",
+                "kind": "text",
+                "multiline": true,
+                "name": "Description"
+              },
+              {
+                "description": "What must be true for it to be done.",
+                "key": "acceptance",
+                "kind": "text",
+                "multiline": true,
+                "name": "Acceptance"
+              },
+              {
+                "key": "assignee",
+                "kind": "user",
+                "name": "Assignee"
+              },
+              {
+                "description": "The pull request or commit that does it.",
+                "key": "change",
+                "kind": "reference",
+                "name": "Change"
+              }
+            ],
+            "key": "task",
+            "links": [
+              {
+                "inverse": "Blocked by",
+                "key": "blocks",
+                "name": "Blocks",
+                "to": [
+                  "task"
+                ]
+              }
+            ],
+            "name": "Task",
+            "number": "{parent}-T{seq:2}",
+            "presentation": {
+              "card": [
+                "assignee"
+              ],
+              "colour": "teal",
+              "icon": "list-checks",
+              "list": [
+                "assignee"
+              ],
+              "tones": {
+                "doing": "active",
+                "done": "success",
+                "dropped": "neutral",
+                "review": "warning"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "todo",
+                "name": "To do"
+              },
+              {
+                "key": "doing",
+                "name": "Doing"
+              },
+              {
+                "key": "review",
+                "name": "In review"
+              },
+              {
+                "final": true,
+                "key": "done",
+                "name": "Done"
+              },
+              {
+                "final": true,
+                "key": "dropped",
+                "name": "Dropped"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "todo"
+                ],
+                "key": "start",
+                "name": "Start",
+                "to": "doing"
+              },
+              {
+                "from": [
+                  "doing"
+                ],
+                "key": "review",
+                "name": "Send to review",
+                "to": "review"
+              },
+              {
+                "from": [
+                  "review"
+                ],
+                "key": "rework",
+                "name": "Rework",
+                "to": "doing"
+              },
+              {
+                "from": [
+                  "doing",
+                  "review"
+                ],
+                "key": "finish",
+                "name": "Finish",
+                "to": "done"
+              },
+              {
+                "from": [
+                  "todo",
+                  "doing",
+                  "review"
+                ],
+                "key": "drop",
+                "name": "Drop",
+                "to": "dropped"
+              }
+            ]
+          },
+          "id": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+          "version": 1
+        }
+      ]
+    }
+  ],
+  "akter": [
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.786083Z",
+      "fields": {
+        "design": "## Constraints\n\n- A reset link is valid once, for 30 minutes.\n- Nothing tells whether an email has an account.\n\n## Design\n\nA signed, single-use token in the link; the new password is checked against the breached-password list.",
+        "goal": "Customers reset a forgotten password themselves, by email, without calling support.\n\nSuccess: support's password tickets drop by half within a month of the release.",
+        "owner": "01900000-0000-7000-8000-00000000d002",
+        "title": "Self-service password reset",
+        "verification": "- The backend's tests cover expiry and reuse.\n- The acceptance protocol has a case for each step."
+      },
+      "id": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "number": "PLAN-001",
+      "rank": "a0",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "design": "## Constraints\n\n- A reset link is valid once, for 30 minutes.\n- Nothing tells whether an email has an account.\n\n## Design\n\nA signed, single-use token in the link; the new password is checked against the breached-password list.",
+            "goal": "Customers reset a forgotten password themselves, by email, without calling support.\n\nSuccess: support's password tickets drop by half within a month of the release.",
+            "owner": "01900000-0000-7000-8000-00000000d002",
+            "title": "Self-service password reset",
+            "verification": "- The backend's tests cover expiry and reuse.\n- The acceptance protocol has a case for each step."
+          },
+          "createdAt": "2026-11-16T10:48:06.786083Z",
+          "hash": "7b9ca686f9e6e86f13c869655bc5b88af27cfb1d468de5e8e1a414248d1b3f7a",
+          "membership": null,
+          "reason": "Plan the password reset",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.797082Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": null,
+          "reason": "Agreed in planning",
+          "revision": 2,
+          "state": "active",
+          "transition": "activate"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.804284Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-a994-74f7-9c51-390b9956ca52",
+                "number": "PLAN-001-T01"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 3,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.815488Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-a9a0-777e-941a-abb143de35ca",
+                "number": "PLAN-001-T02"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 4,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.826771Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe",
+                "number": "PLAN-001-T03"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 5,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.837120Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-a9b5-74f8-ac94-19678e1109f7",
+                "number": "PLAN-001-T04"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 6,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.847307Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-a9bf-71b4-8cdf-39ca0770c555",
+                "number": "PLAN-001-T05"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 7,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.939576Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aa1c-736c-842d-705a5e45f5c7",
+                "number": "PLAN-001-G01"
+              }
+            ]
+          },
+          "reason": "Found writing the email",
+          "revision": 8,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.951016Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aa27-757c-8a02-42bf30001aec",
+                "number": "PLAN-001-G02"
+              }
+            ]
+          },
+          "reason": "Found in review",
+          "revision": 9,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.961310Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aa31-705c-bd68-02cae73ce1e6",
+                "number": "PLAN-001-D01"
+              }
+            ]
+          },
+          "reason": "Record the expiry",
+          "revision": 10,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.977339Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aa41-7523-adaf-7b2c6ae5967e",
+                "number": "PLAN-001-D02"
+              }
+            ]
+          },
+          "reason": "Answer the rate-limit gap",
+          "revision": 11,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.009326Z",
+          "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aa61-7452-b327-3a92aec643d6",
+                "number": "PLAN-001-D03"
+              }
+            ]
+          },
+          "reason": "Support asked for longer links",
+          "revision": 12,
+          "state": "active",
+          "transition": null
+        }
+      ],
+      "state": "active",
+      "title": "Self-service password reset",
+      "typeVersion": "01a1e3f8-a96f-76b2-96b3-17ebbac8ccbc",
+      "updatedAt": "2026-11-16T10:48:07.009326Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.804284Z",
+      "fields": {
+        "acceptance": "The spec names each step and its failure cases.",
+        "assignee": "01900000-0000-7000-8000-00000000d002",
+        "change": {
+          "label": "docs#41",
+          "url": "https://git.example/shop/docs/pulls/41"
+        },
+        "description": "Write the requirements: request, email, link, new password.",
+        "title": "Spec the reset flow"
+      },
+      "id": "01a1e3f8-a994-74f7-9c51-390b9956ca52",
+      "number": "PLAN-001-T01",
+      "rank": "a1",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "acceptance": "The spec names each step and its failure cases.",
+            "assignee": "01900000-0000-7000-8000-00000000d002",
+            "description": "Write the requirements: request, email, link, new password.",
+            "title": "Spec the reset flow"
+          },
+          "createdAt": "2026-11-16T10:48:06.804284Z",
+          "hash": "de2562e920d6640f711e1ccf455b912403fd5aefccbf79af55135f3bd392f769",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.875240Z",
+          "hash": "ce8e0a7182ed76a0649972726102d33a1184070fdaa4a1f3acf969bd1081b848",
+          "membership": null,
+          "reason": "Taken",
+          "revision": 2,
+          "state": "doing",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "change": {
+              "label": "docs#41",
+              "url": "https://git.example/shop/docs/pulls/41"
+            }
+          },
+          "createdAt": "2026-11-16T10:48:06.882558Z",
+          "hash": "83e4d55c85bdd02b0b7840838f7f00974d5ddc9fa4915c040f2ada23d0a960c8",
+          "membership": null,
+          "reason": "Spec merged",
+          "revision": 3,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Spec the reset flow",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:06.882558Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.815488Z",
+      "fields": {
+        "acceptance": "A spent or expired token is refused; tests cover both.",
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#320",
+          "url": "https://git.example/shop/backend/pulls/320"
+        },
+        "description": "Signed tokens with an expiry, stored hashed and spent on use.",
+        "title": "Single-use reset tokens"
+      },
+      "id": "01a1e3f8-a9a0-777e-941a-abb143de35ca",
+      "number": "PLAN-001-T02",
+      "rank": "a2",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "acceptance": "A spent or expired token is refused; tests cover both.",
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Signed tokens with an expiry, stored hashed and spent on use.",
+            "title": "Single-use reset tokens"
+          },
+          "createdAt": "2026-11-16T10:48:06.815488Z",
+          "hash": "8fd163cc50b1de60f4f35978d7dfe911affa9c917e73f750bdb1fae69832b7e0",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.857803Z",
+          "hash": "8fd163cc50b1de60f4f35978d7dfe911affa9c917e73f750bdb1fae69832b7e0",
+          "membership": {
+            "linked": [
+              {
+                "akt": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe",
+                "kind": "blocks",
+                "name": "Blocks",
+                "number": "PLAN-001-T03"
+              }
+            ]
+          },
+          "reason": "The email carries a token",
+          "revision": 2,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.889802Z",
+          "hash": "c44f5614be4bc16639bf3fd80381408009cebf4e00bfb9f8c3b0e0dcaaf2ebc1",
+          "membership": null,
+          "reason": "Taken",
+          "revision": 3,
+          "state": "doing",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#320",
+              "url": "https://git.example/shop/backend/pulls/320"
+            }
+          },
+          "createdAt": "2026-11-16T10:48:06.896842Z",
+          "hash": "37ac459040ebb09af67c8aeab1651cd9200620ae22fbf13c2fdff52ab8068c3d",
+          "membership": null,
+          "reason": "Opened the pull request",
+          "revision": 4,
+          "state": "doing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.903670Z",
+          "hash": "9abc965a27dea6a89faa223eb2e667e76ff0d7a3646ecc09faedf89080e74014",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 5,
+          "state": "review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.910164Z",
+          "hash": "37ac459040ebb09af67c8aeab1651cd9200620ae22fbf13c2fdff52ab8068c3d",
+          "membership": null,
+          "reason": "Store the tokens hashed, not in clear",
+          "revision": 6,
+          "state": "doing",
+          "transition": "rework"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.917341Z",
+          "hash": "9abc965a27dea6a89faa223eb2e667e76ff0d7a3646ecc09faedf89080e74014",
+          "membership": null,
+          "reason": "Hashed now",
+          "revision": 7,
+          "state": "review",
+          "transition": "review"
+        }
+      ],
+      "state": "review",
+      "title": "Single-use reset tokens",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:06.917341Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.826771Z",
+      "fields": {
+        "acceptance": "Sent within a minute; the link opens the new-password form.",
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "Plain text and HTML, in the shop's languages.",
+        "title": "The reset email"
+      },
+      "id": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe",
+      "number": "PLAN-001-T03",
+      "rank": "a3",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "acceptance": "Sent within a minute; the link opens the new-password form.",
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Plain text and HTML, in the shop's languages.",
+            "title": "The reset email"
+          },
+          "createdAt": "2026-11-16T10:48:06.826771Z",
+          "hash": "1014a9140688770d69742dd8e4abd77af5e1a43bf1e1c8e5909925c32bd18c23",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.857803Z",
+          "hash": "1014a9140688770d69742dd8e4abd77af5e1a43bf1e1c8e5909925c32bd18c23",
+          "membership": {
+            "linked_from": [
+              {
+                "akt": "01a1e3f8-a9a0-777e-941a-abb143de35ca",
+                "kind": "blocks",
+                "name": "Blocked by",
+                "number": "PLAN-001-T02"
+              }
+            ]
+          },
+          "reason": "The email carries a token",
+          "revision": 2,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.866360Z",
+          "hash": "1014a9140688770d69742dd8e4abd77af5e1a43bf1e1c8e5909925c32bd18c23",
+          "membership": {
+            "linked": [
+              {
+                "akt": "01a1e3f8-a9b5-74f8-ac94-19678e1109f7",
+                "kind": "blocks",
+                "name": "Blocks",
+                "number": "PLAN-001-T04"
+              }
+            ]
+          },
+          "reason": "The form is where the link lands",
+          "revision": 3,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.924599Z",
+          "hash": "97003779cb1311b9db6d1d75228c49953e106fb7d6171acbcab010902e13b246",
+          "membership": null,
+          "reason": "Taken",
+          "revision": 4,
+          "state": "doing",
+          "transition": "start"
+        }
+      ],
+      "state": "doing",
+      "title": "The reset email",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:06.924599Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.837120Z",
+      "fields": {
+        "acceptance": "A breached password is refused with a reason.",
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "Checks the password against the breached list as you type.",
+        "title": "New-password form"
+      },
+      "id": "01a1e3f8-a9b5-74f8-ac94-19678e1109f7",
+      "number": "PLAN-001-T04",
+      "rank": "a4",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "acceptance": "A breached password is refused with a reason.",
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Checks the password against the breached list as you type.",
+            "title": "New-password form"
+          },
+          "createdAt": "2026-11-16T10:48:06.837120Z",
+          "hash": "e36a51bc5765fb7fc2b317124ac578951a34d0b815398b24e0ec574ba7f2bfbf",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.866360Z",
+          "hash": "e36a51bc5765fb7fc2b317124ac578951a34d0b815398b24e0ec574ba7f2bfbf",
+          "membership": {
+            "linked_from": [
+              {
+                "akt": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe",
+                "kind": "blocks",
+                "name": "Blocked by",
+                "number": "PLAN-001-T03"
+              }
+            ]
+          },
+          "reason": "The form is where the link lands",
+          "revision": 2,
+          "state": "todo",
+          "transition": null
+        }
+      ],
+      "state": "todo",
+      "title": "New-password form",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:06.866360Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.847307Z",
+      "fields": {
+        "acceptance": "",
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "A code by text message, for customers without email.",
+        "title": "Reset by SMS"
+      },
+      "id": "01a1e3f8-a9bf-71b4-8cdf-39ca0770c555",
+      "number": "PLAN-001-T05",
+      "rank": "a5",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "acceptance": "",
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "A code by text message, for customers without email.",
+            "title": "Reset by SMS"
+          },
+          "createdAt": "2026-11-16T10:48:06.847307Z",
+          "hash": "4ddcf3182feb18d032894e8d4a17bd32850f3544ed9a237986ded5ca5170a308",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.932406Z",
+          "hash": "c4eae3c4e69280fa93439e6921760b17354781b170fc4fb45455c433220b674b",
+          "membership": null,
+          "reason": "Out of scope: every account has an email",
+          "revision": 2,
+          "state": "dropped",
+          "transition": "drop"
+        }
+      ],
+      "state": "dropped",
+      "title": "Reset by SMS",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:06.932406Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.939576Z",
+      "fields": {
+        "description": "The shop sells in five countries; the templates exist in two languages.",
+        "title": "Which languages does the email need?"
+      },
+      "id": "01a1e3f8-aa1c-736c-842d-705a5e45f5c7",
+      "number": "PLAN-001-G01",
+      "rank": "a6",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "description": "The shop sells in five countries; the templates exist in two languages.",
+            "title": "Which languages does the email need?"
+          },
+          "createdAt": "2026-11-16T10:48:06.939576Z",
+          "hash": "17cd8ef335e960072e839811479a49ffd842cbaa4dadc21f9d2482d5a9e07b8c",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Found writing the email",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Which languages does the email need?",
+      "typeVersion": "01a1e3f8-a978-74f5-8e96-bc77deee4bfb",
+      "updatedAt": "2026-11-16T10:48:06.939576Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.951016Z",
+      "fields": {
+        "description": "Nothing stops a script asking for thousands of resets.",
+        "resolution": "Limited as the decision says.",
+        "title": "Limit reset requests"
+      },
+      "id": "01a1e3f8-aa27-757c-8a02-42bf30001aec",
+      "number": "PLAN-001-G02",
+      "rank": "a7",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "description": "Nothing stops a script asking for thousands of resets.",
+            "title": "Limit reset requests"
+          },
+          "createdAt": "2026-11-16T10:48:06.951016Z",
+          "hash": "b8e6361ac88de4c61989c957d66868d27a3b9355451f1e0fdc27b267d787ea57",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Found in review",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.994063Z",
+          "hash": "b8e6361ac88de4c61989c957d66868d27a3b9355451f1e0fdc27b267d787ea57",
+          "membership": {
+            "linked": [
+              {
+                "akt": "01a1e3f8-aa41-7523-adaf-7b2c6ae5967e",
+                "kind": "resolved_by",
+                "name": "Resolved by",
+                "number": "PLAN-001-D02"
+              }
+            ]
+          },
+          "reason": "The limit answers it",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "resolution": "Limited as the decision says."
+          },
+          "createdAt": "2026-11-16T10:48:07.003129Z",
+          "hash": "772fbc405d5b63c9140ec2ced2e25665e47fedcecab5e9475b301b4a3f5a7c5e",
+          "membership": null,
+          "reason": "Resolved",
+          "revision": 3,
+          "state": "closed",
+          "transition": "close"
+        }
+      ],
+      "state": "closed",
+      "title": "Limit reset requests",
+      "typeVersion": "01a1e3f8-a978-74f5-8e96-bc77deee4bfb",
+      "updatedAt": "2026-11-16T10:48:07.003129Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.961310Z",
+      "fields": {
+        "context": "Longer links are easier on customers; shorter ones leak less.",
+        "decided_by": "01900000-0000-7000-8000-00000000d002",
+        "decision": "A reset token expires 30 minutes after it is sent, and on first use.",
+        "title": "Tokens expire after 30 minutes",
+        "why": "What the bank's and the mail provider's own resets do; support saw no complaints there."
+      },
+      "id": "01a1e3f8-aa31-705c-bd68-02cae73ce1e6",
+      "number": "PLAN-001-D01",
+      "rank": "a8",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "title": "Tokens expire after 30 minutes"
+          },
+          "createdAt": "2026-11-16T10:48:06.961310Z",
+          "hash": "db7837c31305945c92c3d902c4e55c9c7bd728b8aece73ab40c8a3f28b880f87",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Record the expiry",
+          "revision": 1,
+          "state": "proposed",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "context": "Longer links are easier on customers; shorter ones leak less.",
+            "decided_by": "01900000-0000-7000-8000-00000000d002",
+            "decision": "A reset token expires 30 minutes after it is sent, and on first use.",
+            "why": "What the bank's and the mail provider's own resets do; support saw no complaints there."
+          },
+          "createdAt": "2026-11-16T10:48:06.971174Z",
+          "hash": "1fec498c6ca09236ba742eb42d106a0c46379bf5ac9a8ae0f503b95a67630825",
+          "membership": null,
+          "reason": "Decided in planning",
+          "revision": 2,
+          "state": "decided",
+          "transition": "decide"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.025246Z",
+          "hash": "1fec498c6ca09236ba742eb42d106a0c46379bf5ac9a8ae0f503b95a67630825",
+          "membership": {
+            "linked_from": [
+              {
+                "akt": "01a1e3f8-aa61-7452-b327-3a92aec643d6",
+                "kind": "supersedes",
+                "name": "Superseded by",
+                "number": "PLAN-001-D03"
+              }
+            ]
+          },
+          "reason": "Longer links",
+          "revision": 3,
+          "state": "decided",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.033103Z",
+          "hash": "d4545dd659cc4cefc160d825c8489bb03162043fc2144c2ec40290ee04f647a3",
+          "membership": null,
+          "reason": "Superseded by the hour",
+          "revision": 4,
+          "state": "superseded",
+          "transition": "supersede"
+        }
+      ],
+      "state": "superseded",
+      "title": "Tokens expire after 30 minutes",
+      "typeVersion": "01a1e3f8-a97d-74d1-b63b-b393cf49fa0b",
+      "updatedAt": "2026-11-16T10:48:07.033103Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:06.977339Z",
+      "fields": {
+        "context": "Reset requests send email, which costs money and can be abused.",
+        "decided_by": "01900000-0000-7000-8000-00000000d002",
+        "decision": "At most five reset requests an hour for one email, and fifty for one address.",
+        "title": "Five reset requests an hour per email",
+        "why": "No real customer needs more; the limit is the sign-in limit's."
+      },
+      "id": "01a1e3f8-aa41-7523-adaf-7b2c6ae5967e",
+      "number": "PLAN-001-D02",
+      "rank": "a9",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "title": "Five reset requests an hour per email"
+          },
+          "createdAt": "2026-11-16T10:48:06.977339Z",
+          "hash": "473446a7ef47ec2f25b781b7e053160246de6ee20a85b94e240fda4703a7beec",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Answer the rate-limit gap",
+          "revision": 1,
+          "state": "proposed",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "context": "Reset requests send email, which costs money and can be abused.",
+            "decided_by": "01900000-0000-7000-8000-00000000d002",
+            "decision": "At most five reset requests an hour for one email, and fifty for one address.",
+            "why": "No real customer needs more; the limit is the sign-in limit's."
+          },
+          "createdAt": "2026-11-16T10:48:06.987811Z",
+          "hash": "b4746a5f0999dc376a032560da38246b8fd2fe3076de5a3eacbab1119e37e278",
+          "membership": null,
+          "reason": "Decided with security",
+          "revision": 2,
+          "state": "decided",
+          "transition": "decide"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:06.994063Z",
+          "hash": "b4746a5f0999dc376a032560da38246b8fd2fe3076de5a3eacbab1119e37e278",
+          "membership": {
+            "linked_from": [
+              {
+                "akt": "01a1e3f8-aa27-757c-8a02-42bf30001aec",
+                "kind": "resolved_by",
+                "name": "Resolves",
+                "number": "PLAN-001-G02"
+              }
+            ]
+          },
+          "reason": "The limit answers it",
+          "revision": 3,
+          "state": "decided",
+          "transition": null
+        }
+      ],
+      "state": "decided",
+      "title": "Five reset requests an hour per email",
+      "typeVersion": "01a1e3f8-a97d-74d1-b63b-b393cf49fa0b",
+      "updatedAt": "2026-11-16T10:48:06.994063Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.009326Z",
+      "fields": {
+        "context": "Customers on slow email providers got links that had already expired.",
+        "decided_by": "01900000-0000-7000-8000-00000000d003",
+        "decision": "A reset token expires an hour after it is sent, and on first use.",
+        "title": "Tokens expire after an hour",
+        "why": "Support saw expired links daily at 30 minutes; an hour covers the slowest provider."
+      },
+      "id": "01a1e3f8-aa61-7452-b327-3a92aec643d6",
+      "number": "PLAN-001-D03",
+      "rank": "aA",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "title": "Tokens expire after an hour"
+          },
+          "createdAt": "2026-11-16T10:48:07.009326Z",
+          "hash": "557884a62a3f27a874b2accb5ac30ac6e26152992a213ae82f9ff43f26600e01",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+                "number": "PLAN-001"
+              }
+            ]
+          },
+          "reason": "Support asked for longer links",
+          "revision": 1,
+          "state": "proposed",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "context": "Customers on slow email providers got links that had already expired.",
+            "decided_by": "01900000-0000-7000-8000-00000000d003",
+            "decision": "A reset token expires an hour after it is sent, and on first use.",
+            "why": "Support saw expired links daily at 30 minutes; an hour covers the slowest provider."
+          },
+          "createdAt": "2026-11-16T10:48:07.019498Z",
+          "hash": "ed7ab98d72f2f2d413bda6aceeeb0ec76434045441fb8b724563c144044544f1",
+          "membership": null,
+          "reason": "Decided with the head of product",
+          "revision": 2,
+          "state": "decided",
+          "transition": "decide"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.025246Z",
+          "hash": "ed7ab98d72f2f2d413bda6aceeeb0ec76434045441fb8b724563c144044544f1",
+          "membership": {
+            "linked": [
+              {
+                "akt": "01a1e3f8-aa31-705c-bd68-02cae73ce1e6",
+                "kind": "supersedes",
+                "name": "Supersedes",
+                "number": "PLAN-001-D01"
+              }
+            ]
+          },
+          "reason": "Longer links",
+          "revision": 3,
+          "state": "decided",
+          "transition": null
+        }
+      ],
+      "state": "decided",
+      "title": "Tokens expire after an hour",
+      "typeVersion": "01a1e3f8-a97d-74d1-b63b-b393cf49fa0b",
+      "updatedAt": "2026-11-16T10:48:07.025246Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.039005Z",
+      "fields": {
+        "goal": "Every order confirmation is in the language the customer shopped in.",
+        "owner": "01900000-0000-7000-8000-00000000d003",
+        "title": "Order confirmation emails in the customer's language"
+      },
+      "id": "01a1e3f8-aa7f-77ca-b56b-08380b89e847",
+      "number": "PLAN-002",
+      "rank": "aB",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "goal": "Every order confirmation is in the language the customer shopped in.",
+            "owner": "01900000-0000-7000-8000-00000000d003",
+            "title": "Order confirmation emails in the customer's language"
+          },
+          "createdAt": "2026-11-16T10:48:07.039005Z",
+          "hash": "828b6645ab0f8597bbc7f6f3b9601d0c9eab28f9f6cb89ef37382c20638f1068",
+          "membership": null,
+          "reason": "Plan the translated confirmations",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.046798Z",
+          "hash": "f6b94b8aa1b58bfefb492f2d5433e68a8da1d7d672c44c455202ebdcbab66064",
+          "membership": null,
+          "reason": "Agreed",
+          "revision": 2,
+          "state": "active",
+          "transition": "activate"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.053518Z",
+          "hash": "f6b94b8aa1b58bfefb492f2d5433e68a8da1d7d672c44c455202ebdcbab66064",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aa8e-75bf-9005-c63cab05a321",
+                "number": "PLAN-002-T01"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 3,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.077505Z",
+          "hash": "f6b94b8aa1b58bfefb492f2d5433e68a8da1d7d672c44c455202ebdcbab66064",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e3f8-aaa6-7266-86ce-fbc71bbc2099",
+                "number": "PLAN-002-T02"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 4,
+          "state": "active",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.105199Z",
+          "hash": "c9d8dc261b6659c717f6d6232dc0de21d7f7ac3dca77d2362c99ca2a1a8db120",
+          "membership": null,
+          "reason": "Shipped in 4.1",
+          "revision": 5,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Order confirmation emails in the customer's language",
+      "typeVersion": "01a1e3f8-a96f-76b2-96b3-17ebbac8ccbc",
+      "updatedAt": "2026-11-16T10:48:07.105199Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.053518Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#290",
+          "url": "https://git.example/shop/backend/pulls/290"
+        },
+        "title": "Store the shop language with the order"
+      },
+      "id": "01a1e3f8-aa8e-75bf-9005-c63cab05a321",
+      "number": "PLAN-002-T01",
+      "rank": "aC",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "title": "Store the shop language with the order"
+          },
+          "createdAt": "2026-11-16T10:48:07.053518Z",
+          "hash": "bb631f6a099ddae030fc21c097d933886b880df49bc6b76e9646420bbf62262d",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-aa7f-77ca-b56b-08380b89e847",
+                "number": "PLAN-002"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.063881Z",
+          "hash": "85fc0f1a6d6467c73a0a4c726287db0bf15abfc75f4298a17839cd58a757f584",
+          "membership": null,
+          "reason": "Taken",
+          "revision": 2,
+          "state": "doing",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#290",
+              "url": "https://git.example/shop/backend/pulls/290"
+            }
+          },
+          "createdAt": "2026-11-16T10:48:07.069516Z",
+          "hash": "e05e857aa4ee87929dbc8bd35568f4ab78d6cea3d3c73181480c1d171b76d945",
+          "membership": null,
+          "reason": "Merged",
+          "revision": 3,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Store the shop language with the order",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:07.069516Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.077505Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#291",
+          "url": "https://git.example/shop/backend/pulls/291"
+        },
+        "title": "Translate the confirmation templates"
+      },
+      "id": "01a1e3f8-aaa6-7266-86ce-fbc71bbc2099",
+      "number": "PLAN-002-T02",
+      "rank": "aD",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "title": "Translate the confirmation templates"
+          },
+          "createdAt": "2026-11-16T10:48:07.077505Z",
+          "hash": "436189711770cdf67fa017dc2c3a3c70af6e4356c4f887ba5cc3f69544b9537b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e3f8-aa7f-77ca-b56b-08380b89e847",
+                "number": "PLAN-002"
+              }
+            ]
+          },
+          "reason": "Add the plan's tasks",
+          "revision": 1,
+          "state": "todo",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.090437Z",
+          "hash": "d747970468082fadd88a46bccc761688aefc72324908b79496a371ccbf497919",
+          "membership": null,
+          "reason": "Taken",
+          "revision": 2,
+          "state": "doing",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#291",
+              "url": "https://git.example/shop/backend/pulls/291"
+            }
+          },
+          "createdAt": "2026-11-16T10:48:07.097759Z",
+          "hash": "8176be51c9b44754a1a58a305c63e06a5d84dbd4e2ee257e2a2f3ec4371a5ebe",
+          "membership": null,
+          "reason": "Merged",
+          "revision": 3,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Translate the confirmation templates",
+      "typeVersion": "01a1e3f8-a974-7291-b59c-45b033c718cd",
+      "updatedAt": "2026-11-16T10:48:07.097759Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T10:48:07.111022Z",
+      "fields": {
+        "owner": "01900000-0000-7000-8000-00000000d001",
+        "title": "A native mobile app"
+      },
+      "id": "01a1e3f8-aac7-754b-b0a6-a65f9896d448",
+      "number": "PLAN-003",
+      "rank": "aE",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "owner": "01900000-0000-7000-8000-00000000d001",
+            "title": "A native mobile app"
+          },
+          "createdAt": "2026-11-16T10:48:07.111022Z",
+          "hash": "a00616cd63514eb9c0a6558b20239f0835bd12c63caaebfe251ec9f7c08ad312",
+          "membership": null,
+          "reason": "An idea",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d003",
+          "changes": {},
+          "createdAt": "2026-11-16T10:48:07.124871Z",
+          "hash": "6baf329ef4ea04a078d7f66f2d092826b913c7b291b614de91b3997a30d618f7",
+          "membership": null,
+          "reason": "The web shop works well on phones",
+          "revision": 2,
+          "state": "dropped",
+          "transition": "drop"
+        }
+      ],
+      "state": "dropped",
+      "title": "A native mobile app",
+      "typeVersion": "01a1e3f8-a96f-76b2-96b3-17ebbac8ccbc",
+      "updatedAt": "2026-11-16T10:48:07.124871Z"
+    }
+  ],
+  "attachments": [],
+  "contacts": [],
+  "counters": [],
+  "exportedAt": "2026-11-16T10:48:07.135308Z",
+  "format": 2,
+  "holdsAkter": true,
+  "links": [
+    {
+      "addedAt": "2026-11-16T10:48:06.857803Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "kind": "blocks",
+      "pinnedRevision": null,
+      "source": "01a1e3f8-a9a0-777e-941a-abb143de35ca",
+      "target": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.866360Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "kind": "blocks",
+      "pinnedRevision": null,
+      "source": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe",
+      "target": "01a1e3f8-a9b5-74f8-ac94-19678e1109f7"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.994063Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "kind": "resolved_by",
+      "pinnedRevision": null,
+      "source": "01a1e3f8-aa27-757c-8a02-42bf30001aec",
+      "target": "01a1e3f8-aa41-7523-adaf-7b2c6ae5967e"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.025246Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "kind": "supersedes",
+      "pinnedRevision": null,
+      "source": "01a1e3f8-aa61-7452-b327-3a92aec643d6",
+      "target": "01a1e3f8-aa31-705c-bd68-02cae73ce1e6"
+    }
+  ],
+  "memberships": [
+    {
+      "addedAt": "2026-11-16T10:48:06.804284Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-a994-74f7-9c51-390b9956ca52"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.815488Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-a9a0-777e-941a-abb143de35ca"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.826771Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-a9ab-72d8-a814-fa06334fb1fe"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.837120Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-a9b5-74f8-ac94-19678e1109f7"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.847307Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-a9bf-71b4-8cdf-39ca0770c555"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.939576Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-aa1c-736c-842d-705a5e45f5c7"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.951016Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-aa27-757c-8a02-42bf30001aec"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.961310Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-aa31-705c-bd68-02cae73ce1e6"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:06.977339Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-aa41-7523-adaf-7b2c6ae5967e"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.009326Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e3f8-a982-7677-93f7-8a4c22a5528c",
+      "member": "01a1e3f8-aa61-7452-b327-3a92aec643d6"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.053518Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d003",
+      "container": "01a1e3f8-aa7f-77ca-b56b-08380b89e847",
+      "member": "01a1e3f8-aa8e-75bf-9005-c63cab05a321"
+    },
+    {
+      "addedAt": "2026-11-16T10:48:07.077505Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d003",
+      "container": "01a1e3f8-aa7f-77ca-b56b-08380b89e847",
+      "member": "01a1e3f8-aaa6-7266-86ce-fbc71bbc2099"
+    }
+  ],
+  "people": [
+    {
+      "email": "dev@shop.example",
+      "name": "Devi Larsen",
+      "subject": "01900000-0000-7000-8000-00000000d001"
+    },
+    {
+      "email": "rm@shop.example",
+      "name": "Rami Moberg",
+      "subject": "01900000-0000-7000-8000-00000000d002"
+    },
+    {
+      "email": "hedda@shop.example",
+      "name": "Hedda Lund",
+      "subject": "01900000-0000-7000-8000-00000000d003"
+    }
+  ],
+  "scope": "types",
+  "signedIn": [],
+  "types": [
+    "plan",
+    "task",
+    "gap",
+    "decision"
+  ]
+}

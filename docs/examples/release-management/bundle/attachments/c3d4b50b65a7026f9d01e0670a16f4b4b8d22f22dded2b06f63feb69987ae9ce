@@ -1,0 +1,27 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "name": "serde",
+      "type": "library",
+      "version": "1.0.228"
+    },
+    {
+      "name": "tokio",
+      "type": "library",
+      "version": "1.48.0"
+    },
+    {
+      "name": "axum",
+      "type": "library",
+      "version": "0.8.6"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "backend",
+      "version": "4.2.0-rc.1"
+    }
+  },
+  "specVersion": "1.6"
+}

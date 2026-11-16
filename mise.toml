@@ -62,6 +62,11 @@ run = [
     "test ! -d plans || cargo run -q -p kuria-cli -- check --dir plans",
 ]
 
+[tasks."examples:bundles"]
+description = "Write each example's bundle in docs/examples/*/bundle again, made through the API against a fresh database (see docs/examples/README.md)"
+depends = ["db:up"]
+run = "cargo test -q -p kuria-server --test examples -- --ignored write_example_bundles"
+
 [tasks.kuria]
 description = "Run the `kuria` CLI from source, such as `mise run kuria -- whoami` (see items/cli/README.md)"
 run = "cargo run -q -p kuria-cli --"
