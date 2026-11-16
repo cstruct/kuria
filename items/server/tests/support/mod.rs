@@ -5,6 +5,7 @@
 
 pub mod decider;
 pub mod konklav;
+pub mod world;
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -57,8 +58,9 @@ pub fn claims_in(kind: &str, tenant: &str) -> AccessClaims {
 /// Stands in for a started `RelyingClient`. It accepts bearer tokens starting
 /// with `tenant` or `identity`, with claims of that kind, `tenant-expiring`,
 /// a tenant token that expires in two seconds, `tenant-dpop`, a
-/// tenant token bound to a DPoP key, and `other-tenant`, a tenant token in
-/// `OTHER_TENANT`; refuses `invalid`,
+/// tenant token bound to a DPoP key, `other-tenant`, a tenant token in
+/// `OTHER_TENANT`, and `as-<subject>…`, a tenant token of that subject;
+/// refuses `invalid`,
 /// refuses the proof of `bad-proof`, fails for `unreachable`, and decides
 /// by token kind alone.
 #[derive(Default)]
@@ -99,6 +101,14 @@ impl FakeHost {
                 Ok(Verified::Valid(bound))
             }
             token if token.starts_with("tenant") => Ok(Verified::Valid(claims("tenant"))),
+            token if token.starts_with("as-") => {
+                let mut someone = claims("tenant");
+                someone.sub = token
+                    .get(3..39)
+                    .and_then(|s| s.parse().ok())
+                    .ok_or(Error::Exhausted)?;
+                Ok(Verified::Valid(someone))
+            }
             token if token.starts_with("colleague") => {
                 let mut colleague = claims("tenant");
                 colleague.sub = COLLEAGUE.parse().unwrap();

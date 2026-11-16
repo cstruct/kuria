@@ -19,8 +19,27 @@ impl User {
             Some(principal) => shown_as(&mut conn, principal.tenant.into(), self.0).await?,
             None => self.0,
         };
-        Ok(people::find(&mut conn, &[shown]).await?.pop())
+        Ok(recorded(&mut conn, self.0, shown).await?)
     }
+}
+
+/// What Kuria recorded of `shown`, whom `subject` is shown as; else, until
+/// it records that user's name, of `subject` itself, as the bundle that
+/// aliased them recorded it (`bundle.import.subjects`).
+async fn recorded(
+    conn: &mut kuria_store::Connection,
+    subject: Uuid,
+    shown: Uuid,
+) -> diesel::QueryResult<Option<Person>> {
+    let person = people::find(conn, &[shown]).await?.pop();
+    if shown == subject
+        || person
+            .as_ref()
+            .is_some_and(|p| p.name.is_some() || p.email.is_some())
+    {
+        return Ok(person);
+    }
+    Ok(people::find(conn, &[subject]).await?.pop().or(person))
 }
 
 /// Whom `subject` is shown as in `tenant`: the user an import aliased them
@@ -112,8 +131,11 @@ pub async fn someone_name(
     match someone {
         Named::User(subject) => {
             let shown = shown_as(conn, tenant, subject).await?;
-            let person = people::find(conn, &[shown]).await?.pop();
-            Ok(display_name(shown, person.as_ref()))
+            let person = recorded(conn, subject, shown).await?;
+            Ok(display_name(
+                person.as_ref().map_or(shown, |p| p.subject_id),
+                person.as_ref(),
+            ))
         }
         Named::Contact(id) => {
             match kuria_store::contacts::find(conn, tenant, &[id])

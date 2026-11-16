@@ -137,7 +137,8 @@ user who has signed in to the tenant, else not at all. Revisions and values MUST
 they recorded, so that they and their hashes stay as they were; the tenant
 MUST instead record each mapping as an alias, and an aliased subject MUST
 be shown as the user it maps to (`person.name`), and match `me` for that
-user (`akt.filter`). A contact linked to a mapped subject MUST be linked to
+user (`akt.filter`); until Kuria holds a name or email for that user, by
+the name and email the bundle recorded. A contact linked to a mapped subject MUST be linked to
 the user it maps to. An unmapped subject MUST be shown by the name and
 email the bundle recorded for them, unless Kuria already holds a name for
 that subject.
@@ -146,3 +147,51 @@ r[bundle.import.recorded]
 An import MUST be recorded, with who imported it, when, its scope and how
 many akt types and akter it wrote, and MUST append change events for the
 akter it wrote so that subscribers learn of them.
+
+## Bootstrapping
+
+A server can start with a bundle already imported: a bootstrap bundle, for
+a new deployment's first data or for an example to explore.
+
+r[bundle.bootstrap.variables]
+The server MUST bootstrap when `KURIA_BOOTSTRAP_BUNDLE` names a bundle: a
+directory as `bundle.format` describes it, or a file holding its tar
+archive. `KURIA_BOOTSTRAP_SUBJECTS` MAY name a JSON file mapping subjects as
+`subjects.json` does (`bundle.import.request`). Without
+`KURIA_BOOTSTRAP_BUNDLE` the server MUST NOT bootstrap, and
+`KURIA_BOOTSTRAP_SUBJECTS` alone MUST make start-up fail.
+
+r[bundle.bootstrap.tenant]
+The bundle MUST go into the tenant `KURIA_BOOTSTRAP_TENANT` names, else into
+`KURIA_DEFAULT_TENANT`'s. With neither set, start-up MUST fail.
+
+r[bundle.bootstrap.import]
+Bootstrapping MUST import the bundle as `POST /import` does, with every
+check and refusal of `bundle.import.*`, and a refused import MUST make
+start-up fail with the refusal's message.
+
+r[bundle.bootstrap.fresh]
+Bootstrapping MUST only import into a fresh tenant: one that holds no akt
+type, akt or contact, whatever the bundle's scope, checked in the import's
+transaction. Other tenants in the database MUST NOT count. A tenant that
+isn't fresh, even one that holds this very bundle from an earlier start,
+MUST make start-up fail, naming the tenant and `KURIA_BOOTSTRAP_BUNDLE`, and
+MUST NOT be written to.
+
+r[bundle.bootstrap.before-serving]
+The server MUST bootstrap after applying its migrations and before it
+listens, so that no request is answered before the import, nor at all if it
+fails.
+
+r[bundle.bootstrap.recorded]
+A bootstrap MUST be recorded as an import (`bundle.import.recorded`) by the
+nil subject, since no one asked for it; the akt types a bundle without
+akter defines are defined by the nil subject too.
+
+## The examples' bundles
+
+r[bundle.examples]
+Each example under `docs/examples` MUST hold `bundle/`: a `types` bundle of
+all its akt types with akter, made through Kuria's API, whose akt types'
+latest versions are the example's documents as its files hold them. Each
+MUST import into a fresh tenant (`bundle.bootstrap.fresh`).

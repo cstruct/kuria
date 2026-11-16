@@ -1,0 +1,4050 @@
+{
+  "aktTypes": [
+    {
+      "key": "artifact",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.489658Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "fields": [
+              {
+                "key": "component",
+                "kind": "text",
+                "name": "Component",
+                "required": true
+              },
+              {
+                "key": "change",
+                "kind": "choice",
+                "name": "Change",
+                "options": [
+                  {
+                    "key": "built",
+                    "name": "Built"
+                  },
+                  {
+                    "key": "removed",
+                    "name": "Removed"
+                  }
+                ],
+                "required": true
+              },
+              {
+                "key": "version",
+                "kind": "text",
+                "name": "Version"
+              },
+              {
+                "key": "source",
+                "kind": "git",
+                "name": "Source"
+              },
+              {
+                "key": "image",
+                "kind": "docker",
+                "name": "Image"
+              },
+              {
+                "format": "sbom",
+                "key": "sbom",
+                "kind": "attachment",
+                "name": "SBOM"
+              }
+            ],
+            "key": "artifact",
+            "name": "Artifact",
+            "number": "ARTIFACT-{seq:5}",
+            "presentation": {
+              "card": [
+                "change",
+                "version"
+              ],
+              "colour": "amber",
+              "icon": "package",
+              "list": [
+                "change",
+                "version",
+                "image"
+              ]
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "registered",
+                "name": "Registered"
+              }
+            ],
+            "transitions": []
+          },
+          "id": "01a1e410-1c42-745d-af56-4fa353b737fe",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "backlog",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.505728Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "board": {
+              "columns": [
+                {
+                  "key": "todo",
+                  "name": "To do",
+                  "states": {
+                    "backlog_item": [
+                      "open"
+                    ],
+                    "epic": [
+                      "open"
+                    ]
+                  }
+                },
+                {
+                  "key": "doing",
+                  "name": "In progress",
+                  "states": {
+                    "backlog_item": [
+                      "in_progress",
+                      "in_review"
+                    ],
+                    "epic": [
+                      "in_progress"
+                    ]
+                  }
+                },
+                {
+                  "key": "done",
+                  "name": "Done",
+                  "states": {
+                    "backlog_item": [
+                      "done"
+                    ],
+                    "epic": [
+                      "done"
+                    ]
+                  }
+                }
+              ]
+            },
+            "contains": [
+              {
+                "exclusive": true,
+                "type": "backlog_item"
+              },
+              {
+                "type": "epic"
+              }
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              }
+            ],
+            "key": "backlog",
+            "name": "Backlog",
+            "number": "BACKLOG-{seq:3}",
+            "presentation": {
+              "colour": "blue",
+              "icon": "layers"
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "final": true,
+                "key": "closed",
+                "name": "Closed"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "open"
+                ],
+                "key": "close",
+                "name": "Close",
+                "to": "closed"
+              }
+            ]
+          },
+          "id": "01a1e410-1c52-76c8-903f-192866e8542d",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "backlog_item",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.495696Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "archive": {
+              "rules": [
+                {
+                  "days_in": 90,
+                  "in": [
+                    "done"
+                  ]
+                }
+              ]
+            },
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "key": "kind",
+                "kind": "choice",
+                "name": "Kind",
+                "options": [
+                  {
+                    "key": "feature",
+                    "name": "Feature"
+                  },
+                  {
+                    "key": "fix",
+                    "name": "Fix"
+                  },
+                  {
+                    "key": "chore",
+                    "name": "Chore"
+                  }
+                ]
+              },
+              {
+                "key": "description",
+                "kind": "text",
+                "multiline": true,
+                "name": "Description"
+              },
+              {
+                "key": "assignee",
+                "kind": "user",
+                "name": "Assignee"
+              },
+              {
+                "key": "change",
+                "kind": "reference",
+                "name": "Pull request"
+              }
+            ],
+            "key": "backlog_item",
+            "name": "Backlog item",
+            "number": "ITEM-{seq:4}",
+            "presentation": {
+              "card": [
+                "kind",
+                "assignee"
+              ],
+              "colour": "neutral",
+              "icon": "file-text",
+              "list": [
+                "kind",
+                "assignee"
+              ],
+              "tones": {
+                "done": "success",
+                "in_progress": "active",
+                "in_review": "warning"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "key": "in_progress",
+                "name": "In progress"
+              },
+              {
+                "key": "in_review",
+                "name": "In review"
+              },
+              {
+                "final": true,
+                "key": "done",
+                "name": "Done"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "open"
+                ],
+                "key": "start",
+                "name": "Start",
+                "to": "in_progress"
+              },
+              {
+                "from": [
+                  "in_progress"
+                ],
+                "key": "review",
+                "name": "Send to review",
+                "requires": [
+                  "change"
+                ],
+                "to": "in_review"
+              },
+              {
+                "from": [
+                  "in_review"
+                ],
+                "key": "rework",
+                "name": "Rework",
+                "to": "in_progress"
+              },
+              {
+                "from": [
+                  "in_review"
+                ],
+                "key": "finish",
+                "name": "Finish",
+                "to": "done"
+              }
+            ]
+          },
+          "id": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "epic",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.500552Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "board": {
+              "columns": [
+                {
+                  "key": "todo",
+                  "name": "To do",
+                  "states": {
+                    "backlog_item": [
+                      "open"
+                    ]
+                  }
+                },
+                {
+                  "key": "doing",
+                  "name": "In progress",
+                  "states": {
+                    "backlog_item": [
+                      "in_progress"
+                    ]
+                  }
+                },
+                {
+                  "key": "review",
+                  "name": "In review",
+                  "states": {
+                    "backlog_item": [
+                      "in_review"
+                    ]
+                  }
+                },
+                {
+                  "key": "done",
+                  "name": "Done",
+                  "states": {
+                    "backlog_item": [
+                      "done"
+                    ]
+                  }
+                }
+              ]
+            },
+            "contains": [
+              {
+                "exclusive": true,
+                "type": "backlog_item"
+              }
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "key": "goal",
+                "kind": "text",
+                "multiline": true,
+                "name": "Goal"
+              }
+            ],
+            "key": "epic",
+            "name": "Epic",
+            "number": "EPIC-{seq:3}",
+            "presentation": {
+              "colour": "purple",
+              "icon": "flag",
+              "tones": {
+                "done": "success",
+                "in_progress": "active"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "key": "in_progress",
+                "name": "In progress"
+              },
+              {
+                "final": true,
+                "key": "done",
+                "name": "Done"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "open"
+                ],
+                "key": "start",
+                "name": "Start",
+                "to": "in_progress"
+              },
+              {
+                "from": [
+                  "in_progress"
+                ],
+                "key": "finish",
+                "name": "Finish",
+                "to": "done"
+              }
+            ]
+          },
+          "id": "01a1e410-1c4d-7105-b95a-0db39f811fc6",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "hotfix",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.522090Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "archive": {
+              "rules": [
+                {
+                  "with_container": "release"
+                }
+              ]
+            },
+            "contains": [
+              {
+                "type": "backlog_item"
+              },
+              {
+                "type": "artifact"
+              }
+            ],
+            "created_in": [
+              "release"
+            ],
+            "fields": [
+              {
+                "key": "reason",
+                "kind": "text",
+                "multiline": true,
+                "name": "Why it can't wait",
+                "required": true
+              },
+              {
+                "key": "build",
+                "kind": "reference",
+                "name": "Build"
+              }
+            ],
+            "key": "hotfix",
+            "name": "Hotfix",
+            "number": "{parent}-HOTFIX-{seq:4}",
+            "presentation": {
+              "card": [
+                "build"
+              ],
+              "colour": "red",
+              "icon": "wrench",
+              "list": [
+                "build"
+              ],
+              "tones": {
+                "deployed": "success",
+                "open": "warning"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "open",
+                "name": "Open"
+              },
+              {
+                "final": true,
+                "key": "deployed",
+                "name": "Deployed"
+              }
+            ],
+            "transitions": [
+              {
+                "action": "release:approve",
+                "from": [
+                  "open"
+                ],
+                "key": "deploy",
+                "name": "Deploy",
+                "requires": [
+                  "build"
+                ],
+                "to": "deployed"
+              }
+            ]
+          },
+          "id": "01a1e410-1c62-74cd-894b-95ad40f53e17",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "release",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.511211Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "archive": {
+              "rules": [
+                {
+                  "in": [
+                    "closed"
+                  ],
+                  "newer": 2
+                }
+              ]
+            },
+            "board": {
+              "columns": [
+                {
+                  "key": "testing",
+                  "name": "Testing",
+                  "states": {
+                    "hotfix": [
+                      "open"
+                    ],
+                    "release_candidate": [
+                      "testing"
+                    ]
+                  }
+                },
+                {
+                  "key": "accepted",
+                  "name": "Accepted",
+                  "states": {
+                    "hotfix": [
+                      "deployed"
+                    ],
+                    "release_candidate": [
+                      "accepted"
+                    ]
+                  }
+                },
+                {
+                  "key": "rejected",
+                  "name": "Rejected",
+                  "states": {
+                    "release_candidate": [
+                      "rejected"
+                    ]
+                  }
+                }
+              ]
+            },
+            "contains": [
+              {
+                "type": "backlog"
+              },
+              {
+                "type": "release_candidate",
+                "while": [
+                  "planning",
+                  "testing"
+                ]
+              },
+              {
+                "type": "hotfix",
+                "while": [
+                  "released"
+                ]
+              },
+              {
+                "exclusive": true,
+                "type": "release_notes"
+              }
+            ],
+            "fields": [
+              {
+                "key": "title",
+                "kind": "text",
+                "name": "Title",
+                "required": true
+              },
+              {
+                "key": "version",
+                "kind": "text",
+                "name": "Version"
+              },
+              {
+                "key": "released_on",
+                "kind": "date",
+                "name": "Released on"
+              },
+              {
+                "key": "release_manager",
+                "kind": "user",
+                "name": "Release manager"
+              },
+              {
+                "key": "go",
+                "kind": "checkbox",
+                "name": "Go for release"
+              }
+            ],
+            "key": "release",
+            "name": "Release",
+            "number": "RELEASE-{year}-{seq:4}",
+            "presentation": {
+              "card": [
+                "version"
+              ],
+              "colour": "green",
+              "icon": "rocket",
+              "list": [
+                "version",
+                "released_on",
+                "release_manager"
+              ],
+              "tones": {
+                "released": "success",
+                "testing": "active"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "planning",
+                "name": "Planning"
+              },
+              {
+                "key": "testing",
+                "name": "Testing"
+              },
+              {
+                "key": "released",
+                "name": "Released"
+              },
+              {
+                "final": true,
+                "key": "closed",
+                "name": "Closed"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "planning"
+                ],
+                "key": "test",
+                "name": "Start testing",
+                "to": "testing"
+              },
+              {
+                "action": "release:approve",
+                "from": [
+                  "testing"
+                ],
+                "key": "release",
+                "name": "Release",
+                "requires": [
+                  "version",
+                  "released_on",
+                  "release_manager",
+                  "go"
+                ],
+                "to": "released"
+              },
+              {
+                "from": [
+                  "released"
+                ],
+                "key": "close",
+                "name": "End maintenance",
+                "to": "closed"
+              }
+            ]
+          },
+          "id": "01a1e410-1c57-7727-aa32-6b4cf1fa8a26",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "release_candidate",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.516833Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "archive": {
+              "rules": [
+                {
+                  "with_container": "release"
+                }
+              ]
+            },
+            "board": {
+              "columns": [
+                {
+                  "key": "todo",
+                  "name": "To do",
+                  "states": {
+                    "backlog_item": [
+                      "open"
+                    ],
+                    "epic": [
+                      "open"
+                    ]
+                  }
+                },
+                {
+                  "key": "doing",
+                  "name": "In progress",
+                  "states": {
+                    "backlog_item": [
+                      "in_progress",
+                      "in_review"
+                    ],
+                    "epic": [
+                      "in_progress"
+                    ]
+                  }
+                },
+                {
+                  "key": "done",
+                  "name": "Done",
+                  "states": {
+                    "backlog_item": [
+                      "done"
+                    ],
+                    "epic": [
+                      "done"
+                    ]
+                  }
+                }
+              ]
+            },
+            "contains": [
+              {
+                "type": "epic"
+              },
+              {
+                "type": "backlog_item"
+              },
+              {
+                "type": "artifact"
+              }
+            ],
+            "created_in": [
+              "release"
+            ],
+            "fields": [
+              {
+                "key": "build",
+                "kind": "reference",
+                "name": "Build"
+              },
+              {
+                "key": "test_record",
+                "kind": "reference",
+                "name": "Test record"
+              }
+            ],
+            "key": "release_candidate",
+            "name": "Release candidate",
+            "number": "{parent}-RC-{seq:4}",
+            "presentation": {
+              "card": [
+                "build"
+              ],
+              "colour": "teal",
+              "icon": "flask-conical",
+              "list": [
+                "build",
+                "test_record"
+              ],
+              "tones": {
+                "accepted": "success",
+                "rejected": "danger",
+                "testing": "active"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "testing",
+                "name": "Testing"
+              },
+              {
+                "final": true,
+                "key": "accepted",
+                "name": "Accepted"
+              },
+              {
+                "final": true,
+                "key": "rejected",
+                "name": "Rejected"
+              }
+            ],
+            "transitions": [
+              {
+                "from": [
+                  "testing"
+                ],
+                "key": "accept",
+                "name": "Accept",
+                "requires": [
+                  "build",
+                  "test_record"
+                ],
+                "to": "accepted"
+              },
+              {
+                "from": [
+                  "testing"
+                ],
+                "key": "reject",
+                "name": "Reject",
+                "to": "rejected"
+              }
+            ]
+          },
+          "id": "01a1e410-1c5d-7588-ac81-e80041b72bbc",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "key": "release_notes",
+      "versions": [
+        {
+          "createdAt": "2026-11-16T11:13:43.527883Z",
+          "createdBy": "01900000-0000-7000-8000-00000000d002",
+          "definition": {
+            "archive": {
+              "rules": [
+                {
+                  "with_container": "release"
+                }
+              ]
+            },
+            "created_in": [
+              "release"
+            ],
+            "fields": [
+              {
+                "draft": {
+                  "depth": 3,
+                  "group_by": "type",
+                  "line": "- {number} {field:title} ({field:kind})",
+                  "states": {
+                    "hotfix": [
+                      "deployed"
+                    ],
+                    "release_candidate": [
+                      "accepted"
+                    ]
+                  },
+                  "through": [
+                    "release_candidate",
+                    "hotfix",
+                    "epic"
+                  ],
+                  "types": [
+                    "epic",
+                    "backlog_item"
+                  ]
+                },
+                "key": "text",
+                "kind": "text",
+                "multiline": true,
+                "name": "Text"
+              },
+              {
+                "draft": {
+                  "depth": 2,
+                  "exclude": {
+                    "change": [
+                      "removed"
+                    ]
+                  },
+                  "latest_by": "component",
+                  "line": "- {field:component} {field:version}: {field:image}",
+                  "through": [
+                    "release_candidate",
+                    "hotfix"
+                  ],
+                  "types": [
+                    "artifact"
+                  ]
+                },
+                "key": "artifacts",
+                "kind": "text",
+                "multiline": true,
+                "name": "Artifacts"
+              }
+            ],
+            "key": "release_notes",
+            "name": "Release notes",
+            "number": "{parent}-NOTES-{seq}",
+            "presentation": {
+              "colour": "pink",
+              "icon": "notebook-pen",
+              "tones": {
+                "approved": "success",
+                "draft": "warning"
+              }
+            },
+            "states": [
+              {
+                "initial": true,
+                "key": "draft",
+                "name": "Draft"
+              },
+              {
+                "final": true,
+                "key": "approved",
+                "name": "Approved"
+              }
+            ],
+            "transitions": [
+              {
+                "action": "release:approve",
+                "from": [
+                  "draft"
+                ],
+                "key": "approve",
+                "name": "Approve",
+                "requires": [
+                  "text"
+                ],
+                "to": "approved"
+              }
+            ]
+          },
+          "id": "01a1e410-1c68-728e-8f42-592618a68b19",
+          "version": 1
+        }
+      ]
+    }
+  ],
+  "akter": [
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.535066Z",
+      "fields": {
+        "go": {
+          "checked_at": "2026-11-16T11:13:44.243289Z",
+          "checked_by": "01900000-0000-7000-8000-00000000d002",
+          "for": "01900000-0000-7000-8000-00000000d003"
+        },
+        "release_manager": "01900000-0000-7000-8000-00000000d002",
+        "released_on": "2026-04-01",
+        "title": "Spring",
+        "version": "4.2.0"
+      },
+      "id": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+      "number": "RELEASE-2026-0001",
+      "rank": "a0",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "release_manager": "01900000-0000-7000-8000-00000000d002",
+            "title": "Spring"
+          },
+          "createdAt": "2026-11-16T11:13:43.535066Z",
+          "hash": "7a12e7b6ffd1cc20f4536c46cec171e46a217383c73060a2800e3280743ccfb3",
+          "membership": null,
+          "reason": "Plan the spring release",
+          "revision": 1,
+          "state": "planning",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.639552Z",
+          "hash": "7a12e7b6ffd1cc20f4536c46cec171e46a217383c73060a2800e3280743ccfb3",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Spring ships this backlog",
+          "revision": 2,
+          "state": "planning",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.812477Z",
+          "hash": "d4856ba42264c8178499cf97c8f03629391e73851672fe44734e34446f42946c",
+          "membership": null,
+          "reason": "Feature freeze",
+          "revision": 3,
+          "state": "testing",
+          "transition": "test"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.827530Z",
+          "hash": "d4856ba42264c8178499cf97c8f03629391e73851672fe44734e34446f42946c",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "First candidate",
+          "revision": 4,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.971448Z",
+          "hash": "d4856ba42264c8178499cf97c8f03629391e73851672fe44734e34446f42946c",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "Second candidate, without search",
+          "revision": 5,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.217020Z",
+          "hash": "d4856ba42264c8178499cf97c8f03629391e73851672fe44734e34446f42946c",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1f19-73fb-a393-7735787e6a71",
+                "number": "RELEASE-2026-0001-NOTES-1"
+              }
+            ]
+          },
+          "reason": "Notes for 4.2.0",
+          "revision": 6,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "go": {
+              "checked_at": "2026-11-16T11:13:44.243289Z",
+              "checked_by": "01900000-0000-7000-8000-00000000d002",
+              "for": "01900000-0000-7000-8000-00000000d003"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.243289Z",
+          "hash": "5363039ec55ed584449b5ddc30568d4515afa432a4b66b61c4b3fdbe51b30ced",
+          "membership": null,
+          "reason": "Hedda gave the go in the release meeting",
+          "revision": 7,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "released_on": "2026-04-01",
+            "version": "4.2.0"
+          },
+          "createdAt": "2026-11-16T11:13:44.250788Z",
+          "hash": "7e21113e3f480652a40e7b04d3d41e9e8e2ce545f091e22766f8609d6ae1f58d",
+          "membership": null,
+          "reason": "Released to production",
+          "revision": 8,
+          "state": "released",
+          "transition": "release"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.274066Z",
+          "hash": "7e21113e3f480652a40e7b04d3d41e9e8e2ce545f091e22766f8609d6ae1f58d",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1f52-728c-a1ca-bba0f6912a22",
+                "number": "RELEASE-2026-0001-HOTFIX-0001"
+              }
+            ]
+          },
+          "reason": "Hotfix for sessions",
+          "revision": 9,
+          "state": "released",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.348123Z",
+          "hash": "db60c89fac03012cdf2bdd1cf1767a37b4508bad4c2cbc0167c294446d1598d2",
+          "membership": null,
+          "reason": "Nothing more to ship",
+          "revision": 10,
+          "state": "closed",
+          "transition": "close"
+        }
+      ],
+      "state": "closed",
+      "title": "Spring",
+      "typeVersion": "01a1e410-1c57-7727-aa32-6b4cf1fa8a26",
+      "updatedAt": "2026-11-16T11:13:44.348123Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.548692Z",
+      "fields": {
+        "title": "Spring backlog"
+      },
+      "id": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "number": "BACKLOG-001",
+      "rank": "a1",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "title": "Spring backlog"
+          },
+          "createdAt": "2026-11-16T11:13:43.548692Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": null,
+          "reason": "What spring is to hold",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.639552Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+                "number": "RELEASE-2026-0001"
+              }
+            ]
+          },
+          "reason": "Spring ships this backlog",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.662955Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1cef-73f6-a363-241374c808d6",
+                "number": "EPIC-001"
+              }
+            ]
+          },
+          "reason": "From the checkout research",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.687559Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d08-7580-9066-0c04c478adda",
+                "number": "EPIC-002"
+              }
+            ]
+          },
+          "reason": "Support's top request",
+          "revision": 4,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.698952Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d13-74ef-9452-bcbe9545d664",
+                "number": "ITEM-0001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 5,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.714171Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d22-7792-ab7c-12a45e40204d",
+                "number": "ITEM-0002"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 6,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.729152Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d31-7253-8980-fd8624f9ef0d",
+                "number": "ITEM-0003"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 7,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.743435Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d3f-755a-9ceb-5e5ba1882fca",
+                "number": "ITEM-0004"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 8,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.757315Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d4d-74db-8a5d-77261f0fb081",
+                "number": "ITEM-0005"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 9,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.768762Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d59-75e1-a213-3c5af78557d9",
+                "number": "ITEM-0006"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 10,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.779843Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d64-7281-9572-73c41897e426",
+                "number": "ITEM-0007"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 11,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.258775Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1f43-7622-ae67-af89f76bd5a8",
+                "number": "ITEM-0008"
+              }
+            ]
+          },
+          "reason": "Reported by support after the release",
+          "revision": 12,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.381736Z",
+          "hash": "12571ac734247854bb94547ab00c37619464e63dd3216ab58ec4213ccfc17451",
+          "membership": {
+            "removed_member": [
+              {
+                "akt": "01a1e410-1d64-7281-9572-73c41897e426",
+                "number": "ITEM-0007"
+              }
+            ]
+          },
+          "reason": "Try again in summer",
+          "revision": 13,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.393201Z",
+          "hash": "1537d464c457c9eeb54edc6a10a899313107952aeb9a111c943edf99e8009fbb",
+          "membership": null,
+          "reason": "Spring is done",
+          "revision": 14,
+          "state": "closed",
+          "transition": "close"
+        }
+      ],
+      "state": "closed",
+      "title": "Spring backlog",
+      "typeVersion": "01a1e410-1c52-76c8-903f-192866e8542d",
+      "updatedAt": "2026-11-16T11:13:44.393201Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.662955Z",
+      "fields": {
+        "goal": "Customers pay on one page, without making an account.",
+        "title": "One-page checkout"
+      },
+      "id": "01a1e410-1cef-73f6-a363-241374c808d6",
+      "number": "EPIC-001",
+      "rank": "a2",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "goal": "Customers pay on one page, without making an account.",
+            "title": "One-page checkout"
+          },
+          "createdAt": "2026-11-16T11:13:43.662955Z",
+          "hash": "b12b06b5e6dd20bc730da10e98748ba131570d34f6150880f35a64acbc754cae",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "From the checkout research",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.698952Z",
+          "hash": "b12b06b5e6dd20bc730da10e98748ba131570d34f6150880f35a64acbc754cae",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d13-74ef-9452-bcbe9545d664",
+                "number": "ITEM-0001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.714171Z",
+          "hash": "b12b06b5e6dd20bc730da10e98748ba131570d34f6150880f35a64acbc754cae",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d22-7792-ab7c-12a45e40204d",
+                "number": "ITEM-0002"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.791802Z",
+          "hash": "a028264a3ce086b31d32eed952fd78627a4364d14fe72461fd8427019dbc08d2",
+          "membership": null,
+          "reason": "Work started",
+          "revision": 4,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.846749Z",
+          "hash": "a028264a3ce086b31d32eed952fd78627a4364d14fe72461fd8427019dbc08d2",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "In the first candidate",
+          "revision": 5,
+          "state": "in_progress",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.982185Z",
+          "hash": "a028264a3ce086b31d32eed952fd78627a4364d14fe72461fd8427019dbc08d2",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 6,
+          "state": "in_progress",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.192853Z",
+          "hash": "3d1cd2c65939c016be223d93ab368c4ae313f47b163955f8fcbccc7b59c63f0c",
+          "membership": null,
+          "reason": "All its items are done",
+          "revision": 7,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "One-page checkout",
+      "typeVersion": "01a1e410-1c4d-7105-b95a-0db39f811fc6",
+      "updatedAt": "2026-11-16T11:13:44.192853Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.687559Z",
+      "fields": {
+        "goal": "Returning customers sign in with a passkey or a reset password.",
+        "title": "Sign-in"
+      },
+      "id": "01a1e410-1d08-7580-9066-0c04c478adda",
+      "number": "EPIC-002",
+      "rank": "a3",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "goal": "Returning customers sign in with a passkey or a reset password.",
+            "title": "Sign-in"
+          },
+          "createdAt": "2026-11-16T11:13:43.687559Z",
+          "hash": "200bd793d208b97680d223821dd2aaf52ccebd35ba8db0ea44b661b247d9962a",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Support's top request",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.729152Z",
+          "hash": "200bd793d208b97680d223821dd2aaf52ccebd35ba8db0ea44b661b247d9962a",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d31-7253-8980-fd8624f9ef0d",
+                "number": "ITEM-0003"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.743435Z",
+          "hash": "200bd793d208b97680d223821dd2aaf52ccebd35ba8db0ea44b661b247d9962a",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d3f-755a-9ceb-5e5ba1882fca",
+                "number": "ITEM-0004"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.799477Z",
+          "hash": "a90e2a7f0d025dd66b788db4e9b54e5ae10881cdc56d9ee253d69a3400554707",
+          "membership": null,
+          "reason": "Work started",
+          "revision": 4,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.991818Z",
+          "hash": "a90e2a7f0d025dd66b788db4e9b54e5ae10881cdc56d9ee253d69a3400554707",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 5,
+          "state": "in_progress",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.201208Z",
+          "hash": "40893b9e78cbaf552bfddec2079c0a2fe09fda29d3d1f2c7033887957fb1bdf1",
+          "membership": null,
+          "reason": "All its items are done",
+          "revision": 6,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Sign-in",
+      "typeVersion": "01a1e410-1c4d-7105-b95a-0db39f811fc6",
+      "updatedAt": "2026-11-16T11:13:44.201208Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.698952Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "frontend#207",
+          "url": "https://git.example/shop/frontend/pulls/207"
+        },
+        "description": "Prefill the shipping address from the customer's last order.",
+        "kind": "feature",
+        "title": "Address form remembers the last address"
+      },
+      "id": "01a1e410-1d13-74ef-9452-bcbe9545d664",
+      "number": "ITEM-0001",
+      "rank": "a4",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Prefill the shipping address from the customer's last order.",
+            "kind": "feature",
+            "title": "Address form remembers the last address"
+          },
+          "createdAt": "2026-11-16T11:13:43.698952Z",
+          "hash": "be072e056f4539a093dcfed878943e8eed2ccbee0f85927b9cab4e08932ae438",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              },
+              {
+                "akt": "01a1e410-1cef-73f6-a363-241374c808d6",
+                "number": "EPIC-001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.067918Z",
+          "hash": "9135d09466ac9faf1f9093f8f96813e0c372df270c4947e3bc3a1fa92cfef536",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 2,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "frontend#207",
+              "url": "https://git.example/shop/frontend/pulls/207"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.075452Z",
+          "hash": "f5a30e5779a84cca7efa96364f3b514fcdc2642d01013a17bcd4cf89a64c0476",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 3,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.082795Z",
+          "hash": "f20dc227e2727f6f7837d247a555ea7f2b280e86ca4a3416f96b7414ad38033e",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 4,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Address form remembers the last address",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.082795Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.714171Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "frontend#212",
+          "url": "https://git.example/shop/frontend/pulls/212"
+        },
+        "description": "Checkout without an account; offer one after payment.",
+        "kind": "feature",
+        "title": "Pay as a guest"
+      },
+      "id": "01a1e410-1d22-7792-ab7c-12a45e40204d",
+      "number": "ITEM-0002",
+      "rank": "a5",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Checkout without an account; offer one after payment.",
+            "kind": "feature",
+            "title": "Pay as a guest"
+          },
+          "createdAt": "2026-11-16T11:13:43.714171Z",
+          "hash": "759c861bec1481386eafa5e45882e107e28f5925057b06a71f8a9ab428185233",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              },
+              {
+                "akt": "01a1e410-1cef-73f6-a363-241374c808d6",
+                "number": "EPIC-001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.090237Z",
+          "hash": "e7eba9ef5ac80829c2073e514273d8ef38f3bbcb5a85329b39ab9fb952fb15e1",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 2,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "frontend#212",
+              "url": "https://git.example/shop/frontend/pulls/212"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.097748Z",
+          "hash": "3eeff1930722be9220210f393adcc35c92531576721cc8897f9f74069a7fcb92",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 3,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.105401Z",
+          "hash": "edd3c0a7df516ffbd8e5ee9b8fb2d0d2736134b4f6d814c677b406d21a32475a",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 4,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Pay as a guest",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.105401Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.729152Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#318",
+          "url": "https://git.example/shop/backend/pulls/318"
+        },
+        "description": "Sign in with a passkey, falling back to a password.",
+        "kind": "feature",
+        "title": "Passkeys"
+      },
+      "id": "01a1e410-1d31-7253-8980-fd8624f9ef0d",
+      "number": "ITEM-0003",
+      "rank": "a6",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Sign in with a passkey, falling back to a password.",
+            "kind": "feature",
+            "title": "Passkeys"
+          },
+          "createdAt": "2026-11-16T11:13:43.729152Z",
+          "hash": "968a017ba67a4fbc6e3ed6795e6e09978c568615d16f56aedc241e6edc96db38",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              },
+              {
+                "akt": "01a1e410-1d08-7580-9066-0c04c478adda",
+                "number": "EPIC-002"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.113009Z",
+          "hash": "2e5711fee2962e72cede8028b2b51616165c15af5a1c77e054a1002877ef96d8",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 2,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#318",
+              "url": "https://git.example/shop/backend/pulls/318"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.120309Z",
+          "hash": "3c1ff5bdb89b02e492ebd722e8752ec3eb87174dff18bec37f2d28334633798c",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 3,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.128623Z",
+          "hash": "c75939558f4a2c18bf739561439b99198e8723dbb5f2d2c69090dc475e751cb1",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 4,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Passkeys",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.128623Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.743435Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#320",
+          "url": "https://git.example/shop/backend/pulls/320"
+        },
+        "description": "A link valid for 30 minutes, once.",
+        "kind": "feature",
+        "title": "Password reset by email"
+      },
+      "id": "01a1e410-1d3f-755a-9ceb-5e5ba1882fca",
+      "number": "ITEM-0004",
+      "rank": "a7",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "A link valid for 30 minutes, once.",
+            "kind": "feature",
+            "title": "Password reset by email"
+          },
+          "createdAt": "2026-11-16T11:13:43.743435Z",
+          "hash": "cd30fa7949cf27f9bda143c35f897bde6fc328656bca6c4f91ac906f40e94a47",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              },
+              {
+                "akt": "01a1e410-1d08-7580-9066-0c04c478adda",
+                "number": "EPIC-002"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.139740Z",
+          "hash": "299f69a62efc377b939149a14c18b84fbf5bf91d5c1a014485ed959b5e7934b1",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 2,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#320",
+              "url": "https://git.example/shop/backend/pulls/320"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.152017Z",
+          "hash": "c4d5fd6170408e1e5438dd06421eaf9068c1b736c1becc040f5c255f610f86c7",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 3,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.160598Z",
+          "hash": "9e9c9c6bd5df463da847884c5952e17c483cb5a375619beec64d10bdcfa5e035",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 4,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Password reset by email",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.160598Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.757315Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#311",
+          "url": "https://git.example/shop/backend/pulls/311"
+        },
+        "description": "Saving a basket with no lines throws in the order service.",
+        "kind": "fix",
+        "title": "Crash when saving an empty basket"
+      },
+      "id": "01a1e410-1d4d-74db-8a5d-77261f0fb081",
+      "number": "ITEM-0005",
+      "rank": "a8",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Saving a basket with no lines throws in the order service.",
+            "kind": "fix",
+            "title": "Crash when saving an empty basket"
+          },
+          "createdAt": "2026-11-16T11:13:43.757315Z",
+          "hash": "a661f0f9e20487cff10ebb33ef5d85dbb24371a020696c20e453669f246cf25c",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.859742Z",
+          "hash": "a661f0f9e20487cff10ebb33ef5d85dbb24371a020696c20e453669f246cf25c",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "In the first candidate",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.939631Z",
+          "hash": "3722daf6c74eb94a06796d5676de2a34c96e5fbf0b532d8b1cfeb49ff0074798",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 3,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#311",
+              "url": "https://git.example/shop/backend/pulls/311"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:43.948394Z",
+          "hash": "eded42acf40d3a522602831f941c4a1767f99ffc5c35c69fada9c9a47f09aae7",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 4,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.956828Z",
+          "hash": "bd90a4e2d7d7c271c02f8206e08bc0023ab59ff8df0771df26f9405e23e2cda7",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 5,
+          "state": "done",
+          "transition": "finish"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.001789Z",
+          "hash": "bd90a4e2d7d7c271c02f8206e08bc0023ab59ff8df0771df26f9405e23e2cda7",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 6,
+          "state": "done",
+          "transition": null
+        }
+      ],
+      "state": "done",
+      "title": "Crash when saving an empty basket",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.001789Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.768762Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#322",
+          "url": "https://git.example/shop/backend/pulls/322"
+        },
+        "description": "The old version is out of support in May.",
+        "kind": "chore",
+        "title": "Update the TLS library"
+      },
+      "id": "01a1e410-1d59-75e1-a213-3c5af78557d9",
+      "number": "ITEM-0006",
+      "rank": "a9",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "The old version is out of support in May.",
+            "kind": "chore",
+            "title": "Update the TLS library"
+          },
+          "createdAt": "2026-11-16T11:13:43.768762Z",
+          "hash": "8d66993e438c80c0424fb9a4c0d6b2cb9f7f8fc4a3b224bf2a7254f8b25da9b8",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.013137Z",
+          "hash": "8d66993e438c80c0424fb9a4c0d6b2cb9f7f8fc4a3b224bf2a7254f8b25da9b8",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.168921Z",
+          "hash": "8194be52138f317daf5d081a726442a77301406661838695e42aef6f90c8ce96",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 3,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#322",
+              "url": "https://git.example/shop/backend/pulls/322"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.177306Z",
+          "hash": "e6364beb14bff4a81a5522b395c4909e9cbc516e050cd20d4ba143c8ff6ca2db",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 4,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.185003Z",
+          "hash": "1762b463789c1b5887e015e2a568a847842df4e71d382385ff1234a0fd624744",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 5,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Update the TLS library",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.185003Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.779843Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "Rank by what sold, behind a flag.",
+        "kind": "feature",
+        "title": "Experimental search ranking"
+      },
+      "id": "01a1e410-1d64-7281-9572-73c41897e426",
+      "number": "ITEM-0007",
+      "rank": "aA",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Rank by what sold, behind a flag.",
+            "kind": "feature",
+            "title": "Experimental search ranking"
+          },
+          "createdAt": "2026-11-16T11:13:43.779843Z",
+          "hash": "2eaabcde3e6937e7d4e40fbd609c40099f5b5f6f0b792c4012535767bbdbed0b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.870805Z",
+          "hash": "2eaabcde3e6937e7d4e40fbd609c40099f5b5f6f0b792c4012535767bbdbed0b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "In the first candidate",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.381736Z",
+          "hash": "2eaabcde3e6937e7d4e40fbd609c40099f5b5f6f0b792c4012535767bbdbed0b",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+                "number": "BACKLOG-002"
+              }
+            ],
+            "removed": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Try again in summer",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Experimental search ranking",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.381736Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.827530Z",
+      "fields": {},
+      "id": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "number": "RELEASE-2026-0001-RC-0001",
+      "rank": "aB",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.827530Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+                "number": "RELEASE-2026-0001"
+              }
+            ]
+          },
+          "reason": "First candidate",
+          "revision": 1,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.846749Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1cef-73f6-a363-241374c808d6",
+                "number": "EPIC-001"
+              }
+            ]
+          },
+          "reason": "In the first candidate",
+          "revision": 2,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.859742Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d4d-74db-8a5d-77261f0fb081",
+                "number": "ITEM-0005"
+              }
+            ]
+          },
+          "reason": "In the first candidate",
+          "revision": 3,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.870805Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d64-7281-9572-73c41897e426",
+                "number": "ITEM-0007"
+              }
+            ]
+          },
+          "reason": "In the first candidate",
+          "revision": 4,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.908160Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1dca-7663-b4d0-084249816cd6",
+                "number": "ARTIFACT-00001"
+              }
+            ]
+          },
+          "reason": "Built for the first candidate",
+          "revision": 5,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.918747Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1dd5-72b0-9fa2-7f9a3f2f2b3d",
+                "number": "ARTIFACT-00002"
+              }
+            ]
+          },
+          "reason": "Built for the first candidate",
+          "revision": 6,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.928860Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1ddc-7172-a789-b9cee7e707fe",
+                "number": "ARTIFACT-00003"
+              }
+            ]
+          },
+          "reason": "Built for the first candidate",
+          "revision": 7,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.964531Z",
+          "hash": "694bc00163a9dbcde9b927c52fc9e7623b29947fc41b59b6d3cc343d4432ca69",
+          "membership": null,
+          "reason": "Search ranking slows the product list down fivefold",
+          "revision": 8,
+          "state": "rejected",
+          "transition": "reject"
+        }
+      ],
+      "state": "rejected",
+      "title": null,
+      "typeVersion": "01a1e410-1c5d-7588-ac81-e80041b72bbc",
+      "updatedAt": "2026-11-16T11:13:43.964531Z"
+    },
+    {
+      "attachments": [
+        {
+          "attachment": "01a1e410-1dc5-711b-9e21-efd8755ebc12",
+          "field": "sbom"
+        }
+      ],
+      "createdAt": "2026-11-16T11:13:43.881638Z",
+      "fields": {
+        "change": "built",
+        "component": "backend",
+        "image": {
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "repository": "registry.example/shop/backend",
+          "tag": "4.2.0-rc.1"
+        },
+        "sbom": "01a1e410-1dc5-711b-9e21-efd8755ebc12",
+        "source": {
+          "repository": "https://git.example/shop/backend.git",
+          "tag": "v4.2.0-rc.1"
+        },
+        "version": "4.2.0-rc.1"
+      },
+      "id": "01a1e410-1dca-7663-b4d0-084249816cd6",
+      "number": "ARTIFACT-00001",
+      "rank": "aC",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d004",
+          "changes": {
+            "change": "built",
+            "component": "backend",
+            "image": {
+              "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "repository": "registry.example/shop/backend",
+              "tag": "4.2.0-rc.1"
+            },
+            "sbom": "01a1e410-1dc5-711b-9e21-efd8755ebc12",
+            "source": {
+              "repository": "https://git.example/shop/backend.git",
+              "tag": "v4.2.0-rc.1"
+            },
+            "version": "4.2.0-rc.1"
+          },
+          "createdAt": "2026-11-16T11:13:43.881638Z",
+          "hash": "7124e583c35e122a0ba310f0fc6b4f8f86ae18ec9387aa28581b99a23a4f5074",
+          "membership": null,
+          "reason": "Built by the pipeline",
+          "revision": 1,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.908160Z",
+          "hash": "7124e583c35e122a0ba310f0fc6b4f8f86ae18ec9387aa28581b99a23a4f5074",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "Built for the first candidate",
+          "revision": 2,
+          "state": "registered",
+          "transition": null
+        }
+      ],
+      "state": "registered",
+      "title": "backend",
+      "typeVersion": "01a1e410-1c42-745d-af56-4fa353b737fe",
+      "updatedAt": "2026-11-16T11:13:43.908160Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.892663Z",
+      "fields": {
+        "change": "built",
+        "component": "frontend",
+        "image": {
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "repository": "registry.example/shop/frontend",
+          "tag": "4.2.0-rc.1"
+        },
+        "source": {
+          "repository": "https://git.example/shop/frontend.git",
+          "tag": "v4.2.0-rc.1"
+        },
+        "version": "4.2.0-rc.1"
+      },
+      "id": "01a1e410-1dd5-72b0-9fa2-7f9a3f2f2b3d",
+      "number": "ARTIFACT-00002",
+      "rank": "aD",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d004",
+          "changes": {
+            "change": "built",
+            "component": "frontend",
+            "image": {
+              "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "repository": "registry.example/shop/frontend",
+              "tag": "4.2.0-rc.1"
+            },
+            "source": {
+              "repository": "https://git.example/shop/frontend.git",
+              "tag": "v4.2.0-rc.1"
+            },
+            "version": "4.2.0-rc.1"
+          },
+          "createdAt": "2026-11-16T11:13:43.892663Z",
+          "hash": "ce15a717c58f3ff0199dc423c039d8432dc2719866f1771ac05991c1e188f662",
+          "membership": null,
+          "reason": "Built by the pipeline",
+          "revision": 1,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.918747Z",
+          "hash": "ce15a717c58f3ff0199dc423c039d8432dc2719866f1771ac05991c1e188f662",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "Built for the first candidate",
+          "revision": 2,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.048623Z",
+          "hash": "ce15a717c58f3ff0199dc423c039d8432dc2719866f1771ac05991c1e188f662",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "Built for the second candidate",
+          "revision": 3,
+          "state": "registered",
+          "transition": null
+        }
+      ],
+      "state": "registered",
+      "title": "frontend",
+      "typeVersion": "01a1e410-1c42-745d-af56-4fa353b737fe",
+      "updatedAt": "2026-11-16T11:13:44.048623Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.899697Z",
+      "fields": {
+        "change": "built",
+        "component": "search",
+        "image": {
+          "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "repository": "registry.example/shop/search",
+          "tag": "0.1.0"
+        },
+        "source": {
+          "repository": "https://git.example/shop/search.git",
+          "tag": "v0.1.0"
+        },
+        "version": "0.1.0"
+      },
+      "id": "01a1e410-1ddc-7172-a789-b9cee7e707fe",
+      "number": "ARTIFACT-00003",
+      "rank": "aE",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d004",
+          "changes": {
+            "change": "built",
+            "component": "search",
+            "image": {
+              "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "repository": "registry.example/shop/search",
+              "tag": "0.1.0"
+            },
+            "source": {
+              "repository": "https://git.example/shop/search.git",
+              "tag": "v0.1.0"
+            },
+            "version": "0.1.0"
+          },
+          "createdAt": "2026-11-16T11:13:43.899697Z",
+          "hash": "6455a09b12b6926955e8714f642965b9bd465ede2ccf7822e501b3cbb386b1fd",
+          "membership": null,
+          "reason": "Built by the pipeline",
+          "revision": 1,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.928860Z",
+          "hash": "6455a09b12b6926955e8714f642965b9bd465ede2ccf7822e501b3cbb386b1fd",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+                "number": "RELEASE-2026-0001-RC-0001"
+              }
+            ]
+          },
+          "reason": "Built for the first candidate",
+          "revision": 2,
+          "state": "registered",
+          "transition": null
+        }
+      ],
+      "state": "registered",
+      "title": "search",
+      "typeVersion": "01a1e410-1c42-745d-af56-4fa353b737fe",
+      "updatedAt": "2026-11-16T11:13:43.928860Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:43.971448Z",
+      "fields": {
+        "build": {
+          "label": "Build 812",
+          "url": "https://ci.example/shop/builds/812"
+        },
+        "test_record": {
+          "label": "Acceptance test TP-002",
+          "url": "https://kuria.example/akt/TP-002"
+        }
+      },
+      "id": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "number": "RELEASE-2026-0001-RC-0002",
+      "rank": "aF",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.971448Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+                "number": "RELEASE-2026-0001"
+              }
+            ]
+          },
+          "reason": "Second candidate, without search",
+          "revision": 1,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.982185Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1cef-73f6-a363-241374c808d6",
+                "number": "EPIC-001"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 2,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:43.991818Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d08-7580-9066-0c04c478adda",
+                "number": "EPIC-002"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 3,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.001789Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d4d-74db-8a5d-77261f0fb081",
+                "number": "ITEM-0005"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 4,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.013137Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d59-75e1-a213-3c5af78557d9",
+                "number": "ITEM-0006"
+              }
+            ]
+          },
+          "reason": "In the second candidate",
+          "revision": 5,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.039020Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1e57-765a-b0b1-e0d7718fbe77",
+                "number": "ARTIFACT-00004"
+              }
+            ]
+          },
+          "reason": "Built for the second candidate",
+          "revision": 6,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.048623Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1dd5-72b0-9fa2-7f9a3f2f2b3d",
+                "number": "ARTIFACT-00002"
+              }
+            ]
+          },
+          "reason": "Built for the second candidate",
+          "revision": 7,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.058205Z",
+          "hash": "2dc2b5c977966c5c7d51d08661f9811bc1b5f9b33bf1254f5d2343e7e4314dcd",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1e5f-772a-9757-644332cfface",
+                "number": "ARTIFACT-00005"
+              }
+            ]
+          },
+          "reason": "Built for the second candidate",
+          "revision": 8,
+          "state": "testing",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "build": {
+              "label": "Build 812",
+              "url": "https://ci.example/shop/builds/812"
+            },
+            "test_record": {
+              "label": "Acceptance test TP-002",
+              "url": "https://kuria.example/akt/TP-002"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.209445Z",
+          "hash": "0bbbae22834c9ef5b3c5bda7c5681cd13ffc604c4dbcd9474d9d2f5ba38cdde6",
+          "membership": null,
+          "reason": "Passed acceptance",
+          "revision": 9,
+          "state": "accepted",
+          "transition": "accept"
+        }
+      ],
+      "state": "accepted",
+      "title": null,
+      "typeVersion": "01a1e410-1c5d-7588-ac81-e80041b72bbc",
+      "updatedAt": "2026-11-16T11:13:44.209445Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.023205Z",
+      "fields": {
+        "change": "built",
+        "component": "backend",
+        "image": {
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "repository": "registry.example/shop/backend",
+          "tag": "4.2.0-rc.2"
+        },
+        "source": {
+          "repository": "https://git.example/shop/backend.git",
+          "tag": "v4.2.0-rc.2"
+        },
+        "version": "4.2.0-rc.2"
+      },
+      "id": "01a1e410-1e57-765a-b0b1-e0d7718fbe77",
+      "number": "ARTIFACT-00004",
+      "rank": "aG",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d004",
+          "changes": {
+            "change": "built",
+            "component": "backend",
+            "image": {
+              "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              "repository": "registry.example/shop/backend",
+              "tag": "4.2.0-rc.2"
+            },
+            "source": {
+              "repository": "https://git.example/shop/backend.git",
+              "tag": "v4.2.0-rc.2"
+            },
+            "version": "4.2.0-rc.2"
+          },
+          "createdAt": "2026-11-16T11:13:44.023205Z",
+          "hash": "114ba97764eb1b1b396aef535476c6f4f71bd52f1f814f36fcfce9446aa34b73",
+          "membership": null,
+          "reason": "Built by the pipeline",
+          "revision": 1,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.039020Z",
+          "hash": "114ba97764eb1b1b396aef535476c6f4f71bd52f1f814f36fcfce9446aa34b73",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "Built for the second candidate",
+          "revision": 2,
+          "state": "registered",
+          "transition": null
+        }
+      ],
+      "state": "registered",
+      "title": "backend",
+      "typeVersion": "01a1e410-1c42-745d-af56-4fa353b737fe",
+      "updatedAt": "2026-11-16T11:13:44.039020Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.030677Z",
+      "fields": {
+        "change": "removed",
+        "component": "search"
+      },
+      "id": "01a1e410-1e5f-772a-9757-644332cfface",
+      "number": "ARTIFACT-00005",
+      "rank": "aH",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d004",
+          "changes": {
+            "change": "removed",
+            "component": "search"
+          },
+          "createdAt": "2026-11-16T11:13:44.030677Z",
+          "hash": "dc6981f555c09f7b4ab69ee31bd720b5c2fa10194d8e75c2c903e4cf09c9dfb1",
+          "membership": null,
+          "reason": "Removed from the deployment",
+          "revision": 1,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.058205Z",
+          "hash": "dc6981f555c09f7b4ab69ee31bd720b5c2fa10194d8e75c2c903e4cf09c9dfb1",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+                "number": "RELEASE-2026-0001-RC-0002"
+              }
+            ]
+          },
+          "reason": "Built for the second candidate",
+          "revision": 2,
+          "state": "registered",
+          "transition": null
+        }
+      ],
+      "state": "registered",
+      "title": "search",
+      "typeVersion": "01a1e410-1c42-745d-af56-4fa353b737fe",
+      "updatedAt": "2026-11-16T11:13:44.058205Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.217020Z",
+      "fields": {
+        "artifacts": "backend 4.2.0-rc.2, frontend 4.2.0-rc.1; search removed.",
+        "text": "Shop 4.2.0\n\n- Checkout on one page, as a guest if you like, with your last address filled in.\n- Sign in with a passkey, or reset your password by email.\n- Fixed: saving an empty basket no longer fails."
+      },
+      "id": "01a1e410-1f19-73fb-a393-7735787e6a71",
+      "number": "RELEASE-2026-0001-NOTES-1",
+      "rank": "aI",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.217020Z",
+          "hash": "15af29abd2f8b906313ad5c4983900e844ed0d47dd291937de4193d6f9d60c22",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+                "number": "RELEASE-2026-0001"
+              }
+            ]
+          },
+          "reason": "Notes for 4.2.0",
+          "revision": 1,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "artifacts": "backend 4.2.0-rc.2, frontend 4.2.0-rc.1; search removed.",
+            "text": "Shop 4.2.0\n\n- Checkout on one page, as a guest if you like, with your last address filled in.\n- Sign in with a passkey, or reset your password by email.\n- Fixed: saving an empty basket no longer fails."
+          },
+          "createdAt": "2026-11-16T11:13:44.227966Z",
+          "hash": "3fbdae79ca06b94c126ca017b8f246c30e0964c4133bc36f38711fc8fde1c73c",
+          "membership": null,
+          "reason": "Drafted from the candidate",
+          "revision": 2,
+          "state": "draft",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.235290Z",
+          "hash": "e9328871bab0ea6b5db9f05fce711c99d26cf83640fa914cdd7a800cc3d40265",
+          "membership": null,
+          "reason": "Read and approved",
+          "revision": 3,
+          "state": "approved",
+          "transition": "approve"
+        }
+      ],
+      "state": "approved",
+      "title": null,
+      "typeVersion": "01a1e410-1c68-728e-8f42-592618a68b19",
+      "updatedAt": "2026-11-16T11:13:44.235290Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.258775Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "change": {
+          "label": "backend#331",
+          "url": "https://git.example/shop/backend/pulls/331"
+        },
+        "description": "Signed-in customers are signed out whenever the backend restarts.",
+        "kind": "fix",
+        "title": "Sessions lost on restart"
+      },
+      "id": "01a1e410-1f43-7622-ae67-af89f76bd5a8",
+      "number": "ITEM-0008",
+      "rank": "aJ",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Signed-in customers are signed out whenever the backend restarts.",
+            "kind": "fix",
+            "title": "Sessions lost on restart"
+          },
+          "createdAt": "2026-11-16T11:13:44.258775Z",
+          "hash": "61c5c15b28c4c9831baebd720956434935a29694307e002ce34f486401f96270",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+                "number": "BACKLOG-001"
+              }
+            ]
+          },
+          "reason": "Reported by support after the release",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.290001Z",
+          "hash": "61c5c15b28c4c9831baebd720956434935a29694307e002ce34f486401f96270",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1f52-728c-a1ca-bba0f6912a22",
+                "number": "RELEASE-2026-0001-HOTFIX-0001"
+              }
+            ]
+          },
+          "reason": "What the hotfix fixes",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.301346Z",
+          "hash": "1c35dfd43102bb504f8d5b8e582418c67f56ca3d9bb7fc2a2b1e256863ace7c1",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 3,
+          "state": "in_progress",
+          "transition": "start"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "change": {
+              "label": "backend#331",
+              "url": "https://git.example/shop/backend/pulls/331"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.309200Z",
+          "hash": "cd306da40a484be7e4317e65cc998a86fd6b9d40018f36ebcb9e3890b340e8f3",
+          "membership": null,
+          "reason": "Ready for review",
+          "revision": 4,
+          "state": "in_review",
+          "transition": "review"
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.317360Z",
+          "hash": "a536e1043ec5e83d4f2d2f1695e8c59c592f1bb27d89d84ced5408d598851cc7",
+          "membership": null,
+          "reason": "Reviewed and merged",
+          "revision": 5,
+          "state": "done",
+          "transition": "finish"
+        }
+      ],
+      "state": "done",
+      "title": "Sessions lost on restart",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.317360Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.274066Z",
+      "fields": {
+        "build": {
+          "label": "Build 815",
+          "url": "https://ci.example/shop/builds/815"
+        },
+        "reason": "Customers are signed out on every deploy"
+      },
+      "id": "01a1e410-1f52-728c-a1ca-bba0f6912a22",
+      "number": "RELEASE-2026-0001-HOTFIX-0001",
+      "rank": "aK",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "reason": "Customers are signed out on every deploy"
+          },
+          "createdAt": "2026-11-16T11:13:44.274066Z",
+          "hash": "b17af85420ead1e74375af763d3a579cdea5de6deb2a6d0e052043f68dbd8f4c",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+                "number": "RELEASE-2026-0001"
+              }
+            ]
+          },
+          "reason": "Hotfix for sessions",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.290001Z",
+          "hash": "b17af85420ead1e74375af763d3a579cdea5de6deb2a6d0e052043f68dbd8f4c",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1f43-7622-ae67-af89f76bd5a8",
+                "number": "ITEM-0008"
+              }
+            ]
+          },
+          "reason": "What the hotfix fixes",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.331941Z",
+          "hash": "b17af85420ead1e74375af763d3a579cdea5de6deb2a6d0e052043f68dbd8f4c",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1f85-7140-8d56-9e24d7a98772",
+                "number": "ARTIFACT-00006"
+              }
+            ]
+          },
+          "reason": "The fixed build",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "build": {
+              "label": "Build 815",
+              "url": "https://ci.example/shop/builds/815"
+            }
+          },
+          "createdAt": "2026-11-16T11:13:44.340607Z",
+          "hash": "8a129b19784b3da51fad78b14fd98e7937e6fdeaa8e3838f7d6784d38957fdc0",
+          "membership": null,
+          "reason": "Deployed 4.2.1",
+          "revision": 4,
+          "state": "deployed",
+          "transition": "deploy"
+        }
+      ],
+      "state": "deployed",
+      "title": null,
+      "typeVersion": "01a1e410-1c62-74cd-894b-95ad40f53e17",
+      "updatedAt": "2026-11-16T11:13:44.340607Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.324362Z",
+      "fields": {
+        "change": "built",
+        "component": "backend",
+        "image": {
+          "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "repository": "registry.example/shop/backend",
+          "tag": "4.2.1"
+        },
+        "source": {
+          "repository": "https://git.example/shop/backend.git",
+          "tag": "v4.2.1"
+        },
+        "version": "4.2.1"
+      },
+      "id": "01a1e410-1f85-7140-8d56-9e24d7a98772",
+      "number": "ARTIFACT-00006",
+      "rank": "aL",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d004",
+          "changes": {
+            "change": "built",
+            "component": "backend",
+            "image": {
+              "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "repository": "registry.example/shop/backend",
+              "tag": "4.2.1"
+            },
+            "source": {
+              "repository": "https://git.example/shop/backend.git",
+              "tag": "v4.2.1"
+            },
+            "version": "4.2.1"
+          },
+          "createdAt": "2026-11-16T11:13:44.324362Z",
+          "hash": "d5c9aba9c030d31a5374b186679b50e14777905bd3cc77ebfd930a7fd3c92917",
+          "membership": null,
+          "reason": "Built by the pipeline",
+          "revision": 1,
+          "state": "registered",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.331941Z",
+          "hash": "d5c9aba9c030d31a5374b186679b50e14777905bd3cc77ebfd930a7fd3c92917",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1f52-728c-a1ca-bba0f6912a22",
+                "number": "RELEASE-2026-0001-HOTFIX-0001"
+              }
+            ]
+          },
+          "reason": "The fixed build",
+          "revision": 2,
+          "state": "registered",
+          "transition": null
+        }
+      ],
+      "state": "registered",
+      "title": "backend",
+      "typeVersion": "01a1e410-1c42-745d-af56-4fa353b737fe",
+      "updatedAt": "2026-11-16T11:13:44.331941Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.355669Z",
+      "fields": {
+        "release_manager": "01900000-0000-7000-8000-00000000d002",
+        "title": "Summer"
+      },
+      "id": "01a1e410-1fa4-7674-88b0-b4b53edd08f6",
+      "number": "RELEASE-2026-0002",
+      "rank": "aM",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {
+            "release_manager": "01900000-0000-7000-8000-00000000d002",
+            "title": "Summer"
+          },
+          "createdAt": "2026-11-16T11:13:44.355669Z",
+          "hash": "a03ed9f0cffeb69fa950b3bc4d422cc59d92da7f32fe920a87aeff444fe203a4",
+          "membership": null,
+          "reason": "Plan the summer release",
+          "revision": 1,
+          "state": "planning",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.371218Z",
+          "hash": "a03ed9f0cffeb69fa950b3bc4d422cc59d92da7f32fe920a87aeff444fe203a4",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+                "number": "BACKLOG-002"
+              }
+            ]
+          },
+          "reason": "Summer ships this backlog",
+          "revision": 2,
+          "state": "planning",
+          "transition": null
+        }
+      ],
+      "state": "planning",
+      "title": "Summer",
+      "typeVersion": "01a1e410-1c57-7727-aa32-6b4cf1fa8a26",
+      "updatedAt": "2026-11-16T11:13:44.371218Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.363056Z",
+      "fields": {
+        "title": "Summer backlog"
+      },
+      "id": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+      "number": "BACKLOG-002",
+      "rank": "aN",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "title": "Summer backlog"
+          },
+          "createdAt": "2026-11-16T11:13:44.363056Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": null,
+          "reason": "What summer is to hold",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d002",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.371218Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1fa4-7674-88b0-b4b53edd08f6",
+                "number": "RELEASE-2026-0002"
+              }
+            ]
+          },
+          "reason": "Summer ships this backlog",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.381736Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1d64-7281-9572-73c41897e426",
+                "number": "ITEM-0007"
+              }
+            ]
+          },
+          "reason": "Try again in summer",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.400221Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f",
+                "number": "EPIC-003"
+              }
+            ]
+          },
+          "reason": "From the customer survey",
+          "revision": 4,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.411139Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1fdb-7144-90c2-c20f5d9d88fd",
+                "number": "ITEM-0009"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 5,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.424426Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1fe9-7504-b52e-537fc7fc496b",
+                "number": "ITEM-0010"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 6,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.438091Z",
+          "hash": "8604e28aae092be154ad868e5f1f2a3e23c69a4105ce74000d3918e53f1f4e95",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1ff6-73a5-be31-ef4287eb3b03",
+                "number": "ITEM-0011"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 7,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Summer backlog",
+      "typeVersion": "01a1e410-1c52-76c8-903f-192866e8542d",
+      "updatedAt": "2026-11-16T11:13:44.438091Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.400221Z",
+      "fields": {
+        "goal": "Customers keep what they want for later, and share it.",
+        "title": "Wish lists"
+      },
+      "id": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f",
+      "number": "EPIC-003",
+      "rank": "aO",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "goal": "Customers keep what they want for later, and share it.",
+            "title": "Wish lists"
+          },
+          "createdAt": "2026-11-16T11:13:44.400221Z",
+          "hash": "0e1ee795bde7ceb0aa4e225bbb11f381a5dbc3ddb18c9f123a325ad314fce03f",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+                "number": "BACKLOG-002"
+              }
+            ]
+          },
+          "reason": "From the customer survey",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.411139Z",
+          "hash": "0e1ee795bde7ceb0aa4e225bbb11f381a5dbc3ddb18c9f123a325ad314fce03f",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1fdb-7144-90c2-c20f5d9d88fd",
+                "number": "ITEM-0009"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 2,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.424426Z",
+          "hash": "0e1ee795bde7ceb0aa4e225bbb11f381a5dbc3ddb18c9f123a325ad314fce03f",
+          "membership": {
+            "added_member": [
+              {
+                "akt": "01a1e410-1fe9-7504-b52e-537fc7fc496b",
+                "number": "ITEM-0010"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 3,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.449764Z",
+          "hash": "d16bf841ecde7d5622b6953c70deb387b0990484ba6aae39d1ac23311d337c25",
+          "membership": null,
+          "reason": "Work started",
+          "revision": 4,
+          "state": "in_progress",
+          "transition": "start"
+        }
+      ],
+      "state": "in_progress",
+      "title": "Wish lists",
+      "typeVersion": "01a1e410-1c4d-7105-b95a-0db39f811fc6",
+      "updatedAt": "2026-11-16T11:13:44.449764Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.411139Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "A heart on every product page.",
+        "kind": "feature",
+        "title": "Save a product for later"
+      },
+      "id": "01a1e410-1fdb-7144-90c2-c20f5d9d88fd",
+      "number": "ITEM-0009",
+      "rank": "aP",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "A heart on every product page.",
+            "kind": "feature",
+            "title": "Save a product for later"
+          },
+          "createdAt": "2026-11-16T11:13:44.411139Z",
+          "hash": "aa91e088dc83310b30439325a7f9ba79f1891371095b02352ade73d5a4c867b4",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+                "number": "BACKLOG-002"
+              },
+              {
+                "akt": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f",
+                "number": "EPIC-003"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        },
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {},
+          "createdAt": "2026-11-16T11:13:44.457307Z",
+          "hash": "d1e1f4f58b54a52ed05fe7995ba72d68e6ff488c8ca00a53c16ae2377d243924",
+          "membership": null,
+          "reason": "Picked up",
+          "revision": 2,
+          "state": "in_progress",
+          "transition": "start"
+        }
+      ],
+      "state": "in_progress",
+      "title": "Save a product for later",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.457307Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.424426Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "Read-only, revocable.",
+        "kind": "feature",
+        "title": "Share a wish list by link"
+      },
+      "id": "01a1e410-1fe9-7504-b52e-537fc7fc496b",
+      "number": "ITEM-0010",
+      "rank": "aQ",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Read-only, revocable.",
+            "kind": "feature",
+            "title": "Share a wish list by link"
+          },
+          "createdAt": "2026-11-16T11:13:44.424426Z",
+          "hash": "5c667e67016ee6a66f0389b46c9a792bc137e8a8b80ca2a3623f2aaadfa448c3",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+                "number": "BACKLOG-002"
+              },
+              {
+                "akt": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f",
+                "number": "EPIC-003"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Share a wish list by link",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.424426Z"
+    },
+    {
+      "attachments": [],
+      "createdAt": "2026-11-16T11:13:44.438091Z",
+      "fields": {
+        "assignee": "01900000-0000-7000-8000-00000000d001",
+        "description": "Serve AVIF with a JPEG fallback.",
+        "kind": "chore",
+        "title": "Faster product images"
+      },
+      "id": "01a1e410-1ff6-73a5-be31-ef4287eb3b03",
+      "number": "ITEM-0011",
+      "rank": "aR",
+      "revisions": [
+        {
+          "author": "01900000-0000-7000-8000-00000000d001",
+          "changes": {
+            "assignee": "01900000-0000-7000-8000-00000000d001",
+            "description": "Serve AVIF with a JPEG fallback.",
+            "kind": "chore",
+            "title": "Faster product images"
+          },
+          "createdAt": "2026-11-16T11:13:44.438091Z",
+          "hash": "2afabad6b4552a79af48419db54927438ef70f5f8710cc62f6c34d0d8e130ee6",
+          "membership": {
+            "added": [
+              {
+                "akt": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+                "number": "BACKLOG-002"
+              }
+            ]
+          },
+          "reason": "Added in backlog grooming",
+          "revision": 1,
+          "state": "open",
+          "transition": null
+        }
+      ],
+      "state": "open",
+      "title": "Faster product images",
+      "typeVersion": "01a1e410-1c48-76f5-b14e-cefd5023c5a0",
+      "updatedAt": "2026-11-16T11:13:44.438091Z"
+    }
+  ],
+  "attachments": [
+    {
+      "id": "01a1e410-1dc5-711b-9e21-efd8755ebc12",
+      "mediaType": "application/vnd.cyclonedx+json",
+      "name": "backend.cdx.json",
+      "sbom": {
+        "components": 3,
+        "format": "cyclonedx",
+        "name": "backend",
+        "spec_version": "1.6"
+      },
+      "sha256": "c3d4b50b65a7026f9d01e0670a16f4b4b8d22f22dded2b06f63feb69987ae9ce",
+      "size": 437,
+      "uploadedAt": "2026-11-16T11:13:43.877711Z",
+      "uploadedBy": "01900000-0000-7000-8000-00000000d004"
+    }
+  ],
+  "contacts": [],
+  "counters": [],
+  "exportedAt": "2026-11-16T11:13:44.464179Z",
+  "format": 3,
+  "holdsAkter": true,
+  "links": [],
+  "memberships": [
+    {
+      "addedAt": "2026-11-16T11:13:43.639552Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+      "member": "01a1e410-1c86-76ef-b90d-7c7a78b12110"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.662955Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1cef-73f6-a363-241374c808d6"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.687559Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d08-7580-9066-0c04c478adda"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.698952Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d13-74ef-9452-bcbe9545d664"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.698952Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1cef-73f6-a363-241374c808d6",
+      "member": "01a1e410-1d13-74ef-9452-bcbe9545d664"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.714171Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d22-7792-ab7c-12a45e40204d"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.714171Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1cef-73f6-a363-241374c808d6",
+      "member": "01a1e410-1d22-7792-ab7c-12a45e40204d"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.729152Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d31-7253-8980-fd8624f9ef0d"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.729152Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1d08-7580-9066-0c04c478adda",
+      "member": "01a1e410-1d31-7253-8980-fd8624f9ef0d"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.743435Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d3f-755a-9ceb-5e5ba1882fca"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.743435Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1d08-7580-9066-0c04c478adda",
+      "member": "01a1e410-1d3f-755a-9ceb-5e5ba1882fca"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.757315Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d4d-74db-8a5d-77261f0fb081"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.768762Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1d59-75e1-a213-3c5af78557d9"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.827530Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+      "member": "01a1e410-1d94-77f2-894a-13a1e3cd360a"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.846749Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "member": "01a1e410-1cef-73f6-a363-241374c808d6"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.859742Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "member": "01a1e410-1d4d-74db-8a5d-77261f0fb081"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.870805Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "member": "01a1e410-1d64-7281-9572-73c41897e426"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.908160Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "member": "01a1e410-1dca-7663-b4d0-084249816cd6"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.918747Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "member": "01a1e410-1dd5-72b0-9fa2-7f9a3f2f2b3d"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.928860Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1d94-77f2-894a-13a1e3cd360a",
+      "member": "01a1e410-1ddc-7172-a789-b9cee7e707fe"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.971448Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+      "member": "01a1e410-1e23-75e1-9b78-591d13994ea4"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.982185Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1cef-73f6-a363-241374c808d6"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:43.991818Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1d08-7580-9066-0c04c478adda"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.001789Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1d4d-74db-8a5d-77261f0fb081"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.013137Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1d59-75e1-a213-3c5af78557d9"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.039020Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1e57-765a-b0b1-e0d7718fbe77"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.048623Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1dd5-72b0-9fa2-7f9a3f2f2b3d"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.058205Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1e23-75e1-9b78-591d13994ea4",
+      "member": "01a1e410-1e5f-772a-9757-644332cfface"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.217020Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+      "member": "01a1e410-1f19-73fb-a393-7735787e6a71"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.258775Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1c86-76ef-b90d-7c7a78b12110",
+      "member": "01a1e410-1f43-7622-ae67-af89f76bd5a8"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.274066Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1c70-75b5-9c3b-d651b4ceb3f8",
+      "member": "01a1e410-1f52-728c-a1ca-bba0f6912a22"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.290001Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1f52-728c-a1ca-bba0f6912a22",
+      "member": "01a1e410-1f43-7622-ae67-af89f76bd5a8"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.331941Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1f52-728c-a1ca-bba0f6912a22",
+      "member": "01a1e410-1f85-7140-8d56-9e24d7a98772"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.371218Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d002",
+      "container": "01a1e410-1fa4-7674-88b0-b4b53edd08f6",
+      "member": "01a1e410-1fab-73e1-b68a-e063a1d536a2"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.381736Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+      "member": "01a1e410-1d64-7281-9572-73c41897e426"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.400221Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+      "member": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.411139Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+      "member": "01a1e410-1fdb-7144-90c2-c20f5d9d88fd"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.411139Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f",
+      "member": "01a1e410-1fdb-7144-90c2-c20f5d9d88fd"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.424426Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+      "member": "01a1e410-1fe9-7504-b52e-537fc7fc496b"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.424426Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fd0-706b-90e3-b76b5f31fd0f",
+      "member": "01a1e410-1fe9-7504-b52e-537fc7fc496b"
+    },
+    {
+      "addedAt": "2026-11-16T11:13:44.438091Z",
+      "addedBy": "01900000-0000-7000-8000-00000000d001",
+      "container": "01a1e410-1fab-73e1-b68a-e063a1d536a2",
+      "member": "01a1e410-1ff6-73a5-be31-ef4287eb3b03"
+    }
+  ],
+  "people": [
+    {
+      "email": "dev@shop.example",
+      "name": "Devi Larsen",
+      "subject": "01900000-0000-7000-8000-00000000d001"
+    },
+    {
+      "email": "rm@shop.example",
+      "name": "Rami Moberg",
+      "subject": "01900000-0000-7000-8000-00000000d002"
+    },
+    {
+      "email": "hedda@shop.example",
+      "name": "Hedda Lund",
+      "subject": "01900000-0000-7000-8000-00000000d003"
+    },
+    {
+      "email": null,
+      "name": "Build pipeline",
+      "subject": "01900000-0000-7000-8000-00000000d004"
+    }
+  ],
+  "scope": "types",
+  "signedIn": [],
+  "types": [
+    "artifact",
+    "backlog_item",
+    "epic",
+    "backlog",
+    "release",
+    "release_candidate",
+    "hotfix",
+    "release_notes"
+  ]
+}

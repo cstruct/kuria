@@ -114,6 +114,32 @@ title: Checkout regression
 
 The same works in an akt directory, without a server (`--dir`).
 
+## With example data
+
+[`bundle/`](bundle/) is an example bundle of these akt types with akter:
+an acceptance test kept as a template, in sections; two runs copied from
+it, one passed and one failed, with verdicts from two testers; and a draft
+protocol. Devi Larsen (`dev@shop.example`), Rami Moberg
+(`rm@shop.example`) and Hedda Lund (`hedda@shop.example`) wrote them, the
+people the end-to-end seed signs in as. To start a server with it, set
+
+```sh
+KURIA_BOOTSTRAP_BUNDLE=docs/examples/test-protocols/bundle
+```
+
+and the server imports it into its default tenant (or
+`KURIA_BOOTSTRAP_TENANT`) before it serves; the tenant must hold nothing
+yet ([`items/server`](../../../items/server/README.md#running)).
+`kuria import docs/examples/test-protocols/bundle` takes it to a running server's
+tenant that hasn't defined these types. Against the end-to-end Konklav,
+
+```sh
+mise run e2e:example test-protocols
+```
+
+serves it on <http://localhost:18090> to the seeded people, as themselves.
+[`docs/examples`](../README.md) says how the bundles are made.
+
 ## Konklav roles
 
 - **Test lead**, tenant-wide: `kuria:akter:read`; and at `test_protocol`

@@ -239,6 +239,12 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `bundle`
   - What an export writes and an import reads: selected akt types, with or without their akter, or a whole tenant, as a directory (a tar archive on the wire). Akter in a bundle keep their numbers and whole history.
 
+- `bootstrap bundle`
+  - A bundle the server imports into a fresh tenant when it starts, before it serves (`KURIA_BOOTSTRAP_BUNDLE`).
+
+- `example bundle`
+  - The bundle each example in `docs/examples` holds in `bundle/`: its akt types with akter made through Kuria's API, to bootstrap or import.
+
 - `subject alias`
   - A record, made by an import, that a subject a bundle names is shown as, and filters as, a user of the importing tenant. Revisions keep naming the subject they recorded.
 
