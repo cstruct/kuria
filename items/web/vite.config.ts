@@ -22,14 +22,23 @@ export default defineConfig({
 		// The app must share the server's origin: its session cookie is
 		// SameSite=Strict, and the login page reaches Konklav through it.
 		proxy: Object.fromEntries(
-			['/graphql', '/akter', '/auth', '/attachments', '/v1', '/.well-known', '/healthz'].map(
-				(path) => [
-					path,
-					// Subscriptions, and live drafts (`/akter/{number}/live`), over
-					// WebSockets.
-					{ target: server, ws: path === '/graphql' || path === '/akter', changeOrigin: false }
-				]
-			)
+			[
+				'/graphql',
+				'/akter',
+				'/auth',
+				'/attachments',
+				'/export',
+				'/import',
+				'/cli',
+				'/v1',
+				'/.well-known',
+				'/healthz'
+			].map((path) => [
+				path,
+				// Subscriptions, and live drafts (`/akter/{number}/live`), over
+				// WebSockets.
+				{ target: server, ws: path === '/graphql' || path === '/akter', changeOrigin: false }
+			])
 		)
 	},
 	test: {

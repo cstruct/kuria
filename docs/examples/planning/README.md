@@ -100,13 +100,14 @@ and the server imports it into its default tenant (or
 `KURIA_BOOTSTRAP_TENANT`) before it serves; the tenant must hold nothing
 yet ([`items/server`](../../../items/server/README.md#running)).
 `kuria import docs/examples/planning/bundle` takes it to a running server's
-tenant that hasn't defined these types. Against the end-to-end Konklav,
+tenant that hasn't defined these types.
 
 ```sh
-mise run e2e:example planning
+mise run example planning
 ```
 
-serves it on <http://localhost:18090> to the seeded people, as themselves.
+serves it on <http://localhost:18290> to its people, who sign in as
+themselves, with the app hot-reloading ([`example/`](../../../example/README.md)).
 [`docs/examples`](../README.md) says how the bundles are made.
 
 ## Konklav roles

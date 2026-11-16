@@ -28,16 +28,16 @@ KURIA_BOOTSTRAP_BUNDLE=docs/examples/planning/bundle mise run serve
 (`KURIA_BOOTSTRAP_TENANT`, else `KURIA_DEFAULT_TENANT`, names the tenant;
 [`items/server`](../../items/server/README.md#running) lists the variables.)
 A server started again with the variable still set refuses to start rather
-than import twice: unset it after the first start. Against the end-to-end
-Konklav, with its seeded people,
+than import twice: unset it after the first start. To click around in one,
 
 ```sh
-mise run e2e:example planning
+mise run example planning
 ```
 
-runs Kuria as `mise run e2e:serve` does, with the example loaded and its
-people shown as, and signing in as, the seeded ones
-([`e2e/`](../../e2e/README.md)).
+serves it on <http://localhost:18290> with only that example loaded, to its
+own people, who sign in as themselves, and with the app hot-reloading as you
+edit it. It runs on a stack of its own, beside `mise run e2e`
+([`example/`](../../example/README.md)).
 
 ### Making them
 

@@ -42,9 +42,9 @@ const EXAMPLES: [(&str, &[&str]); 4] = [
     ("test-protocols", &["test_case", "test_protocol"]),
 ];
 
-/// The people of the end-to-end seed (`e2e/scripts/setup.ts`), by email,
-/// so that `mise run e2e:example` maps them to the seeded users, and the
-/// build pipeline.
+/// The examples' people, with the emails of the end-to-end seed
+/// (`e2e/scripts/setup.ts`), and the build pipeline. The example stack
+/// (`example/scripts/setup.ts`) seeds Konklav with these very subjects.
 const DEV: &str = "01900000-0000-7000-8000-00000000d001";
 const RM: &str = "01900000-0000-7000-8000-00000000d002";
 const HEDDA: &str = "01900000-0000-7000-8000-00000000d003";
