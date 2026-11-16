@@ -15,16 +15,26 @@ use crate::authorize::Permission;
 pub(crate) enum By {
     /// A subject, through the API.
     Subject(Uuid),
-    /// One of its akt type's rules, by its kind (`archive.rules`).
-    #[allow(dead_code, reason = "rules archive from PLAN-017-T04")]
-    Rule(&'static str),
+    /// One of its akt type's rules, by its kind (`archive.rules`), and for
+    /// `with_container` the container it went with.
+    Rule {
+        kind: &'static str,
+        container: Option<Uuid>,
+    },
 }
 
 impl By {
     fn json(self) -> Json {
         match self {
             Self::Subject(id) => json!({ "subject": id }),
-            Self::Rule(kind) => json!({ "rule": kind }),
+            Self::Rule {
+                kind,
+                container: None,
+            } => json!({ "rule": kind }),
+            Self::Rule {
+                kind,
+                container: Some(container),
+            } => json!({ "rule": kind, "container": container }),
         }
     }
 
@@ -33,7 +43,7 @@ impl By {
     fn author(self) -> Uuid {
         match self {
             Self::Subject(id) => id,
-            Self::Rule(_) => Uuid::nil(),
+            Self::Rule { .. } => Uuid::nil(),
         }
     }
 }
@@ -112,7 +122,7 @@ pub(crate) async fn set(
         )));
     }
     let rule = match by {
-        By::Rule(kind) => Some(format!("by the rule `{kind}`")),
+        By::Rule { kind, .. } => Some(format!("by the rule `{kind}`")),
         By::Subject(_) => None,
     };
     let revision = RevisionRow {
@@ -185,7 +195,10 @@ impl Akter {
                     )));
                 }
                 let by = By::Subject(caller.actor.subject.into());
-                set(conn, akt, &ty, archive, by, reason.clone(), Utc::now()).await
+                let now = Utc::now();
+                let akt = set(conn, akt, &ty, archive, by, reason.clone(), now).await?;
+                super::rules::follow(conn, tenant, &akt, &ty, now).await?;
+                Ok(akt)
             })
             .await;
         self.committed(result)

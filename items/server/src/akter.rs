@@ -27,6 +27,7 @@ mod ordering;
 pub mod outcomes;
 mod push;
 mod references;
+pub(crate) mod rules;
 pub mod versions;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
@@ -628,9 +629,13 @@ async fn change_in(
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
     diagrams::render_written(conn, caller, &stored.ty, &akt, &outcome).await?;
+    let transitioned = transition.is_some();
     let mut recorded = revision(&akt, actor, transition, reason, &outcome, now);
     references::record(conn, &stored.ty, &akt, &outcome.fields, &mut recorded).await?;
     store::append_revision(conn, &recorded).await?;
+    if transitioned {
+        rules::after_transition(conn, tenant, &akt, &stored, now).await?;
+    }
     if live {
         return live::read_as_draft(conn, &stored, akt).await;
     }

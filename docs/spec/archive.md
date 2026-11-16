@@ -81,9 +81,11 @@ object of one of these kinds:
 - `{ "days_in": D, "in": [final states] }`: archive an akt that has been
   in one of `in` for at least `D` days.
 
-The document MUST be refused naming the rule when `N` or `D` is below 1, a
-state in `in` isn't the type's, a `days_in` state isn't final, or
-`with_container` or `within` names a type that may not contain it.
+The document MUST be refused naming the rule when it isn't exactly one of
+these kinds, `N` or `D` is below 1, `in` is empty or names a state that
+isn't the type's, or a `days_in` state isn't final. `with_container` and
+`within` name akt types by key; a rule naming one that never contains the
+akt archives nothing.
 
 r[archive.rules.state-since]
 Every akt MUST record when it reached its current state: when it was

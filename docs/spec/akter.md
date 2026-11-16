@@ -45,7 +45,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - every `attachment` field's `media_types` are valid
   (`akt.field.attachment`);
 - its `versions` are valid (`version.declare`);
-- `live_drafts` comes with `versions` (`live.declare`).
+- `live_drafts` comes with `versions` (`live.declare`);
+- its `archive` rules are valid (`archive.rules`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or

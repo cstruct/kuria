@@ -583,6 +583,30 @@ pub async fn count_akter(
         .await
 }
 
+/// Every akt of the akt type `key`, in any version, in one of `states`
+/// (any state when empty), live, archived or both, the latest to reach
+/// its state first (`archive.rules`).
+pub async fn akter_in_states(
+    conn: &mut Connection,
+    tenant: Uuid,
+    key: &str,
+    states: &[String],
+    archived: Archived,
+) -> QueryResult<Vec<AktRow>> {
+    let mut query = akt::table
+        .inner_join(akt_type_version::table)
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt_type_version::key.eq(key))
+        .filter(akt::archived.eq_any(archived.values()))
+        .select(AktRow::as_select())
+        .order((akt::state_since.desc(), akt::id.desc()))
+        .into_boxed();
+    if !states.is_empty() {
+        query = query.filter(akt::state.eq_any(states));
+    }
+    query.load(conn).await
+}
+
 /// Escapes `%`, `_` and `\` for a `like` pattern.
 fn like_escaped(text: &str) -> String {
     text.replace('\\', "\\\\")

@@ -234,16 +234,17 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-017-T04 -->
 ---
 type: task
-revision: 3
+revision: 8
 rank: b53
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T03, Blocks PLAN-017-T05]
 title: Archive rules on change
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`archive.rules` in akt type documents, validated when defined; `newer` (with `within`) checked on transitions, `with_container` on archives and unarchives, cascading down, kept akter left alone.
+`archive.rules` in akt type documents (`ArchiveDef`, `ArchiveRuleDef` with `rule()` giving `ArchiveRule::{Newer, WithContainer, DaysIn}`), checked when defined: exactly one kind, counts at least 1, `in` named and the type's states, `days_in` states final; `with_container` and `within` name types (containment is the container's to declare, so a rule naming one that never holds the akt archives nothing; spec says so). Server (`akter/rules.rs`): rules read from each type's latest version; `newer` (and `within`, by shared containers of that type) applied after every transition, counting archived akter too and archiving only live, unkept ones; `with_container` followed down from every archive and unarchive, `archived_by` naming the container so unarchiving it brings back only what it took; archives by rule authored by Kuria (nil), revision reason "by the rule `kind`". `akter_in_states` in the store. Config test and 4 server tests (newer, within, nested containers and back, kept). 467 Rust tests pass.
 
 <!-- field: acceptance -->
 - Config and server tests for each rule kind, cascades, unarchive bringing back what a container took, kept akter, and wrong rules refused.
