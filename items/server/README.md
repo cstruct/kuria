@@ -319,6 +319,9 @@ redirect URI. The end-to-end seed registers it
 | `KURIA_WEB_DIR` | The built app (`items/web/build`) to serve; none by default |
 | `KURIA_LOGIN_APP` | `true` to be Konklav's login application: proxying its subject-facing surface, with Konklav's issuer this server's public URL and its login URL `<public URL>/login`; `false` by default |
 | `KURIA_DEFAULT_TENANT` | The tenant a sign-in that names none is for; none by default |
+| `KURIA_BOOTSTRAP_BUNDLE` | A bundle to import before serving: a directory as `kuria export` writes it, or its tar archive. Only into a fresh tenant (no akt types, akter or contacts), else the server refuses to start; unset it after the first start. Every example holds one in `bundle/` ([`docs/examples`](../../docs/examples/README.md)); none by default (`bundle.bootstrap.*`) |
+| `KURIA_BOOTSTRAP_TENANT` | The tenant the bootstrap bundle goes into; `KURIA_DEFAULT_TENANT` by default |
+| `KURIA_BOOTSTRAP_SUBJECTS` | A JSON file mapping the bootstrap bundle's subjects to the tenant's (`{"<bundle's subject>": "<tenant's subject>"}`), as `kuria import --map-subjects` does; without it, they are shown by the names the bundle recorded |
 | `KURIA_TRUSTED_PROXIES` | Comma-separated addresses or CIDR networks whose `X-Forwarded-For` names the client; none by default |
 | `KONKLAV_ISSUER` | Konklav's issuer, as its tokens' `iss` names it; the OpenID provider is discovered from it |
 | `KONKLAV_AUDIENCE` | The audiences Kuria accepts tokens for, comma-separated: its OIDC client's, and Konklav's own (`konklav`) if software that signs in to Konklav directly, with a secret key, calls Kuria |

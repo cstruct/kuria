@@ -49,12 +49,16 @@ Success: `mise run e2e:example -- planning` serves the planning example's akter 
 <!-- akt: PLAN-018-T01 -->
 ---
 type: task
-revision: 1
+revision: 5
 rank: b4v
-state: todo
+state: done
 in: [PLAN-018]
 title: Spec bootstrapping and example bundles
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+`docs/spec/bundles.md` gained "Bootstrapping" (`bundle.bootstrap.variables`, `.tenant`, `.import`, `.fresh`, `.before-serving`, `.recorded`) and "The examples' bundles" (`bundle.examples`). `docs/nomenclature.md` defines `bootstrap bundle` and `example bundle`; `items/server/README.md` lists `KURIA_BOOTSTRAP_BUNDLE`, `KURIA_BOOTSTRAP_TENANT` and `KURIA_BOOTSTRAP_SUBJECTS`. Checked by reading against PLAN-018-D01 to D03; `tracey` sees the rules once the code references them (PLAN-018-T02, T03).
 
 <!-- field: acceptance -->
 `docs/spec/bundles.md` has rules for bootstrapping (`bundle.bootstrap.*`): the variables, which tenant, what fresh means, refusing to start, recording and subjects; and for the examples' bundles. `docs/nomenclature.md` defines `bootstrap bundle` and `example bundle`. `items/server/README.md` lists the variables.
