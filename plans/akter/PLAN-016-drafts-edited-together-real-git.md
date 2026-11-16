@@ -378,9 +378,9 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-016-T08 -->
 ---
 type: task
-revision: 7
+revision: 10
 rank: b4c
-state: doing
+state: dropped
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T02, Blocked by PLAN-016-T03, Blocked by PLAN-016-T05, Blocked by PLAN-016-T07]
 title: The example and its walkthrough
@@ -388,7 +388,7 @@ assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The example and its walkthrough: `document` with drafts, `document_index` with git; the walkthrough with two editors, a release, the branch workflow and an exported directory; docs; `git-remote-kuria` retired or kept for moving over (G03).
+Superseded by PLAN-016-T13 once D07 and D08 replaced hosted repositories with clones: the example (`document` live, `document_index` without git), the walkthrough with two editors (`live.spec.ts`), a release, the branch workflow through `kuria clone/pull/push` with local git, and an exported directory (`cli.spec.ts`) were done there. G03 went with D08.
 
 <!-- field: acceptance -->
 - The walkthrough passes in `mise run e2e`, with lint and the tests.
@@ -608,9 +608,9 @@ The CLI's clone workflow (`clone.clone`, `.status`, `.add`, `.push`, `.pull`), b
 <!-- akt: PLAN-016-T13 -->
 ---
 type: task
-revision: 4
+revision: 6
 rank: b4o
-state: doing
+state: done
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T12]
 title: "The walkthrough, the failing browser tests and docs"
@@ -618,7 +618,16 @@ assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The example (`document` with live drafts; `document_index` without `git`), the walkthrough with two editors, a release, an exported directory and the branch workflow through `kuria clone/pull/push` with local git; the browser tests that fail since the merges (documents, live, the editor's image test, sheets) fixed; docs.
+The example's documents live, the clone walkthrough, and all of `mise run e2e` green (`959beb7`).
+
+- **Example:** `document` says `"live_drafts": true`; its README says how live drafts work. The browser tests close the editor with **Done**; `live.spec.ts` and `clone.spec.ts` no longer redefine the type.
+- **Walkthrough** (`documents.spec.ts`): after the release, the index cloned with `kuria clone` into a git repository of its own (`.kuria/` not committed, the picture linked relatively); a ready commit and an unready one; the unready one kept on a branch and reset away; the ready part pushed and released in the app; the branch merged back and pushed; the guide has it, version 1 doesn't; `kuria status` clean.
+- **Fixed on the way:**
+  - `kuria clone <number> <dir>` took the directory as the global `--dir` and refused as local mode; the positional is now `into`, with a parsing test.
+  - A diagram typed into a live draft was never drawn: WebSocket edits now render each block that compiles and pass over one half written (`live.sync`, server test).
+  - A release checked references to a live akt against its last revision, not its live draft (`live.read`, server test). Its pin still names that revision: PLAN-016-G06.
+  - Tests pick the example's Image type when other image types exist, and wait for a transition's dialog before its state.
+- Lint, 451 Rust, 110 app and 39 browser tests pass.
 
 <!-- field: acceptance -->
 - All of `mise run e2e` passes, with lint and the tests.
