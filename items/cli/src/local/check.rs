@@ -9,7 +9,8 @@ use kuria_engine::rules::containment;
 use serde_json::json;
 
 use super::answers;
-use super::dir::{AktDir, LocalAkt, LocalType, files, read_file, read_type};
+use super::archive::{Archive, kept_path};
+use super::dir::{AktDir, LocalAkt, LocalType, akt_files, files, read_file, read_type};
 use super::layout;
 use super::write::Writer;
 use crate::error::CliError;
@@ -67,21 +68,33 @@ pub fn run(root: &Path, fix: bool) -> Result<Answer, CliError> {
     if !fix {
         return check(root);
     }
-    let before = files(&root.join("akter"), "md")?;
-    let mut w = Writer::open(root, None)?;
+    let before = akt_files(&root.join("akter"))?;
+    let me = std::env::var("KURIA_ME")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .or_else(|| super::git::email(root));
+    let mut w = Writer::open(root, me)?;
+    // r[impl cli.local.archive]
+    let archived = super::archive::sweep(&mut w)?;
     w.touch_all();
     w.save()?;
-    let after = files(&root.join("akter"), "md")?;
+    let after = akt_files(&root.join("akter"))?;
     let checked = check(root);
-    let said = format!(
+    let mut said = format!(
         "Moved the akter of {} files into {} files.",
         before.len(),
         after.len()
     );
+    if archived > 0 {
+        said.push_str(&format!(
+            " Archived {archived} akter by their types' rules."
+        ));
+    }
     match checked {
         Ok(mut answer) => {
             answer.markdown = format!("{said}\n\n{}", answer.markdown);
             answer.json["files"] = json!({ "before": before.len(), "after": after.len() });
+            answer.json["archivedByRules"] = archived.into();
             Ok(answer)
         }
         Err(e) => Err(CliError {
@@ -133,7 +146,7 @@ pub fn check(root: &Path) -> Result<Answer, CliError> {
     }
 
     let mut akter = Vec::new();
-    for path in files(&root.join("akter"), "md")? {
+    for path in akt_files(&root.join("akter"))? {
         for akt in read_file(&path, &types) {
             match akt {
                 Ok(akt) => akter.push(akt),
@@ -142,13 +155,20 @@ pub fn check(root: &Path) -> Result<Answer, CliError> {
         }
     }
     akter.sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));
+    let archive = Archive::read(root).unwrap_or_else(|e| {
+        problems.add(&Archive::path(root), e.message);
+        Archive::default()
+    });
     let dir = AktDir {
         root: root.to_owned(),
         types,
         akter,
+        archive,
+        archived: Vec::new(),
     };
     check_akter(&dir, &mut problems);
     check_names(&dir, &mut problems);
+    check_archive(&dir, &mut problems);
 
     if problems.found.is_empty() {
         return Ok(Answer {
@@ -257,11 +277,18 @@ fn check_containers(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
             problems.of(akt, "is in itself");
             continue;
         }
-        let Some(container) = dir.akt(number) else {
-            problems.of(akt, format!("is in `{number}`, which the directory lacks"));
-            continue;
+        // An archived container is named by its number, and its type.
+        let container_ty = match (dir.akt(number), dir.archive.entry(number)) {
+            (Some(container), _) => &dir.type_of(container).ty,
+            (None, Some(entry)) if dir.types.contains_key(&entry.type_key) => {
+                &dir.types[&entry.type_key].ty
+            }
+            (None, Some(_)) => continue,
+            (None, None) => {
+                problems.of(akt, format!("is in `{number}`, which the directory lacks"));
+                continue;
+            }
         };
-        let container_ty = &dir.type_of(container).ty;
         match container_ty.contains(ty.key()) {
             None => problems.of(
                 akt,
@@ -304,10 +331,13 @@ fn check_links(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
             continue;
         };
         let Some(other) = dir.akt(number) else {
-            problems.of(
-                akt,
-                format!("the link `{text}` names an akt the directory lacks"),
-            );
+            // A link to an archived akt reads as one (`cli.local.archive`).
+            if !dir.is_archived(number) {
+                problems.of(
+                    akt,
+                    format!("the link `{text}` names an akt the directory lacks"),
+                );
+            }
             continue;
         };
         let other_ty = &dir.type_of(other).ty;
@@ -388,6 +418,52 @@ fn check_place(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
             "isn't numbered after an akt of its file, so it begins a file of its own",
         ),
         _ => {}
+    }
+}
+
+/// Whether `akter/archived.md` names akter of the directory's types that
+/// aren't live too, and `akter/archived/` keeps only akter it names
+/// (`cli.local.archive`).
+// r[impl cli.local.archive.kept]
+// r[impl cli.local.check]
+// r[impl cli.local.archive]
+fn check_archive(dir: &AktDir, problems: &mut Problems) {
+    let listing = Archive::path(&dir.root);
+    for entry in &dir.archive.archived {
+        if let Some(live) = dir.akt(&entry.number) {
+            let file = problems.relative(&live.path);
+            problems.add(
+                &listing,
+                format!("lists {} as archived, but {file} holds it", entry.number),
+            );
+        }
+        if !dir.types.contains_key(&entry.type_key) {
+            problems.add(
+                &listing,
+                format!(
+                    "lists {} as a `{}`, which `types/` lacks",
+                    entry.number, entry.type_key
+                ),
+            );
+        }
+    }
+    for number in &dir.archive.kept {
+        if dir.akt(number).is_none() {
+            problems.add(
+                &listing,
+                format!("keeps {number} from rules, but the directory has no live {number}"),
+            );
+        }
+    }
+    let kept = dir.root.join("akter").join(super::archive::KEPT);
+    for path in files(&kept, "md").unwrap_or_default() {
+        let number = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default();
+        if !dir.is_archived(number) || kept_path(&dir.root, number) != path {
+            problems.add(&path, "keeps an akt that akter/archived.md doesn't list");
+        }
     }
 }
 

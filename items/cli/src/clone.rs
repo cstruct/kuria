@@ -146,9 +146,12 @@ impl CloneOf<'_> {
     // r[impl clone.tree]
     pub async fn now(&self) -> Result<Now, CliError> {
         self.container().await?;
-        let members =
-            crate::reads::members_of(crate::reads::Source::Server(self.session), &self.number)
-                .await?;
+        let members = crate::reads::members_of(
+            crate::reads::Source::Server(self.session),
+            &self.number,
+            crate::reads::Archived::Live,
+        )
+        .await?;
         let mut asked = vec![(self.number.clone(), None)];
         asked.extend(members.into_iter().map(|(n, _)| (n, None)));
         let fragments = format!("{SHAPE} {VALUES} {SOMEONE}");

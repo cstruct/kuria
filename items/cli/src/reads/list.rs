@@ -32,6 +32,8 @@ pub struct Listing {
     pub after: Option<String>,
     /// Every page, not one.
     pub all: bool,
+    /// Live akter, archived ones, or both (`cli.archive`).
+    pub archived: super::Archived,
 }
 
 /// `kuria ls`.
@@ -81,12 +83,18 @@ pub async fn ls(source: Source<'_>, listing: &Listing) -> Result<Answer, CliErro
 
 /// `kuria find <text>`: akter by a number's beginning or a title's words.
 // r[impl cli.read]
-pub async fn find(source: Source<'_>, text: &str, limit: u32) -> Result<Answer, CliError> {
+pub async fn find(
+    source: Source<'_>,
+    text: &str,
+    limit: u32,
+    archived: super::Archived,
+) -> Result<Answer, CliError> {
     ls(
         source,
         &Listing {
             search: Some(text.to_owned()),
             limit,
+            archived,
             ..Listing::default()
         },
     )
@@ -196,11 +204,11 @@ async fn page(
         let data = session
             .graphql(
                 &format!(
-                    "query($n: String!, $type: String, $first: Int, $after: String, $where: [FieldCondition!], $outcome: Outcome) {{
-                      akt(number: $n) {{ members(type: $type, first: $first, after: $after, where: $where, outcome: $outcome) {{
+                    "query($n: String!, $type: String, $first: Int, $after: String, $where: [FieldCondition!], $outcome: Outcome, $archived: ArchivedFilter) {{
+                      akt(number: $n) {{ members(type: $type, first: $first, after: $after, where: $where, outcome: $outcome, archived: $archived) {{
                         nodes {{ ...Row }} pageInfo {{ endCursor hasNextPage }} }} }} }} {fragments}"
                 ),
-                json!({ "n": container, "type": listing.akt_type, "first": first, "after": after, "where": wheres, "outcome": outcome }),
+                json!({ "n": container, "type": listing.akt_type, "first": first, "after": after, "where": wheres, "outcome": outcome, "archived": listing.archived.filter() }),
             )
             .await?;
         if data["akt"].is_null() {
@@ -215,13 +223,14 @@ async fn page(
     let data = session
         .graphql(
             &format!(
-                "query($type: String, $state: String, $first: Int, $after: String, $search: String, $where: [FieldCondition!], $outcome: Outcome) {{
-                  akter(type: $type, state: $state, first: $first, after: $after, search: $search, where: $where, outcome: $outcome) {{
+                "query($type: String, $state: String, $first: Int, $after: String, $search: String, $where: [FieldCondition!], $outcome: Outcome, $archived: ArchivedFilter) {{
+                  akter(type: $type, state: $state, first: $first, after: $after, search: $search, where: $where, outcome: $outcome, archived: $archived) {{
                     nodes {{ ...Row }} pageInfo {{ endCursor hasNextPage }} }} }} {fragments}"
             ),
             json!({
                 "type": listing.akt_type, "state": state, "first": first, "after": after,
                 "search": listing.search, "where": wheres, "outcome": outcome,
+                "archived": listing.archived.filter(),
             }),
         )
         .await?;
@@ -274,18 +283,18 @@ fn local_page(
     let dir = &local.dir;
     let mut akter: Vec<_> = match &listing.inside {
         Some(container) => {
-            if dir.akt(container).is_none() {
+            if dir.any(container).is_none() && !dir.archive.has(container) {
                 return Err(CliError::from_server(
                     "NOT_FOUND",
                     format!("No akt `{container}`"),
                     None,
                 ));
             }
-            dir.members_of(container).collect()
+            dir.members_with(container, listing.archived).collect()
         }
         None => {
-            let mut all: Vec<_> = dir.akter.iter().collect();
-            let updated = |a: &&crate::local::dir::LocalAkt| local.times.of_akt(a).1;
+            let mut all: Vec<_> = dir.with(listing.archived).collect();
+            let updated = |a: &&crate::local::dir::LocalAkt| answers::updated(dir, &local.times, a);
             all.sort_by(|a, b| {
                 updated(b)
                     .cmp(&updated(a))
@@ -417,7 +426,11 @@ fn answer(rows: &[Row], shape: Option<&Shape>, page: &crate::model::PageInfo, al
                 cells.push(r.akt_type.name.clone());
             }
             cells.push(r.title.clone().unwrap_or_default());
-            cells.push(r.state.name.clone());
+            // r[impl cli.archive]
+            cells.push(match &r.archived {
+                Some(_) => format!("{} (archived)", r.state.name),
+                None => r.state.name.clone(),
+            });
             if outcomes {
                 cells.push(
                     r.outcome
@@ -473,6 +486,7 @@ fn row_json(row: &Row) -> Json {
         "title": row.title,
         "state": row.state.key,
         "outcome": row.outcome.as_ref().map(|o| o.to_lowercase()),
+        "archived": row.archived.as_ref().map(crate::model::Archived::json),
         "updatedAt": row.updated_at,
         "fields": fields,
     })

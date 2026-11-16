@@ -305,7 +305,7 @@ async fn a_whole_tenant_moves_to_another_kuria_as_it_was() {
     let unpacked = archive::unpack(&archive).unwrap();
     assert_eq!(unpacked.attachments.len(), 1);
     let bundle: Value = serde_json::from_slice(&unpacked.bundle).unwrap();
-    assert_eq!(bundle["format"], 2);
+    assert_eq!(bundle["format"], 3);
     assert_eq!(bundle["scope"], "tenant");
     assert_eq!(bundle["people"][0]["email"], "ada@shop.example");
     assert_eq!(bundle["signedIn"][0]["subject"], SUBJECT);
@@ -824,4 +824,81 @@ async fn versions_that_dont_fit_their_akt_are_refused() {
     );
     let (status, imported) = target.import("tenant", older).await;
     assert_eq!(status, StatusCode::OK, "{imported}");
+}
+
+const ARCHIVED: &str = "query($n: String!) { akt(number: $n) { revision archived { at by { id } rule reason } revisions { revision transition reason } } }";
+
+/// An akt type whose akter go with their plan when it is archived.
+fn kept_task() -> Value {
+    let mut task = task();
+    task["archive"] = json!({ "rules": [{ "with_container": "plan" }] });
+    task
+}
+
+/// How each of `numbers` is archived in `token`'s tenant, with its history.
+async fn archived_states(kuria: &Kuria, token: &str, numbers: &[&str]) -> Vec<Value> {
+    let mut found = Vec::new();
+    for number in numbers {
+        found.push(kuria.ok(token, ARCHIVED, json!({ "n": number })).await["akt"].clone());
+    }
+    found
+}
+
+// r[verify bundle.contents]
+// r[verify bundle.import.archived]
+#[tokio::test(flavor = "multi_thread")]
+async fn archived_akter_move_archived_and_come_back_with_their_container() {
+    let kuria = Kuria::new().await;
+    kuria.define("tenant", plan()).await;
+    kuria.define("tenant", kept_task()).await;
+    let plan = kuria
+        .create("tenant", "plan", json!({ "title": "Autumn" }), &[])
+        .await;
+    let first = kuria
+        .create("tenant", "task", json!({ "title": "First" }), &[&plan])
+        .await;
+    let second = kuria
+        .create("tenant", "task", json!({ "title": "Second" }), &[&plan])
+        .await;
+    let archive = "mutation($n: String!, $r: String) { archiveAkt(input: { number: $n, reason: $r }) { number } }";
+    let unarchive = "mutation($n: String!) { unarchiveAkt(input: { number: $n }) { number } }";
+    // The second is kept from rules: archived by one, unarchived by hand.
+    kuria
+        .ok("tenant", archive, json!({ "n": plan, "r": "Done with" }))
+        .await;
+    kuria.ok("tenant", unarchive, json!({ "n": second })).await;
+    let here = archived_states(&kuria, "tenant", &[&plan, &first, &second]).await;
+    assert_eq!(here[0]["archived"]["reason"], "Done with");
+    assert_eq!(here[0]["archived"]["by"]["id"], SUBJECT);
+    assert_eq!(here[1]["archived"]["rule"], "with_container");
+    assert!(here[2]["archived"].is_null());
+
+    let bundle = kuria.exported("tenant", "types=plan,task&akter=true").await;
+    let (status, imported) = kuria.import("other-tenant", bundle).await;
+    assert_eq!(status, StatusCode::OK, "{imported}");
+    let there = archived_states(&kuria, "other-tenant", &[&plan, &first, &second]).await;
+    assert_eq!(there, here, "archived as they were, history and all");
+    let live = kuria
+        .ok(
+            "other-tenant",
+            "{ akter(first: 10) { nodes { number } } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(live["akter"]["nodes"], json!([{ "number": second }]));
+
+    // The plan's archive names the identifier its container got there:
+    // unarchived, it brings back what it took; archived again, the kept
+    // task stays.
+    kuria
+        .ok("other-tenant", unarchive, json!({ "n": plan }))
+        .await;
+    let back = archived_states(&kuria, "other-tenant", &[&first]).await;
+    assert!(back[0]["archived"].is_null(), "{back:?}");
+    kuria
+        .ok("other-tenant", archive, json!({ "n": plan, "r": null }))
+        .await;
+    let after = archived_states(&kuria, "other-tenant", &[&first, &second]).await;
+    assert_eq!(after[0]["archived"]["rule"], "with_container");
+    assert!(after[1]["archived"].is_null(), "kept from rules");
 }

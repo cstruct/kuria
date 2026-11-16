@@ -249,6 +249,8 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             limit,
             after,
             all,
+            archived,
+            with_archived,
         } => {
             let listing = reads::Listing {
                 akt_type,
@@ -260,29 +262,54 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
                 limit,
                 after,
                 all,
+                archived: reads::Archived::asked(archived, with_archived),
             };
             reads::ls(source, &listing).await
         }
-        Command::Find { text, limit } => reads::find(source, &text.join(" "), limit).await,
+        Command::Find {
+            text,
+            limit,
+            archived,
+            with_archived,
+        } => {
+            let archived = reads::Archived::asked(archived, with_archived);
+            reads::find(source, &text.join(" "), limit, archived).await
+        }
         Command::Cat {
             numbers,
             output,
             members,
             all_members,
             version,
+            archived,
+            with_archived,
         } => {
             let members = match (all_members, members.is_empty()) {
                 (true, _) => reads::WithMembers::All,
                 (false, false) => reads::WithMembers::Types(&members),
                 (false, true) => reads::WithMembers::None,
             };
-            reads::cat(source, &numbers, output.as_deref(), members, version).await
+            let archived = reads::Archived::asked(archived, with_archived);
+            reads::cat(
+                source,
+                &numbers,
+                output.as_deref(),
+                members,
+                version,
+                archived,
+            )
+            .await
         }
         Command::Show {
             number,
             history,
             version,
-        } => reads::show(source, &number, history, version).await,
+            archived,
+            with_archived,
+        } => {
+            let archived = reads::Archived::asked(archived, with_archived);
+            reads::show(source, &number, history, version, archived).await
+        }
         Command::Versions { number } => crate::versions::list(source, &number).await,
         Command::Diff { number, from, to } => {
             crate::versions::diff(source, &number, from, to).await
@@ -442,6 +469,13 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
         Command::Release { numbers, label } => {
             let times = local::git::Times::of(&w.dir.root);
             local::versions::release(&mut w, &times, &numbers, label.as_deref())
+        }
+        // r[impl cli.local.archive]
+        Command::Archive { numbers, reason } => {
+            return local::archive::command(w, &numbers, reason.as_deref(), true);
+        }
+        Command::Unarchive { numbers, reason } => {
+            return local::archive::command(w, &numbers, reason.as_deref(), false);
         }
         Command::Types {
             action: Some(TypesCommand::Define { files, .. }),
@@ -607,6 +641,12 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             field,
             reason,
         } => writes::draft(session, &number, &field, reason.as_deref()).await,
+        Command::Archive { numbers, reason } => {
+            writes::archive::archive(session, &numbers, reason.as_deref(), true).await
+        }
+        Command::Unarchive { numbers, reason } => {
+            writes::archive::archive(session, &numbers, reason.as_deref(), false).await
+        }
         _ => unreachable!("dispatched above"),
     }
 }

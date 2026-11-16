@@ -29,7 +29,7 @@ pub fn pins_of(version: &Json) -> Vec<Pin> {
 /// each version's, which its entry keeps.
 #[must_use]
 pub fn target(dir: &AktDir, number: &str) -> Option<Target> {
-    let akt = dir.akt(number)?;
+    let akt = dir.any(number)?;
     let ty = &dir.type_of(akt).ty;
     Some(Target {
         headings: markdown::heading_ids(ty, &markdown_of(dir, akt)),

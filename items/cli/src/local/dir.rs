@@ -8,9 +8,11 @@ use kuria_config::{AktType, AktTypeDocument, validate};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as Json};
 
+use super::archive::Archive;
 use crate::error::CliError;
 use crate::file::{self, Parsed};
 use crate::profile::io_error;
+use crate::reads::Archived;
 
 /// The akt directory format this client reads and writes.
 pub const FORMAT: u32 = 1;
@@ -59,8 +61,14 @@ pub struct LocalAkt {
 pub struct AktDir {
     pub root: PathBuf,
     pub types: BTreeMap<String, LocalType>,
-    /// In the directory's order (`rank`).
+    /// Its live akter, in the directory's order (`rank`).
     pub akter: Vec<LocalAkt>,
+    /// `akter/archived.md`: the akter archived, and those kept from rules
+    /// (`cli.local.archive`).
+    pub archive: Archive,
+    /// The archived akter, as git or `akter/archived/` keeps each, at the
+    /// revision their archiving reached, once loaded (`load_archived`).
+    pub archived: Vec<LocalAkt>,
 }
 
 fn bad(path: &Path, message: impl std::fmt::Display) -> CliError {
@@ -119,16 +127,71 @@ impl AktDir {
         let types = read_types(&root.join("types"))?;
         let mut akter = read_akter(&root.join("akter"), &types)?;
         akter.sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));
+        let archive = Archive::read(root)?;
         Ok(Self {
             root: root.to_owned(),
             types,
             akter,
+            archive,
+            archived: Vec::new(),
         })
     }
 
+    /// Reads each archived akt from where it is kept, as `times` says git
+    /// has it, leaving out any neither git nor `akter/archived/` has.
+    // r[impl cli.local.archive]
+    pub fn load_archived(&mut self, times: &super::git::Times) {
+        self.archived = self
+            .archive
+            .archived
+            .iter()
+            .filter_map(|entry| super::archive::read_archived(self, times, entry))
+            .collect();
+        self.archived
+            .sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));
+    }
+
+    /// The live akt `number`.
     #[must_use]
     pub fn akt(&self, number: &str) -> Option<&LocalAkt> {
         self.akter.iter().find(|a| a.number == number)
+    }
+
+    /// The akt `number`, live or archived, as reading it by its number
+    /// finds it (`archive.read`).
+    #[must_use]
+    pub fn any(&self, number: &str) -> Option<&LocalAkt> {
+        self.akt(number)
+            .or_else(|| self.archived.iter().find(|a| a.number == number))
+    }
+
+    /// Whether `akt` is archived.
+    #[must_use]
+    pub fn is_archived(&self, number: &str) -> bool {
+        self.archive.has(number)
+    }
+
+    /// The akter `archived` allows, live ones first, each in the
+    /// directory's order.
+    pub fn with(&self, archived: Archived) -> impl Iterator<Item = &LocalAkt> + '_ {
+        let live = archived.allows(false).then_some(self.akter.iter());
+        let gone = archived.allows(true).then_some(self.archived.iter());
+        live.into_iter().flatten().chain(gone.into_iter().flatten())
+    }
+
+    /// The members of `container` that `archived` allows, in the
+    /// directory's order.
+    pub fn members_with<'a>(
+        &'a self,
+        container: &'a str,
+        archived: Archived,
+    ) -> impl Iterator<Item = &'a LocalAkt> + 'a {
+        let mut members: Vec<&LocalAkt> = self
+            .with(archived)
+            .filter(|a| a.containers.iter().any(|c| c == container))
+            .collect();
+        members.sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));
+        members.into_iter()
     }
 
     #[must_use]
@@ -202,6 +265,15 @@ pub fn files(dir: &Path, extension: &str) -> Result<Vec<PathBuf>, CliError> {
     Ok(found)
 }
 
+/// The akt files of `akter/`, by name: all its Markdown files but
+/// `archived.md` (`cli.local.archive`).
+pub fn akt_files(dir: &Path) -> Result<Vec<PathBuf>, CliError> {
+    Ok(files(dir, "md")?
+        .into_iter()
+        .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some(super::archive::FILE))
+        .collect())
+}
+
 fn strings(parsed: &Parsed, key: &str) -> Result<Vec<String>, String> {
     match parsed.front.get(key) {
         None | Some(Json::Null) => Ok(Vec::new()),
@@ -220,7 +292,7 @@ fn strings(parsed: &Parsed, key: &str) -> Result<Vec<String>, String> {
 /// Every akt in the files of `dir`, as akter of `types`.
 fn read_akter(dir: &Path, types: &BTreeMap<String, LocalType>) -> Result<Vec<LocalAkt>, CliError> {
     let mut akter = Vec::new();
-    for path in files(dir, "md")? {
+    for path in akt_files(dir)? {
         for akt in read_file(&path, types) {
             akter.push(akt?);
         }

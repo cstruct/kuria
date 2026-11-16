@@ -103,6 +103,14 @@ pub struct Writer {
     types: BTreeSet<String>,
     /// Files to copy into the directory: each source, and its path there.
     copies: Vec<(PathBuf, String)>,
+    /// What git says of the directory (`cli.local.history`).
+    pub times: super::git::Times,
+    /// Files akter were taken out of, by archiving.
+    emptied: BTreeSet<PathBuf>,
+    /// Whether `akter/archived.md` changed.
+    archive_changed: bool,
+    /// Archived akter's own files to write, or to remove (`None`).
+    kept: std::collections::BTreeMap<PathBuf, Option<String>>,
     _lock: Lock,
 }
 
@@ -110,7 +118,9 @@ impl Writer {
     /// The akt directory at `root`, locked for one change.
     pub fn open(root: &Path, me: Option<String>) -> Result<Self, CliError> {
         let lock = Lock::take(root)?;
-        let dir = AktDir::open(root)?;
+        let mut dir = AktDir::open(root)?;
+        let times = super::git::Times::of(root);
+        dir.load_archived(&times);
         Ok(Self {
             dir,
             ids: Ids::new(me),
@@ -118,8 +128,39 @@ impl Writer {
             touched: BTreeSet::new(),
             types: BTreeSet::new(),
             copies: Vec::new(),
+            times,
+            emptied: BTreeSet::new(),
+            archive_changed: false,
+            kept: std::collections::BTreeMap::new(),
             _lock: lock,
         })
+    }
+
+    /// `akter/archived.md`, to be written when saved.
+    pub fn archive_mut(&mut self) -> &mut super::archive::Archive {
+        self.archive_changed = true;
+        &mut self.dir.archive
+    }
+
+    /// Writes `text` to `path`, an archived akt's own file, when saved, or
+    /// removes it for `None`.
+    pub fn keep_file(&mut self, path: PathBuf, text: Option<String>) {
+        self.kept.insert(path, text);
+    }
+
+    /// Takes the live akt `number` out of the directory, its file to be
+    /// written without it when saved.
+    pub fn remove(&mut self, number: &str) -> LocalAkt {
+        let i = self
+            .dir
+            .akter
+            .iter()
+            .position(|a| a.number == number)
+            .expect("found before it is removed");
+        let akt = self.dir.akter.remove(i);
+        self.emptied.insert(akt.path.clone());
+        self.touched.remove(number);
+        akt
     }
 
     /// The value `raw` given for the attachment field `key` of `ty`, for
@@ -209,10 +250,16 @@ impl Writer {
         unreachable!("a name is found")
     }
 
+    /// The live akt `number`; refused as `ARCHIVED` if it is archived
+    /// (`archive.readonly`).
     pub fn akt(&self, number: &str) -> Result<&LocalAkt, CliError> {
-        self.dir
-            .akt(number)
-            .ok_or_else(|| CliError::from_server("NOT_FOUND", format!("No akt `{number}`"), None))
+        self.dir.akt(number).ok_or_else(|| {
+            if self.dir.is_archived(number) {
+                super::archive::archived(number)
+            } else {
+                CliError::from_server("NOT_FOUND", format!("No akt `{number}`"), None)
+            }
+        })
     }
 
     pub fn akt_mut(&mut self, number: &str) -> &mut LocalAkt {
@@ -310,15 +357,38 @@ impl Writer {
             let bytes = std::fs::read(source).map_err(|e| io_error(source, &e))?;
             write_whole(&to, &bytes)?;
         }
-        let from: BTreeSet<PathBuf> = self
+        let mut from: BTreeSet<PathBuf> = self
             .touched
             .iter()
-            .map(|n| self.dir.akt(n).expect("touched akter exist").path.clone())
+            .filter_map(|n| self.dir.akt(n))
+            .map(|a| a.path.clone())
             .collect();
+        from.extend(self.emptied.iter().cloned());
         let to = layout::relocate(&mut self.dir, &from);
         // Written first, so that an akt is never in no file.
         for path in &to {
             write_whole(path, layout::file_text(&self.dir, path))?;
+        }
+        // r[impl cli.local.archive]
+        for (path, text) in &self.kept {
+            match text {
+                Some(text) => {
+                    if let Some(parent) = path.parent() {
+                        std::fs::create_dir_all(parent).map_err(|e| io_error(parent, &e))?;
+                    }
+                    write_whole(path, text)?;
+                }
+                None => match std::fs::remove_file(path) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                        return Err(io_error(path, &e));
+                    }
+                    _ => {}
+                },
+            }
+        }
+        if self.archive_changed {
+            let path = super::archive::Archive::path(&self.dir.root);
+            write_whole(&path, self.dir.archive.text())?;
         }
         for path in from.difference(&to) {
             if self.dir.akter.iter().all(|a| a.path != *path) {
@@ -417,10 +487,16 @@ impl Writer {
             .extend(self.dir.akter.iter().map(|a| a.number.clone()));
     }
 
-    /// The highest rank in the directory.
+    /// The highest rank in the directory, archived akter's too, so that an
+    /// archived akt's place is never taken.
     #[must_use]
     pub fn last_rank(&self) -> Option<&str> {
-        self.dir.akter.iter().map(|a| a.rank.as_str()).max()
+        self.dir
+            .akter
+            .iter()
+            .chain(&self.dir.archived)
+            .map(|a| a.rank.as_str())
+            .max()
     }
 
     /// A new akt of `t`, not yet added.
@@ -530,9 +606,13 @@ pub fn answer(markdown: String, mut json: Json, reason: Option<&str>) -> Answer 
     Answer { markdown, json }
 }
 
-/// Every akt the directory has, by number.
+/// Every akt the directory has, by number, archived ones too, so that no
+/// number is used again (`cli.local.archive`).
 pub fn numbers(dir: &AktDir) -> impl Iterator<Item = &str> {
-    dir.akter.iter().map(|a| a.number.as_str())
+    dir.akter
+        .iter()
+        .map(|a| a.number.as_str())
+        .chain(dir.archive.archived.iter().map(|e| e.number.as_str()))
 }
 
 /// `json!` for an answer's revision.

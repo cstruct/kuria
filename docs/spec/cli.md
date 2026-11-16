@@ -217,7 +217,9 @@ The client MUST offer:
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
-  `import <dir> [--map-subjects <file>]` (`bundle.format`).
+  `import <dir> [--map-subjects <file>]` (`bundle.format`);
+- `archive <number>… [--reason]` and `unarchive <number>… [--reason]`
+  (`cli.archive`).
 
 Every command that edits, transitions, links or arranges MUST take
 `--reason`, recorded with the revisions it makes.
@@ -232,10 +234,17 @@ reference, Git or Docker value as JSON. A multiline value MAY be given as
 r[cli.archive]
 `kuria archive <number>… [--reason]` and `kuria unarchive <number>…
 [--reason]` MUST archive and unarchive each akt (`archive.act`), in order,
-stopping at the first refused. `ls`, `find` and `cat`/`show` of a
-container's members MUST answer live akter, or with `--archived` only
-archived ones, or with `--all` both; an archived akt's answer MUST say it
-is archived.
+stopping at the first refused, those before it staying so. `ls`, `find`
+and `cat`/`show` of a container's members MUST answer live akter, or with
+`--archived` only archived ones, or with `--with-archived` both (`--all`
+of `ls` being every page); `show` of an archived container MUST list all
+its members unless asked otherwise, as its board does (`archive.board`).
+An archived akt's answer MUST say it is archived: in Markdown, `(archived)`
+by its state in a list, beside its members' and containers' states, and
+when, by whom or which rule and why in `show`; in its akt file, a
+read-only `archived` key after `state` (`{at, by, rule, reason}`); in
+JSON, an `archived` object with `at`, `by`, `rule` and `reason`, `null`
+for a live akt.
 
 ## Local mode
 
@@ -349,6 +358,23 @@ as `UNCOMMITTED` while the directory has changes git hasn't committed.
 Rules MUST apply on the changes the CLI makes (`archive.rules.on-change`),
 and `kuria check --fix` MUST apply them all (`archive.sweep`).
 
+r[cli.local.archive.kept]
+`akter/archived.md` MUST hold its list as YAML front matter: `archived`,
+each entry's `number`, `type`, `revision`, `at`, `by` or `rule` (with the
+`container` a `with_container` archive went with) and `reason`, and
+`kept`, the live akter a person unarchived after a rule archived them
+(`archive.rules.kept`). The akter nested in an archived akt's file MUST
+be archived with it, as `with_container` archives them, whatever their
+types' rules. An archived akt that git doesn't hold at its revision as it
+is, such as one with changes not committed yet, MUST also be kept as its
+own akt file `akter/archived/<NUMBER>.md`, which `kuria unarchive` MUST
+read before git and remove. Reading an archived akt MUST answer it at the
+revision its archiving reached, one past the one listed, and unarchiving
+it MUST raise it by one more, as a server's archive and unarchive
+revisions do (`archive.history`). `kuria check` MUST name an entry that
+is also live, of a type `types/` lacks, a kept akt that isn't live, and a
+file in `akter/archived/` the list doesn't name.
+
 r[cli.local.versions]
 In local mode an akt's versions MUST be kept in the directory's file, as
 a front-matter `versions` list of what `version.number` and
@@ -391,7 +417,11 @@ write the selected akt types and their akter as a new akt directory, in
 the server's order, each akt reading through `cat` as it does on the
 server, refusing an akt that doesn't fit its type's latest document, which
 is the one an akt directory keeps. Each attachment MUST be written as
-its file (`cli.local.attachments`). Each
+its file (`cli.local.attachments`). Each archived akt MUST be listed in
+`akter/archived.md` and written to `akter/archived/` at the revision
+before its archive's (`cli.local.archive.kept`), since no git history
+holds it yet; an import MUST carry each archived akt, with its archive's
+revision, and each kept one, as archived and kept (`bundle.contents`). Each
 akt's versions MUST be written into its directory file's `versions`
 (`cli.local.versions`), each with the headings it had at its revision; a
 version's text stays with the server, since git holds none of the

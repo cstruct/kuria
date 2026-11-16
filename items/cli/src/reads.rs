@@ -19,6 +19,48 @@ use crate::model::{SHAPE, Shape, read};
 use crate::session::Session;
 use crate::values::People;
 
+/// Which akter a list answers (`cli.archive`, `archive.read`): live ones,
+/// the default, archived ones only, or both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Archived {
+    #[default]
+    Live,
+    Archived,
+    All,
+}
+
+impl Archived {
+    /// As `--archived` and `--with-archived` ask.
+    #[must_use]
+    pub fn asked(archived: bool, with_archived: bool) -> Self {
+        match (archived, with_archived) {
+            (true, _) => Self::Archived,
+            (false, true) => Self::All,
+            (false, false) => Self::Live,
+        }
+    }
+
+    /// As GraphQL's `ArchivedFilter` names it.
+    #[must_use]
+    pub fn filter(self) -> &'static str {
+        match self {
+            Self::Live => "LIVE",
+            Self::Archived => "ARCHIVED",
+            Self::All => "ALL",
+        }
+    }
+
+    /// Whether an akt, archived or not as `archived` says, is answered.
+    #[must_use]
+    pub fn allows(self, archived: bool) -> bool {
+        match self {
+            Self::Live => !archived,
+            Self::Archived => archived,
+            Self::All => true,
+        }
+    }
+}
+
 /// Where reads read: a Kuria server, or an akt directory (`cli.local.dir`).
 #[derive(Clone, Copy)]
 pub enum Source<'a> {
@@ -37,9 +79,11 @@ pub struct Local {
 impl Local {
     /// The akt directory at `root`.
     pub fn open(root: &std::path::Path, me: Option<String>) -> Result<Self, CliError> {
-        let dir = AktDir::open(root)?;
+        let mut dir = AktDir::open(root)?;
+        let times = Times::of(root);
+        dir.load_archived(&times);
         Ok(Self {
-            times: Times::of(root),
+            times,
             me: me.or_else(|| local::git::email(root)),
             dir,
         })
