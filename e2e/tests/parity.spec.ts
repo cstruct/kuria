@@ -479,7 +479,9 @@ test('local mode writes documents, releases and reads versions as the server doe
 		expect((await both(args)).code, args.join(' ')).toBe(code);
 	}
 	commit();
-	expect((await both(['release', guide, '--label', '1.0'])).code).toBe(0);
+	// The setup has no version: the guide is released together with it.
+	expect((await both(['release', guide, '--label', '1.0'])).code).toBe(1);
+	expect((await both(['release', guide, setup, '--label', '1.0'])).code).toBe(0);
 	commit();
 	await both(['set', guide, body('more', `[install](kuria:${setup}#install)\n\nMore.\n`)]);
 	commit();

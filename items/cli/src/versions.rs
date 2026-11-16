@@ -58,31 +58,51 @@ pub async fn pdf(
     })
 }
 
-/// `kuria release <number> [--label]` against a server.
+/// `kuria release <number>… [--label]` against a server: one, or several
+/// together (`version.together`).
 // r[impl version.release]
+// r[impl version.together]
 pub async fn release(
     session: &Session,
-    number: &str,
+    numbers: &[String],
     label: Option<&str>,
 ) -> Result<Answer, CliError> {
-    let akt = crate::writes::akt(session, number).await?;
+    let mut akter = Vec::new();
+    for number in numbers {
+        let akt = crate::writes::akt(session, number).await?;
+        akter.push(json!({ "number": number, "revision": akt.revision, "label": label }));
+    }
     let data = session
         .graphql(
-            "mutation($n: String!, $v: Int!, $l: String) {
-               releaseVersion(input: { number: $n, revision: $v, label: $l }) { number revision label } }",
-            json!({ "n": number, "v": akt.revision, "l": label }),
+            "mutation($a: [ReleaseVersionInput!]!) {
+               releaseVersions(input: { akter: $a }) { number revision label } }",
+            json!({ "a": akter }),
         )
         .await?;
-    let version = &data["releaseVersion"];
-    let n = version["number"].as_i64().unwrap_or_default();
-    let label = version["label"].as_str();
-    Ok(Answer {
-        markdown: format!(
-            "{number}: released version {n}{} (revision {}).",
+    let versions = data["releaseVersions"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let mut lines = Vec::new();
+    let mut released = Vec::new();
+    for (number, version) in numbers.iter().zip(&versions) {
+        let n = version["number"].as_i64().unwrap_or_default();
+        let revision = version["revision"].as_i64().unwrap_or_default();
+        let label = version["label"].as_str();
+        lines.push(format!(
+            "{number}: released version {n}{} (revision {revision}).",
             label.map(|l| format!(", {l}")).unwrap_or_default(),
-            akt.revision
-        ),
-        json: json!({ "number": number, "version": n, "revision": akt.revision, "label": label }),
+        ));
+        released
+            .push(json!({ "number": number, "version": n, "revision": revision, "label": label }));
+    }
+    let json = match <[serde_json::Value; 1]>::try_from(released) {
+        Ok([one]) => one,
+        Err(all) => json!({ "released": all }),
+    };
+    Ok(Answer {
+        markdown: lines.join("\n"),
+        json,
     })
 }
 

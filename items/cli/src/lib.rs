@@ -361,8 +361,8 @@ fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, 
 /// `verdict` and `copy`, on a server.
 async fn protocol(session: &Session, command: Command) -> Result<Answer, CliError> {
     match command {
-        Command::Release { number, label } => {
-            versions::release(session, &number, label.as_deref()).await
+        Command::Release { numbers, label } => {
+            versions::release(session, &numbers, label.as_deref()).await
         }
         Command::Pdf {
             number,
@@ -470,9 +470,9 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
         | Command::Unlink { .. }
         | Command::Verdict { .. }
         | Command::Copy { .. }) => local_more(&mut w, command),
-        Command::Release { number, label } => {
+        Command::Release { numbers, label } => {
             let times = local::git::Times::of(&w.dir.root);
-            local::versions::release(&mut w, &times, &number, label.as_deref())
+            local::versions::release(&mut w, &times, &numbers, label.as_deref())
         }
         Command::Types {
             action: Some(TypesCommand::Define { files, .. }),

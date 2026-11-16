@@ -78,18 +78,151 @@ pub fn has_picture(dir: &AktDir, akt: &LocalAkt) -> bool {
         })
 }
 
-/// `kuria release` in local mode: the akt's current revision, committed,
-/// as its next version, once none of its references is broken.
+/// `kuria release` in local mode: each akt's current revision, committed,
+/// as its next version, all or nothing, once none of their references is
+/// broken; a reference from one to another read as what that one is
+/// released as (`version.together`).
 // r[impl cli.local.versions]
 // r[impl version.release]
 // r[impl version.references]
 // r[impl version.pins]
+// r[impl version.together]
 pub fn release(
     w: &mut Writer,
     times: &Times,
-    number: &str,
+    numbers: &[String],
     label: Option<&str>,
 ) -> Result<Answer, CliError> {
+    let label = label_of(label)?;
+    let mut releasing = Vec::new();
+    for (i, number) in numbers.iter().enumerate() {
+        if numbers[..i].contains(number) {
+            return Err(CliError::refused(
+                "BAD_REQUEST",
+                format!("{number} is named twice"),
+            ));
+        }
+        releasing.push(releasable(w, times, number)?);
+    }
+    // Each akt released here as it is released, at the version it gets.
+    let dir = &w.dir;
+    let mut group = std::collections::HashMap::new();
+    for (akt, ty, fields, next) in &releasing {
+        if let Some(mut found) = target(dir, &akt.number) {
+            found.versions.push(TargetVersion {
+                number: u32::try_from(*next).unwrap_or_default(),
+                revision: akt.revision,
+                headings: markdown::heading_ids(ty, fields),
+                picture: has_picture(dir, akt),
+            });
+            group.insert(akt.number.clone(), found);
+        }
+    }
+    let targets = |n: &str| group.get(n).cloned().or_else(|| target(dir, n));
+    let mut pins = Vec::new();
+    let mut broken = Vec::new();
+    let mut together: Vec<String> = Vec::new();
+    for (akt, ty, fields, _) in &releasing {
+        match versions::check(ty, fields, &targets) {
+            Ok(found) => pins.push(found),
+            Err(found) => {
+                for b in found {
+                    broken.push(if releasing.len() > 1 {
+                        format!("{}: {b}", akt.number)
+                    } else {
+                        b.to_string()
+                    });
+                    if let Some(number) = b.together
+                        && !together.contains(&number)
+                    {
+                        together.push(number);
+                    }
+                }
+            }
+        }
+    }
+    if !broken.is_empty() {
+        let hint = if together.is_empty() {
+            String::new()
+        } else {
+            format!(
+                " (released together with {}, they would be mended: `kuria release` them all at once)",
+                together.join(", ")
+            )
+        };
+        return Err(CliError::refused(
+            "BROKEN_REFERENCES",
+            format!(
+                "the release has broken references: {}{hint}",
+                broken.join("; ")
+            ),
+        ));
+    }
+    let mut lines = Vec::new();
+    let mut released = Vec::new();
+    for ((akt, ty, fields, next), pins) in releasing.into_iter().zip(pins) {
+        let number = akt.number.clone();
+        let mut version = json!({
+            "number": next,
+            "revision": akt.revision,
+            "label": label,
+            "by": w.ids.me.clone().unwrap_or_default(),
+            "at": w.now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            "pins": pins,
+            "headings": markdown::heading_ids(&ty, &fields),
+        });
+        // Whether it had a picture, kept as its headings are, for an image
+        // naming the version.
+        if has_picture(&w.dir, &akt) {
+            version["picture"] = true.into();
+        }
+        // A release makes no revision (`version.history`).
+        w.akt_mut(&number).versions.push(version);
+        lines.push(format!(
+            "{number}: released version {next}{} (revision {}).",
+            label.map(|l| format!(", {l}")).unwrap_or_default(),
+            akt.revision
+        ));
+        released.push(
+            json!({ "number": number, "version": next, "revision": akt.revision, "label": label }),
+        );
+    }
+    let json = match <[Json; 1]>::try_from(released) {
+        Ok([one]) => one,
+        Err(all) => json!({ "released": all }),
+    };
+    Ok(super::write::answer(lines.join("\n"), json, None))
+}
+
+/// `label` trimmed, `None` if empty; refused unless one line of at most
+/// 100 characters.
+fn label_of(label: Option<&str>) -> Result<Option<&str>, CliError> {
+    let label = label.map(str::trim).filter(|l| !l.is_empty());
+    if label.is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r'])) {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "a label is one line of at most 100 characters",
+        ));
+    }
+    Ok(label)
+}
+
+/// `number`, checked as releasable: its type releases versions, git has
+/// it committed, and its revision isn't a version yet. Answers it, its
+/// type, its fields and the version it gets.
+fn releasable(
+    w: &Writer,
+    times: &Times,
+    number: &str,
+) -> Result<
+    (
+        LocalAkt,
+        kuria_config::AktType,
+        std::collections::BTreeMap<String, kuria_engine::Value>,
+        i64,
+    ),
+    CliError,
+> {
     let akt = w.akt(number)?.clone();
     let ty = w.dir.type_of(&akt).ty.clone();
     if ty.document().versions.is_none() {
@@ -110,54 +243,9 @@ pub fn release(
             format!("revision {} of {number} is already a version", akt.revision),
         ));
     }
-    let label = label.map(str::trim).filter(|l| !l.is_empty());
-    if label.is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r'])) {
-        return Err(CliError::refused(
-            "BAD_REQUEST",
-            "a label is one line of at most 100 characters",
-        ));
-    }
     let fields = markdown_of(&w.dir, &akt);
-    let dir = &w.dir;
-    let pins = versions::check(&ty, &fields, &|n| target(dir, n)).map_err(|broken| {
-        CliError::refused(
-            "BROKEN_REFERENCES",
-            format!(
-                "the release has broken references: {}",
-                broken
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            ),
-        )
-    })?;
     let next = akt.versions.iter().map(number_of).max().unwrap_or(0) + 1;
-    let mut version = json!({
-        "number": next,
-        "revision": akt.revision,
-        "label": label,
-        "by": w.ids.me.clone().unwrap_or_default(),
-        "at": w.now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-        "pins": pins,
-        "headings": markdown::heading_ids(&ty, &fields),
-    });
-    // Whether it had a picture, kept as its headings are, for an image
-    // naming the version.
-    if has_picture(&w.dir, &akt) {
-        version["picture"] = true.into();
-    }
-    // A release makes no revision (`version.history`).
-    w.akt_mut(number).versions.push(version);
-    Ok(super::write::answer(
-        format!(
-            "{number}: released version {next}{} (revision {}).",
-            label.map(|l| format!(", {l}")).unwrap_or_default(),
-            akt.revision
-        ),
-        json!({ "number": number, "version": next, "revision": akt.revision, "label": label }),
-        None,
-    ))
+    Ok((akt, ty, fields, next))
 }
 
 /// The akt `number` as it was at its version `n`, read from git, with the

@@ -280,9 +280,11 @@ pub enum Command {
         action: DocsCommand,
     },
     /// Release an akt's current revision as its next version, once none
-    /// of its references is broken.
+    /// of its references is broken; several, together, all or nothing, a
+    /// reference from one to another read as what that one is released as.
     Release {
-        number: String,
+        #[arg(required = true, value_name = "NUMBER")]
+        numbers: Vec<String>,
         /// A label beside the version's number, such as `2.0`.
         #[arg(long)]
         label: Option<String>,

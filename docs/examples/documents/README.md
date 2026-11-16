@@ -63,8 +63,12 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
 - **Versions:** releasing a document names its current revision as its next
   version, 1, 2, …, with an optional label such as `2.0`. It needs the
   Konklav action `documents:release`. A release is refused while any
-  reference is broken. A version never changes, and pins what each reference
-  naming no version meant, so its links keep their meaning.
+  reference is broken, a link to another document being read as that
+  document's latest version: one never released, or whose latest version
+  lacks the heading, breaks it. Documents that link to each other's new
+  text are **released together**, all or nothing, each link read as what
+  the other is released as. A version never changes, and pins what each
+  reference naming no version meant, so its links keep their meaning.
 - **PDFs:** a document's body, of the living version or a version, its
   pictures and diagrams drawn in it.
 - **Clones:** an index as files, its folders as directories, each document
@@ -81,7 +85,9 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
    starts a diagram as code, previewed as you type; **Show diagram** and
    **Show code** switch between its picture and its code.
 2. **Release a version** in its Versions card, with a label. If a reference
-   is broken, the release is refused, listing each.
+   is broken, the release is refused, listing each; where releasing another
+   document with it would mend a link, it offers **Release together with**
+   that document, chosen already: **Release** again releases both.
 3. Each version opens read-only; **Compare** shows what changed since.
    **Download PDF** gives the body of what is open.
 
@@ -91,6 +97,7 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
 kuria new document --in DOCS-1 --set title=Setup --set body=@setup.md
 kuria show DOCS-1-D02                 # its broken references, if any
 kuria release DOCS-1-D02 --label 1.0
+kuria release DOCS-1-D02 DOCS-1-D03   # together, linking to each other's new text
 kuria versions DOCS-1-D02
 kuria cat DOCS-1-D02 --version 1      # read-only
 kuria diff DOCS-1-D02 1               # what changed since version 1

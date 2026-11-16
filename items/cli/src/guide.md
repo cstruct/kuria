@@ -183,6 +183,8 @@ kuria draft <number> <field>
 kuria verdict <test> pass|fail|skip|clear [--for <assignee>]
 kuria copy <template> [--only <number>…] [--in <container>]   # with its members
 kuria release <number> [--label 2.0]   # its current revision as its next version
+kuria release <number> <other>…        # together, all or nothing: links between them
+                                       # read as they are released
 kuria versions <number>                # its versions, latest first
 kuria cat <number> --version 2         # as it was at version 2 (read-only)
 kuria diff <number> 1 [2]              # what changed since version 1, or up to 2

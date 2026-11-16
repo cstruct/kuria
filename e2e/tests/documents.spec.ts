@@ -174,7 +174,8 @@ test('a document is written and released at its version', async ({ browser }) =>
 	await expect(dev.getByRole('status').filter({ hasText: 'not the living version' })).toContainText('Version 1 (1.0)');
 	await expect(dev.getByRole('button', { name: 'Edit Body' })).toHaveCount(0);
 	await expect(body).not.toContainText('More soon.');
-	await expect(body.getByRole('link', { name: 'Install' })).toHaveAttribute('href', `/akt/${setup}#install`);
+	// Pinned to the setup's version 1, released with it.
+	await expect(body.getByRole('link', { name: 'Install' })).toHaveAttribute('href', `/akt/${setup}?version=1#install`);
 	await expect(body.getByRole('figure')).toHaveCount(2);
 	expect(await violations(dev), 'a version').toEqual([]);
 	const [download] = await Promise.all([

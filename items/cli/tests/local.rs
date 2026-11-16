@@ -2045,6 +2045,63 @@ fn markdown_fields_get_heading_ids_and_keep_reference_links() {
 }
 
 // r[verify cli.local.versions]
+// r[verify version.together]
+// r[verify version.references]
+#[test]
+fn documents_referring_to_each_other_are_released_together() {
+    let dir = Dir::new();
+    documents(&dir);
+    let file = dir.root.parent().unwrap().join("body.md");
+    let body = |text: &str| {
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n\n[use it](kuria:DOC-2#use)\n"),
+    ]);
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("# Use\n\n[install](kuria:DOC-1#install)\n"),
+    ]);
+    dir.commit("Two documents");
+    // Neither has a version: alone, each is refused, naming the other.
+    let alone = dir.refused(&["release", "DOC-2"]);
+    assert_eq!(alone.code, "BROKEN_REFERENCES");
+    assert!(
+        alone.message.contains("`DOC-1` has no version yet")
+            && alone.message.contains("released together with DOC-1"),
+        "{}",
+        alone.message
+    );
+    assert_eq!(
+        dir.refused(&["release", "DOC-2", "DOC-2"]).code,
+        "BAD_REQUEST"
+    );
+    // Together: each pinned to the other's version 1.
+    let released = dir.ok(&["release", "DOC-2", "DOC-1", "--label", "1.0"]);
+    let all = released.json["released"].as_array().unwrap();
+    assert_eq!(all.len(), 2, "{}", released.markdown);
+    assert_eq!(all[0]["number"], "DOC-2");
+    assert_eq!(all[1]["version"], 1);
+    dir.commit("Release both");
+    for (number, other) in [("DOC-1", "DOC-2"), ("DOC-2", "DOC-1")] {
+        let versions = dir.ok(&["versions", number]).json;
+        assert_eq!(versions["versions"][0]["label"], "1.0", "{versions}");
+        let pins = dir.ok(&["show", number, "--version", "1"]).json;
+        assert!(pins.to_string().contains(other), "{pins}");
+    }
+}
+
+// r[verify cli.local.versions]
 // r[verify version.release]
 // r[verify version.references]
 // r[verify version.read]
