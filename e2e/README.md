@@ -35,9 +35,11 @@ a fresh Konklav. Ctrl-C stops the server.
 mise run e2e:example planning
 ```
 
-does the same with an example's bundle loaded into the seeded tenant
-([`docs/examples`](../docs/examples/README.md)): release-management,
-documents, planning or test-protocols. Its people are mapped by email to
+does the same with only an example loaded into the seeded tenant, from its
+bundle ([`docs/examples`](../docs/examples/README.md)): release-management,
+documents, planning or test-protocols. The tenant holds that example's akt
+types and akter and no other example's types; the script checks so before
+printing who can sign in. Its people are mapped by email to
 the seeded ones, so signing in as the developer shows their tasks as
 yours.
 

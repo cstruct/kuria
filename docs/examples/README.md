@@ -35,7 +35,8 @@ Konklav, with its seeded people,
 mise run e2e:example planning
 ```
 
-runs Kuria as `mise run e2e:serve` does, with the example loaded and its
+runs Kuria as `mise run e2e:serve` does, with only that example loaded (no
+other example's akt types) and its
 people shown as, and signing in as, the seeded ones
 ([`e2e/`](../../e2e/README.md)).
 
