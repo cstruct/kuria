@@ -110,7 +110,7 @@ pub async fn release(
 // r[impl version.list]
 pub async fn list(source: Source<'_>, number: &str) -> Result<Answer, CliError> {
     let akt: Akt = read(
-        crate::reads::akt_data(source, number, "", None).await?,
+        crate::reads::akt_data(source, number, "", None, crate::reads::Archived::Live).await?,
         "the akt",
     )?;
     let rows: Vec<Vec<String>> = akt.versions.iter().map(row).collect();
@@ -175,7 +175,8 @@ pub async fn diff(
 ) -> Result<Answer, CliError> {
     let read_at = async |version| -> Result<Akt, CliError> {
         read(
-            crate::reads::akt_data(source, number, "", version).await?,
+            crate::reads::akt_data(source, number, "", version, crate::reads::Archived::Live)
+                .await?,
             "the akt",
         )
     };

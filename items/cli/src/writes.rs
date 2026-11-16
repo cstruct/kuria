@@ -2,8 +2,9 @@
 //! editing akter, from files or `--set`; transitions and drafts; arranging
 //! containers, order and links; and akt type documents.
 
+pub mod archive;
 mod arrange;
-pub(crate) mod bundles;
+pub mod bundles;
 pub(crate) mod copy;
 pub(crate) mod edit;
 mod types;

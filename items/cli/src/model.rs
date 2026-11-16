@@ -39,9 +39,13 @@ pub const VALUES: &str = "fragment Values on FieldValue {
   ... on MarkdownValue { field markdown references { destination broken } }
 }";
 
+/// How an akt is archived, if it is (`archive.read`).
+pub const ARCHIVED: &str = "archived { at by { id name email } rule reason }";
+
 /// An akt as lists show it.
 pub const ROW: &str = "fragment Row on Akt {
   number title updatedAt outcome
+  archived { at by { id name email } rule reason }
   type { key name }
   state { key name tone }
   fields { ...Values }
@@ -331,6 +335,62 @@ pub struct Row {
     /// `PASS`, …, if its type has outcomes.
     #[serde(default)]
     pub outcome: Option<String>,
+    /// How it is archived, if it is (`archive.read`).
+    #[serde(default)]
+    pub archived: Option<Archived>,
+}
+
+/// How an akt is archived (`archive.flag`): when, by whom or which rule,
+/// and why.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Archived {
+    pub at: String,
+    #[serde(default)]
+    pub by: Option<User>,
+    /// The kind of rule that archived it, if one did.
+    #[serde(default)]
+    pub rule: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+impl Archived {
+    /// Who archived it, as values name people: by email, else name.
+    #[must_use]
+    pub fn by_text(&self) -> Option<String> {
+        self.by
+            .as_ref()
+            .map(|u| u.email.clone().unwrap_or_else(|| u.name.clone()))
+    }
+
+    /// As answers in JSON give it: `{at, by, rule, reason}`.
+    // r[impl cli.archive]
+    #[must_use]
+    pub fn json(&self) -> Json {
+        serde_json::json!({
+            "at": self.at,
+            "by": self.by_text(),
+            "rule": self.rule,
+            "reason": self.reason,
+        })
+    }
+
+    /// As Markdown says it: "archived 2026-11-16 by ada@shop.example:
+    /// done with".
+    #[must_use]
+    pub fn said(&self) -> String {
+        let by = match (&self.rule, self.by_text()) {
+            (Some(rule), _) => format!(" by the rule `{rule}`"),
+            (None, Some(who)) => format!(" by {who}"),
+            (None, None) => String::new(),
+        };
+        let reason = self
+            .reason
+            .as_deref()
+            .map(|r| format!(": {r}"))
+            .unwrap_or_default();
+        format!("archived {}{by}{reason}", crate::history::when(&self.at))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

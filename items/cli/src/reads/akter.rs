@@ -14,7 +14,7 @@ use crate::local::answers;
 use kuria_engine::outcomes::Outcome;
 use kuria_engine::sections::Item;
 
-use crate::model::{SHAPE, SOMEONE, VALUES, Value, read};
+use crate::model::{ARCHIVED, SHAPE, SOMEONE, VALUES, Value, read};
 use crate::output::Answer;
 use crate::profile::io_error;
 use crate::values::text_of;
@@ -23,11 +23,15 @@ use crate::values::text_of;
 const MEMBERS: u32 = 200;
 
 /// The akt `number`, at its version `version` if given (`version.read`).
+///
+/// In an akt directory, its members and board answer those `members`
+/// allows; against a server, `extra` asks for them.
 pub(crate) async fn akt_data(
     source: Source<'_>,
     number: &str,
     extra: &str,
     version: Option<i64>,
+    members: super::Archived,
 ) -> Result<Json, CliError> {
     let missing = || match version {
         Some(v) => CliError::from_server("NOT_FOUND", format!("{number} has no version {v}"), None),
@@ -38,7 +42,7 @@ pub(crate) async fn akt_data(
         Source::Local(l) => {
             let found = match version {
                 Some(v) => answers::akt_at(&l.dir, &l.times, number, v)?,
-                None => answers::akt(&l.dir, &l.times, number)?,
+                None => answers::akt(&l.dir, &l.times, number, members)?,
             };
             return found.ok_or_else(missing);
         }
@@ -67,19 +71,21 @@ pub enum WithMembers<'a> {
     All,
 }
 
-/// The direct members of `container`, in its order, with their types'
-/// keys.
+/// The direct members of `container` that `archived` allows, in its
+/// order, with their types' keys.
 // r[impl cli.members]
+// r[impl cli.archive]
 pub(crate) async fn members_of(
     source: Source<'_>,
     container: &str,
+    archived: super::Archived,
 ) -> Result<Vec<(String, String)>, CliError> {
     let session = match source {
         Source::Server(session) => session,
         Source::Local(l) => {
             return Ok(l
                 .dir
-                .members_of(container)
+                .members_with(container, archived)
                 .map(|m| (m.number.clone(), m.type_key.clone()))
                 .collect());
         }
@@ -90,11 +96,11 @@ pub(crate) async fn members_of(
         let data = session
             .graphql(
                 &format!(
-                    "query($n: String!, $after: String) {{ akt(number: $n) {{
-                       members(first: {MEMBERS}, after: $after) {{
+                    "query($n: String!, $after: String, $archived: ArchivedFilter) {{ akt(number: $n) {{
+                       members(first: {MEMBERS}, after: $after, archived: $archived) {{
                          nodes {{ number type {{ key }} }} pageInfo {{ hasNextPage endCursor }} }} }} }}"
                 ),
-                json!({ "n": container, "after": after }),
+                json!({ "n": container, "after": after, "archived": archived.filter() }),
             )
             .await?;
         let members = &data["akt"]["members"];
@@ -111,8 +117,8 @@ pub(crate) async fn members_of(
 }
 
 /// `kuria cat <number>…`: each akt as its file, followed by the members
-/// `with` asks for, several as one multi-akt file, or each written to
-/// `output` as `<number>.md`.
+/// `with` asks for that `archived` allows, several as one multi-akt file,
+/// or each written to `output` as `<number>.md`.
 // r[impl cli.read]
 // r[impl cli.file]
 // r[impl cli.members]
@@ -122,6 +128,7 @@ pub async fn cat(
     output: Option<&Path>,
     with: WithMembers<'_>,
     version: Option<i64>,
+    archived: super::Archived,
 ) -> Result<Answer, CliError> {
     if version.is_some() && (numbers.len() > 1 || !matches!(with, WithMembers::None)) {
         return Err(CliError::refused(
@@ -137,11 +144,14 @@ pub async fn cat(
     let mut wanted: Vec<String> = Vec::new();
     for number in numbers {
         // Known before its members are asked for, so a missing one says so.
-        let akt: Akt = read(akt_data(source, number, "", version).await?, "the akt")?;
+        let akt: Akt = read(
+            akt_data(source, number, "", version, archived).await?,
+            "the akt",
+        )?;
         wanted.push(akt.number);
         let members = match with {
             WithMembers::None => Vec::new(),
-            _ => members_of(source, number).await?,
+            _ => members_of(source, number, archived).await?,
         };
         for (member, key) in members {
             let asked = match with {
@@ -158,7 +168,7 @@ pub async fn cat(
     for number in wanted {
         if seen.insert(number.clone()) {
             akter.push(read::<Akt>(
-                akt_data(source, &number, "", version).await?,
+                akt_data(source, &number, "", version, archived).await?,
                 "the akt",
             )?);
         }
@@ -232,8 +242,14 @@ fn other(o: &Other) -> String {
         .as_deref()
         .map(|o| format!(" — {}", o.to_lowercase()))
         .unwrap_or_default();
+    // r[impl cli.archive]
+    let archived = if o.archived.is_some() {
+        ", archived"
+    } else {
+        ""
+    };
     format!(
-        "{}{title} ({}, {}){outcome}",
+        "{}{title} ({}, {}{archived}){outcome}",
         o.number, o.akt_type.name, o.state.name
     )
 }
@@ -242,6 +258,9 @@ fn other_json(o: &Other) -> Json {
     let mut json = json!({ "number": o.number, "title": o.title, "type": o.akt_type.key, "state": o.state.key });
     if let Some(outcome) = &o.outcome {
         json["outcome"] = outcome.to_lowercase().into();
+    }
+    if let Some(archived) = &o.archived {
+        json["archived"] = archived.json();
     }
     json
 }
@@ -326,21 +345,37 @@ fn sections_json(items: &[Item], member_outcome: &dyn Fn(&str) -> Option<Outcome
 /// `kuria show <number>`: its fields, containers, members, links and the
 /// transitions its state allows, and with `history` its revisions.
 // r[impl cli.read]
+// r[impl cli.archive]
 pub async fn show(
     source: Source<'_>,
     number: &str,
     with_history: bool,
     version: Option<i64>,
+    archived: super::Archived,
 ) -> Result<Answer, CliError> {
+    // A live container's board shows its live members, an archived one's
+    // all of them (`archive.board`), unless asked otherwise.
+    let board = match archived {
+        super::Archived::Live => String::new(),
+        asked => format!(", archived: {}", asked.filter()),
+    };
     let extra = format!(
-        "board(first: {MEMBERS}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} outcome }} }} }}
-         members(first: {MEMBERS}) {{ nodes {{ number title type {{ key name }} state {{ key name }} outcome }} pageInfo {{ hasNextPage }} }}
+        "board(first: {MEMBERS}{board}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} outcome {ARCHIVED} }} }} }}
+         members(first: {MEMBERS}, archived: {}) {{ nodes {{ number title type {{ key name }} state {{ key name }} outcome {ARCHIVED} }} pageInfo {{ hasNextPage }} }}
          {}",
+        // Kept below as the board keeps them: all of an archived one's.
+        match archived {
+            super::Archived::Live => "ALL",
+            asked => asked.filter(),
+        },
         if with_history { REVISIONS } else { "" }
     );
-    let data = akt_data(source, number, &extra, version).await?;
+    let data = akt_data(source, number, &extra, version, archived).await?;
     let akt: Akt = read(data.clone(), "the akt")?;
-    let around: Around = read(data, "the akt")?;
+    let mut around: Around = read(data, "the akt")?;
+    if archived == super::Archived::Live && akt.archived.is_none() {
+        around.members.nodes.retain(|m| m.archived.is_none());
+    }
     let shape = &akt.shape;
     let has_board = shape.document["board"].is_object();
 
@@ -388,6 +423,35 @@ pub async fn show(
     })
 }
 
+/// How `show` begins: the akt's number and title, then its type, state,
+/// outcome, revision, when it changed and whether it is archived.
+fn heading(akt: &Akt) -> String {
+    let mut text = format!("# {}", akt.number);
+    if let Some(title) = &akt.title {
+        text.push_str(&format!(" · {title}"));
+    }
+    let outcome = akt
+        .outcome
+        .as_deref()
+        .map(|o| format!(" · {}", o.to_lowercase()))
+        .unwrap_or_default();
+    // r[impl cli.archive]
+    let archived = akt
+        .archived
+        .as_ref()
+        .map(|a| format!(" · {}", a.said()))
+        .unwrap_or_default();
+    text.push_str(&format!(
+        "\n\n{} · {}{outcome} · revision {} · changed {}{archived}\n{}",
+        akt.shape.name,
+        akt.state.name,
+        akt.revision,
+        crate::history::when(&akt.updated_at),
+        at_version(akt)
+    ));
+    text
+}
+
 /// What `show` says, gathered.
 struct Shown<'a> {
     akt: &'a Akt,
@@ -410,23 +474,7 @@ impl Shown<'_> {
             ..
         } = *self;
         let shape = &akt.shape;
-        let mut text = format!("# {}", akt.number);
-        if let Some(title) = &akt.title {
-            text.push_str(&format!(" · {title}"));
-        }
-        let outcome = akt
-            .outcome
-            .as_deref()
-            .map(|o| format!(" · {}", o.to_lowercase()))
-            .unwrap_or_default();
-        text.push_str(&format!(
-            "\n\n{} · {}{outcome} · revision {} · changed {}\n{}",
-            shape.name,
-            akt.state.name,
-            akt.revision,
-            crate::history::when(&akt.updated_at),
-            at_version(akt)
-        ));
+        let mut text = heading(akt);
 
         let title_field = shape.presentation.title.as_deref();
         let (sections, inline): (Vec<_>, Vec<_>) = akt
@@ -688,7 +736,7 @@ fn described(revisions: &[Revision], shape: &crate::model::Shape) -> Vec<Describ
 /// has changes not committed yet; `None` outside git.
 // r[impl cli.local.history]
 fn local_history(local: &Local, number: &str) -> Result<(Vec<Described>, Option<bool>), CliError> {
-    let akt = local.dir.akt(number).ok_or_else(|| not_found(number))?;
+    let akt = local.dir.any(number).ok_or_else(|| not_found(number))?;
     let Some((commits, dirty)) = local.times.history(akt) else {
         return Ok((Vec::new(), None));
     };

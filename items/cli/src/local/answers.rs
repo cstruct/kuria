@@ -388,7 +388,7 @@ fn reference_links(dir: &AktDir, akt: &LocalAkt) -> Vec<Json> {
     };
     let mut answers = Vec::new();
     for (def, numbers) in kept_by(akt) {
-        for target in numbers.iter().filter_map(|n| dir.akt(n)) {
+        for target in numbers.iter().filter_map(|n| dir.any(n)) {
             if fits(&def, akt, target) {
                 answers.push(link(&def, true, target));
             }
@@ -411,7 +411,8 @@ pub fn title(dir: &AktDir, akt: &LocalAkt) -> Option<String> {
     akt.values.get(&field.key)?.as_str().map(str::to_owned)
 }
 
-/// Another akt as `{ number title type { key name } state { key name } }`.
+/// Another akt as `{ number title type { key name } state { key name }
+/// archived }`.
 #[must_use]
 pub fn other(dir: &AktDir, akt: &LocalAkt) -> Json {
     let t = dir.type_of(akt);
@@ -420,7 +421,50 @@ pub fn other(dir: &AktDir, akt: &LocalAkt) -> Json {
         "title": title(dir, akt),
         "type": { "key": t.ty.key(), "name": t.ty.document().name },
         "state": { "key": akt.state, "name": t.ty.state(&akt.state).map_or(akt.state.as_str(), |s| s.name.as_str()) },
+        "archived": archived(dir, &akt.number),
     })
+}
+
+/// How the akt `number` is archived, as `archived { at by rule reason }`;
+/// `null` while it is live (`cli.local.archive`).
+// r[impl cli.local.archive]
+#[must_use]
+pub fn archived(dir: &AktDir, number: &str) -> Json {
+    dir.archive
+        .entry(number)
+        .map_or(Json::Null, super::archive::Entry::json)
+}
+
+/// The akt `number` as another names it, live or archived; an archived
+/// one neither git nor `akter/archived/` has is named by its number and
+/// type only.
+#[must_use]
+pub fn named(dir: &AktDir, number: &str) -> Option<Json> {
+    if let Some(akt) = dir.any(number) {
+        return Some(other(dir, akt));
+    }
+    let entry = dir.archive.entry(number)?;
+    let name = dir
+        .types
+        .get(&entry.type_key)
+        .map_or(entry.type_key.as_str(), |t| t.ty.document().name.as_str());
+    Some(json!({
+        "number": number,
+        "title": null,
+        "type": { "key": entry.type_key, "name": name },
+        "state": { "key": null, "name": "archived" },
+        "archived": entry.json(),
+    }))
+}
+
+/// When `akt` last changed: when it was archived, if it is, else as git
+/// says.
+#[must_use]
+pub fn updated(dir: &AktDir, times: &Times, akt: &LocalAkt) -> String {
+    match dir.archive.entry(&akt.number) {
+        Some(entry) => entry.at.clone(),
+        None => times.of_akt(akt).1,
+    }
 }
 
 /// An akt as the `Row` fragment.
@@ -428,7 +472,7 @@ pub fn row(dir: &AktDir, times: &Times, akt: &LocalAkt) -> Result<Json, CliError
     let t = dir.type_of(akt);
     let mut answer = other(dir, akt);
     answer["state"]["tone"] = screaming(&t.ty.tone(&akt.state));
-    answer["updatedAt"] = json!(times.of_akt(akt).1);
+    answer["updatedAt"] = json!(updated(dir, times, akt));
     answer["fields"] = json!(values(dir, akt)?);
     answer["outcome"] = outcome_json(dir, akt)?;
     Ok(answer)
@@ -457,9 +501,26 @@ pub fn links(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
             )
         };
         let (name, number, pin) = said(text).ok_or_else(|| bad("isn't `<name> <number>`"))?;
-        let target = dir
-            .akt(number)
-            .ok_or_else(|| bad("names an akt the directory lacks"))?;
+        let Some(target) = dir.any(number) else {
+            // An archived akt neither git nor `akter/archived/` has, named
+            // by its own type's link only.
+            let def = dir
+                .type_of(akt)
+                .ty
+                .document()
+                .links
+                .iter()
+                .find(|l| l.name == name);
+            match (def, named(dir, number)) {
+                (Some(def), Some(other)) => answers.push(json!({
+                    "kind": def.key, "name": name, "outgoing": true,
+                    "pinnedRevision": pin, "akt": other, "pinned": null,
+                })),
+                (None, Some(_)) => {}
+                _ => return Err(bad("names an akt the directory lacks")),
+            }
+            continue;
+        };
         let outgoing = dir
             .type_of(akt)
             .ty
@@ -492,15 +553,37 @@ pub fn links(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
     Ok(answers)
 }
 
-/// The akt `number` as the CLI's akt query answers it, with its containers,
-/// links, members (in the directory's order) and its type's board.
-pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, CliError> {
-    let Some(akt) = dir.akt(number) else {
+/// The akt `number`, live or archived, as the CLI's akt query answers it,
+/// with its containers, links, members `shown` allows (in the
+/// directory's order) and its type's board; an archived container's board
+/// shows every member unless asked otherwise (`archive.board`).
+// r[impl cli.local.archive]
+pub fn akt(
+    dir: &AktDir,
+    times: &Times,
+    number: &str,
+    shown: crate::reads::Archived,
+) -> Result<Option<Json>, CliError> {
+    let Some(akt) = dir.any(number) else {
         return Ok(None);
     };
     let t = dir.type_of(akt);
-    let (created, updated) = times.of_akt(akt);
-    let members: Vec<&LocalAkt> = dir.members_of(&akt.number).collect();
+    let gone = dir.archive.entry(number);
+    let (created, updated) = match gone {
+        Some(entry) => (
+            times
+                .history(akt)
+                .and_then(|(commits, _)| commits.first().map(|(c, _)| c.at.clone()))
+                .unwrap_or_else(|| entry.at.clone()),
+            entry.at.clone(),
+        ),
+        None => times.of_akt(akt),
+    };
+    let shown = match shown {
+        crate::reads::Archived::Live if gone.is_some() => crate::reads::Archived::All,
+        asked => asked,
+    };
+    let members: Vec<&LocalAkt> = dir.members_with(&akt.number, shown).collect();
     let board = t.ty.board();
     let mut columns: Vec<Json> = board
         .map(|b| {
@@ -523,7 +606,7 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
         .containers
         .iter()
         .map(|n| {
-            dir.akt(n).map(|c| other(dir, c)).ok_or_else(|| {
+            named(dir, n).ok_or_else(|| {
                 CliError::refused(
                     "BAD_FILE",
                     format!(
@@ -545,6 +628,7 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
         "type": shape,
         "state": state(t, &akt.state),
         "outcome": outcome_json(dir, akt)?,
+        "archived": archived(dir, number),
         "fields": values(dir, akt)?,
         "containers": containers,
         "links": links(dir, akt)?,
@@ -578,11 +662,18 @@ pub fn akt_at(dir: &AktDir, times: &Times, number: &str, n: i64) -> Result<Optio
         root: dir.root.clone(),
         types: dir.types.clone(),
         akter: dir.akter.clone(),
+        archive: dir.archive.clone(),
+        archived: dir.archived.clone(),
     };
-    if let Some(slot) = at.akter.iter_mut().find(|a| a.number == number) {
+    if let Some(slot) = at
+        .akter
+        .iter_mut()
+        .chain(at.archived.iter_mut())
+        .find(|a| a.number == number)
+    {
         *slot = read;
     }
-    let Some(mut answer) = akt(&at, times, number)? else {
+    let Some(mut answer) = akt(&at, times, number, crate::reads::Archived::Live)? else {
         return Ok(None);
     };
     answer["version"] = super::versions::shown(&version);

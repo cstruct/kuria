@@ -16,7 +16,7 @@ use kuria_store::links::LinkRow;
 use kuria_store::people::Person;
 use kuria_store::versions::VersionRow;
 use kuria_store::{Connection, Pool};
-use serde_json::{Map, Value as Json};
+use serde_json::{Map, Value as Json, json};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
@@ -239,6 +239,42 @@ fn check_types(bundle: &Bundle) -> Result<HashMap<Uuid, AktType>, BundleError> {
     }
 
     Ok(types)
+}
+
+/// Archives the akter `bundle` holds archived, as it records them, and
+/// marks those it holds kept, once they and their history are written:
+/// each is written live and moved, as archiving moves it
+/// (`archive.storage`). A `with_container` archive names its container
+/// by the identifier it got.
+// r[impl bundle.import.archived]
+async fn archive_akter(
+    conn: &mut Connection,
+    tenant: Uuid,
+    bundle: &Bundle,
+    akt_ids: &HashMap<Uuid, Uuid>,
+) -> Result<(), BundleError> {
+    for a in &bundle.akter {
+        let id = akt_ids[&a.id];
+        if let Some(archived) = &a.archived {
+            let mut by = archived.by.clone();
+            if let Some(container) = by["container"]
+                .as_str()
+                .and_then(|c| c.parse::<Uuid>().ok())
+                .and_then(|c| akt_ids.get(&c))
+            {
+                by["container"] = json!(container);
+            }
+            let archive = kuria_store::akter::Archive {
+                at: archived.at,
+                by,
+                reason: archived.reason.clone(),
+            };
+            kuria_store::akter::set_archived(conn, tenant, id, Some(&archive), false).await?;
+        } else if a.archive_kept {
+            kuria_store::akter::set_archived(conn, tenant, id, None, true).await?;
+        }
+    }
+    Ok(())
 }
 
 /// Replays `akt`'s revisions, checking each one's hash against the state
@@ -747,6 +783,8 @@ async fn write(
         &written,
     )
     .await?;
+    // Moved once everything naming them, change events too, is written.
+    archive_akter(conn, tenant, bundle, &akt_ids).await?;
     Ok(Imported {
         scope: bundle.scope,
         akt_types: bundle.akt_types.len(),

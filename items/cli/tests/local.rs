@@ -2314,7 +2314,7 @@ fn versions_go_to_a_bundle_and_back() {
         kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
             .unwrap();
     let bundle = &unpacked.bundle;
-    assert_eq!(bundle["format"], 2);
+    assert_eq!(bundle["format"], 3);
     let akt = |number: &str| {
         bundle["akter"]
             .as_array()
@@ -2684,4 +2684,387 @@ fn written_back(dir: &Dir, unpacked: &kuria_cli::local::convert::Unpacked) {
         );
     }
     assert_eq!(back.ok(&["check"]).json["problems"], json!([]));
+}
+
+/// Gives the planning example's type `key` the archive rules `rules`.
+fn with_rules(dir: &Dir, key: &str, rules: &Value) {
+    let path = dir.root.join(format!("types/{key}.json"));
+    let mut document: Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    document["archive"] = json!({ "rules": rules });
+    std::fs::write(&path, serde_json::to_string_pretty(&document).unwrap()).unwrap();
+}
+
+/// `akter/archived.md`: each archived akt, and who or which rule archived
+/// it.
+fn archived_list(dir: &Dir) -> Vec<(String, String)> {
+    kuria_cli::local::archive::Archive::read(&dir.root)
+        .unwrap()
+        .archived
+        .into_iter()
+        .map(|e| {
+            let by = match (e.rule, e.container) {
+                (Some(rule), Some(container)) => format!("{rule} {container}"),
+                (Some(rule), None) => rule,
+                (None, _) => e.by.unwrap_or_default(),
+            };
+            (e.number, by)
+        })
+        .collect()
+}
+
+fn sorted(mut numbers: Vec<String>) -> Vec<String> {
+    numbers.sort();
+    numbers
+}
+
+impl Dir {
+    /// Commits everything, as if at `at`, by git's dates.
+    fn commit_at(&self, message: &str, at: &str) {
+        self.git(&["add", "-A"]);
+        let ran = Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(["commit", "-q", "-m", message])
+            .env("GIT_AUTHOR_DATE", at)
+            .env("GIT_COMMITTER_DATE", at)
+            .output()
+            .unwrap();
+        assert!(
+            ran.status.success(),
+            "{}",
+            String::from_utf8_lossy(&ran.stderr)
+        );
+    }
+}
+
+// r[verify cli.local.archive.kept]
+// r[verify cli.local.archive]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one akt archived and back, told in one place"
+)]
+// r[verify cli.archive]
+#[test]
+fn archiving_takes_an_akt_out_of_its_file_and_unarchiving_puts_it_back() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "plan", "--set", "title=Other"]);
+    dir.commit("Planned");
+    let plan = revision_of(&dir, "PLAN-001");
+    let task = revision_of(&dir, "PLAN-001-T01");
+    let before = dir.ok(&["cat", "PLAN-001-T01"]).markdown;
+
+    let archived = dir
+        .ok(&[
+            "archive",
+            "PLAN-001",
+            "--reason",
+            "Done with",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(
+        archived,
+        json!({ "archived": [{ "number": "PLAN-001", "revision": plan + 1 }], "reason": "Done with" })
+    );
+    // Out of its file, with what is nested in it; listed, by whom and why.
+    assert_eq!(akt_files(&dir), ["PLAN-002-other.md", "archived.md"]);
+    assert_eq!(
+        archived_list(&dir),
+        [
+            ("PLAN-001".to_owned(), "me@kuria.example".to_owned()),
+            (
+                "PLAN-001-T01".to_owned(),
+                "with_container PLAN-001".to_owned()
+            ),
+            (
+                "PLAN-001-T02".to_owned(),
+                "with_container PLAN-001".to_owned()
+            ),
+        ]
+    );
+    let entries = kuria_cli::local::archive::Archive::read(&dir.root).unwrap();
+    assert_eq!(entries.archived[0].reason.as_deref(), Some("Done with"));
+    assert_eq!(i64::from(entries.archived[0].revision), plan);
+
+    // Lists leave it out unless asked; read by number, it says so.
+    assert_eq!(numbers(&dir.ok(&["ls", "--format", "json"])), ["PLAN-002"]);
+    assert_eq!(
+        sorted(numbers(&dir.ok(&["ls", "--archived", "--format", "json"]))),
+        ["PLAN-001", "PLAN-001-T01", "PLAN-001-T02"]
+    );
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "--with-archived", "--format", "json"])).len(),
+        4
+    );
+    assert!(
+        dir.ok(&["ls", "plan", "--archived"])
+            .markdown
+            .contains("Active (archived)")
+    );
+    assert_eq!(
+        numbers(&dir.ok(&["find", "Local", "--format", "json"])),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        numbers(&dir.ok(&["find", "Local", "--archived", "--format", "json"])),
+        ["PLAN-001"]
+    );
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "--in", "PLAN-001", "--format", "json"])),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "--in", "PLAN-001", "--archived", "--format", "json"])),
+        ["PLAN-001-T01", "PLAN-001-T02"]
+    );
+    let cat = dir.ok(&["cat", "PLAN-001-T01", "--format", "json"]).json;
+    assert_eq!(cat["akter"][0]["revision"], task + 1);
+    assert_eq!(cat["akter"][0]["archived"]["rule"], "with_container");
+    let file = dir.ok(&["cat", "PLAN-001"]).markdown;
+    assert!(file.contains("archived: {at: "), "{file}");
+    assert!(
+        file.contains("by: me@kuria.example, reason: Done with}"),
+        "{file}"
+    );
+    assert_eq!(
+        dir.ok(&["cat", "PLAN-001", "--all-members", "--format", "json"])
+            .json["akter"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        dir.ok(&[
+            "cat",
+            "PLAN-001",
+            "--all-members",
+            "--archived",
+            "--format",
+            "json"
+        ])
+        .json["akter"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    let shown = dir.ok(&["show", "PLAN-001"]).markdown;
+    assert!(shown.contains(" by me@kuria.example: Done with"), "{shown}");
+    assert!(
+        shown.contains("PLAN-001-T01 · First (Task, To do, archived)"),
+        "{shown}"
+    );
+
+    // Read-only, and its numbers stay taken.
+    let refused = dir.refused(&["set", "PLAN-001-T01", "title=Again"]);
+    assert_eq!(refused.code, "ARCHIVED");
+    assert!(refused.message.contains("kuria unarchive PLAN-001-T01"));
+    assert_eq!(
+        dir.refused(&["new", "task", "--in", "PLAN-001", "--set", "title=Late"])
+            .code,
+        "ARCHIVED"
+    );
+    assert_eq!(dir.refused(&["archive", "PLAN-001"]).code, "BAD_REQUEST");
+    assert_eq!(dir.refused(&["unarchive", "PLAN-002"]).code, "BAD_REQUEST");
+    assert_eq!(dir.refused(&["unarchive", "PLAN-009"]).code, "NOT_FOUND");
+    assert!(
+        dir.ok(&["new", "plan", "--set", "title=Third"])
+            .markdown
+            .contains("PLAN-003")
+    );
+    dir.ok(&["check"]);
+
+    // Put back as git holds it, once everything is committed.
+    assert_eq!(dir.refused(&["unarchive", "PLAN-001"]).code, "UNCOMMITTED");
+    dir.commit("Archived");
+    let back = dir.ok(&["unarchive", "PLAN-001", "--format", "json"]).json;
+    assert_eq!(back["unarchived"][0]["revision"], plan + 2);
+    assert_eq!(
+        akt_files(&dir),
+        [
+            "PLAN-001-local-writes.md",
+            "PLAN-002-other.md",
+            "PLAN-003-third.md",
+            "archived.md"
+        ]
+    );
+    assert_eq!(archived_list(&dir), Vec::new());
+    assert_eq!(
+        dir.ok(&["cat", "PLAN-001-T01"]).markdown,
+        before.replace(
+            &format!("revision: {task}\n"),
+            &format!("revision: {}\n", task + 2)
+        )
+    );
+    dir.ok(&["set", "PLAN-001-T01", "title=Again"]);
+    dir.ok(&["check"]);
+}
+
+// r[verify cli.local.archive]
+#[test]
+fn rules_archive_on_the_cli_s_changes_and_by_check_fix() {
+    let dir = Dir::new();
+    with_rules(
+        &dir,
+        "plan",
+        &json!([{ "newer": 1, "in": ["done"] }, { "days_in": 30, "in": ["dropped"] }]),
+    );
+    with_rules(&dir, "task", &json!([{ "with_container": "plan" }]));
+    for title in ["One", "Two", "Three", "Four"] {
+        dir.ok(&[
+            "new",
+            "plan",
+            "--set",
+            &format!("title={title}"),
+            "--set",
+            "goal=G",
+        ]);
+    }
+    for plan in ["PLAN-001", "PLAN-002", "PLAN-003", "PLAN-004"] {
+        dir.ok(&["do", plan, "activate"]);
+    }
+    dir.ok(&["new", "task", "--in", "PLAN-003", "--set", "title=Shared"]);
+    dir.ok(&["members", "add", "PLAN-004", "PLAN-003-T01"]);
+    dir.commit_at("Planned", "2026-01-01T00:00:00Z");
+    dir.ok(&["do", "PLAN-001", "finish"]);
+    dir.commit_at("One done", "2026-01-02T00:00:00Z");
+
+    // A newer plan done overtakes the first.
+    dir.ok(&["do", "PLAN-002", "finish"]);
+    assert_eq!(
+        archived_list(&dir),
+        [("PLAN-001".to_owned(), "newer".to_owned())]
+    );
+    dir.commit("Two done");
+    // Unarchived by hand, it is kept from rules.
+    dir.ok(&["unarchive", "PLAN-001"]);
+    let archive = kuria_cli::local::archive::Archive::read(&dir.root).unwrap();
+    assert_eq!(archive.kept, ["PLAN-001"]);
+    dir.commit("Kept");
+
+    // A task goes with any plan holding it, out of another's file, and
+    // comes back with it.
+    dir.ok(&["archive", "PLAN-004"]);
+    assert_eq!(
+        archived_list(&dir),
+        [
+            ("PLAN-004".to_owned(), "me@kuria.example".to_owned()),
+            (
+                "PLAN-003-T01".to_owned(),
+                "with_container PLAN-004".to_owned()
+            ),
+        ]
+    );
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "--in", "PLAN-003", "--format", "json"])),
+        Vec::<String>::new()
+    );
+    dir.ok(&["check"]);
+    dir.commit("Four archived");
+    dir.ok(&["unarchive", "PLAN-004"]);
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "--in", "PLAN-003", "--format", "json"])),
+        ["PLAN-003-T01"]
+    );
+    assert_eq!(archived_list(&dir), Vec::new());
+    dir.ok(&["check"]);
+    dir.commit("Four back");
+
+    // Dropped long ago, by git's commit, `check --fix` archives it, with
+    // what is nested in it.
+    dir.ok(&["do", "PLAN-003", "drop"]);
+    dir.commit_at("Dropped", "2026-01-03T00:00:00Z");
+    let fixed = dir.ok(&["check", "--fix", "--format", "json"]).json;
+    assert_eq!(fixed["archivedByRules"], 1, "{fixed}");
+    assert_eq!(
+        archived_list(&dir),
+        [
+            ("PLAN-003".to_owned(), "days_in".to_owned()),
+            (
+                "PLAN-003-T01".to_owned(),
+                "with_container PLAN-003".to_owned()
+            ),
+        ]
+    );
+    // Kept from rules, the first stays though the second is newer.
+    assert!(dir.ok(&["cat", "PLAN-001"]).json["akter"][0]["archived"].is_null());
+}
+
+// r[verify cli.local.archive.kept]
+// r[verify cli.local.archive]
+// r[verify cli.local.convert]
+#[test]
+fn archived_akter_go_to_a_bundle_and_back() {
+    let dir = Dir::new();
+    worked(&dir);
+    dir.ok(&["new", "plan", "--set", "title=Other"]);
+    dir.commit("Planned");
+    let plan = revision_of(&dir, "PLAN-001");
+    dir.ok(&["archive", "PLAN-001", "--reason", "Done with"]);
+    dir.commit("Archived");
+    let unpacked =
+        kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
+            .unwrap();
+    let akter = unpacked.bundle["akter"].as_array().unwrap();
+    assert_eq!(akter.len(), 4);
+    let of = |number: &str| akter.iter().find(|a| a["number"] == number).unwrap();
+    let archived = of("PLAN-001");
+    assert_eq!(archived["archived"]["reason"], "Done with");
+    assert!(archived["archived"]["by"]["subject"].is_string());
+    let revisions = archived["revisions"].as_array().unwrap();
+    assert_eq!(revisions.len(), usize::try_from(plan + 1).unwrap());
+    assert_eq!(revisions.last().unwrap()["transition"], "archive");
+    assert_eq!(
+        of("PLAN-001-T01")["archived"]["by"],
+        json!({ "rule": "with_container", "container": archived["id"] })
+    );
+    assert!(of("PLAN-002")["archived"].is_null());
+
+    // Back as a directory no git history holds: archived akter are kept in
+    // `akter/archived/`, read and unarchived from there.
+    let again = dir.root.parent().unwrap().join("again");
+    let wrote = kuria_cli::local::convert::to_dir(&unpacked, &again).unwrap();
+    assert_eq!(
+        (wrote["akter"].as_i64(), wrote["archived"].as_i64()),
+        (Some(1), Some(3))
+    );
+    let back = Dir {
+        _temp: tempfile::tempdir().unwrap(),
+        root: again.clone(),
+    };
+    assert_eq!(
+        akt_files(&back),
+        ["PLAN-002-other.md", "archived", "archived.md"]
+    );
+    assert_eq!(archived_list(&back), archived_list(&dir));
+    for number in ["PLAN-001", "PLAN-001-T01", "PLAN-002"] {
+        assert_eq!(
+            back.ok(&["cat", number]).markdown,
+            dir.ok(&["cat", number]).markdown,
+            "{number}"
+        );
+    }
+    back.ok(&["check"]);
+    back.ok(&["unarchive", "PLAN-001"]);
+    assert_eq!(
+        akt_files(&back),
+        [
+            "PLAN-001-local-writes.md",
+            "PLAN-002-other.md",
+            "archived",
+            "archived.md"
+        ]
+    );
+    assert!(
+        std::fs::read_dir(again.join("akter/archived"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+    assert_eq!(revision_of(&back, "PLAN-001"), plan + 2);
+    back.ok(&["check"]);
 }

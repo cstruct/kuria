@@ -261,6 +261,7 @@ pub fn perform(
     target.values = values;
     target.state.clone_from(&state);
     let now = w.bump(number);
+    super::archive::after_transition(w, number)?;
     let state_name = shape
         .state(&state)
         .map_or(state.as_str(), |s| s.name.as_str())

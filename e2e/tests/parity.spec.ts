@@ -493,3 +493,117 @@ test('local mode writes documents, releases and reads versions as the server doe
 		await both(args);
 	}
 });
+
+// r[verify cli.archive]
+// r[verify cli.local.archive]
+test('local mode archives, by hand and by rules, and unarchives as the server does', async () => {
+	test.setTimeout(300_000);
+	const stamp = Date.now();
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const dir = join(cli.dir, 'archives');
+	const box = `parity_shelf_${stamp}`;
+	const item = `parity_thing_${stamp}`;
+	writeFileSync(
+		join(cli.dir, 'types.json'),
+		JSON.stringify([
+			{
+				key: box,
+				name: 'Parity shelf',
+				number: `PS${stamp}-{seq}`,
+				fields: [{ key: 'title', name: 'Title', kind: 'text', required: true }],
+				states: [
+					{ key: 'open', name: 'Open', initial: true },
+					{ key: 'shut', name: 'Shut', final: true }
+				],
+				transitions: [{ key: 'shut', name: 'Shut', from: ['open'], to: 'shut' }],
+				contains: [{ type: item }],
+				archive: { rules: [{ newer: 1, in: ['shut'] }] }
+			},
+			{
+				key: item,
+				name: 'Parity thing',
+				number: '{parent}-T{seq}',
+				created_in: [box],
+				fields: [{ key: 'title', name: 'Title', kind: 'text', required: true }],
+				states: [{ key: 'open', name: 'Open', initial: true }],
+				archive: { rules: [{ with_container: box }] }
+			}
+		])
+	);
+	expect((await cli.run(['init', '--dir', dir])).code).toBe(0);
+	const git = (...args: string[]) =>
+		execFileSync('git', ['-C', dir, '-c', 'commit.gpgsign=false', ...args], {
+			env: {
+				...process.env,
+				GIT_AUTHOR_NAME: 'Ada',
+				GIT_AUTHOR_EMAIL: 'ada@shop.example',
+				GIT_COMMITTER_NAME: 'Ada',
+				GIT_COMMITTER_EMAIL: 'ada@shop.example'
+			}
+		});
+	git('init', '-q');
+	const viewer = JSON.parse((await cli.run(['whoami', '--format', 'json'])).stdout);
+	const me = { KURIA_ME: viewer.email ?? viewer.name };
+	// Each local command on a committed directory, as unarchiving needs.
+	const both = async (args: string[]): Promise<Said> => {
+		const server = said(await cli.run(args));
+		git('add', '-A');
+		git('commit', '-qm', 'Saved', '--allow-empty');
+		const local = said(await cli.run(['--dir', dir, ...args], me));
+		expect(local, args.join(' ')).toEqual(server);
+		return server;
+	};
+	const archived = async (prefix: string[], type: string) =>
+		JSON.parse((await cli.run([...prefix, 'ls', type, '--archived', '--format', 'json'], me)).stdout)
+			.akter.map((x: { number: string }) => x.number)
+			.sort();
+	const same = async (type: string) => {
+		const server = await archived([], type);
+		expect(await archived(['--dir', dir], type), type).toEqual(server);
+		return server;
+	};
+	// When each reached its state is told apart by the second, as git's
+	// commits are.
+	const later = () => new Promise((resolve) => setTimeout(resolve, 1100));
+	const [a, b, c] = [1, 2, 3].map((n) => `PS${stamp}-${n}`);
+
+	await both(['types', 'define', join(cli.dir, 'types.json')]);
+	for (const title of ['A', 'B', 'C']) {
+		await both(['new', box, '--set', `title=${title}`]);
+	}
+	await both(['new', item, '--in', a, '--set', 'title=One']);
+	await both(['new', item, '--in', a, '--set', 'title=Two']);
+	await both(['do', a, 'shut']);
+	await later();
+	// A newer shelf shut overtakes the first, its things going with it.
+	await both(['do', b, 'shut']);
+	expect(await same(box)).toEqual([a]);
+	expect(await same(item)).toEqual([`${a}-T1`, `${a}-T2`]);
+	const steps: [string[], number][] = [
+		[['ls', item, '--in', a], 0],
+		[['ls', item, '--in', a, '--archived'], 0],
+		[['ls', item, '--in', a, '--with-archived'], 0],
+		[['set', `${a}-T1`, 'title=Again'], 1],
+		[['new', item, '--in', a, '--set', 'title=Late'], 1],
+		[['archive', a], 1],
+		[['unarchive', b], 1],
+		[['unarchive', 'NOPE-1'], 2],
+		// Unarchived by hand, it brings its things back and is kept.
+		[['unarchive', a, '--reason', 'Still needed'], 0],
+		[['cat', a, '--all-members'], 0],
+		[['ls', item, '--in', a], 0]
+	];
+	for (const [args, code] of steps) {
+		expect((await both(args)).code, args.join(' ')).toBe(code);
+	}
+	await later();
+	// Kept from rules, the first stays live; the second is overtaken.
+	await both(['do', c, 'shut']);
+	expect(await same(box)).toEqual([b]);
+	// By hand, in order, stopping at the first refused.
+	expect((await both(['archive', a, 'NOPE-1', c, '--reason', 'Done with'])).code).toBe(2);
+	expect(await same(box)).toEqual([a, b]);
+	expect(await same(item)).toEqual([`${a}-T1`, `${a}-T2`]);
+	await both(['ls', box]);
+	expect((await cli.run(['--dir', dir, 'check'])).code).toBe(0);
+});

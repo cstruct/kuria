@@ -91,7 +91,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   people and who signed in, raises counters past the imported numbers
   (read back through their patterns), records subject aliases (by the
   mapping, else by email to a user who signed in) and the import, and
-  appends a change event per akt. A bundle without akter defines each type
+  appends a change event per akt; last, it archives the akter the bundle
+  holds archived, moving each with its history, a `with_container`
+  archive naming its container's new identifier, and marks the kept ones
+  (format 3 carries `archived` and `archiveKept` per akt). A bundle without akter defines each type
   as `defineAktType` does. Aliased subjects are shown as, and filter as,
   the users they map to.
 - Contacts ([`src/graphql/contacts.rs`](src/graphql/contacts.rs)):
@@ -374,8 +377,10 @@ mise run test
   numbering on; an incomplete selection; types moving between tenants,
   after the tenant's own akter, then clashing; types without akter as new
   versions; refused bundles (format, hashes, changes, bytes, not tar)
-  writing nothing; and subjects mapped by email and by `subjects.json`,
-  shown and filtering as the users they map to.
+  writing nothing; subjects mapped by email and by `subjects.json`,
+  shown and filtering as the users they map to; and archived and kept
+  akter moving as they were, a plan's archive bringing back its tasks
+  in the other tenant.
 - [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
   Valkey: the relay keeping a code or an error until it is collected once,
   the first redirect for a `state` winning, forgetting an uncollected code,
