@@ -85,9 +85,12 @@ it to a server that hasn't defined the types yet, keeping numbers.
 ## With example data
 
 [`bundle/`](bundle/) is an example bundle of these akt types with akter:
-an active plan with tasks in every state, `blocks` links, an open gap and one closed by a decision, and a decision superseded by a later one; a finished plan and a dropped one. Devi Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`)
-and Hedda Lund (`hedda@shop.example`) wrote them, the people the end-to-end
-seed signs in as. To start a server with it, set
+an active plan with tasks in every state, `blocks` links, an open gap and
+one closed by a decision, and a decision superseded by a later one; a
+finished plan, and a dropped one, archived. Devi Larsen
+(`dev@shop.example`), Rami Moberg (`rm@shop.example`) and Hedda Lund
+(`hedda@shop.example`) wrote them, the people the end-to-end seed signs in
+as. To start a server with it, set
 
 ```sh
 KURIA_BOOTSTRAP_BUNDLE=docs/examples/planning/bundle

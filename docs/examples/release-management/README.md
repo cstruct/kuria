@@ -97,9 +97,13 @@ mutation($document: JSON!) {
 ## With example data
 
 [`bundle/`](bundle/) is an example bundle of these akt types with akter:
-two releases of a web shop: spring's, worked through a rejected and an accepted candidate with the pipeline's artifacts and an SBOM, approved notes, the go given for the head of product and a deployed hotfix, then closed; and summer's, being planned, with a wish-list epic under way. Devi Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`)
-and Hedda Lund (`hedda@shop.example`) wrote them, the people the end-to-end
-seed signs in as. To start a server with it, set
+two releases of a web shop: spring's, worked through a rejected and an
+accepted candidate with the pipeline's artifacts and an SBOM, approved
+notes, the go given for the head of product and a deployed hotfix, then
+closed; and summer's, being planned, with a wish-list epic under way. Devi
+Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`) and Hedda
+Lund (`hedda@shop.example`) wrote them, the people the end-to-end seed
+signs in as. To start a server with it, set
 
 ```sh
 KURIA_BOOTSTRAP_BUNDLE=docs/examples/release-management/bundle

@@ -172,10 +172,12 @@ new picture in, and a release finds the pictures it embeds.
 
 ## With example data
 
-[`bundle/`](bundle/) is an example bundle of these akt types with akter:
-a quality manual of documents in folders, referring to each other and to a diagram image, released (the release procedure twice) and one retired, and an archived handbook. Devi Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`)
-and Hedda Lund (`hedda@shop.example`) wrote them, the people the end-to-end
-seed signs in as. To start a server with it, set
+[`bundle/`](bundle/) is an example bundle of these akt types with akter: a
+quality manual of documents in folders, referring to each other and to a
+diagram image, released (the release procedure twice) and one retired, and
+an archived handbook. Devi Larsen (`dev@shop.example`), Rami Moberg
+(`rm@shop.example`) and Hedda Lund (`hedda@shop.example`) wrote them, the
+people the end-to-end seed signs in as. To start a server with it, set
 
 ```sh
 KURIA_BOOTSTRAP_BUNDLE=docs/examples/documents/bundle

@@ -178,7 +178,6 @@ impl Config {
             })?),
             _ => None,
         };
-        let bootstrap = bootstrap(&lookup, default_tenant)?;
         let login_app = flag(&lookup, "KURIA_LOGIN_APP", false)?;
         let rate_limit_secret = required("KURIA_RATE_LIMIT_SECRET")?;
         if rate_limit_secret.len() < 32 {
@@ -208,7 +207,7 @@ impl Config {
             render_limits,
             archive_sweep,
             default_tenant,
-            bootstrap,
+            bootstrap: bootstrap(&lookup, default_tenant)?,
             web_dir: lookup("KURIA_WEB_DIR")
                 .filter(|d| !d.is_empty())
                 .map(std::path::PathBuf::from),

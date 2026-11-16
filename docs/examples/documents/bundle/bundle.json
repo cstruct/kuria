@@ -4,7 +4,7 @@
       "key": "document",
       "versions": [
         {
-          "createdAt": "2026-11-16T10:48:06.150460Z",
+          "createdAt": "2026-11-16T11:13:44.850249Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "created_in": [
@@ -83,7 +83,7 @@
               "action": "documents:release"
             }
           },
-          "id": "01a1e3f8-a707-7672-8c32-456c07973c18",
+          "id": "01a1e410-2195-7417-b583-6c27445d70cd",
           "version": 1
         }
       ]
@@ -92,7 +92,7 @@
       "key": "document_index",
       "versions": [
         {
-          "createdAt": "2026-11-16T10:48:06.154911Z",
+          "createdAt": "2026-11-16T11:13:44.861101Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "contains": [
@@ -167,7 +167,7 @@
               }
             ]
           },
-          "id": "01a1e3f8-a70b-72a9-8911-7a41c01da449",
+          "id": "01a1e410-219e-7527-9aed-b116efa138a9",
           "version": 1
         }
       ]
@@ -176,7 +176,7 @@
       "key": "image",
       "versions": [
         {
-          "createdAt": "2026-11-16T10:48:06.145122Z",
+          "createdAt": "2026-11-16T11:13:44.842653Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "fields": [
@@ -244,7 +244,7 @@
               }
             ]
           },
-          "id": "01a1e3f8-a701-7375-9b9b-65e5666c3d11",
+          "id": "01a1e410-218b-7341-8353-b50e6d617438",
           "version": 1
         }
       ]
@@ -254,17 +254,17 @@
     {
       "attachments": [
         {
-          "attachment": "01a1e3f8-a70d-74e3-a159-9ea68278b20a",
+          "attachment": "01a1e410-21a0-772c-b8f7-826d3058640d",
           "field": "file"
         }
       ],
-      "createdAt": "2026-11-16T10:48:06.162081Z",
+      "createdAt": "2026-11-16T11:13:44.871441Z",
       "fields": {
         "caption": "From planning to a closed release.",
-        "file": "01a1e3f8-a70d-74e3-a159-9ea68278b20a",
+        "file": "01a1e410-21a0-772c-b8f7-826d3058640d",
         "title": "Release process"
       },
-      "id": "01a1e3f8-a712-77d5-b2c8-d8aa51610f2a",
+      "id": "01a1e410-21a8-765e-b5da-5be5589ab44a",
       "number": "IMG-1",
       "rank": "a0",
       "revisions": [
@@ -272,11 +272,11 @@
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {
             "caption": "From planning to a closed release.",
-            "file": "01a1e3f8-a70d-74e3-a159-9ea68278b20a",
+            "file": "01a1e410-21a0-772c-b8f7-826d3058640d",
             "title": "Release process"
           },
-          "createdAt": "2026-11-16T10:48:06.162081Z",
-          "hash": "020ec2d4bff93d6d5c17acfff00c4278e1e616ed3690c4c7c422cc8bae91d1d9",
+          "createdAt": "2026-11-16T11:13:44.871441Z",
+          "hash": "9a25a9d1bcc88237d2cff74721d73e2ca9646c0cd1586d5348228c36164b4111",
           "membership": null,
           "reason": "The diagram for the release procedure",
           "revision": 1,
@@ -286,12 +286,12 @@
       ],
       "state": "current",
       "title": "Release process",
-      "typeVersion": "01a1e3f8-a701-7375-9b9b-65e5666c3d11",
-      "updatedAt": "2026-11-16T10:48:06.162081Z"
+      "typeVersion": "01a1e410-218b-7341-8353-b50e6d617438",
+      "updatedAt": "2026-11-16T11:13:44.871441Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.174411Z",
+      "createdAt": "2026-11-16T11:13:44.891071Z",
       "fields": {
         "about": "How the shop plans, builds, tests and releases its software.",
         "folders": [
@@ -325,7 +325,7 @@
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Quality manual"
       },
-      "id": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
+      "id": "01a1e410-21bb-7171-89f9-9df65417be3e",
       "number": "DOCS-1",
       "rank": "a1",
       "revisions": [
@@ -336,7 +336,7 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Quality manual"
           },
-          "createdAt": "2026-11-16T10:48:06.174411Z",
+          "createdAt": "2026-11-16T11:13:44.891071Z",
           "hash": "8e8e05b2718b789e7d2b54dca8d5402457f50810f04fa2946eac908b8ab5b1e9",
           "membership": null,
           "reason": "Start the quality manual",
@@ -347,12 +347,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.182070Z",
+          "createdAt": "2026-11-16T11:13:44.898986Z",
           "hash": "8e8e05b2718b789e7d2b54dca8d5402457f50810f04fa2946eac908b8ab5b1e9",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1e3f8-a727-76d8-82f2-86f419ce4e63",
+                "akt": "01a1e410-21c4-74b8-a9df-ef07e887cb1f",
                 "number": "DOCS-1-D01"
               }
             ]
@@ -365,12 +365,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.219959Z",
+          "createdAt": "2026-11-16T11:13:44.932892Z",
           "hash": "8e8e05b2718b789e7d2b54dca8d5402457f50810f04fa2946eac908b8ab5b1e9",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1e3f8-a74c-75f7-be95-e03e27376e97",
+                "akt": "01a1e410-21e5-7682-bbbf-3a2ceae72e5e",
                 "number": "DOCS-1-D02"
               }
             ]
@@ -383,12 +383,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.252742Z",
+          "createdAt": "2026-11-16T11:13:44.969845Z",
           "hash": "8e8e05b2718b789e7d2b54dca8d5402457f50810f04fa2946eac908b8ab5b1e9",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1e3f8-a76d-70db-9cd4-3e274cb1eb2f",
+                "akt": "01a1e410-220a-7669-aab5-754010ef13c3",
                 "number": "DOCS-1-D03"
               }
             ]
@@ -401,12 +401,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.317291Z",
+          "createdAt": "2026-11-16T11:13:45.040724Z",
           "hash": "8e8e05b2718b789e7d2b54dca8d5402457f50810f04fa2946eac908b8ab5b1e9",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1e3f8-a7ad-706c-934c-59b124b5e2db",
+                "akt": "01a1e410-2251-7734-9d9e-c263dfcc47c6",
                 "number": "DOCS-1-D04"
               }
             ]
@@ -419,12 +419,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.341805Z",
+          "createdAt": "2026-11-16T11:13:45.069923Z",
           "hash": "8e8e05b2718b789e7d2b54dca8d5402457f50810f04fa2946eac908b8ab5b1e9",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1e3f8-a7c6-712c-b202-216a1184c624",
+                "akt": "01a1e410-226e-7731-8ba3-fe75b6a6ef99",
                 "number": "DOCS-1-D05"
               }
             ]
@@ -466,7 +466,7 @@
               }
             ]
           },
-          "createdAt": "2026-11-16T10:48:06.375110Z",
+          "createdAt": "2026-11-16T11:13:45.108470Z",
           "hash": "90f520fc46550daf7a04d340439af387438d9cc167bab5e6372468cb89884902",
           "membership": null,
           "reason": "Sort the manual into folders",
@@ -477,18 +477,18 @@
       ],
       "state": "open",
       "title": "Quality manual",
-      "typeVersion": "01a1e3f8-a70b-72a9-8911-7a41c01da449",
-      "updatedAt": "2026-11-16T10:48:06.375110Z"
+      "typeVersion": "01a1e410-219e-7527-9aed-b116efa138a9",
+      "updatedAt": "2026-11-16T11:13:45.108470Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.182070Z",
+      "createdAt": "2026-11-16T11:13:44.898986Z",
       "fields": {
         "body": "# Quality policy {#quality-policy}\n\nWe ship small changes often, each one reviewed, tested and traceable from request to release.\n\n## Principles {#principles}\n\n- Every change starts as a backlog item.\n- Nothing ships without a passed acceptance test.\n- Releases are approved by the head of product.\n",
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Quality policy"
       },
-      "id": "01a1e3f8-a727-76d8-82f2-86f419ce4e63",
+      "id": "01a1e410-21c4-74b8-a9df-ef07e887cb1f",
       "number": "DOCS-1-D01",
       "rank": "a2",
       "revisions": [
@@ -499,12 +499,12 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Quality policy"
           },
-          "createdAt": "2026-11-16T10:48:06.182070Z",
+          "createdAt": "2026-11-16T11:13:44.898986Z",
           "hash": "38e6a18156c1820eb2b44fd787c8f4864737021d09619539884fb94df89ae902",
           "membership": {
             "added": [
               {
-                "akt": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
+                "akt": "01a1e410-21bb-7171-89f9-9df65417be3e",
                 "number": "DOCS-1"
               }
             ]
@@ -517,7 +517,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.205461Z",
+          "createdAt": "2026-11-16T11:13:44.919770Z",
           "hash": "38e6a18156c1820eb2b44fd787c8f4864737021d09619539884fb94df89ae902",
           "membership": null,
           "reason": null,
@@ -528,14 +528,14 @@
       ],
       "state": "draft",
       "title": "Quality policy",
-      "typeVersion": "01a1e3f8-a707-7672-8c32-456c07973c18",
-      "updatedAt": "2026-11-16T10:48:06.205461Z",
+      "typeVersion": "01a1e410-2195-7417-b583-6c27445d70cd",
+      "updatedAt": "2026-11-16T11:13:44.919770Z",
       "versions": [
         {
           "label": "Approved",
           "number": 1,
           "pins": [],
-          "releasedAt": "2026-11-16T10:48:06.211473Z",
+          "releasedAt": "2026-11-16T11:13:44.925968Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d003",
           "revision": 2
         }
@@ -543,13 +543,13 @@
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.219959Z",
+      "createdAt": "2026-11-16T11:13:44.932892Z",
       "fields": {
         "body": "# Document control {#document-control}\n\nDocuments in this manual are drafted together and released as versions. A released version is never changed; a new one replaces it.\n\nThey follow the [principles](kuria:DOCS-1-D01#principles) of the quality policy.\n\n## Review {#review}\n\nThe owner reviews each document once a year, and after every change to the process it describes.\n",
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Document control"
       },
-      "id": "01a1e3f8-a74c-75f7-be95-e03e27376e97",
+      "id": "01a1e410-21e5-7682-bbbf-3a2ceae72e5e",
       "number": "DOCS-1-D02",
       "rank": "a3",
       "revisions": [
@@ -560,18 +560,18 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Document control"
           },
-          "createdAt": "2026-11-16T10:48:06.219959Z",
+          "createdAt": "2026-11-16T11:13:44.932892Z",
           "hash": "ff214eee56dc761943cdf512b1ab012c2b580d17ded643023a4ac9569de3adca",
           "membership": {
             "added": [
               {
-                "akt": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
+                "akt": "01a1e410-21bb-7171-89f9-9df65417be3e",
                 "number": "DOCS-1"
               }
             ],
             "linked": [
               {
-                "akt": "01a1e3f8-a727-76d8-82f2-86f419ce4e63",
+                "akt": "01a1e410-21c4-74b8-a9df-ef07e887cb1f",
                 "kind": "refers_to",
                 "name": "Refers to",
                 "number": "DOCS-1-D01"
@@ -586,7 +586,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.240891Z",
+          "createdAt": "2026-11-16T11:13:44.957240Z",
           "hash": "ff214eee56dc761943cdf512b1ab012c2b580d17ded643023a4ac9569de3adca",
           "membership": null,
           "reason": null,
@@ -597,8 +597,8 @@
       ],
       "state": "draft",
       "title": "Document control",
-      "typeVersion": "01a1e3f8-a707-7672-8c32-456c07973c18",
-      "updatedAt": "2026-11-16T10:48:06.240891Z",
+      "typeVersion": "01a1e410-2195-7417-b583-6c27445d70cd",
+      "updatedAt": "2026-11-16T11:13:44.957240Z",
       "versions": [
         {
           "label": "First issue",
@@ -610,7 +610,7 @@
               "version": 1
             }
           ],
-          "releasedAt": "2026-11-16T10:48:06.246816Z",
+          "releasedAt": "2026-11-16T11:13:44.963911Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d002",
           "revision": 2
         }
@@ -618,13 +618,13 @@
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.252742Z",
+      "createdAt": "2026-11-16T11:13:44.969845Z",
       "fields": {
         "body": "# Release procedure {#release-procedure}\n\n![The release process](kuria:IMG-1)\n\n1. Plan the release and its backlog.\n2. Freeze features and cut a release candidate.\n3. Run the acceptance test protocol against the candidate; a failed test rejects it.\n4. Write the release notes and have them approved.\n5. Get the go from the head of product, and release.\n6. Close the release once its hotfixes are deployed.\n\nDocuments are kept as [document control](kuria:DOCS-1-D02#review) says.\n",
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Release procedure"
       },
-      "id": "01a1e3f8-a76d-70db-9cd4-3e274cb1eb2f",
+      "id": "01a1e410-220a-7669-aab5-754010ef13c3",
       "number": "DOCS-1-D03",
       "rank": "a4",
       "revisions": [
@@ -635,24 +635,24 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Release procedure"
           },
-          "createdAt": "2026-11-16T10:48:06.252742Z",
+          "createdAt": "2026-11-16T11:13:44.969845Z",
           "hash": "5fae74970a27d3ee9e4aaac3cd6960a07f50e7cdebde1e6dcf4fa60e159037a5",
           "membership": {
             "added": [
               {
-                "akt": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
+                "akt": "01a1e410-21bb-7171-89f9-9df65417be3e",
                 "number": "DOCS-1"
               }
             ],
             "linked": [
               {
-                "akt": "01a1e3f8-a712-77d5-b2c8-d8aa51610f2a",
+                "akt": "01a1e410-21a8-765e-b5da-5be5589ab44a",
                 "kind": "refers_to",
                 "name": "Refers to",
                 "number": "IMG-1"
               },
               {
-                "akt": "01a1e3f8-a74c-75f7-be95-e03e27376e97",
+                "akt": "01a1e410-21e5-7682-bbbf-3a2ceae72e5e",
                 "kind": "refers_to",
                 "name": "Refers to",
                 "number": "DOCS-1-D02"
@@ -667,7 +667,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.274323Z",
+          "createdAt": "2026-11-16T11:13:44.991269Z",
           "hash": "5fae74970a27d3ee9e4aaac3cd6960a07f50e7cdebde1e6dcf4fa60e159037a5",
           "membership": null,
           "reason": null,
@@ -680,7 +680,7 @@
           "changes": {
             "body": "# Release procedure {#release-procedure}\n\n![The release process](kuria:IMG-1)\n\n1. Plan the release and its backlog.\n2. Freeze features and cut a release candidate.\n3. Run the acceptance test protocol against the candidate; a failed test rejects it.\n4. Write the release notes and have them approved.\n5. Get the go from the head of product, and release.\n6. Close the release once its hotfixes are deployed.\n\nDocuments are kept as [document control](kuria:DOCS-1-D02#review) says.\n"
           },
-          "createdAt": "2026-11-16T10:48:06.305225Z",
+          "createdAt": "2026-11-16T11:13:45.027312Z",
           "hash": "b4328ed723835145b43c2632c113cf8dcc50d1b7efa50707ba43200c7d94f0d2",
           "membership": null,
           "reason": null,
@@ -691,8 +691,8 @@
       ],
       "state": "draft",
       "title": "Release procedure",
-      "typeVersion": "01a1e3f8-a707-7672-8c32-456c07973c18",
-      "updatedAt": "2026-11-16T10:48:06.305225Z",
+      "typeVersion": "01a1e410-2195-7417-b583-6c27445d70cd",
+      "updatedAt": "2026-11-16T11:13:45.027312Z",
       "versions": [
         {
           "label": "First issue",
@@ -709,7 +709,7 @@
               "version": 1
             }
           ],
-          "releasedAt": "2026-11-16T10:48:06.280614Z",
+          "releasedAt": "2026-11-16T11:13:44.998569Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d002",
           "revision": 2
         },
@@ -728,7 +728,7 @@
               "version": 1
             }
           ],
-          "releasedAt": "2026-11-16T10:48:06.311385Z",
+          "releasedAt": "2026-11-16T11:13:45.034296Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d002",
           "revision": 3
         }
@@ -736,13 +736,13 @@
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.317291Z",
+      "createdAt": "2026-11-16T11:13:45.040724Z",
       "fields": {
         "body": "# Developer onboarding {#developer-onboarding}\n\nYour first week: set up the development stack, take a small backlog item, and have it reviewed.\n\n<!-- pagebreak -->\n\n## Checklist {#checklist}\n\n- [ ] Accounts for git, CI and Kuria\n- [ ] The development stack running\n- [ ] A first pull request merged\n",
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Developer onboarding"
       },
-      "id": "01a1e3f8-a7ad-706c-934c-59b124b5e2db",
+      "id": "01a1e410-2251-7734-9d9e-c263dfcc47c6",
       "number": "DOCS-1-D04",
       "rank": "a5",
       "revisions": [
@@ -753,12 +753,12 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Developer onboarding"
           },
-          "createdAt": "2026-11-16T10:48:06.317291Z",
+          "createdAt": "2026-11-16T11:13:45.040724Z",
           "hash": "23f82663547f015eb70b7f4f81df5985dd459e95c2fe8220b9c4639032e819d9",
           "membership": {
             "added": [
               {
-                "akt": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
+                "akt": "01a1e410-21bb-7171-89f9-9df65417be3e",
                 "number": "DOCS-1"
               }
             ]
@@ -771,7 +771,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.332804Z",
+          "createdAt": "2026-11-16T11:13:45.056875Z",
           "hash": "23f82663547f015eb70b7f4f81df5985dd459e95c2fe8220b9c4639032e819d9",
           "membership": null,
           "reason": null,
@@ -782,13 +782,13 @@
       ],
       "state": "draft",
       "title": "Developer onboarding",
-      "typeVersion": "01a1e3f8-a707-7672-8c32-456c07973c18",
-      "updatedAt": "2026-11-16T10:48:06.332804Z",
+      "typeVersion": "01a1e410-2195-7417-b583-6c27445d70cd",
+      "updatedAt": "2026-11-16T11:13:45.056875Z",
       "versions": [
         {
           "number": 1,
           "pins": [],
-          "releasedAt": "2026-11-16T10:48:06.336682Z",
+          "releasedAt": "2026-11-16T11:13:45.062340Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d001",
           "revision": 2
         }
@@ -796,13 +796,13 @@
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.341805Z",
+      "createdAt": "2026-11-16T11:13:45.069923Z",
       "fields": {
         "body": "# Release checklist {#release-checklist}\n\nPrint, tick and file in the release binder.\n",
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Release checklist (paper)"
       },
-      "id": "01a1e3f8-a7c6-712c-b202-216a1184c624",
+      "id": "01a1e410-226e-7731-8ba3-fe75b6a6ef99",
       "number": "DOCS-1-D05",
       "rank": "a6",
       "revisions": [
@@ -813,12 +813,12 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Release checklist (paper)"
           },
-          "createdAt": "2026-11-16T10:48:06.341805Z",
+          "createdAt": "2026-11-16T11:13:45.069923Z",
           "hash": "77fe398349da27056522567ae3513617ae93aa3b24efaf8ca489ede550592d8f",
           "membership": {
             "added": [
               {
-                "akt": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
+                "akt": "01a1e410-21bb-7171-89f9-9df65417be3e",
                 "number": "DOCS-1"
               }
             ]
@@ -831,7 +831,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.357022Z",
+          "createdAt": "2026-11-16T11:13:45.087540Z",
           "hash": "77fe398349da27056522567ae3513617ae93aa3b24efaf8ca489ede550592d8f",
           "membership": null,
           "reason": null,
@@ -842,7 +842,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.367660Z",
+          "createdAt": "2026-11-16T11:13:45.099009Z",
           "hash": "9c1aef4f669e617e130206d6d87105e01fd1d51d137e0af3b53e3f02ab1aced3",
           "membership": null,
           "reason": "Replaced by the release procedure",
@@ -853,13 +853,13 @@
       ],
       "state": "retired",
       "title": "Release checklist (paper)",
-      "typeVersion": "01a1e3f8-a707-7672-8c32-456c07973c18",
-      "updatedAt": "2026-11-16T10:48:06.367660Z",
+      "typeVersion": "01a1e410-2195-7417-b583-6c27445d70cd",
+      "updatedAt": "2026-11-16T11:13:45.099009Z",
       "versions": [
         {
           "number": 1,
           "pins": [],
-          "releasedAt": "2026-11-16T10:48:06.360767Z",
+          "releasedAt": "2026-11-16T11:13:45.091992Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d002",
           "revision": 2
         }
@@ -867,13 +867,13 @@
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.382621Z",
+      "createdAt": "2026-11-16T11:13:45.116436Z",
       "fields": {
         "about": "Last year's handbook, merged into the quality manual.",
         "owner": "01900000-0000-7000-8000-00000000d001",
         "title": "Engineering handbook 2025"
       },
-      "id": "01a1e3f8-a7ef-7113-908f-76329a4148ee",
+      "id": "01a1e410-229d-741b-b37c-5ee47bf3fff6",
       "number": "DOCS-2",
       "rank": "a7",
       "revisions": [
@@ -884,7 +884,7 @@
             "owner": "01900000-0000-7000-8000-00000000d001",
             "title": "Engineering handbook 2025"
           },
-          "createdAt": "2026-11-16T10:48:06.382621Z",
+          "createdAt": "2026-11-16T11:13:45.116436Z",
           "hash": "d7e6b9def6610aaed10f30ceaea53d0acaa5d79b32a8b4a03628622dc16aa056",
           "membership": null,
           "reason": "Last year's handbook",
@@ -895,12 +895,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.390119Z",
+          "createdAt": "2026-11-16T11:13:45.124129Z",
           "hash": "d7e6b9def6610aaed10f30ceaea53d0acaa5d79b32a8b4a03628622dc16aa056",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1e3f8-a7f6-756e-83a7-4ccd3878d05d",
+                "akt": "01a1e410-22a4-7631-8dd7-c8193b15e530",
                 "number": "DOCS-2-D01"
               }
             ]
@@ -913,7 +913,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.413221Z",
+          "createdAt": "2026-11-16T11:13:45.151965Z",
           "hash": "934278deab342907e1d717d724b607e8add0117983be7b3b422734a0595c6019",
           "membership": null,
           "reason": "Merged into the quality manual",
@@ -924,18 +924,18 @@
       ],
       "state": "archived",
       "title": "Engineering handbook 2025",
-      "typeVersion": "01a1e3f8-a70b-72a9-8911-7a41c01da449",
-      "updatedAt": "2026-11-16T10:48:06.413221Z"
+      "typeVersion": "01a1e410-219e-7527-9aed-b116efa138a9",
+      "updatedAt": "2026-11-16T11:13:45.151965Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-16T10:48:06.390119Z",
+      "createdAt": "2026-11-16T11:13:45.124129Z",
       "fields": {
         "body": "# Code style {#code-style}\n\nFormat with the project's formatter; lint warnings fail the build.\n",
         "owner": "01900000-0000-7000-8000-00000000d001",
         "title": "Code style"
       },
-      "id": "01a1e3f8-a7f6-756e-83a7-4ccd3878d05d",
+      "id": "01a1e410-22a4-7631-8dd7-c8193b15e530",
       "number": "DOCS-2-D01",
       "rank": "a8",
       "revisions": [
@@ -946,12 +946,12 @@
             "owner": "01900000-0000-7000-8000-00000000d001",
             "title": "Code style"
           },
-          "createdAt": "2026-11-16T10:48:06.390119Z",
+          "createdAt": "2026-11-16T11:13:45.124129Z",
           "hash": "6f6ba87cfc0634590d349d30ae8eae456eb5690781e907da6d4a1fdc9f3f4f46",
           "membership": {
             "added": [
               {
-                "akt": "01a1e3f8-a7ef-7113-908f-76329a4148ee",
+                "akt": "01a1e410-229d-741b-b37c-5ee47bf3fff6",
                 "number": "DOCS-2"
               }
             ]
@@ -964,7 +964,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-16T10:48:06.404411Z",
+          "createdAt": "2026-11-16T11:13:45.140775Z",
           "hash": "6f6ba87cfc0634590d349d30ae8eae456eb5690781e907da6d4a1fdc9f3f4f46",
           "membership": null,
           "reason": null,
@@ -975,13 +975,13 @@
       ],
       "state": "draft",
       "title": "Code style",
-      "typeVersion": "01a1e3f8-a707-7672-8c32-456c07973c18",
-      "updatedAt": "2026-11-16T10:48:06.404411Z",
+      "typeVersion": "01a1e410-2195-7417-b583-6c27445d70cd",
+      "updatedAt": "2026-11-16T11:13:45.140775Z",
       "versions": [
         {
           "number": 1,
           "pins": [],
-          "releasedAt": "2026-11-16T10:48:06.408084Z",
+          "releasedAt": "2026-11-16T11:13:45.145256Z",
           "releasedBy": "01900000-0000-7000-8000-00000000d001",
           "revision": 2
         }
@@ -990,83 +990,83 @@
   ],
   "attachments": [
     {
-      "id": "01a1e3f8-a70d-74e3-a159-9ea68278b20a",
+      "id": "01a1e410-21a0-772c-b8f7-826d3058640d",
       "mediaType": "image/svg+xml",
       "name": "release-process.svg",
       "sbom": null,
       "sha256": "f151a414f75c1f64f1c51738e565bca81d8558e0131af656150c481357e93bee",
       "size": 1072,
-      "uploadedAt": "2026-11-16T10:48:06.157175Z",
+      "uploadedAt": "2026-11-16T11:13:44.864920Z",
       "uploadedBy": "01900000-0000-7000-8000-00000000d002"
     }
   ],
   "contacts": [],
   "counters": [],
-  "exportedAt": "2026-11-16T10:48:06.418272Z",
-  "format": 2,
+  "exportedAt": "2026-11-16T11:13:45.157564Z",
+  "format": 3,
   "holdsAkter": true,
   "links": [
     {
-      "addedAt": "2026-11-16T10:48:06.219959Z",
+      "addedAt": "2026-11-16T11:13:44.932892Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
       "kind": "refers_to",
       "pinnedRevision": null,
-      "source": "01a1e3f8-a74c-75f7-be95-e03e27376e97",
-      "target": "01a1e3f8-a727-76d8-82f2-86f419ce4e63"
+      "source": "01a1e410-21e5-7682-bbbf-3a2ceae72e5e",
+      "target": "01a1e410-21c4-74b8-a9df-ef07e887cb1f"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.252742Z",
+      "addedAt": "2026-11-16T11:13:44.969845Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
       "kind": "refers_to",
       "pinnedRevision": null,
-      "source": "01a1e3f8-a76d-70db-9cd4-3e274cb1eb2f",
-      "target": "01a1e3f8-a712-77d5-b2c8-d8aa51610f2a"
+      "source": "01a1e410-220a-7669-aab5-754010ef13c3",
+      "target": "01a1e410-21a8-765e-b5da-5be5589ab44a"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.252742Z",
+      "addedAt": "2026-11-16T11:13:44.969845Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
       "kind": "refers_to",
       "pinnedRevision": null,
-      "source": "01a1e3f8-a76d-70db-9cd4-3e274cb1eb2f",
-      "target": "01a1e3f8-a74c-75f7-be95-e03e27376e97"
+      "source": "01a1e410-220a-7669-aab5-754010ef13c3",
+      "target": "01a1e410-21e5-7682-bbbf-3a2ceae72e5e"
     }
   ],
   "memberships": [
     {
-      "addedAt": "2026-11-16T10:48:06.182070Z",
+      "addedAt": "2026-11-16T11:13:44.898986Z",
       "addedBy": "01900000-0000-7000-8000-00000000d003",
-      "container": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
-      "member": "01a1e3f8-a727-76d8-82f2-86f419ce4e63"
+      "container": "01a1e410-21bb-7171-89f9-9df65417be3e",
+      "member": "01a1e410-21c4-74b8-a9df-ef07e887cb1f"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.219959Z",
+      "addedAt": "2026-11-16T11:13:44.932892Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
-      "member": "01a1e3f8-a74c-75f7-be95-e03e27376e97"
+      "container": "01a1e410-21bb-7171-89f9-9df65417be3e",
+      "member": "01a1e410-21e5-7682-bbbf-3a2ceae72e5e"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.252742Z",
+      "addedAt": "2026-11-16T11:13:44.969845Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
-      "member": "01a1e3f8-a76d-70db-9cd4-3e274cb1eb2f"
+      "container": "01a1e410-21bb-7171-89f9-9df65417be3e",
+      "member": "01a1e410-220a-7669-aab5-754010ef13c3"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.317291Z",
+      "addedAt": "2026-11-16T11:13:45.040724Z",
       "addedBy": "01900000-0000-7000-8000-00000000d001",
-      "container": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
-      "member": "01a1e3f8-a7ad-706c-934c-59b124b5e2db"
+      "container": "01a1e410-21bb-7171-89f9-9df65417be3e",
+      "member": "01a1e410-2251-7734-9d9e-c263dfcc47c6"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.341805Z",
+      "addedAt": "2026-11-16T11:13:45.069923Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1e3f8-a71e-7037-bd7a-b108e32cc4b0",
-      "member": "01a1e3f8-a7c6-712c-b202-216a1184c624"
+      "container": "01a1e410-21bb-7171-89f9-9df65417be3e",
+      "member": "01a1e410-226e-7731-8ba3-fe75b6a6ef99"
     },
     {
-      "addedAt": "2026-11-16T10:48:06.390119Z",
+      "addedAt": "2026-11-16T11:13:45.124129Z",
       "addedBy": "01900000-0000-7000-8000-00000000d001",
-      "container": "01a1e3f8-a7ef-7113-908f-76329a4148ee",
-      "member": "01a1e3f8-a7f6-756e-83a7-4ccd3878d05d"
+      "container": "01a1e410-229d-741b-b37c-5ee47bf3fff6",
+      "member": "01a1e410-22a4-7631-8dd7-c8193b15e530"
     }
   ],
   "people": [

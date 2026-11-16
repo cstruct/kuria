@@ -172,8 +172,15 @@ async fn every_example_s_bundle_imports_into_a_fresh_database() {
             .iter()
             .map(|t| t["akterCount"].as_i64().unwrap())
             .sum();
+        // Archived akter aren't counted (`archive.read`).
+        let archived = bundle["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|a| !a["archived"].is_null())
+            .count();
         assert_eq!(
-            usize::try_from(counted).unwrap(),
+            usize::try_from(counted).unwrap() + archived,
             imported.akter,
             "{example}"
         );
@@ -730,8 +737,8 @@ async fn documents(w: &World) {
     .await;
 }
 
-/// Two plans: one active, with tasks in every state, gaps and decisions,
-/// one finished.
+/// Plans: one active, with tasks in every state, gaps and decisions, one
+/// finished, and one dropped and archived.
 #[expect(clippy::too_many_lines, reason = "two plans told from start to end")]
 async fn planning(w: &World) {
     let (dev, rm, hedda) = (t(DEV), t(RM), t(HEDDA));
@@ -1001,6 +1008,12 @@ async fn planning(w: &World) {
         "drop",
         None,
         "The web shop works well on phones",
+    )
+    .await;
+    w.ok(
+        &hedda,
+        "mutation($n: String!) { archiveAkt(input: { number: $n, reason: \"Out of the way of the plans being worked\" }) { number } }",
+        json!({ "n": dropped }),
     )
     .await;
 }
