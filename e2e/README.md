@@ -2,7 +2,7 @@
 
 Kuria's app in a real browser, signed in through its login page against a
 real Konklav: Playwright drives the built app, served by the Kuria server,
-which relies on a seeded Konklav 1.8.0.
+which relies on a seeded Konklav, its latest release.
 
 ## Running
 
@@ -60,7 +60,7 @@ server. A failed test keeps its trace and screenshots in
 
 | Piece | Where | What |
 |---|---|---|
-| Konklav | `cstruct/konklav:1.8.0`, ports 18080–18082 | Its subject-facing, relying and control surfaces; issuer and login URL are Kuria's |
+| Konklav | `cstruct/konklav`, its latest release, checked daily; ports 18080–18082 | Its subject-facing, relying and control surfaces; issuer and login URL are Kuria's |
 | Konklav's Postgres | `konklav-dev-postgres:18.6-jsonschema0.3.4` | Built from [`konklav/postgres`](konklav/postgres/Dockerfile), a copy of Konklav's, where missing; in memory |
 | Kuria | `localhost:18090`, a fresh `kuria_e2e` database | The server serving `items/web/build`, as Konklav's login application (`KURIA_LOGIN_APP`) |
 | Valkey, S3 | the development ones | As for the other tests |

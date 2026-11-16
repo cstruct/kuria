@@ -4,6 +4,7 @@
 	import { Konklav } from '#lib/login/konklav.ts';
 	import { resolve } from '$app/paths';
 	import { cancel, signIn, signOut, start, type Step } from '#lib/login/flow.ts';
+	import Button from '#lib/ui/Button.svelte';
 
 	// Konklav's login application: it signs the person in to Konklav and
 	// accepts the sign-in another client (Kuria, say) started.
@@ -75,8 +76,8 @@
 				/>
 			</label>
 			<div class="actions">
-				<button type="submit" disabled={busy}>Sign in</button>
-				<button type="button" onclick={refuse} disabled={busy}>Cancel</button>
+				<Button type="submit" variant="primary" {busy}>Sign in</Button>
+				<Button onclick={refuse} disabled={busy}>Cancel</Button>
 			</div>
 		</form>
 	{:else if step.kind === 'message'}
@@ -103,7 +104,9 @@
 	}
 
 	.actions {
-		display: flex;
-		gap: 0.5rem;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--space-2);
+		margin-top: var(--space-2);
 	}
 </style>

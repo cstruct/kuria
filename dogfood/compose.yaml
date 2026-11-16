@@ -1,11 +1,15 @@
 # Konklav for dogfooding Kuria locally: its Postgres, its migrations and
-# the server, at the Konklav release Kuria pins (=1.8.0). Unlike the
+# the server, at Konklav's latest release. Unlike the
 # end-to-end stack, it keeps its data: `mise run dogfood:down` stops it,
 # and only `mise run dogfood:reset` forgets it.
 name: kuria-dogfood
 
 x-konklav: &konklav
-  image: cstruct/konklav:1.8.0
+  # Konklav's latest release, checked for a newer one once a day. Kuria's
+  # Konklav crates are pinned in Cargo.toml, so a release they don't yet
+  # match shows here first.
+  image: cstruct/konklav
+  pull_policy: daily
   volumes:
     - ./konklav/config.styx:/etc/konklav/config.styx:ro
     # Made once by scripts/prepare.ts, never committed.

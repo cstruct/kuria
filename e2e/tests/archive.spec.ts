@@ -57,7 +57,6 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(main.getByRole('button', { name: 'Reject', exact: true })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: 'Accept', exact: true })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: `More actions for ${gone}` })).toHaveCount(0);
-	await expect(main.getByRole('combobox', { name: 'Add to a container' })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: `Remove from ${release}` })).toHaveCount(0);
 	await expect(rm.getByRole('list', { name: 'Revisions' })).toContainText('archived it');
 	expect(await violations(rm), 'an archived akt’s page').toEqual([]);

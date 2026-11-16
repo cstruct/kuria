@@ -58,3 +58,49 @@ export function guideOffsets(sheets: readonly [number, number][], height: number
 	}
 	return guides;
 }
+
+/**
+ * How tall a sheet is whose text runs from `start` to `end`: a whole
+ * number of pages `page` tall, at least one, counted from `start`.
+ */
+export function wholePages(start: number, end: number, page: number): number {
+	if (!(page > 0)) return end;
+	// A pixel's rounding is not another page.
+	const pages = Math.max(1, Math.ceil((end - start - 1) / page));
+	return start + pages * page;
+}
+
+/** Where a sheet's text ends, its bottom margin included. */
+function textEnd(sheet: HTMLElement): number {
+	const padding = parseFloat(getComputedStyle(sheet).paddingBottom) || 0;
+	const last = sheet.lastElementChild;
+	if (!(last instanceof HTMLElement)) return padding * 2;
+	return last.offsetTop + last.offsetHeight + padding;
+}
+
+/**
+ * An action keeping a sheet a whole number of A4 pages tall, as its text
+ * or width changes; `start` is where its last page break leaves off, for
+ * the editor, whose page breaks are gaps in one sheet.
+ */
+export function pagesOf(sheet: HTMLElement, start: () => number = () => 0) {
+	const fit = () => {
+		const height = `${wholePages(start(), textEnd(sheet), sheet.offsetWidth * A4)}px`;
+		if (sheet.style.minHeight !== height) sheet.style.minHeight = height;
+	};
+	const resized = new ResizeObserver(fit);
+	resized.observe(sheet);
+	const changed = new MutationObserver(fit);
+	changed.observe(sheet, { childList: true, subtree: true, characterData: true });
+	// Images and fonts change how tall the text is without changing it.
+	sheet.addEventListener('load', fit, true);
+	document.fonts?.ready.then(fit);
+	fit();
+	return {
+		destroy() {
+			resized.disconnect();
+			changed.disconnect();
+			sheet.removeEventListener('load', fit, true);
+		}
+	};
+}
