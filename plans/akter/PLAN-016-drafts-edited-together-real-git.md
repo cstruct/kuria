@@ -1,9 +1,9 @@
 ---
 number: PLAN-016
 type: plan
-revision: 34
+revision: 35
 rank: b4O
-state: active
+state: done
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
 owner: albin@mattsson.io
 ---

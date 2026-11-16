@@ -1,9 +1,9 @@
 ---
 number: PLAN-015
 type: plan
-revision: 18
+revision: 19
 rank: b47
-state: active
+state: done
 title: "Images and diagrams in documents, and types under Show more"
 owner: albin@mattsson.io
 ---

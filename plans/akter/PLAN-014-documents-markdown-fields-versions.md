@@ -1,9 +1,9 @@
 ---
 number: PLAN-014
 type: plan
-revision: 24
+revision: 25
 rank: b3k
-state: active
+state: done
 title: "Documents: markdown fields, versions, references, PDFs and a git remote"
 owner: albin@mattsson.io
 ---
