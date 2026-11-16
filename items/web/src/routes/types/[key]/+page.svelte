@@ -5,7 +5,9 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import Archive from '@lucide/svelte/icons/archive';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { archivedFilterOf, showsArchived, withArchived } from '#lib/akt/archive.ts';
 	import { ago } from '#lib/akt/history.ts';
 	import { shownFields, sortAkter, type SortBy } from '#lib/akt/members.ts';
 	import { getClient, query } from '#lib/graphql/context.svelte.ts';
@@ -42,11 +44,15 @@
 	// r[impl app.filters]: by outcome, where the type has a verdict field.
 	const byOutcome = $derived(filtersByOutcome(filterFields));
 	const outcome = $derived(outcomeOf(page.url.searchParams, filterFields));
+	// r[impl app.archive]: live akter, and with Show archived, archived ones.
+	const showArchived = $derived(showsArchived(page.url.searchParams));
+	const archived = $derived(archivedFilterOf(page.url.searchParams));
 	const list = query(AkterOfType, () => ({
 		type: key,
 		state: stateKey || null,
 		where: conditions.length > 0 ? conditions : null,
-		outcome
+		outcome,
+		archived
 	}));
 	const type = $derived(list.data?.aktType ?? undefined);
 	const users = query(Users, () => ({}));
@@ -62,7 +68,7 @@
 	let loading = $state(false);
 	$effect(() => {
 		// A new list starts again from its first page.
-		void [key, stateKey, conditionsKey, outcome];
+		void [key, stateKey, conditionsKey, outcome, archived];
 		more = [];
 		next = null;
 	});
@@ -82,6 +88,7 @@
 				state: stateKey || null,
 				where: conditions.length > 0 ? conditions : null,
 				outcome,
+				archived,
 				after: pageInfo.cursor
 			})
 			.toPromise();
@@ -174,6 +181,14 @@
 				{people}
 				onChange={filter}
 			/>
+			<label>
+				<input
+					type="checkbox"
+					checked={showArchived}
+					onchange={(e) => go(withArchived(page.url.searchParams, e.currentTarget.checked))}
+				/>
+				Show archived
+			</label>
 		</div>
 
 		{#if akter.length === 0}
@@ -206,7 +221,9 @@
 								<td
 									><a href={resolve('/akt/[number]', { number: akt.number })}
 										><Mono value={akt.number} max={32} /></a
-									></td
+									>{#if akt.archived}<span class="archived"
+											><Badge><Archive size={12} aria-hidden={true} /> Archived</Badge></span
+										>{/if}</td
 								>
 								<td class="title">{akt.title ?? ''}</td>
 								{#each shownFields(akt, 'list') as field (field.name)}
@@ -329,6 +346,11 @@
 	.more {
 		display: flex;
 		justify-content: center;
+	}
+
+	.archived {
+		display: block;
+		margin-top: var(--space-1);
 	}
 
 	.when {

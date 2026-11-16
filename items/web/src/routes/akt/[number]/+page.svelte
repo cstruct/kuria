@@ -4,6 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { page } from '$app/state';
+	import Archive from '@lucide/svelte/icons/archive';
+	import ArchiveRestore from '@lucide/svelte/icons/archive-restore';
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -30,6 +32,13 @@
 	} from '#lib/akt/document.ts';
 	import { oneField, settle } from '#lib/akt/editing.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
+	import {
+		archivedCount,
+		archivedFilterOf,
+		archivedSummary,
+		showsArchived,
+		withArchived
+	} from '#lib/akt/archive.ts';
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
@@ -41,6 +50,8 @@
 	import {
 		AddLink,
 		AddToContainer,
+		ArchiveAkt,
+		UnarchiveAkt,
 		RemoveLink,
 		AktPage,
 		Contacts,
@@ -77,7 +88,11 @@
 	const number = $derived(page.params.number ?? '');
 	// r[impl app.versions]: `?version=` reads the akt at one of its versions.
 	const atVersion = $derived(Number(page.url.searchParams.get('version')) || null);
-	const view = query(AktPage, () => ({ number, version: atVersion }));
+	// r[impl app.archive]: a board shows live members, unless the container
+	// is archived, or with Show archived, all of them.
+	const showArchived = $derived(showsArchived(page.url.searchParams));
+	const boardArchived = $derived(archivedFilterOf(page.url.searchParams));
+	const view = query(AktPage, () => ({ number, version: atVersion, boardArchived }));
 	const contacts = query(Contacts, () => ({}));
 	const users = query(Users, () => ({}));
 
@@ -117,7 +132,11 @@
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
 	// A version never changes: read at one, nothing is offered to change.
 	const actions = $derived(
-		actionsOf(akt && !atVersion ? availableTransitions(akt.type.transitions, akt.state) : [])
+		actionsOf(
+			akt && !atVersion && !akt.archived
+				? availableTransitions(akt.type.transitions, akt.state)
+				: []
+		)
 	);
 	// r[impl app.live]: an akt with a live draft is its live draft, edited
 	// together with everyone else who has it open.
@@ -125,7 +144,7 @@
 	// doesn't drop the connection and the editor bound to it.
 	let liveFor = $state<string | null>(null);
 	$effect(() => {
-		if (akt) liveFor = akt.type.liveDrafts && !atVersion ? akt.number : null;
+		if (akt) liveFor = akt.type.liveDrafts && !atVersion && !akt.archived ? akt.number : null;
 	});
 	let live = $state<LiveDraft | null>(null);
 	$effect(() => {
@@ -142,7 +161,14 @@
 		field.kind === 'MARKDOWN' || (field.kind === 'TEXT' && field.multiline);
 	const editable = $derived(
 		// A live draft is edited once it is in hand, by those who may.
-		Boolean(akt && !akt.state.final && !atVersion && !(live && (live.readOnly || !live.synced)))
+		Boolean(
+			akt &&
+			!akt.state.final &&
+			!atVersion &&
+			// r[impl app.archive]: an archived akt offers no edit.
+			!akt.archived &&
+			!(live && (live.readOnly || !live.synced))
+		)
 	);
 	const versioned = $derived(
 		Boolean(akt && (akt.type.document as { versions?: unknown } | null)?.versions)
@@ -274,7 +300,7 @@
 	// that needs fields opens here, asking for them.
 	$effect(() => {
 		const key = page.url.searchParams.get('transition');
-		if (!akt || !key || askedFor === akt.number) return;
+		if (!akt || !key || askedFor === akt.number || akt.archived) return;
 		askedFor = akt.number;
 		const transition = availableTransitions(akt.type.transitions, akt.state).find(
 			(t) => t.key === key
@@ -284,7 +310,7 @@
 
 	async function refetch(): Promise<Akt | undefined> {
 		const result = await client
-			.query(AktPage, { number }, { requestPolicy: 'network-only' })
+			.query(AktPage, { number, boardArchived }, { requestPolicy: 'network-only' })
 			.toPromise();
 		return result.data?.akt ?? undefined;
 	}
@@ -479,6 +505,51 @@
 	async function move(member: string, place: { before?: string; after?: string }) {
 		await run(() => mutate(client, MoveAkt, { input: { number: member, ...place } }));
 	}
+
+	// r[impl app.archive]: archiving and unarchiving, with a reason if given.
+	let archiving = $state<'archive' | 'unarchive' | null>(null);
+	let archiveOpen = $state(false);
+	let archiveReason = $state('');
+	let archiveRefusal = $state<Refusal | null>(null);
+	const archived = $derived(akt?.archived ? archivedSummary(akt.archived) : null);
+
+	function beginArchiving(kind: 'archive' | 'unarchive') {
+		archiving = kind;
+		archiveReason = '';
+		archiveRefusal = null;
+		archiveOpen = true;
+	}
+
+	async function setArchived() {
+		if (!akt || !archiving) return;
+		const kind = archiving;
+		const target = akt.number;
+		busy = true;
+		archiveRefusal = null;
+		const input = { number: target, reason: archiveReason.trim() || null };
+		const { error } =
+			kind === 'archive'
+				? await mutate(client, ArchiveAkt, { input })
+				: await mutate(client, UnarchiveAkt, { input });
+		if (error) {
+			busy = false;
+			archiveRefusal = refusalOf(error);
+			return;
+		}
+		await refetch();
+		busy = false;
+		archiveOpen = false;
+		toast(`${target}: ${kind === 'archive' ? 'archived' : 'unarchived'}`, 'success');
+	}
+
+	function toggleArchivedMembers(on: boolean) {
+		const search = withArchived(page.url.searchParams, on).toString();
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved, with a query
+		goto(`${resolve('/akt/[number]', { number })}${search ? `?${search}` : ''}`, {
+			replace: true,
+			reset: false
+		});
+	}
 </script>
 
 <svelte:head>
@@ -501,6 +572,7 @@
 				<h1>{headingOf(akt)}</h1>
 				<div class="badges">
 					<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
+					{#if akt.archived}<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge>{/if}
 					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
 						>{/if}
 				</div>
@@ -552,6 +624,20 @@
 						onclick={() => begin(primary)}>{primary.name}</Button
 					>
 				{/if}
+				{#if !akt.archived && !atVersion}
+					<!-- r[impl app.archive]: Archive, in the akt's menu. -->
+					<Menu
+						label="More actions for {akt.number}"
+						items={[
+							{
+								label: 'Archive…',
+								icon: Archive,
+								disabled: busy,
+								onSelect: () => beginArchiving('archive')
+							}
+						]}
+					/>
+				{/if}
 				<!-- r[impl app.transitions]: a transition the outcome doesn't allow, unavailable, saying what it allows. -->
 				{#each [...actions.others, ...(actions.primary ? [actions.primary] : [])] as transition (transition.key)}
 					{@const blocked = outcomeRefusal(transition, akt.outcome)}
@@ -563,6 +649,23 @@
 				{/each}
 			</div>
 		</header>
+
+		{#if archived}
+			<!-- r[impl app.archive]: when, by whom or which rule, and why. -->
+			<section class="archived" aria-label="Archived">
+				<Archive size={20} aria-hidden={true} />
+				<div class="archived-text">
+					<p class="archived-title" data-testid="archived">{archived.title}</p>
+					{#if archived.reason}<p class="archived-reason">“{archived.reason}”</p>{/if}
+					<p class="archived-hint">It is read-only until it is unarchived.</p>
+				</div>
+				{#if !atVersion}
+					<Button disabled={busy} onclick={() => beginArchiving('unarchive')}
+						><ArchiveRestore size={14} aria-hidden={true} /> Unarchive</Button
+					>
+				{/if}
+			</section>
+		{/if}
 
 		<div class="columns">
 			<div class="main">
@@ -602,6 +705,24 @@
 					<section class="members" aria-labelledby="members-title">
 						<header>
 							<h2 id="members-title">Members</h2>
+							<!-- r[impl app.archive]: how many members are archived, and showing them. -->
+							{#if akt.archivedMemberCount > 0 || showArchived}
+								<div class="archived-members">
+									{#if akt.archivedMemberCount > 0}<span data-testid="archived-members"
+											>{archivedCount(akt.archivedMemberCount)}</span
+										>{/if}
+									{#if !akt.archived}
+										<label>
+											<input
+												type="checkbox"
+												checked={showArchived}
+												onchange={(e) => toggleArchivedMembers(e.currentTarget.checked)}
+											/>
+											Show archived
+										</label>
+									{/if}
+								</div>
+							{/if}
 							{#if editable}
 								<Menu
 									label="Add a member"
@@ -643,6 +764,7 @@
 								document={akt.type.document}
 								{contained}
 								{editable}
+								movable={!akt.archived}
 								{busy}
 								onMove={move}
 								onRemove={removeMember}
@@ -669,37 +791,39 @@
 										>
 										<span class="hint">{container.title ?? container.type.name}</span>
 									</span>
-									<IconButton
-										label="Remove from {container.number}"
-										icon={X}
-										size="sm"
-										disabled={busy}
-										onclick={() => leave(container.number)}
-									/>
+									{#if !akt.archived}
+										<IconButton
+											label="Remove from {container.number}"
+											icon={X}
+											size="sm"
+											disabled={busy}
+											onclick={() => leave(container.number)}
+										/>
+									{/if}
 								</li>
 							{/each}
 						</ul>
 					{/if}
-					<div class="container-tools">
-						<Combobox
-							label="Add to a container"
-							placeholder="Add to a container…"
-							search={(text) =>
-								pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
-							onPick={(option) => join(option.value)}
-						/>
-						{#if akt.containers.length > 0}
-							<Button
-								size="sm"
-								onclick={() => {
-									transferFrom = akt.containers[0].number;
-									transferOpen = true;
-								}}
-							>
-								<ArrowRightLeft size={14} aria-hidden={true} /> Move to another container
-							</Button>
-						{/if}
-					</div>
+					{#if !akt.archived}<div class="container-tools">
+							<Combobox
+								label="Add to a container"
+								placeholder="Add to a container…"
+								search={(text) =>
+									pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
+								onPick={(option) => join(option.value)}
+							/>
+							{#if akt.containers.length > 0}
+								<Button
+									size="sm"
+									onclick={() => {
+										transferFrom = akt.containers[0].number;
+										transferOpen = true;
+									}}
+								>
+									<ArrowRightLeft size={14} aria-hidden={true} /> Move to another container
+								</Button>
+							{/if}
+						</div>{/if}
 				</Card>
 
 				{#if versioned}
@@ -708,7 +832,7 @@
 						versions={akt.versions}
 						pdfFields={markdownFields}
 						reading={atVersion}
-						releasable={!atVersion}
+						releasable={!atVersion && !akt.archived}
 						{busy}
 						{refusal}
 						onRelease={releaseVersion}
@@ -781,6 +905,36 @@
 			error={copyOpen && refusal ? refusal.message : undefined}
 			onCopy={copy}
 		/>
+
+		<Dialog
+			bind:open={archiveOpen}
+			title={archiving === 'unarchive' ? `Unarchive ${akt.number}` : `Archive ${akt.number}`}
+			description={archiving === 'unarchive'
+				? 'It is live again: shown in lists, boards and search, and editable.'
+				: 'It is kept, read-only, and left out of lists, boards and search unless they show archived akter.'}
+		>
+			<form
+				id="archive-form"
+				class="archive-form"
+				aria-label={archiving === 'unarchive' ? 'Unarchive' : 'Archive'}
+				onsubmit={(e) => {
+					e.preventDefault();
+					setArchived();
+				}}
+			>
+				<label>
+					Reason <span class="optional">(optional)</span>
+					<input bind:value={archiveReason} maxlength={200} />
+				</label>
+				{#if archiveRefusal}<p role="alert">{archiveRefusal.message}</p>{/if}
+			</form>
+			{#snippet footer()}
+				<Button variant="ghost" onclick={() => (archiveOpen = false)}>Cancel</Button>
+				<Button variant="primary" type="submit" form="archive-form" {busy}
+					>{archiving === 'unarchive' ? 'Unarchive' : 'Archive'}</Button
+				>
+			{/snippet}
+		</Dialog>
 
 		<Dialog
 			bind:open={transferOpen}
@@ -923,6 +1077,81 @@
 		color: var(--text-muted);
 	}
 
+	.archived {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3);
+		padding: var(--space-3) var(--space-4);
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-lg);
+		background: var(--bg-subtle);
+	}
+
+	.archived-text {
+		flex: 1 1 14rem;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		min-width: 0;
+	}
+
+	.archived-text p {
+		margin: 0;
+		overflow-wrap: anywhere;
+	}
+
+	.archived-title {
+		font-weight: 600;
+	}
+
+	.archived-reason,
+	.archived-hint {
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
+	.archived-members {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-3);
+		margin-inline-start: auto;
+		margin-inline-end: var(--space-3);
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+
+	.archived-members label {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.archive-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.archive-form label {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+		font-weight: 500;
+	}
+
+	.optional {
+		color: var(--text-muted);
+		font-weight: 400;
+	}
+
+	.archive-form [role='alert'] {
+		color: var(--tone-danger-fg);
+		font-size: var(--text-sm);
+	}
+
 	.columns {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
@@ -956,8 +1185,10 @@
 
 	.members > header {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		justify-content: space-between;
+		gap: var(--space-2);
 	}
 
 	.containers {

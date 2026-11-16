@@ -52,6 +52,7 @@ export const AkterOfType = graphql(`
 		$after: String
 		$where: [FieldCondition!]
 		$outcome: Outcome
+		$archived: ArchivedFilter
 	) {
 		aktType(key: $type) {
 			...ShownType
@@ -60,7 +61,15 @@ export const AkterOfType = graphql(`
 				name
 			}
 		}
-		akter(type: $type, state: $state, first: 50, after: $after, where: $where, outcome: $outcome) {
+		akter(
+			type: $type
+			state: $state
+			first: 50
+			after: $after
+			where: $where
+			outcome: $outcome
+			archived: $archived
+		) {
 			nodes {
 				id
 				number
@@ -68,6 +77,9 @@ export const AkterOfType = graphql(`
 				rank
 				updatedAt
 				outcome
+				archived {
+					at
+				}
 				state {
 					key
 					name
@@ -307,7 +319,7 @@ export const TypeShape = graphql(`
 `);
 
 export const AktPage = graphql(`
-	query AktPage($number: String!, $version: Int) {
+	query AktPage($number: String!, $version: Int, $boardArchived: ArchivedFilter) {
 		viewer {
 			subject
 		}
@@ -322,6 +334,10 @@ export const AktPage = graphql(`
 			title
 			revision
 			outcome
+			archived {
+				...ArchivedShown
+			}
+			archivedMemberCount
 			version {
 				...VersionShown
 			}
@@ -355,7 +371,7 @@ export const AktPage = graphql(`
 					name
 				}
 			}
-			board(first: 500) {
+			board(first: 500, archived: $boardArchived) {
 				columns {
 					key
 					name
@@ -365,6 +381,9 @@ export const AktPage = graphql(`
 						title
 						revision
 						outcome
+						archived {
+							at
+						}
 						state {
 							key
 							name
@@ -678,12 +697,15 @@ export const Shell = graphql(`
 `);
 
 export const SearchAkter = graphql(`
-	query SearchAkter($text: String!) {
-		akter(search: $text, first: 12) {
+	query SearchAkter($text: String!, $archived: ArchivedFilter) {
+		akter(search: $text, first: 12, archived: $archived) {
 			nodes {
 				id
 				number
 				title
+				archived {
+					at
+				}
 				state {
 					key
 					name
@@ -694,6 +716,45 @@ export const SearchAkter = graphql(`
 					version
 					name
 				}
+			}
+		}
+	}
+`);
+
+/** How an akt is archived, as its page says (`app.archive`). */
+export const ArchivedShown = graphql(`
+	fragment ArchivedShown on Archived {
+		at
+		by {
+			id
+			name
+		}
+		rule
+		reason
+	}
+`);
+
+/** Archives a live akt (`archive.act`). */
+export const ArchiveAkt = graphql(`
+	mutation ArchiveAkt($input: ArchiveAktInput!) {
+		archiveAkt(input: $input) {
+			id
+			revision
+			archived {
+				...ArchivedShown
+			}
+		}
+	}
+`);
+
+/** Makes an archived akt live again (`archive.act`). */
+export const UnarchiveAkt = graphql(`
+	mutation UnarchiveAkt($input: ArchiveAktInput!) {
+		unarchiveAkt(input: $input) {
+			id
+			revision
+			archived {
+				...ArchivedShown
 			}
 		}
 	}

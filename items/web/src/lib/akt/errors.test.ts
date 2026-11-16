@@ -24,6 +24,11 @@ describe('refusals', () => {
 		expect(refusalOf(new CombinedError({ networkError: new Error('down') })).code).toBe('NETWORK');
 	});
 
+	// r[verify app.archive]
+	it('says a write to an archived akt is refused until it is unarchived', () => {
+		expect(refusalOf(refused('REL-1 is archived', 'ARCHIVED')).message).toContain('Unarchive');
+	});
+
 	// r[verify app.versions]
 	it('names the akter a broken release could go together with', () => {
 		const error = new CombinedError({

@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { Command, Dialog } from 'bits-ui';
+	import Archive from '@lucide/svelte/icons/archive';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import { page } from '$app/state';
+	import { showsArchived } from '#lib/akt/archive.ts';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Badge from '#lib/ui/Badge.svelte';
@@ -16,9 +19,16 @@
 	let found = $state<SearchAkterQuery['akter']['nodes']>([]);
 	let searching = $state(false);
 	let asked = 0;
+	// r[impl app.archive]: live akter, and with Show archived, archived
+	// ones; on when the page it opens over shows them.
+	let archived = $state(false);
+	$effect(() => {
+		if (open) archived = showsArchived(page.url.searchParams);
+	});
 
 	$effect(() => {
 		const typed = text.trim();
+		const filter = archived ? ('ALL' as const) : null;
 		const mine = ++asked;
 		if (!typed) {
 			found = [];
@@ -28,7 +38,7 @@
 		searching = true;
 		const timer = setTimeout(async () => {
 			const result = await client
-				.query(SearchAkter, { text: typed }, { requestPolicy: 'network-only' })
+				.query(SearchAkter, { text: typed, archived: filter }, { requestPolicy: 'network-only' })
 				.toPromise();
 			if (mine === asked) {
 				found = result.data?.akter.nodes ?? [];
@@ -55,6 +65,10 @@
 					<SearchIcon size={16} aria-hidden={true} />
 					<Command.Input bind:value={text} placeholder="Search by number or title…" />
 				</div>
+				<label class="search-archived">
+					<input type="checkbox" bind:checked={archived} />
+					Show archived
+				</label>
 				<Command.List class="search-list">
 					{#each found as akt (akt.id)}
 						<Command.Item
@@ -64,7 +78,11 @@
 						>
 							<span class="number">{akt.number}</span>
 							<span class="title">{akt.title ?? akt.type.name}</span>
-							<Badge tone={akt.state.tone}>{akt.state.name}</Badge>
+							<span class="badges">
+								{#if akt.archived}<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge
+									>{/if}
+								<Badge tone={akt.state.tone}>{akt.state.name}</Badge>
+							</span>
 						</Command.Item>
 					{/each}
 					{#if text.trim() && !searching && found.length === 0}
@@ -109,6 +127,21 @@
 		min-height: 2rem;
 		font-size: var(--text-md);
 		background: transparent;
+	}
+
+	.search-archived {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-4);
+		border-bottom: 1px solid var(--border);
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+
+	.badges {
+		display: flex;
+		gap: var(--space-1);
 	}
 
 	:global(.search-list) {
