@@ -270,16 +270,17 @@ The sweep (`Akter::sweep`, `rules::sweep_tenant`): for each tenant whose akt typ
 <!-- akt: PLAN-017-T06 -->
 ---
 type: task
-revision: 3
+revision: 8
 rank: b55
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T03, Blocks PLAN-017-T08]
 title: Archived in the app
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Lists, boards, search and members show live akter, **Show archived** in the URL adds the rest, marked; a container's members name how many are archived; an archived akt's page says so with **Unarchive**; **Archive** in its menu; the sidebar counts live akter.
+Built in a worktree (`e2a926e`), merged. `lib/akt/archive.ts`: `?archived=all` as the `ALL` filter, "N archived", the banner text ("by Kuria, by the rule …" for a rule or the nil author). Type lists and search: **Show archived** (in the URL; the search dialog starts from the page's), archived rows badged with an icon and the word. Akt page: **Archive…** in a "More actions" menu (not a header button, as `document_index` has a transition named Archive), with an optional reason; an archived akt shows a badge and banner with **Unarchive**, and no edit, verdict, transition, link, member, order, container or release controls, nor the live-draft connection (Make a copy stays). Members: "N archived" and **Show archived** (not offered for an archived container, whose board shows all); cards badged; no reordering in an archived container. History says archived/unarchived it, by Kuria for rules. `ARCHIVED` refusal message. Cache: archive/unarchive mark lists and counts stale. The app shows no WIP limits, so nothing there. Tests: unit (116 app tests) and `e2e/tests/archive.spec.ts` (passes): archive with a reason, banner and no controls, history, board's archived count and toggle, lists and search, a developer refused, unarchive, axe.
 
 <!-- field: acceptance -->
 - Unit tests and e2e with axe on each view.
