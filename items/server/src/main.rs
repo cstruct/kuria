@@ -151,6 +151,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         &config.storage,
         usize::try_from(config.attachment_limit).unwrap_or(usize::MAX),
     )?;
+    // r[impl bundle.bootstrap.before-serving]
+    if let Some(bootstrap) = &config.bootstrap {
+        import_bootstrap(&pool, &storage, bootstrap).await?;
+    }
 
     let router = app(
         Arc::new(client.clone()),
@@ -182,6 +186,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let _ = tokio::signal::ctrl_c().await;
     })
     .await?;
+    Ok(())
+}
+
+/// Imports the bootstrap bundle, failing start-up if it can't
+/// (`bundle.bootstrap.*`).
+async fn import_bootstrap(
+    pool: &Pool,
+    storage: &Storage,
+    bootstrap: &kuria_server::bundles::Bootstrap,
+) -> Result<(), String> {
+    let imported = kuria_server::bundles::bootstrap(pool, storage, bootstrap)
+        .await
+        .map_err(|e| {
+            format!(
+                "bootstrapping KURIA_BOOTSTRAP_BUNDLE={}: {e}",
+                bootstrap.bundle.display()
+            )
+        })?;
+    tracing::info!(
+        bundle = %bootstrap.bundle.display(),
+        tenant = %bootstrap.tenant,
+        akt_types = imported.akt_types,
+        akter = imported.akter,
+        "imported the bootstrap bundle"
+    );
     Ok(())
 }
 

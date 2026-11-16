@@ -68,6 +68,9 @@ pub struct Config {
     /// How often archive rules are applied to every akt
     /// (`KURIA_ARCHIVE_SWEEP_SECONDS`, 3600 by default; `archive.sweep`).
     pub archive_sweep: std::time::Duration,
+    /// The bundle to import before serving, if any
+    /// (`KURIA_BOOTSTRAP_BUNDLE`).
+    pub bootstrap: Option<crate::bundles::Bootstrap>,
     /// The built app, to serve from the server's own origin
     /// (`KURIA_WEB_DIR`).
     pub web_dir: Option<std::path::PathBuf>,
@@ -175,6 +178,7 @@ impl Config {
             })?),
             _ => None,
         };
+        let bootstrap = bootstrap(&lookup, default_tenant)?;
         let login_app = flag(&lookup, "KURIA_LOGIN_APP", false)?;
         let rate_limit_secret = required("KURIA_RATE_LIMIT_SECRET")?;
         if rate_limit_secret.len() < 32 {
@@ -204,6 +208,7 @@ impl Config {
             render_limits,
             archive_sweep,
             default_tenant,
+            bootstrap,
             web_dir: lookup("KURIA_WEB_DIR")
                 .filter(|d| !d.is_empty())
                 .map(std::path::PathBuf::from),
@@ -228,6 +233,43 @@ impl Config {
             },
         }
     }
+}
+
+/// The bootstrap bundle and where it goes (`bundle.bootstrap.variables`,
+/// `bundle.bootstrap.tenant`).
+// r[impl bundle.bootstrap.variables]
+// r[impl bundle.bootstrap.tenant]
+fn bootstrap(
+    lookup: &impl Fn(&str) -> Option<String>,
+    default_tenant: Option<uuid::Uuid>,
+) -> Result<Option<crate::bundles::Bootstrap>, ConfigError> {
+    let set = |name: &str| lookup(name).filter(|v| !v.trim().is_empty());
+    let subjects = set("KURIA_BOOTSTRAP_SUBJECTS").map(std::path::PathBuf::from);
+    let Some(bundle) = set("KURIA_BOOTSTRAP_BUNDLE") else {
+        if subjects.is_some() {
+            return Err(ConfigError::Invalid(
+                "KURIA_BOOTSTRAP_SUBJECTS",
+                "it maps a bootstrap bundle's subjects, and KURIA_BOOTSTRAP_BUNDLE is not set"
+                    .to_owned(),
+            ));
+        }
+        return Ok(None);
+    };
+    let tenant = match set("KURIA_BOOTSTRAP_TENANT") {
+        Some(tenant) => tenant.trim().parse().map_err(|_| {
+            ConfigError::Invalid("KURIA_BOOTSTRAP_TENANT", "expected a tenant id".to_owned())
+        })?,
+        None => default_tenant.ok_or(ConfigError::Invalid(
+            "KURIA_BOOTSTRAP_BUNDLE",
+            "set KURIA_BOOTSTRAP_TENANT or KURIA_DEFAULT_TENANT to the tenant it goes into"
+                .to_owned(),
+        ))?,
+    };
+    Ok(Some(crate::bundles::Bootstrap {
+        bundle: bundle.into(),
+        tenant,
+        subjects,
+    }))
 }
 
 /// The origin of an absolute URL: its scheme and authority.
@@ -395,6 +437,66 @@ mod tests {
         assert!(matches!(
             Config::from_lookup(lookup(&vars)),
             Err(ConfigError::Invalid("KONKLAV_SERVICE_KEY", _))
+        ));
+    }
+
+    // r[verify bundle.bootstrap.variables]
+    // r[verify bundle.bootstrap.tenant]
+    #[test]
+    fn reads_the_bootstrap_bundle_and_its_tenant() {
+        let config = Config::from_lookup(lookup(&COMPLETE)).unwrap();
+        assert!(config.bootstrap.is_none());
+        let default = "01900000-0000-7000-8000-000000000001";
+        let other = "01900000-0000-7000-8000-000000000002";
+
+        let mut vars = COMPLETE.to_vec();
+        vars.extend([
+            ("KURIA_BOOTSTRAP_BUNDLE", "docs/examples/planning/bundle"),
+            ("KURIA_DEFAULT_TENANT", default),
+        ]);
+        let bootstrap = Config::from_lookup(lookup(&vars))
+            .unwrap()
+            .bootstrap
+            .unwrap();
+        assert_eq!(
+            bootstrap.bundle,
+            std::path::PathBuf::from("docs/examples/planning/bundle")
+        );
+        assert_eq!(bootstrap.tenant.to_string(), default);
+        assert_eq!(bootstrap.subjects, None);
+
+        vars.extend([
+            ("KURIA_BOOTSTRAP_TENANT", other),
+            ("KURIA_BOOTSTRAP_SUBJECTS", "subjects.json"),
+        ]);
+        let bootstrap = Config::from_lookup(lookup(&vars))
+            .unwrap()
+            .bootstrap
+            .unwrap();
+        assert_eq!(bootstrap.tenant.to_string(), other);
+        assert_eq!(
+            bootstrap.subjects,
+            Some(std::path::PathBuf::from("subjects.json"))
+        );
+
+        // No tenant to go into.
+        let mut vars = COMPLETE.to_vec();
+        vars.push(("KURIA_BOOTSTRAP_BUNDLE", "bundle"));
+        assert!(matches!(
+            Config::from_lookup(lookup(&vars)),
+            Err(ConfigError::Invalid("KURIA_BOOTSTRAP_BUNDLE", _))
+        ));
+        vars.push(("KURIA_BOOTSTRAP_TENANT", "shop"));
+        assert!(matches!(
+            Config::from_lookup(lookup(&vars)),
+            Err(ConfigError::Invalid("KURIA_BOOTSTRAP_TENANT", _))
+        ));
+        // Subjects for no bundle.
+        let mut vars = COMPLETE.to_vec();
+        vars.push(("KURIA_BOOTSTRAP_SUBJECTS", "subjects.json"));
+        assert!(matches!(
+            Config::from_lookup(lookup(&vars)),
+            Err(ConfigError::Invalid("KURIA_BOOTSTRAP_SUBJECTS", _))
         ));
     }
 

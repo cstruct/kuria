@@ -66,12 +66,19 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-018-T02 -->
 ---
 type: task
-revision: 1
+revision: 5
 rank: b4w
-state: todo
+state: done
 in: [PLAN-018]
 title: Bootstrap a bundle when the server starts
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+- `config.rs` reads `KURIA_BOOTSTRAP_BUNDLE`, `KURIA_BOOTSTRAP_TENANT` (else `KURIA_DEFAULT_TENANT`) and `KURIA_BOOTSTRAP_SUBJECTS` into `Config::bootstrap`, failing on a bundle with no tenant, a tenant that isn't an id, or subjects without a bundle.
+- `bundles::bootstrap` (`items/server/src/bundles/bootstrap.rs`) reads the bundle's directory, or its tar archive, and imports it through `import::import_unpacked` with `Tenants::Fresh`, which checks the tenant is empty in the import's transaction and refuses with `BundleError::NotFresh`, naming the tenant and `KURIA_BOOTSTRAP_BUNDLE`. The importer is the nil subject.
+- `main.rs` bootstraps after migrations and storage, before binding the listener; a refusal ends start-up with `bootstrapping KURIA_BOOTSTRAP_BUNDLE=<path>: <why>`.
+- Tests: `config.rs`'s `reads_the_bootstrap_bundle_and_its_tenant`; `tests/bootstrap.rs` (fresh imports, from a directory and a tar; unfresh by akt or contact, and a second start, refused and untouched; another tenant's data not counting; subjects mapped; missing and unknown-format bundles failing). `tests/support/world.rs` is a fresh-database `World` the examples' bundles reuse, and the fake host takes `as-<subject>` tokens. `cargo clippy`, `tracey query validate` clean.
 
 <!-- field: acceptance -->
 `kuria-server` with `KURIA_BOOTSTRAP_BUNDLE` imports the bundle into the bootstrap tenant before listening, and refuses to start, naming the tenant and the variable, if the tenant isn't fresh. `items/server/tests/bootstrap.rs` checks a fresh tenant imports, an unfresh one refuses, another tenant's data doesn't count, a missing tenant and an unreadable bundle fail; `config.rs` tests read the variables. The code carries `r[impl bundle.bootstrap.*]`, the tests `r[verify …]`.

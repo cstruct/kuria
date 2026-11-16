@@ -6,8 +6,11 @@
 //! - `archive`: the tar archive a bundle travels as.
 //! - `export`: one consistent snapshot.
 //! - `import`: checked first, then written all at once.
+//! - `bootstrap`: a bundle imported into a fresh tenant as the server
+//!   starts.
 
 pub mod archive;
+pub mod bootstrap;
 pub mod export;
 pub mod format;
 pub mod import;
@@ -29,6 +32,7 @@ use crate::attachments::Storage;
 use crate::authorize::{Decider, Permission};
 use crate::http::caller;
 
+pub use bootstrap::{Bootstrap, bootstrap};
 pub use export::Selection;
 
 /// The largest bundle an import takes, in bytes.
@@ -47,6 +51,10 @@ pub enum BundleError {
     Invalid(String),
     #[error("{0}")]
     Conflict(String),
+    #[error(
+        "tenant {0} already holds akt types, akter or contacts, and a bootstrap bundle goes only into a fresh tenant: unset KURIA_BOOTSTRAP_BUNDLE to start with what it holds"
+    )]
+    NotFresh(Uuid),
     #[error("{0}")]
     Unavailable(String),
     #[error("{0}")]
@@ -95,7 +103,7 @@ impl BundleError {
                 (StatusCode::UNPROCESSABLE_ENTITY, "INCOMPLETE_SELECTION")
             }
             Self::Invalid(_) => (StatusCode::BAD_REQUEST, "INVALID_BUNDLE"),
-            Self::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
+            Self::Conflict(_) | Self::NotFresh(_) => (StatusCode::CONFLICT, "CONFLICT"),
             Self::Unavailable(_) => (StatusCode::SERVICE_UNAVAILABLE, "UNAVAILABLE"),
             Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL"),
         }

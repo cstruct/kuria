@@ -47,9 +47,32 @@ pub async fn import(
     archive: &[u8],
 ) -> Result<Imported, BundleError> {
     let unpacked = archive::unpack(archive)?;
+    import_unpacked(pool, storage, tenant, importer, &unpacked, Tenants::Any).await
+}
+
+/// Which tenants an import may go into, beyond what its scope allows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Tenants {
+    /// Any, as `bundle.import.*` says.
+    Any,
+    /// Only a fresh one: no akt type, akt or contact
+    /// (`bundle.bootstrap.fresh`).
+    Fresh,
+}
+
+/// Imports the bundle `unpacked` holds into `tenant`, as `importer`, if it
+/// may go `into` it.
+pub(crate) async fn import_unpacked(
+    pool: &Pool,
+    storage: &Storage,
+    tenant: Uuid,
+    importer: Uuid,
+    unpacked: &Unpacked,
+    into: Tenants,
+) -> Result<Imported, BundleError> {
     let bundle = read_bundle(&unpacked.bundle)?;
     let mapping = read_mapping(unpacked.subjects.as_deref())?;
-    let types = check(&bundle, &unpacked)?;
+    let types = check(&bundle, unpacked)?;
     // Content-addressed, so storing bytes an import then refuses harms
     // nothing; doing it first keeps the transaction short.
     for attachment in &bundle.attachments {
@@ -63,6 +86,10 @@ pub async fn import(
     let conn: &mut Connection = &mut conn;
     // r[impl bundle.import.atomic]
     conn.transaction::<_, BundleError, _>(async |conn| {
+        // r[impl bundle.bootstrap.fresh]
+        if into == Tenants::Fresh && !store::is_empty(conn, tenant).await? {
+            return Err(BundleError::NotFresh(tenant));
+        }
         write(conn, tenant, importer, &bundle, &types, &mapping).await
     })
     .await

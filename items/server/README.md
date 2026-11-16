@@ -385,6 +385,12 @@ mise run test
   shown and filtering as the users they map to; and archived and kept
   akter moving as they were, a plan's archive bringing back its tasks
   in the other tenant.
+- [`tests/bootstrap.rs`](tests/bootstrap.rs), against fresh databases:
+  a bootstrap bundle, as a directory or its tar archive, imported into a
+  fresh tenant and recorded as imported by the nil subject; a tenant with
+  akter or a contact, or one bootstrapped already, refused and left as it
+  was; another tenant's data not counting; subjects mapped; an unreadable
+  bundle failing (`bundle.bootstrap.*`).
 - [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
   Valkey: the relay keeping a code or an error until it is collected once,
   the first redirect for a `state` winning, forgetting an uncollected code,
