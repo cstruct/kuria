@@ -122,8 +122,10 @@ mise run web:dev
 ```
 
 serves the app on <http://localhost:5173>, passing `/graphql`, `/akter`, `/auth`,
-`/attachments`, `/v1` and `/.well-known` to `mise run serve` (or
-`KURIA_DEV_SERVER`). `mise run web:build` builds it into `build/`, which
+`/attachments`, `/export`, `/import`, `/cli`, `/v1`, `/.well-known` and
+`/healthz` to `mise run serve` (or `KURIA_DEV_SERVER`). `mise run example
+<example>` serves it the same way, against a stack with an example loaded
+([`example/`](../../example/README.md)). `mise run web:build` builds it into `build/`, which
 the server serves with `KURIA_WEB_DIR`.
 
 After changing the server's schema, run `mise run web:schema`;
