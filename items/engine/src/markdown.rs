@@ -358,6 +358,9 @@ pub struct Target {
     pub image: bool,
     /// Whether it has a picture, as of its current revision.
     pub picture: bool,
+    /// Whether its type releases versions: a release then reads it as its
+    /// latest version (`version.references`).
+    pub versioned: bool,
 }
 
 /// One version of a reference's target.

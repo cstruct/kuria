@@ -379,29 +379,37 @@ async fn references_are_checked_on_the_draft_at_release() {
     let broken = world.release(&guide).await;
     assert_eq!(code(&broken), "BROKEN_REFERENCES", "{broken}");
     assert_eq!(world.akt(&guide).await["revision"], 1);
-    // The setup's living version is its live draft: a heading written
-    // there, never released, is there.
+    // A heading written in the setup's live draft, never released, isn't
+    // there for a release: it names the setup to release with it.
     world
         .edit(
             &setup,
             json!({ "body": "# Install {#install}\n\n## Run {#run}\n" }),
         )
         .await;
-    let taken = world.release(&guide).await;
-    assert!(taken.get("errors").is_none(), "{taken}");
-
-    world
-        .edit(
-            &guide,
-            json!({ "body": format!("[install](kuria:{setup}#install)\n") }),
+    let unreleased = world.release(&guide).await;
+    assert_eq!(code(&unreleased), "BROKEN_REFERENCES", "{unreleased}");
+    assert_eq!(
+        unreleased["errors"][0]["extensions"]["together"],
+        json!([setup])
+    );
+    // Together, the setup's draft is recorded and the guide pinned to it.
+    let revision = |akt: &Value| akt["revision"].clone();
+    let akter = json!([
+        { "number": guide, "revision": revision(&world.akt(&guide).await) },
+        { "number": setup, "revision": revision(&world.akt(&setup).await) },
+    ]);
+    let together = world
+        .ok(
+            "mutation($a: [ReleaseVersionInput!]!) { releaseVersions(input: { akter: $a }) { number pins { number version revision } } }",
+            json!({ "a": akter }),
         )
         .await;
-    let released = world.release(&guide).await;
     assert_eq!(
-        released["data"]["releaseVersion"]["pins"],
-        json!([{ "destination": format!("kuria:{setup}#install"), "number": setup, "revision": 1 }]),
-        "{released}"
+        together["releaseVersions"][0]["pins"],
+        json!([{ "number": setup, "version": 1, "revision": null }])
     );
+    assert_eq!(world.akt(&setup).await["revision"], 2);
     assert_eq!(
         world.akt(&guide).await["links"],
         json!([{ "kind": "refers_to", "akt": { "number": setup } }])

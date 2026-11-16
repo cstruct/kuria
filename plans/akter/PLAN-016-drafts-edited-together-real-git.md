@@ -1,7 +1,7 @@
 ---
 number: PLAN-016
 type: plan
-revision: 30
+revision: 33
 rank: b4O
 state: active
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
@@ -635,12 +635,69 @@ The example's documents live, the clone walkthrough, and all of `mise run e2e` g
 <!-- akt: PLAN-016-G06 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b4p
-state: open
+state: closed
 in: [PLAN-016]
 title: "A release pins a live target's last revision"
 ---
 
 <!-- field: description -->
 A release checks a reference to an akt with a live draft against that draft (its living version), but pins the target's latest revision, which is its last release and may not hold the heading the reference names. Should a release of A pin B's live draft as it is, say by releasing B too, recording a snapshot, or refusing until B is released with the heading?
+
+<!-- field: resolution -->
+Decided in PLAN-016-D09: links checked against released versions, and releases together; built in PLAN-016-T14.
+
+<!-- akt: PLAN-016-D09 -->
+---
+type: decision
+revision: 2
+rank: b4q
+state: decided
+in: [PLAN-016]
+title: "A release checks links against released versions, and releases may go together"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+G06: a release checked references to an akt with a live draft against that draft, but pinned the target's last version or revision, which may not hold what the reference names.
+
+<!-- field: decision -->
+A reference naming no version, to an akt whose type releases versions, is checked against the target's latest version and pinned to it; a target never released breaks it. Several akter may be released together, all or nothing: a reference from one to another in the group is checked against what that one is being released as, and pinned to the version it gets. A target whose type releases no versions is checked as it is now, and pinned to its revision, as before.
+
+<!-- field: why -->
+What a version's link means is then always something released, read the same by everyone; documents that refer to each other's new text are released as one step instead of in an order that can't exist when they refer both ways.
+
+<!-- akt: PLAN-016-T14 -->
+---
+type: task
+revision: 2
+rank: b4r
+state: doing
+in: [PLAN-016]
+title: "Releases check released versions, and go together"
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+D09: a reference naming no version to a versioned target checked against and pinned to its latest version, a never-released one broken; `releaseVersions` releasing several akter all or nothing, references within the group checked against what each is released as and pinned to the version it gets; `kuria release A B`; the app's release dialog offering to release together the akter a refusal names.
+
+<!-- field: acceptance -->
+- Engine, server and e2e tests: a link to an unreleased versioned target refused; a group of two documents referring to each other's new headings released, each pinned to the other's new version; a refusal keeps nothing; lint, tests and e2e pass.
+
+<!-- akt: PLAN-016-T15 -->
+---
+type: task
+revision: 2
+rank: b4s
+state: doing
+in: [PLAN-016]
+title: Clone commands under kuria docs
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+`kuria docs clone/status/diff/add/pull/push/fmt`; top-level `add` and `diff` only their akt meaning again.
+
+<!-- field: acceptance -->
+- Lint, tests and e2e pass with the commands moved and every mention updated.

@@ -108,11 +108,12 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
         AktError::SelfMove | AktError::BadRequest(_) => coded(message, "BAD_REQUEST"),
         AktError::InvalidLink(_) => coded(message, "INVALID_LINK"),
-        AktError::BrokenReferences(broken) => {
-            let broken = broken.clone();
+        AktError::BrokenReferences { broken, together } => {
+            let (broken, together) = (broken.clone(), together.clone());
             async_graphql::Error::new(message).extend_with(move |_, e| {
                 e.set("code", "BROKEN_REFERENCES");
                 e.set("references", broken.clone());
+                e.set("together", together.clone());
             })
         }
         AktError::Unavailable(detail) => {
@@ -1034,6 +1035,37 @@ impl AkterMutation {
             .await
             .map_err(error)?;
         Ok(Version::from(&row))
+    }
+
+    /// Releases each akt's current revision as its next version, all or
+    /// nothing; a reference from one to another is checked against what
+    /// that one is released as, and pinned to the version it gets
+    /// (`version.together`). Answers the versions in order.
+    async fn release_versions(
+        &self,
+        ctx: &Context<'_>,
+        input: ReleaseVersionsInput,
+    ) -> async_graphql::Result<Vec<Version>> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let releasing: Vec<_> = input
+            .akter
+            .into_iter()
+            .map(|a| crate::akter::versions::Releasing {
+                number: a.number,
+                revision: a.revision,
+                label: a.label,
+            })
+            .collect();
+        let rows = akter(ctx)?
+            .release_together(caller, &releasing)
+            .await
+            .map_err(error)?;
+        Ok(rows.iter().map(Version::from).collect())
     }
 
     /// Moves an akt along one of its akt type's transitions.
@@ -2569,6 +2601,13 @@ pub struct ReleaseVersionInput {
     revision: i32,
     /// One line, at most 100 characters.
     label: Option<String>,
+}
+
+/// What releasing several akter together takes.
+#[derive(InputObject)]
+pub struct ReleaseVersionsInput {
+    /// Each akt to release, at the revision read, with its label.
+    akter: Vec<ReleaseVersionInput>,
 }
 
 /// A `multiple` user field's users and contacts, in order.

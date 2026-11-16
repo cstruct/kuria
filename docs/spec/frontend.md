@@ -91,7 +91,9 @@ shown.
 r[app.versions]
 An akt's page MUST list its versions, if its type declares them, and let a
 person release its current revision with an optional label, showing each
-broken reference a refusal names. It MUST let a person read the akt at a
+broken reference a refusal names, and offering to release it together
+with each akt the refusal names under `together` (`version.together`),
+chosen by default. It MUST let a person read the akt at a
 version, saying which and that it is not the living version, and compare
 two versions, or a version and the living version (`version.diff`).
 

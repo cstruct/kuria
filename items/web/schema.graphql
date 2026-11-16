@@ -944,6 +944,13 @@ type Mutation {
 	"""
 	releaseVersion(input: ReleaseVersionInput!): Version!
 	"""
+	Releases each akt's current revision as its next version, all or
+	nothing; a reference from one to another is checked against what
+	that one is released as, and pinned to the version it gets
+	(`version.together`). Answers the versions in order.
+	"""
+	releaseVersions(input: ReleaseVersionsInput!): [Version!]!
+	"""
 	Moves an akt along one of its akt type's transitions.
 	"""
 	performTransition(input: PerformTransitionInput!): Akt!
@@ -1212,6 +1219,16 @@ input ReleaseVersionInput {
 	One line, at most 100 characters.
 	"""
 	label: String
+}
+
+"""
+What releasing several akter together takes.
+"""
+input ReleaseVersionsInput {
+	"""
+	Each akt to release, at the revision read, with its label.
+	"""
+	akter: [ReleaseVersionInput!]!
 }
 
 """

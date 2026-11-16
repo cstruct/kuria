@@ -146,8 +146,12 @@ pub enum AktError {
     NotDraftable(String),
     #[error("{0}")]
     BadRequest(String),
-    #[error("the release has broken references: {}", .0.join("; "))]
-    BrokenReferences(Vec<String>),
+    #[error("the release has broken references: {}", broken.join("; "))]
+    BrokenReferences {
+        broken: Vec<String>,
+        /// The akter that releasing together would mend references to.
+        together: Vec<String>,
+    },
     #[error("{0}")]
     Unavailable(#[from] Unavailable),
     #[error("internal error")]

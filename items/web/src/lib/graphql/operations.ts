@@ -720,6 +720,27 @@ export const ReleaseVersion = graphql(`
 	}
 `);
 
+/** Several akter released together, all or nothing (`version.together`). */
+export const ReleaseVersions = graphql(`
+	mutation ReleaseVersions($input: ReleaseVersionsInput!) {
+		releaseVersions(input: $input) {
+			...VersionShown
+		}
+	}
+`);
+
+/** An akt's title and current revision, to release it with another. */
+export const AktRevision = graphql(`
+	query AktRevision($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			revision
+		}
+	}
+`);
+
 /** An akt's field values at one of its versions, or now, to compare. */
 export const AktFieldsAt = graphql(`
 	query AktFieldsAt($number: String!, $version: Int) {

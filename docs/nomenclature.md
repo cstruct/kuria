@@ -145,6 +145,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `release` (verb)
   - To name the current revision of an akt as its next version. Prefer `version` for the result: `release` is also an akt type in the release-management example.
 
+- `release together`
+  - To release several akter as one step, all or nothing, a reference from one to another read as what that one is released as, at the version it gets. How documents that refer to each other's new text are released.
+
 - `pin` (of a version)
   - What a version records for each of its references without a version: the target's latest version when it was released, else the target's revision then, so that the version's links keep their meaning.
 

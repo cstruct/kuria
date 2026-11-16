@@ -55,6 +55,7 @@ async function editBody(page: Page, write: () => Promise<void>) {
 // r[verify version.references]
 // r[verify version.read]
 // r[verify version.pins]
+// r[verify version.together]
 test('a document is written and released at its version', async ({ browser }) => {
 	test.setTimeout(240_000);
 	const stamp = Date.now();
@@ -135,11 +136,12 @@ test('a document is written and released at its version', async ({ browser }) =>
 	const release = rm.getByRole('dialog', { name: 'Release a version' });
 	await release.getByLabel('Label').fill('1.0');
 	await release.getByRole('button', { name: 'Release' }).click();
-	await expect(release.getByRole('alert')).toContainText(`has no heading`);
+	await expect(release.getByRole('alert')).toContainText('has no version yet');
 	expect(await violations(rm), 'a refused release').toEqual([]);
 	await release.getByRole('button', { name: 'Cancel' }).click();
 
-	// The setup gains the heading, and the release is taken.
+	// The setup gains the heading in its live draft. Never released, it
+	// still breaks the link alone: released together, it doesn't.
 	const revision = (
 		await admin.graphql<{ akt: { revision: number } }>('query($n: String!) { akt(number: $n) { revision } }', {
 			n: setup
@@ -152,6 +154,13 @@ test('a document is written and released at its version', async ({ browser }) =>
 	await versions.getByRole('button', { name: 'Release a version' }).click();
 	await release.getByLabel('Label').fill('1.0');
 	await release.getByRole('button', { name: 'Release' }).click();
+	await expect(release.getByRole('alert')).toContainText('has no version yet');
+	const together = release.getByRole('group', { name: 'Release together with' });
+	await expect(together.getByRole('checkbox', { name: setup })).toBeChecked();
+	expect(await violations(rm), 'a release offered together').toEqual([]);
+	await release.getByRole('button', { name: 'Release' }).click();
+	await expect(versions.getByRole('link', { name: 'Version 1 (1.0)' })).toBeVisible();
+	await open(rm, setup);
 	await expect(versions.getByRole('link', { name: 'Version 1 (1.0)' })).toBeVisible();
 
 	// The guide changes on; version 1 reads as released, its links pinned.
@@ -237,7 +246,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 	await open(rm, setup);
 	await versions.getByRole('button', { name: 'Release a version' }).click();
 	await release.getByRole('button', { name: 'Release' }).click();
-	await expect(versions.getByRole('link', { name: 'Version 1', exact: true })).toBeVisible();
+	await expect(versions.getByRole('link', { name: 'Version 2', exact: true })).toBeVisible();
 	await expect(rm.locator('dd[data-field="body"]')).toContainText('Ready to release.');
 
 	// The rest merged back and pushed: the guide has it, the release doesn't.

@@ -257,18 +257,29 @@ async fn a_release_names_the_current_revision_once_nothing_is_broken() {
     let guide = world
         .create("Guide", &format!("[run](kuria:{setup}#run)\n"))
         .await;
-    // Broken: refused, naming the reference.
+    // Broken: refused, naming the reference; the setup has no version.
     let broken = world.release("tenant", &guide, None).await;
     assert_eq!(code(&broken), "BROKEN_REFERENCES", "{broken}");
     assert_eq!(
         broken["errors"][0]["extensions"]["references"],
         json!([format!(
-            "`kuria:{setup}#run` in `body`: `{setup}` has no heading `run`"
+            "`kuria:{setup}#run` in `body`: `{setup}` has no version yet: release it first, or together"
         )])
     );
+    // Releasing it together wouldn't mend it: it has no `run` either.
+    assert_eq!(broken["errors"][0]["extensions"]["together"], json!([]));
     world
         .edit(&guide, &format!("[install](kuria:{setup}#install)\n"))
         .await;
+    // The setup has `install`, but no version yet: releasing it together
+    // would mend it.
+    let unreleased = world.release("tenant", &guide, None).await;
+    assert_eq!(code(&unreleased), "BROKEN_REFERENCES", "{unreleased}");
+    assert_eq!(
+        unreleased["errors"][0]["extensions"]["together"],
+        json!([setup])
+    );
+    world.release("tenant", &setup, None).await;
     // Stale: refused.
     let stale = world
         .run(RELEASE, json!({ "n": guide, "v": 1, "l": null }))
@@ -284,10 +295,10 @@ async fn a_release_names_the_current_revision_once_nothing_is_broken() {
     let version = &released["data"]["releaseVersion"];
     assert_eq!(version["number"], 1, "{released}");
     assert_eq!(version["label"], "First");
-    // The target has no version: pinned at its revision.
+    // Pinned at the target's latest version.
     assert_eq!(
         version["pins"],
-        json!([{ "destination": format!("kuria:{setup}#install"), "number": setup, "version": null, "revision": 1 }])
+        json!([{ "destination": format!("kuria:{setup}#install"), "number": setup, "version": 1, "revision": null }])
     );
     // A revision is released once.
     let again = world.release("tenant", &guide, None).await;
@@ -308,6 +319,91 @@ async fn a_release_names_the_current_revision_once_nothing_is_broken() {
         .map(|v| &v["number"])
         .collect();
     assert_eq!(numbers, [&json!(2), &json!(1)], "latest first");
+}
+
+const RELEASE_ALL: &str = "mutation($a: [ReleaseVersionInput!]!) {
+    releaseVersions(input: { akter: $a }) { number revision label pins { destination number version revision } } }";
+
+impl World {
+    async fn release_all(&self, numbers: &[&str]) -> Value {
+        let mut akter = Vec::new();
+        for number in numbers {
+            let revision = self.akt(number).await["revision"].clone();
+            akter.push(json!({ "number": number, "revision": revision }));
+        }
+        self.run(RELEASE_ALL, json!({ "a": akter })).await
+    }
+
+    async fn versions(&self, number: &str) -> Value {
+        self.ok(
+            "query($n: String!) { akt(number: $n) { versions { number } } }",
+            json!({ "n": number }),
+        )
+        .await["akt"]["versions"]
+            .clone()
+    }
+}
+
+// r[verify version.together]
+// r[verify version.references]
+// r[verify version.pins]
+#[tokio::test(flavor = "multi_thread")]
+async fn documents_referring_to_each_other_are_released_together() {
+    let world = World::new().await;
+    let setup = world.create("Setup", "# Install {#install}\n").await;
+    let guide = world.create("Guide", "# Use {#use}\n").await;
+    world.release("tenant", &setup, None).await;
+    world.release("tenant", &guide, None).await;
+    // Each now names a heading only the other's new text has.
+    world
+        .edit(
+            &setup,
+            &format!("# Install {{#install}}\n\n## Check {{#check}}\n\nThen [use it](kuria:{guide}#more).\n"),
+        )
+        .await;
+    world
+        .edit(
+            &guide,
+            &format!(
+                "# Use {{#use}}\n\n## More {{#more}}\n\nAfter [the check](kuria:{setup}#check).\n"
+            ),
+        )
+        .await;
+    // Alone, each is refused, naming the other to release with it.
+    let alone = world.release("tenant", &guide, None).await;
+    assert_eq!(code(&alone), "BROKEN_REFERENCES", "{alone}");
+    assert_eq!(alone["errors"][0]["extensions"]["together"], json!([setup]));
+
+    // Named twice: refused.
+    let twice = world.release_all(&[&guide, &guide]).await;
+    assert_eq!(code(&twice), "BAD_REQUEST", "{twice}");
+    // A third broken one refuses them all, prefixed by its number.
+    let other = world
+        .create("Other", &format!("[gone](kuria:{setup}#gone)\n"))
+        .await;
+    let refused = world.release_all(&[&guide, &setup, &other]).await;
+    assert_eq!(code(&refused), "BROKEN_REFERENCES", "{refused}");
+    assert_eq!(
+        refused["errors"][0]["extensions"]["references"],
+        json!([format!(
+            "{other}: `kuria:{setup}#gone` in `body`: `{setup}` has no heading `gone` in version 2"
+        )])
+    );
+    assert_eq!(world.versions(&guide).await, json!([{ "number": 1 }]));
+    assert_eq!(world.versions(&setup).await, json!([{ "number": 1 }]));
+
+    // Together: each pinned to the other's new version.
+    let released = world.release_all(&[&guide, &setup]).await;
+    let versions = &released["data"]["releaseVersions"];
+    assert_eq!(versions[0]["number"], 2, "{released}");
+    assert_eq!(
+        versions[0]["pins"],
+        json!([{ "destination": format!("kuria:{setup}#check"), "number": setup, "version": 2, "revision": null }])
+    );
+    assert_eq!(
+        versions[1]["pins"],
+        json!([{ "destination": format!("kuria:{guide}#more"), "number": guide, "version": 2, "revision": null }])
+    );
 }
 
 // r[verify version.read]
@@ -443,6 +539,7 @@ fn uris_in(object: &lopdf::Object, found: &mut Vec<String>) {
 async fn a_markdown_field_is_read_as_a_pdf() {
     let world = World::new().await;
     let setup = world.create("Setup", "# Install {#install}\n").await;
+    world.release("tenant", &setup, None).await;
     let guide = world
         .create(
             "Guide",

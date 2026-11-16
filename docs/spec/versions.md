@@ -43,14 +43,30 @@ reference by field and destination, while any reference in the revision's
 - an akt that doesn't exist, or that the releaser may not read;
 - a version the target doesn't have;
 - a heading id the target doesn't have: in the version named, if the
-  reference names one, else in the target's current revision;
+  reference names one; else, if the target's type declares `versions`,
+  in its latest version, the reference being broken while it has none;
+  else in the target's current revision;
 - for an embedded image, an akt that isn't an image or has no picture,
-  or a heading (`akt.field.markdown.images`).
+  or a heading (`akt.field.markdown.images`), read as a heading is.
+
+The refusal MUST also name, under `together`, each target that releasing
+together (`version.together`) would mend a reference to: one whose type
+declares `versions`, which the reference names no version of, and whose
+current revision, or live draft, has what the reference names.
 
 r[version.pins]
 A version MUST record, for each of its references that names no version,
 what the reference meant when it was released: the target's latest
-version, if it has one, else the target's revision then.
+version, if its type declares `versions`, else the target's revision
+then.
+
+r[version.together]
+`releaseVersions` MUST release several akter, each as `releaseVersion`
+would, all or nothing, refusing an akt named twice as `BAD_REQUEST`. A
+reference from one of them to another MUST be checked against what that
+other is released as, at the version it gets, and pinned to that
+version; every broken reference of every one of them MUST be named,
+prefixed by the number of the akt it is in.
 
 r[version.history]
 A release MUST be shown in the akt's history, and MUST append a change

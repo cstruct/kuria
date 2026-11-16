@@ -28,6 +28,9 @@ pub struct Broken {
     pub field: String,
     pub destination: String,
     pub why: String,
+    /// The target, if releasing it together would mend the reference: it
+    /// releases versions, and has now what its latest version lacks.
+    pub together: Option<String>,
 }
 
 impl std::fmt::Display for Broken {
@@ -90,16 +93,28 @@ pub fn check(
     for (field, reference) in references_of(ty, fields) {
         let found = target(&reference.number);
         let embedded = images.contains(&(field.clone(), reference.clone()));
-        let why = if embedded {
-            markdown::broken_image(&reference, found.as_ref())
-        } else {
-            markdown::broken(&reference, found.as_ref())
+        let check = |read: &Reference| {
+            if embedded {
+                markdown::broken_image(read, found.as_ref())
+            } else {
+                markdown::broken(read, found.as_ref())
+            }
+        };
+        let why = match as_released(&reference, found.as_ref()) {
+            Err(why) => Some(why),
+            Ok(read) => check(&read),
         };
         if let Some(why) = why {
+            let together = found
+                .as_ref()
+                .filter(|t| t.versioned && reference.version.is_none())
+                .filter(|_| check(&reference).is_none())
+                .map(|_| reference.number.clone());
             broken.push(Broken {
                 field,
                 destination: reference.to_string(),
                 why,
+                together,
             });
             continue;
         }
@@ -109,7 +124,11 @@ pub fn check(
         {
             continue;
         }
-        let latest = found.versions.iter().max_by_key(|v| v.number);
+        let latest = found
+            .versions
+            .iter()
+            .max_by_key(|v| v.number)
+            .filter(|_| found.versioned);
         pins.push(Pin {
             destination: reference.to_string(),
             number: reference.number.clone(),
@@ -125,6 +144,25 @@ pub fn check(
         Ok(pins)
     } else {
         Err(broken)
+    }
+}
+
+/// `reference` as a release checks it: one naming no version, to a target
+/// whose type releases versions, as naming its latest version; refused if
+/// it has none (`version.references`).
+fn as_released(reference: &Reference, target: Option<&Target>) -> Result<Reference, String> {
+    let Some(target) = target.filter(|t| t.versioned && reference.version.is_none()) else {
+        return Ok(reference.clone());
+    };
+    match target.versions.iter().map(|v| v.number).max() {
+        Some(latest) => Ok(Reference {
+            version: Some(latest),
+            ..reference.clone()
+        }),
+        None => Err(format!(
+            "`{}` has no version yet: release it first, or together",
+            reference.number
+        )),
     }
 }
 
@@ -171,7 +209,7 @@ mod tests {
     fn targets(number: &str) -> Option<Target> {
         match number {
             "D-1" => Some(Target {
-                headings: vec!["install".to_owned()],
+                headings: vec!["install".to_owned(), "unreleased".to_owned()],
                 versions: vec![
                     TargetVersion {
                         number: 1,
@@ -187,6 +225,13 @@ mod tests {
                     },
                 ],
                 revision: 6,
+                versioned: true,
+                ..Default::default()
+            }),
+            "D-3" => Some(Target {
+                headings: vec!["install".to_owned()],
+                revision: 1,
+                versioned: true,
                 ..Default::default()
             }),
             "D-2" => Some(Target {
@@ -258,12 +303,38 @@ mod tests {
         assert_eq!(
             said,
             [
-                "`kuria:D-1#gone` in `body`: `D-1` has no heading `gone`",
+                "`kuria:D-1#gone` in `body`: `D-1` has no heading `gone` in version 2",
                 "`kuria:D-1@3` in `body`: `D-1` has no version 3",
                 "`kuria:D-1@1#install` in `body`: `D-1` has no heading `install` in version 1",
                 "`kuria:D-9` in `body`: there is no akt `D-9`",
             ]
         );
+    }
+
+    // r[verify version.references]
+    #[test]
+    fn a_versioned_target_is_read_as_last_released() {
+        let broken = check(
+            &ty(),
+            &body("[a](kuria:D-1#unreleased) [b](kuria:D-3#install) [c](kuria:D-3)"),
+            &targets,
+        )
+        .unwrap_err();
+        let said: Vec<String> = broken.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            said,
+            [
+                "`kuria:D-1#unreleased` in `body`: `D-1` has no heading `unreleased` in version 2",
+                "`kuria:D-3#install` in `body`: `D-3` has no version yet: release it first, or together",
+                "`kuria:D-3` in `body`: `D-3` has no version yet: release it first, or together",
+            ]
+        );
+        // Each is mended by releasing its target together: each has now
+        // what the reference names.
+        let together: Vec<Option<&str>> = broken.iter().map(|b| b.together.as_deref()).collect();
+        assert_eq!(together, [Some("D-1"), Some("D-3"), Some("D-3")]);
+        // A target whose type releases none is read as it is.
+        assert!(check(&ty(), &body("[a](kuria:D-2)"), &targets).is_ok());
     }
 
     // r[verify akt.field.markdown.images]

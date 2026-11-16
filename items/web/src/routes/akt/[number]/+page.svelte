@@ -51,6 +51,8 @@
 		MoveAkt,
 		PerformTransition,
 		ReleaseVersion,
+		ReleaseVersions,
+		AktRevision,
 		RemoveFromContainer,
 		TransferMember
 	} from '#lib/graphql/operations.ts';
@@ -158,16 +160,37 @@
 	let comparing = $state<{ from: number; to: number | null } | null>(null);
 	let compareOpen = $state(false);
 
-	async function releaseVersion(label: string) {
+	async function releaseVersion(label: string, together: string[] = []) {
 		if (!akt) return false;
 		// r[impl app.live]: the live draft as it is, with every edit made.
 		if (live && !(await live.settled())) {
 			toast('Your last edits haven’t reached the server yet: try again', 'danger');
 			return false;
 		}
-		const input = { number: akt.number, revision: akt.revision, label: label.trim() || null };
-		const released = await run(() => mutate(client, ReleaseVersion, { input }));
-		if (released) toast(`${akt.number}: released`, 'success');
+		const named = label.trim() || null;
+		const input = { number: akt.number, revision: akt.revision, label: named };
+		if (together.length === 0) {
+			const released = await run(() => mutate(client, ReleaseVersion, { input }));
+			if (released) toast(`${akt.number}: released`, 'success');
+			return released;
+		}
+		// r[impl app.versions]: released together, each at the revision read now.
+		const others: { number: string; revision: number; label: string | null }[] = [];
+		for (const number of together) {
+			const read = await client
+				.query(AktRevision, { number }, { requestPolicy: 'network-only' })
+				.toPromise();
+			const other = read.data?.akt;
+			if (!other) {
+				toast(`${number} can’t be read`, 'danger');
+				return false;
+			}
+			others.push({ number, revision: other.revision, label: named });
+		}
+		const released = await run(() =>
+			mutate(client, ReleaseVersions, { input: { akter: [input, ...others] } })
+		);
+		if (released) toast(`${[akt.number, ...together].join(', ')}: released together`, 'success');
 		return released;
 	}
 	const me = $derived(view.data?.viewer.subject);

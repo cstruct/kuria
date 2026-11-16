@@ -56,6 +56,7 @@ pub fn target(dir: &AktDir, number: &str) -> Option<Target> {
         revision: akt.revision,
         image: ty.document().presentation.image.is_some(),
         picture: has_picture(dir, akt),
+        versioned: ty.document().versions.is_some(),
     })
 }
 

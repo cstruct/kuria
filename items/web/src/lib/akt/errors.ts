@@ -10,6 +10,9 @@ export interface Refusal {
 	field?: string;
 	/** For `BROKEN_REFERENCES`: each broken reference, and why. */
 	references?: string[];
+	/** For `BROKEN_REFERENCES`: the akter that releasing together would
+	 * mend references to (`version.together`). */
+	together?: string[];
 }
 
 const MESSAGES: Record<string, string> = {
@@ -54,11 +57,12 @@ export function refusalOf(error: CombinedError, fieldNames: Record<string, strin
 		};
 	}
 	if (code === 'BROKEN_REFERENCES') {
-		const references = first.extensions?.references;
+		const { references, together } = first.extensions ?? {};
 		return {
 			code,
 			message: MESSAGES[code],
-			references: Array.isArray(references) ? references.map(String) : []
+			references: Array.isArray(references) ? references.map(String) : [],
+			together: Array.isArray(together) ? together.map(String) : []
 		};
 	}
 	return { code, message: MESSAGES[code] ?? first.message };

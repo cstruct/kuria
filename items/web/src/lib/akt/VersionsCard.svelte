@@ -27,7 +27,9 @@
 		releasable: boolean;
 		busy: boolean;
 		refusal: Refusal | null;
-		onRelease: (label: string) => Promise<boolean>;
+		/** Releases the living version with `label`, together with the
+		 * akter `together` names (`version.together`). */
+		onRelease: (label: string, together: string[]) => Promise<boolean>;
 		onCompare: (from: number, to: number | null) => void;
 	}
 
@@ -45,6 +47,8 @@
 
 	let releaseOpen = $state(false);
 	let label = $state('');
+	/** The akter chosen to release together, of those a refusal named. */
+	let together = $derived<string[]>(refusal?.together ?? []);
 	let from = $state('');
 	let to = $state('');
 
@@ -56,9 +60,10 @@
 		`${resolve('/akt/[number]', { number })}${version ? `?version=${version}` : ''}`;
 
 	async function release() {
-		if (await onRelease(label)) {
+		if (await onRelease(label, together)) {
 			releaseOpen = false;
 			label = '';
+			together = [];
 		}
 	}
 </script>
@@ -168,6 +173,19 @@
 					</ul>
 				{/if}
 			</div>
+			{#if refusal.together?.length}
+				<!-- r[impl app.versions]: released together, the references between them mended. -->
+				<fieldset class="together">
+					<legend>Release together with</legend>
+					<p class="hint">Each gets its next version, with the same label.</p>
+					{#each refusal.together as other (other)}
+						<label>
+							<input type="checkbox" value={other} bind:group={together} />
+							{other}
+						</label>
+					{/each}
+				</fieldset>
+			{/if}
 		{/if}
 	</form>
 	{#snippet footer()}
@@ -177,6 +195,25 @@
 </Dialog>
 
 <style>
+	.together {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin: var(--space-3) 0 0;
+		border: none;
+		padding: 0;
+	}
+
+	.together legend {
+		font-weight: 600;
+	}
+
+	.hint {
+		margin: 0;
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+
 	.versions {
 		display: flex;
 		flex-direction: column;

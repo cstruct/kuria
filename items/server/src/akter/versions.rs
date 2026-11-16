@@ -182,6 +182,7 @@ pub async fn target(
         revision: akt.revision,
         image: ty.ty.document().presentation.image.is_some(),
         picture: picture_in(&ty, &now).is_some(),
+        versioned: ty.ty.document().versions.is_some(),
     };
     let mut rows = stored::of(conn, tenant, akt.id).await?;
     rows.reverse();
@@ -200,12 +201,18 @@ pub async fn target(
     Ok(Some(found))
 }
 
+/// One akt to release: its number, the revision the releaser read, and
+/// an optional label.
+#[derive(Clone, Debug)]
+pub struct Releasing {
+    pub number: String,
+    pub revision: i32,
+    pub label: Option<String>,
+}
+
 impl Akter {
     /// Releases the akt `number`'s current revision, which must be
     /// `revision`, as its next version, and returns the version.
-    // r[impl version.release]
-    // r[impl version.number]
-    // r[impl authz.release]
     pub async fn release(
         &self,
         caller: Caller<'_>,
@@ -213,31 +220,162 @@ impl Akter {
         revision: i32,
         label: Option<String>,
     ) -> Result<VersionRow, AktError> {
+        let releasing = [Releasing {
+            number: number.to_owned(),
+            revision,
+            label,
+        }];
+        let mut rows = self.release_together(caller, &releasing).await?;
+        rows.pop()
+            .ok_or_else(|| AktError::Internal("a release answered no version".to_owned()))
+    }
+
+    /// Releases each of `releasing` as its next version, all or nothing,
+    /// a reference from one to another checked against what that one is
+    /// released as (`version.together`); answers the versions in order.
+    // r[impl version.release]
+    // r[impl version.number]
+    // r[impl version.together]
+    // r[impl authz.release]
+    pub async fn release_together(
+        &self,
+        caller: Caller<'_>,
+        releasing: &[Releasing],
+    ) -> Result<Vec<VersionRow>, AktError> {
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
-            .transaction::<_, AktError, _>(async |conn| {
-                release_in(conn, caller, number, revision, label.clone()).await
-            })
+            .transaction::<_, AktError, _>(async |conn| release_in(conn, caller, releasing).await)
             .await;
         self.committed(result)
     }
 }
 
+/// An akt about to be released: what it is released as, and the version
+/// it gets.
+struct Prepared {
+    akt: AktRow,
+    ty: StoredType,
+    revision: i32,
+    label: Option<String>,
+    draft: Option<super::live::Loaded>,
+    fields: std::collections::BTreeMap<String, kuria_engine::Value>,
+    next: i32,
+}
+
 async fn release_in(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
-    number: &str,
-    revision: i32,
-    label: Option<String>,
-) -> Result<VersionRow, AktError> {
+    releasing: &[Releasing],
+) -> Result<Vec<VersionRow>, AktError> {
     let tenant: Uuid = caller.actor.tenant.into();
-    let akt = containers::lock_akter(conn, tenant, &[number])
-        .await?
-        .pop()
-        .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
+    if releasing.is_empty() {
+        return Err(AktError::BadRequest("name an akt to release".to_owned()));
+    }
+    let numbers: Vec<&str> = releasing.iter().map(|r| r.number.as_str()).collect();
+    if let Some(twice) = numbers
+        .iter()
+        .enumerate()
+        .find(|(i, n)| numbers[..*i].contains(n))
+    {
+        return Err(AktError::BadRequest(format!("{} is named twice", twice.1)));
+    }
+    let mut locked = containers::lock_akter(conn, tenant, &numbers).await?;
+    let mut prepared = Vec::new();
+    for one in releasing {
+        let at = locked
+            .iter()
+            .position(|a| a.number == one.number)
+            .ok_or_else(|| AktError::NotFound(one.number.clone()))?;
+        let akt = locked.swap_remove(at);
+        prepared.push(prepare(conn, caller, akt, one).await?);
+    }
+    // The targets first, since the check can't wait on the database; each
+    // akt released here as what it is released as, at the version it gets.
+    let mut targets = std::collections::HashMap::new();
+    for one in &prepared {
+        let mut found = target(conn, tenant, caller.auth, &one.akt.number).await?;
+        if let Some(found) = &mut found {
+            let json = kuria_engine::fields_to_json(&one.fields);
+            found.versions.push(TargetVersion {
+                number: u32::try_from(one.next).unwrap_or_default(),
+                revision: one.akt.revision + i32::from(one.draft.is_some()),
+                headings: markdown::heading_ids(&one.ty.ty, &one.fields),
+                picture: picture_in(&one.ty, &json).is_some(),
+            });
+        }
+        targets.insert(one.akt.number.clone(), found);
+    }
+    for one in &prepared {
+        for (_, reference) in versions::references_of(&one.ty.ty, &one.fields) {
+            if !targets.contains_key(&reference.number) {
+                let found = target(conn, tenant, caller.auth, &reference.number).await?;
+                targets.insert(reference.number.clone(), found);
+            }
+        }
+    }
+    let mut pins = Vec::new();
+    let mut broken = Vec::new();
+    let mut together: Vec<String> = Vec::new();
+    for one in &prepared {
+        match versions::check(&one.ty.ty, &one.fields, &|n| {
+            targets.get(n).cloned().flatten()
+        }) {
+            Ok(found) => pins.push(found),
+            Err(found) => {
+                for b in found {
+                    broken.push(if prepared.len() > 1 {
+                        format!("{}: {b}", one.akt.number)
+                    } else {
+                        b.to_string()
+                    });
+                    if let Some(number) = b.together
+                        && !together.contains(&number)
+                    {
+                        together.push(number);
+                    }
+                }
+            }
+        }
+    }
+    if !broken.is_empty() {
+        return Err(AktError::BrokenReferences { broken, together });
+    }
+    let mut rows = Vec::new();
+    for (one, pins) in prepared.into_iter().zip(pins) {
+        let revision = match one.draft {
+            Some(loaded) => record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?,
+            None => one.revision,
+        };
+        let row = VersionRow {
+            tenant_id: tenant,
+            akt_id: one.akt.id,
+            number: one.next,
+            revision,
+            label: one.label,
+            released_by: caller.actor.subject.into(),
+            released_at: Utc::now(),
+            pins: serde_json::to_value(pins).map_err(|e| AktError::Internal(e.to_string()))?,
+        };
+        stored::insert(conn, &row).await?;
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+/// Checks that `caller` may release `akt` at `one.revision` with
+/// `one.label`, and answers what it is released as.
+async fn prepare(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    akt: AktRow,
+    one: &Releasing,
+) -> Result<Prepared, AktError> {
+    let tenant: Uuid = caller.actor.tenant.into();
+    let number = akt.number.clone();
+    let revision = one.revision;
     let ty = type_of(conn, tenant, &akt).await?;
-    require_read(caller.auth, &ty, number).await?;
+    require_read(caller.auth, &ty, &number).await?;
     let Some(declared) = &ty.ty.document().versions else {
         return Err(AktError::BadRequest(format!(
             "`{}` akter don't release versions",
@@ -258,7 +396,11 @@ async fn release_in(
             current: akt.revision,
         });
     }
-    let label = label.map(|l| l.trim().to_owned()).filter(|l| !l.is_empty());
+    let label = one
+        .label
+        .as_ref()
+        .map(|l| l.trim().to_owned())
+        .filter(|l| !l.is_empty());
     if label
         .as_ref()
         .is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r']))
@@ -298,33 +440,15 @@ async fn release_in(
             )));
         }
     }
-    // The targets first, since the check can't wait on the database.
-    let mut targets = std::collections::HashMap::new();
-    for (_, reference) in versions::references_of(&ty.ty, &fields) {
-        if !targets.contains_key(&reference.number) {
-            let found = target(conn, tenant, caller.auth, &reference.number).await?;
-            targets.insert(reference.number.clone(), found);
-        }
-    }
-    let pins = versions::check(&ty.ty, &fields, &|n| targets.get(n).cloned().flatten()).map_err(
-        |broken| AktError::BrokenReferences(broken.iter().map(ToString::to_string).collect()),
-    )?;
-    let revision = match draft {
-        Some(loaded) => record_draft(conn, caller, &ty, akt.clone(), loaded).await?,
-        None => revision,
-    };
-    let row = VersionRow {
-        tenant_id: tenant,
-        akt_id: akt.id,
-        number: existing.first().map_or(1, |v| v.number + 1),
+    Ok(Prepared {
+        next: existing.first().map_or(1, |v| v.number + 1),
+        akt,
+        ty,
         revision,
         label,
-        released_by: caller.actor.subject.into(),
-        released_at: Utc::now(),
-        pins: serde_json::to_value(pins).map_err(|e| AktError::Internal(e.to_string()))?,
-    };
-    stored::insert(conn, &row).await?;
-    Ok(row)
+        draft,
+        fields,
+    })
 }
 
 /// Records `akt`'s live draft `loaded` as its next revision, checked as a
