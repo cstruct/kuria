@@ -210,9 +210,9 @@ The client MUST offer:
 - `release <number> [--label <label>]`: its current revision as its next
   version, answering the version's number, or each broken reference
   (`version.release`, `version.references`);
-- `clone`, `status`, `diff`, `add`, `pull` and `push`: a container as
-  files synced with Kuria (`clone.*`);
-- `fmt`, in a clone: its files in normal form (`clone.normal`);
+- `docs clone`, `docs status`, `docs diff`, `docs add`, `docs pull` and
+  `docs push`: a container as files synced with Kuria (`clone.*`);
+- `docs fmt`, in a clone: its files in normal form (`clone.normal`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and

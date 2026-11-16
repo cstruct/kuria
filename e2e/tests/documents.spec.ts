@@ -195,7 +195,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 		return ran.stdout;
 	};
 	const here = mkdtempSync(join(tmpdir(), 'kuria-walkthrough-'));
-	await kuria(['clone', index, 'handbook'], here);
+	await kuria(['docs', 'clone', index, 'handbook'], here);
 	const root = join(here, 'handbook');
 	const git = (...args: string[]) =>
 		execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
@@ -232,8 +232,8 @@ test('a document is written and released at its version', async ({ browser }) =>
 	// ready part pushed and released.
 	git('branch', 'keep');
 	git('reset', '-q', '--hard', 'HEAD~1');
-	await kuria(['add', '.'], root);
-	await kuria(['push', '-m', 'Ready part'], root);
+	await kuria(['docs', 'add', '.'], root);
+	await kuria(['docs', 'push', '-m', 'Ready part'], root);
 	await open(rm, setup);
 	await versions.getByRole('button', { name: 'Release a version' }).click();
 	await release.getByRole('button', { name: 'Release' }).click();
@@ -242,8 +242,8 @@ test('a document is written and released at its version', async ({ browser }) =>
 
 	// The rest merged back and pushed: the guide has it, the release doesn't.
 	git('merge', '-q', 'keep');
-	await kuria(['add', '.'], root);
-	await kuria(['push', '-m', 'The rest'], root);
+	await kuria(['docs', 'add', '.'], root);
+	await kuria(['docs', 'push', '-m', 'The rest'], root);
 	await open(dev, guide);
 	await expect(body).toContainText('Not yet.');
 	const released = await admin.graphql<{ akt: { fields: ({ markdown?: string } | null)[] } }>(
@@ -251,7 +251,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 		{ n: guide }
 	);
 	expect(released.akt.fields.map((f) => f?.markdown).join('')).not.toContain('Not yet.');
-	expect(JSON.parse(await kuria(['status', '--format', 'json'], root))).toMatchObject({
+	expect(JSON.parse(await kuria(['docs', 'status', '--format', 'json'], root))).toMatchObject({
 		staged: [],
 		unstaged: [],
 		conflicted: []

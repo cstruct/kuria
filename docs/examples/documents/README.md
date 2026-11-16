@@ -68,8 +68,8 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
 - **PDFs:** a document's body, of the living version or a version, its
   pictures and diagrams drawn in it.
 - **Clones:** an index as files, its folders as directories, each document
-  a Markdown file, to edit with any editor and sync with `kuria pull` and
-  `kuria push` (below).
+  a Markdown file, to edit with any editor and sync with `kuria docs pull`
+  and `kuria docs push` (below).
 
 ## In the app
 
@@ -97,20 +97,20 @@ kuria diff DOCS-1-D02 1               # what changed since version 1
 kuria pdf DOCS-1-D02 --version 1 -o guide.pdf
 ```
 
-## With kuria clone
+## With kuria docs
 
 An index and its documents as files, synced with Kuria
 ([clones](../../spec/clones.md)), live drafts included:
 
 ```sh
-kuria clone DOCS-1            # into DOCS-1-handbook/, the base in .kuria/
+kuria docs clone DOCS-1       # into DOCS-1-handbook/, the base in .kuria/
 cd DOCS-1-handbook
 # edit guides/DOCS-1-D02-setup.md with any editor
-kuria status                  # what changed, what is staged
-kuria diff                    # what isn't staged yet
-kuria add guides/DOCS-1-D02-setup.md    # or `kuria add -p` for some hunks
-kuria push -m "Explain the install"
-kuria pull                    # what others changed, merged in
+kuria docs status             # what changed, what is staged
+kuria docs diff               # what isn't staged yet
+kuria docs add guides/DOCS-1-D02-setup.md    # or `kuria docs add -p` for some hunks
+kuria docs push -m "Explain the install"
+kuria docs pull               # what others changed, merged in
 ```
 
 The index's file is at the root, and each document's file is in the
@@ -124,7 +124,7 @@ each file as last pulled, each akt's revision and each live draft's
 state. It ignores itself in git.
 
 - **A push** fetches first, and is refused unless what it pushes is still
-  as the base has it: `kuria pull`, then push again. A document's staged
+  as the base has it: `kuria docs pull`, then push again. A document's staged
   change goes to its live draft as one change, merged with whatever is
   being typed in the app meanwhile, and kept with your message in its
   history; the index's goes as a revision with the message as its reason.
@@ -132,8 +132,8 @@ state. It ignores itself in git.
   uploaded there: a new or removed file, or a changed picture, is refused.
 - **A pull** merges Kuria's changes into your files. Where you and Kuria
   changed the same text, the file holds both, between `<<<<<<< ours`,
-  `=======` and `>>>>>>> kuria`, and `kuria status` names it: edit it to
-  what it should say, then `kuria add` it (a file still holding markers
+  `=======` and `>>>>>>> kuria`, and `kuria docs status` names it: edit it
+  to what it should say, then `kuria docs add` it (a file still holding markers
   isn't staged). What you had staged is staged again, or unstaged where
   it conflicts.
 - **With git:** a clone can also be a git repository of your own; Kuria
@@ -145,13 +145,13 @@ state. It ignores itself in git.
   git branch keep               # everything, kept on a branch
   git reset --hard HEAD~1       # the unready commits out of the working copy
                                 # (or `git revert` them: Kuria sees only files)
-  kuria add . && kuria push -m "Ready part"
+  kuria docs add . && kuria docs push -m "Ready part"
   kuria release DOCS-1-D02 --label 1.0     # or release it in the app
   git merge keep                # the rest back (after a revert, revert the revert)
-  kuria add . && kuria push -m "The rest"
+  kuria docs add . && kuria docs push -m "The rest"
   ```
 
-`kuria fmt`, run in a clone, puts its files as Kuria writes them, as a
+`kuria docs fmt`, run in a clone, puts its files as Kuria writes them, as a
 push needs them: it gives headings their ids, puts each file where its index's
 folders say, and fetches the pictures of images newly embedded, putting
 back any changed.

@@ -1,5 +1,5 @@
-//! A clone synced with Kuria: `kuria clone`, `kuria pull` and `kuria push`
-//! (`clone.clone`, `clone.pull`, `clone.push`).
+//! A clone synced with Kuria: `kuria docs clone`, `kuria docs pull` and
+//! `kuria docs push` (`clone.clone`, `clone.pull`, `clone.push`).
 //!
 //! A push sends, as one `pushClone` (`clone.server`), for each staged file
 //! of an akt with a live draft, a Yjs update made against the base's state:
@@ -49,7 +49,7 @@ fn bases_of(now: &Now) -> Bases {
     }
 }
 
-/// `kuria clone <number> [<dir>]`: the container `number` and its members
+/// `kuria docs clone <number> [<dir>]`: the container `number` and its members
 /// as files in `dir`, by default a directory named as its file is in
 /// `here`, with the base in `<dir>/.kuria/` (`clone.clone`).
 // r[impl clone.clone]
@@ -91,7 +91,7 @@ pub async fn clone(
     let (files, members) = cloned?;
     Ok(Answer {
         markdown: format!(
-            "Cloned {number} and its {members} members into {}: {files} files. Edit them, stage with `kuria add`, push with `kuria push -m <message>`; keep `.kuria/` out of version control (it ignores itself).",
+            "Cloned {number} and its {members} members into {}: {files} files. Edit them, stage with `kuria docs add`, push with `kuria docs push -m <message>`; keep `.kuria/` out of version control (it ignores itself).",
             root.display()
         ),
         json: json!({ "dir": root, "number": number, "files": files, "members": members }),
@@ -247,7 +247,7 @@ fn said(title: &str, paths: &[String]) -> String {
     }
 }
 
-/// `kuria pull`: Kuria's current state merged three ways into the working
+/// `kuria docs pull`: Kuria's current state merged three ways into the working
 /// files, from the base, with conflict markers where both changed the same
 /// text; members added appear and members removed go unless changed here;
 /// the base becomes Kuria's, and what was staged is staged again against
@@ -296,7 +296,7 @@ pub async fn pull(session: &Session, here: &Path) -> Result<Answer, CliError> {
         &pulled.kept,
     ));
     markdown.push_str(&said(
-        "Conflicts, marked `<<<<<<< ours` … `>>>>>>> kuria`; resolve them, then `kuria add`",
+        "Conflicts, marked `<<<<<<< ours` … `>>>>>>> kuria`; resolve them, then `kuria docs add`",
         &pulled.conflicted,
     ));
     markdown.push_str(&said(
@@ -379,7 +379,7 @@ fn staged_of(local: &Local) -> Result<Vec<Staged>, CliError> {
     if staged.is_empty() {
         return Err(CliError::refused(
             "BAD_REQUEST",
-            "Nothing is staged: stage files with `kuria add`, then push",
+            "Nothing is staged: stage files with `kuria docs add`, then push",
         ));
     }
     // r[impl clone.pictures]
@@ -390,7 +390,7 @@ fn staged_of(local: &Local) -> Result<Vec<Staged>, CliError> {
             return Err(CliError::refused(
                 "READ_ONLY",
                 format!(
-                    "The picture {path} changed: pictures are uploaded in Kuria; restore it, or remove it and `kuria pull`. Nothing was pushed"
+                    "The picture {path} changed: pictures are uploaded in Kuria; restore it, or remove it and `kuria docs pull`. Nothing was pushed"
                 ),
             ));
         }
@@ -433,7 +433,7 @@ fn check_current(
         Kind::Stale,
         "STALE",
         format!(
-            "{} changed in Kuria since the clone's base: `kuria pull`, then push again. Nothing was pushed",
+            "{} changed in Kuria since the clone's base: `kuria docs pull`, then push again. Nothing was pushed",
             stale.join(", ")
         ),
     ))
@@ -486,7 +486,7 @@ async fn changed_fields(
         return Err(CliError::refused(
             "NOT_NORMAL",
             format!(
-                "{} isn't in normal form: run `kuria fmt`, `kuria add` it again and push. Nothing was pushed",
+                "{} isn't in normal form: run `kuria docs fmt`, `kuria docs add` it again and push. Nothing was pushed",
                 s.path
             ),
         ));
@@ -615,7 +615,7 @@ async fn sent_for(
 const PUSH: &str = "mutation($i: PushCloneInput!) { pushClone(input: $i) {
     drafts { number revision } operations { number revision } } }";
 
-/// `kuria push -m <message>`: what is staged, sent as one push after
+/// `kuria docs push -m <message>`: what is staged, sent as one push after
 /// checking the base is still Kuria's current state; then the base becomes
 /// what was pushed, and what wasn't staged stays in the working files
 /// (`clone.push`).
@@ -642,7 +642,9 @@ pub async fn push(session: &Session, here: &Path, message: &str) -> Result<Answe
         let akt = akt.ok_or_else(|| {
             CliError::from_server(
                 "NOT_FOUND",
-                format!("{number} is gone from Kuria, or you may no longer read it: `kuria pull`"),
+                format!(
+                    "{number} is gone from Kuria, or you may no longer read it: `kuria docs pull`"
+                ),
                 None,
             )
         })?;
@@ -712,7 +714,7 @@ async fn send(
             if e.code == "STALE" {
                 CliError {
                     message: format!(
-                        "{}: `kuria pull`, then push again. Nothing was pushed",
+                        "{}: `kuria docs pull`, then push again. Nothing was pushed",
                         e.message
                     ),
                     ..e
@@ -752,12 +754,6 @@ fn record(local: &mut Local, sent: &[(&Staged, Sent)], answer: &Json) -> Result<
         }
     }
     Ok(())
-}
-
-/// Whether `dir`, or one it is in, is a clone.
-#[must_use]
-pub fn in_clone(dir: &Path) -> bool {
-    Local::is_in_one(dir)
 }
 
 /// The Kuria the clone `dir` is in was cloned from, if it is in one.

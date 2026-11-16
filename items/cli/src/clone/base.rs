@@ -120,7 +120,7 @@ impl Local {
             return Err(CliError::refused(
                 "NOT_A_CLONE",
                 format!(
-                    "{} isn't in a clone; make one with `kuria clone <number>`",
+                    "{} isn't in a clone; make one with `kuria docs clone <number>`",
                     dir.display()
                 ),
             ));
@@ -139,7 +139,7 @@ impl Local {
         })
     }
 
-    /// Whether `dir` is in a clone `kuria clone` made.
+    /// Whether `dir` is in a clone `kuria docs clone` made.
     #[must_use]
     pub fn is_in_one(dir: &Path) -> bool {
         root_of(dir).join(KURIA_DIR).join(CLONE_FILE).is_file()

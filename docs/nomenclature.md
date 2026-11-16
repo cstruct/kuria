@@ -149,7 +149,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - What a version records for each of its references without a version: the target's latest version when it was released, else the target's revision then, so that the version's links keep their meaning.
 
 - `clone`
-  - A container and its members as files on someone's machine, made with `kuria clone`, worked on with any editor and synced with Kuria by `kuria pull` and `kuria push`. It may also be a git repository, which is the person's own.
+  - A container and its members as files on someone's machine, made with `kuria docs clone`, worked on with any editor and synced with Kuria by `kuria docs pull` and `kuria docs push`. It may also be a git repository, which is the person's own.
 
 - `base`
   - What a clone last had from Kuria: each file, each akt's revision, and each live draft's state. Pushes are made against it; pulls merge from it.
@@ -158,7 +158,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - What one push from a clone changed in a live draft, kept as one change with its author and message.
 
 - `normal form`
-  - The files exactly as Kuria writes a container and its members to a clone; `kuria fmt` puts them in it.
+  - The files exactly as Kuria writes a container and its members to a clone; `kuria docs fmt` puts them in it.
 
 ## Links
 

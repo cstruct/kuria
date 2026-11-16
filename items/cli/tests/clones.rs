@@ -207,7 +207,7 @@ async fn clones_an_index_with_its_base() {
         json!({ "url": world.server.url, "number": INDEX })
     );
     assert_eq!(status(&root)["staged"], json!([]));
-    // `kuria fmt` works in a clone, which is in normal form.
+    // `kuria docs fmt` works in a clone, which is in normal form.
     let formatted = kuria_cli::clone::fmt::fmt(session, &root).await.unwrap();
     assert_eq!(
         formatted.json["changed"],
@@ -384,7 +384,7 @@ async fn a_push_behind_a_live_edit_is_refused_until_pulled() {
     let refused: CliError = sync::push(session, &root, "Four").await.unwrap_err();
     assert_eq!(refused.code, "STALE");
     assert!(
-        refused.message.contains("kuria pull"),
+        refused.message.contains("kuria docs pull"),
         "{}",
         refused.message
     );

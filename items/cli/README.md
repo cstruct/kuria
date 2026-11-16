@@ -112,8 +112,7 @@ type.
     `release` and version reads work in local mode too, from git
     ([`src/local/versions.rs`](src/local/versions.rs));
   - `add <container> <member>…`, `remove …`, `transfer <member> <from>
-    <to>`, `move <number> --before|--after <number>`; in a clone, `add`
-    stages files instead (below);
+    <to>`, `move <number> --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;
     `--pin` pins the target's current revision), `unlink …`;
   - `types export [<key>…] [-o <dir>]`, `types define <file>… [--check]`
@@ -121,8 +120,10 @@ type.
     with `kuria-config`, offline, without signing in).
 
 - **Clones** ([`src/clone.rs`](src/clone.rs), docs/spec/clones.md,
-  `clone.*`): a container and its members as files, synced with Kuria.
-  - `clone <number> [<dir>]` ([`src/clone/sync.rs`](src/clone/sync.rs)):
+  `clone.*`): a container and its members as files, synced with Kuria,
+  by the commands under `docs`, run in the clone. They need a server, and
+  are refused in local mode (`--dir` or `KURIA_DIR`).
+  - `docs clone <number> [<dir>]` ([`src/clone/sync.rs`](src/clone/sync.rs)):
     refuses an akt that isn't there or readable (`NOT_FOUND`) and one
     whose type contains nothing (`NOT_A_CONTAINER`); writes into `<dir>`,
     by default a new directory named as the container's file, which must
@@ -136,17 +137,16 @@ type.
     answers them), `base/<path>` (each file and picture as Kuria last had
     them), `staged/<path>` and `pictures/<id>` (pictures' bytes, fetched
     once).
-  - `status`, `diff [--staged] [<path>…]`, `add <path>…` and `add -p
-    [<path>…]` ([`src/clone/work.rs`](src/clone/work.rs)), offline: the
-    working files against what is staged, else the base. `add` takes
+  - `docs status`, `docs diff [--staged] [<path>…]`, `docs add <path>…`
+    and `docs add -p [<path>…]` ([`src/clone/work.rs`](src/clone/work.rs)),
+    offline: the working files against what is staged, else the base.
+    `add` takes
     files or directories, refuses pictures, removed files, files the base
     lacks and files holding conflict markers, and never changes a working
     file; `-p` offers each hunk (`y`, `n`, `q`, `a`, `d`, `?`), reading a
     line of standard input per answer, a terminal or not, and asking on
-    standard error. In a clone, `add` and `diff` take paths when given
-    `-p` or `--staged`, nothing, or only paths that exist; otherwise
-    they are the container and version commands.
-  - `push -m <message>`: fetches each staged akt (its revision, live
+    standard error.
+  - `docs push -m <message>`: fetches each staged akt (its revision, live
     draft's base and type) and refuses (`STALE`, exit 3), changing
     nothing, unless each is as the base has it; refuses a new file, a
     changed picture, a changed `number`, `type` or `state`, verdicts, and
@@ -159,7 +159,7 @@ type.
     what was pushed, its revisions what Kuria answered, its live drafts'
     states and bases the drafts after the update, and the staged files
     are cleared; the working files are left as they are.
-  - `pull`: fetches the container and its members and merges each file
+  - `docs pull`: fetches the container and its members and merges each file
     three ways with `kuria_engine::merge::merge_marked`, base to Kuria
     into the working file, by lines then characters, writing
     `<<<<<<< ours` / `=======` / `>>>>>>> kuria` where both changed the
@@ -168,16 +168,16 @@ type.
     Kuria's pictures unless changed here; restages what was staged,
     merged the same way, or unstages it where that conflicts; and makes
     Kuria's state the base.
-  - `fmt` ([`src/clone/fmt.rs`](src/clone/fmt.rs)): the clone's files,
+  - `docs fmt` ([`src/clone/fmt.rs`](src/clone/fmt.rs)): the clone's files,
     every file under it but those in `.git/` and `.kuria/`, put in normal
     form, each where its container's sections put it, and the pictures
     of the images they embed. The clone is the nearest directory holding
     `.kuria/`, else the current one; its container the one
     `.kuria/clone.json` names, else the akt of the root's file that no
     other file there is a member of.
-  - Push, pull and `fmt` use the clone's URL when neither `--url`,
-    `KURIA_URL` nor the profile names one, and are refused against
-    another Kuria.
+  - `docs push`, `docs pull` and `docs fmt` use the clone's URL when
+    neither `--url`, `KURIA_URL` nor the profile names one, and are
+    refused against another Kuria.
 
 - **Bundles** ([`src/writes/bundles.rs`](src/writes/bundles.rs)):
   `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` writes the
@@ -339,11 +339,11 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `copy` | `{number, from, members: [{from, number}]}` |
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
 | `guide` | `{guide}` |
-| `clone` | `{dir, number, files, members}` |
-| `status` | `{number, staged, unstaged, removed, conflicted, untracked}` |
-| `diff` in a clone, `add` in a clone | `{staged, files}`, `{staged}` |
-| `push`, `pull` | `{pushed, message}`, `{merged, added, removed, kept, conflicted, unstaged}` |
-| `fmt` | `{changed}` |
+| `docs clone` | `{dir, number, files, members}` |
+| `docs status` | `{number, staged, unstaged, removed, conflicted, untracked}` |
+| `docs diff`, `docs add` | `{staged, files}`, `{staged}` |
+| `docs push`, `docs pull` | `{pushed, message}`, `{merged, added, removed, kept, conflicted, unstaged}` |
+| `docs fmt` | `{changed}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
 | `export --to-dir` | `{dir, aktTypes, akter, attachments}` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
@@ -374,8 +374,8 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   `apply`, `set`, `do`, `draft`, `verdict`), `writes/copy.rs`,
   `writes/arrange.rs` (membership, order, links) and `writes/types.rs`
   (documents).
-- [`src/clone.rs`](src/clone.rs): clones, in `clone/sync.rs` (`clone`,
-  `pull`, `push`), `clone/work.rs` (`status`, `diff`, `add`),
+- [`src/clone.rs`](src/clone.rs): clones (`docs …`), in `clone/sync.rs`
+  (`clone`, `pull`, `push`), `clone/work.rs` (`status`, `diff`, `add`),
   `clone/base.rs` (`.kuria/`), `clone/fmt.rs`, `clone/layout.rs` and
   `clone/pictures.rs`.
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),
@@ -426,11 +426,11 @@ cargo test -p kuria-cli
   on a local port with a fresh database and a relying host standing in
   for Konklav ([`tests/support/mod.rs`](tests/support/mod.rs)), with the
   documents example's types, documents with live drafts: a clone and its
-  `.kuria/`, `fmt` in it, refusals of a non-container and a missing akt;
+  `.kuria/`, `docs fmt` in it, refusals of a non-container and a missing akt;
   a live draft's edit pushed as one change with its message, and the
-  index's as a revision with it as its reason; `add -p` staging one hunk
+  index's as a revision with it as its reason; `docs add -p` staging one hunk
   of two and pushing only it; a push behind a live edit refused, then a
-  pull merging it and the push again; a conflict marked, refused by `add`,
+  pull merging it and the push again; a conflict marked, refused by `docs add`,
   resolved and pushed; and git's branch workflow end to end. Needs
   `mise run db:up`.
 - End to end ([`e2e/tests/clone.spec.ts`](../../e2e/tests/clone.spec.ts)):
