@@ -88,7 +88,7 @@ pub(crate) fn known_field<'a>(
         ..CliError::refused(
             "UNKNOWN_FIELD",
             format!(
-                "{} has no field `{key}`; see `kuria schema {}`",
+                "{} has no field `{key}`; see `kuria types schema {}`",
                 shape.name, shape.key
             ),
         )

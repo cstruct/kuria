@@ -195,7 +195,10 @@ pub(crate) fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError
     };
     let containers: BTreeSet<String> = akt.containers.iter().map(|c| c.number.clone()).collect();
     if parsed.front.contains_key("in") && listed("in") != containers {
-        return Err(read_only("in", "use `kuria add`, `remove` or `transfer`"));
+        return Err(read_only(
+            "in",
+            "use `kuria members add`, `remove` or `transfer`",
+        ));
     }
     let links: BTreeSet<String> = file::filed(&akt.links).map(file::Link::said).collect();
     if parsed.front.contains_key("links") && listed("links") != links {

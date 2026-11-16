@@ -179,7 +179,9 @@ fn reads_types_and_schemas_from_the_directory() {
         task,
         json!({ "key": "task", "name": "Task", "version": 1, "numberPattern": "{parent}-T{seq:2}", "akterCount": 2 })
     );
-    let schema = dir.ok(&["schema", "task", "--format", "json"]).json;
+    let schema = dir
+        .ok(&["types", "schema", "task", "--format", "json"])
+        .json;
     assert_eq!(
         schema["type"]["fields"][3],
         json!({
@@ -191,7 +193,10 @@ fn reads_types_and_schemas_from_the_directory() {
     assert_eq!(schema["type"]["links"][0]["key"], "blocks");
     let exported = dir.ok(&["types", "export", "gap", "--format", "json"]).json;
     assert_eq!(exported["types"][0]["key"], "gap");
-    assert_eq!(dir.refused(&["schema", "nope"]).kind.exit_code(), 2);
+    assert_eq!(
+        dir.refused(&["types", "schema", "nope"]).kind.exit_code(),
+        2
+    );
 }
 
 // r[verify cli.local.layout]
@@ -700,38 +705,59 @@ fn arranges_members_order_and_links() {
         2
     );
     // Order.
-    dir.ok(&["move", "PLAN-001-T02", "--before", "PLAN-001-T01"]);
+    dir.ok(&[
+        "members",
+        "place",
+        "PLAN-001-T02",
+        "--before",
+        "PLAN-001-T01",
+    ]);
     assert_eq!(
         numbers(&dir.ok(&["ls", "task", "--in", "PLAN-001", "--format", "json"])),
         ["PLAN-001-T02", "PLAN-001-T01"]
     );
     assert_eq!(
-        dir.refused(&["move", "PLAN-001-T02", "--after", "PLAN-001-T02"])
-            .code,
+        dir.refused(&[
+            "members",
+            "place",
+            "PLAN-001-T02",
+            "--after",
+            "PLAN-001-T02"
+        ])
+        .code,
         "BAD_REQUEST"
     );
     // Membership: a transfer is one change of all three.
     let before = revision_of(&dir, "PLAN-002");
-    dir.ok(&["transfer", "PLAN-001-T02", "PLAN-001", "PLAN-002"]);
+    dir.ok(&[
+        "members",
+        "transfer",
+        "PLAN-001-T02",
+        "PLAN-001",
+        "PLAN-002",
+    ]);
     assert_eq!(
         dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json["akt"]["in"],
         json!(["PLAN-002"])
     );
     assert_eq!(revision_of(&dir, "PLAN-002"), before + 1);
     assert_eq!(
-        dir.refused(&["add", "PLAN-002", "PLAN-001-T02"]).code,
+        dir.refused(&["members", "add", "PLAN-002", "PLAN-001-T02"])
+            .code,
         "ALREADY_MEMBER"
     );
     assert_eq!(
-        dir.refused(&["add", "PLAN-001", "PLAN-002"]).code,
+        dir.refused(&["members", "add", "PLAN-001", "PLAN-002"])
+            .code,
         "NOT_CONTAINABLE"
     );
     assert_eq!(
-        dir.refused(&["remove", "PLAN-001", "PLAN-001-T02"]).code,
+        dir.refused(&["members", "remove", "PLAN-001", "PLAN-001-T02"])
+            .code,
         "NOT_MEMBER"
     );
-    dir.ok(&["remove", "PLAN-002", "PLAN-001-T02"]);
-    dir.ok(&["add", "PLAN-001", "PLAN-001-T02"]);
+    dir.ok(&["members", "remove", "PLAN-002", "PLAN-001-T02"]);
+    dir.ok(&["members", "add", "PLAN-001", "PLAN-001-T02"]);
     assert_eq!(
         dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json["akt"]["in"],
         json!(["PLAN-001"])
@@ -762,7 +788,8 @@ fn redefines_types_only_where_their_akter_fit() {
         "task"
     );
     assert_eq!(
-        dir.ok(&["schema", "task", "--format", "json"]).json["type"]["name"],
+        dir.ok(&["types", "schema", "task", "--format", "json"])
+            .json["type"]["name"],
         "Job"
     );
     // Without `assignee`, PLAN-001-T01, which has one, wouldn't fit.
@@ -1175,7 +1202,13 @@ fn writes_akter_into_their_parent_s_file_named_by_title() {
     assert!(at("<!-- akt: PLAN-001-T02 -->") < at("<!-- akt: PLAN-001-G01 -->"));
 
     // Its order is the directory's.
-    dir.ok(&["move", "PLAN-001-G01", "--before", "PLAN-001-T01"]);
+    dir.ok(&[
+        "members",
+        "place",
+        "PLAN-001-G01",
+        "--before",
+        "PLAN-001-T01",
+    ]);
     let text = std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap();
     assert!(text.find("PLAN-001-G01 -->") < text.find("PLAN-001-T01 -->"));
 
@@ -1190,7 +1223,7 @@ fn writes_akter_into_their_parent_s_file_named_by_title() {
     dir.ok(&["set", "PLAN-001-T01", "title=Renamed task"]);
     assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
     // Removed from its plan, a task stays in its file, in nothing.
-    dir.ok(&["remove", "PLAN-001", "PLAN-001-T02"]);
+    dir.ok(&["members", "remove", "PLAN-001", "PLAN-001-T02"]);
     assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
     assert!(!file(&dir, "PLAN-001-T02").contains("in:"));
     dir.ok(&["check"]);
@@ -1358,7 +1391,13 @@ fn cat_gives_an_akt_with_its_members_as_one_file() {
     let dir = Dir::new();
     worked(&dir);
     dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
-    dir.ok(&["move", "PLAN-001-G01", "--before", "PLAN-001-T02"]);
+    dir.ok(&[
+        "members",
+        "place",
+        "PLAN-001-G01",
+        "--before",
+        "PLAN-001-T02",
+    ]);
     let json = |args: &[&str]| {
         let mut all = args.to_vec();
         all.extend(["--format", "json"]);
@@ -1564,14 +1603,15 @@ fn protocols(dir: &Dir) {
 fn a_protocol_finishes_only_with_an_outcome_it_allows() {
     let dir = Dir::new();
     released(&dir);
-    let schema = dir.ok(&["schema", "protocol"]).markdown;
+    let schema = dir.ok(&["types", "schema", "protocol"]).markdown;
     assert!(
         schema
             .contains("- `finish` Finish: open → done, only if the outcome is pass, fail, skip\n"),
         "{schema}"
     );
     assert_eq!(
-        dir.ok(&["schema", "protocol", "--format", "json"]).json["type"]["transitions"][0]["outcomes"],
+        dir.ok(&["types", "schema", "protocol", "--format", "json"])
+            .json["type"]["transitions"][0]["outcomes"],
         json!(["pass", "fail", "skip"])
     );
     let pending = dir.refused(&["do", "PROT-001", "finish"]);
@@ -1612,7 +1652,7 @@ fn tests_and_protocols_filter_by_outcome() {
     std::fs::write(dir.root.join("types/suite.json"), suite.to_string()).unwrap();
     dir.ok(&["new", "suite", "--set", "title=Nightly"]);
     dir.ok(&["new", "protocol", "--in", "S-1", "--set", "title=Smoke"]);
-    dir.ok(&["add", "S-1", "PROT-001"]);
+    dir.ok(&["members", "add", "S-1", "PROT-001"]);
     dir.ok(&["verdict", "PROT-001-T2", "fail"]);
     let ls = |args: &[&str]| {
         let mut all = vec!["ls"];
@@ -1853,7 +1893,7 @@ fn protocol_files_apply_and_a_test_leaves_its_section() {
     );
 
     // A test that leaves takes its place in the sections with it.
-    dir.ok(&["remove", "PROT-001", "PROT-001-T3"]);
+    dir.ok(&["members", "remove", "PROT-001", "PROT-001-T3"]);
     assert!(
         !dir.ok(&["cat", "PROT-001"])
             .markdown
@@ -2036,7 +2076,7 @@ fn markdown_fields_get_heading_ids_and_keep_reference_links() {
             .code,
         "REFUSED"
     );
-    let schema = dir.ok(&["schema", "document"]).markdown;
+    let schema = dir.ok(&["types", "schema", "document"]).markdown;
     assert!(
         schema.contains("references kept as `refers_to` links"),
         "{schema}"

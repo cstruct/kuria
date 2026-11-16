@@ -48,7 +48,7 @@ type.
   permitted, 5 unavailable.
 
 - **Reads** (`cli.read`):
-  - `types`; `schema <type>` (fields with kinds, required and options,
+  - `types`; `types schema <type>` (fields with kinds, required and options,
     states and tones, transitions with what they require and the outcomes
     they allow, and from the
     type's document what it contains and links to, its board and
@@ -112,8 +112,9 @@ type.
     `cat`/`show --version` ([`src/versions.rs`](src/versions.rs));
     `release` and version reads work in local mode too, from git
     ([`src/local/versions.rs`](src/local/versions.rs));
-  - `add <container> <member>…`, `remove …`, `transfer <member> <from>
-    <to>`, `move <number> --before|--after <number>`;
+  - `members add <container> <member>…`, `members remove …`,
+    `members transfer <member> <from> <to>`, `members place <number>
+    --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;
     `--pin` pins the target's current revision), `unlink …`;
   - `types export [<key>…] [-o <dir>]`, `types define <file>… [--check]`

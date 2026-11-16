@@ -139,12 +139,12 @@ test('kuria reads akt types and akter like files', async () => {
 	// What the tenant has.
 	const { types } = await json(['types']);
 	expect(types.find((t: { key: string }) => t.key === 'backlog_item').akterCount).toBeGreaterThanOrEqual(2);
-	const { type } = await json(['schema', 'backlog_item']);
+	const { type } = await json(['types', 'schema', 'backlog_item']);
 	expect(type.fields.find((f: { key: string }) => f.key === 'kind').options.map((o: { key: string }) => o.key)).toEqual(
 		['feature', 'fix', 'chore']
 	);
 	expect(type.transitions.find((t: { key: string }) => t.key === 'review').requires).toEqual(['change']);
-	const board = await md(['schema', 'backlog']);
+	const board = await md(['types', 'schema', 'backlog']);
 	expect(board).toContain('## Board');
 	expect(board).toContain('`backlog_item`, exclusive');
 
@@ -191,7 +191,7 @@ test('kuria reads akt types and akter like files', async () => {
 	const option = await cli.run(['ls', 'backlog_item', '--where', 'kind=nope', '--format', 'json']);
 	expect(option.code).toBe(1);
 	expect(JSON.parse(option.stderr).error).toMatchObject({ code: 'BAD_REQUEST', field: 'kind' });
-	expect((await cli.run(['schema', 'nope'])).code).toBe(2);
+	expect((await cli.run(['types', 'schema', 'nope'])).code).toBe(2);
 });
 
 // r[verify cli.write]
@@ -343,14 +343,14 @@ test('kuria writes akter: from files and flags, with refusals', async () => {
 	await ok(['unlink', b, 'Blocks', a]);
 	expect((await ok(['show', a])).akt.links).toEqual([]);
 	expect((await refused(['link', b, 'relates', a], 1)).code).toBe('INVALID_LINK');
-	await ok(['move', b, '--before', a]);
+	await ok(['members', 'place', b, '--before', a]);
 	const order = (await ok(['ls', 'cli_task', '--in', p])).akter.map((x: { number: string }) => x.number);
 	expect(order).toEqual([b, a]);
 	const q = (await ok(['new', 'cli_plan', '--set', `title=Next ${word}`])).number;
-	await ok(['transfer', b, p, q, '--reason', 'Later']);
+	await ok(['members', 'transfer', b, p, q, '--reason', 'Later']);
 	expect((await ok(['show', b])).akt.in).toEqual([q]);
-	await ok(['remove', q, b]);
-	await ok(['add', p, b]);
+	await ok(['members', 'remove', q, b]);
+	await ok(['members', 'add', p, b]);
 	expect((await ok(['show', b])).akt.in).toEqual([p]);
 
 	// A field drafted from its recipe: the other tasks in its plan.
@@ -426,7 +426,7 @@ test('kuria exports a bundle and imports it into another tenant', async () => {
 	const typeOnly = join(cli.dir, 'type-only');
 	await ok(['export', '--types', key, '-o', typeOnly]);
 	await ok(['import', typeOnly], inLab);
-	expect((await ok(['schema', key], inLab)).type.version).toBe(2);
+	expect((await ok(['types', 'schema', key], inLab)).type.version).toBe(2);
 
 	// The whole tenant exports, but goes only into an empty tenant.
 	const whole = join(cli.dir, 'whole');

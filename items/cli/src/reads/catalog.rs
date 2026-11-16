@@ -67,7 +67,7 @@ fn kind(field: &FieldDef) -> String {
     field.kind.to_ascii_lowercase()
 }
 
-/// `kuria schema <type>`: everything a type says about its akter.
+/// `kuria types schema <type>`: everything a type says about its akter.
 // r[impl cli.read]
 pub async fn schema(source: Source<'_>, key: &str) -> Result<Answer, CliError> {
     let shape = super::shape(source, key).await?;

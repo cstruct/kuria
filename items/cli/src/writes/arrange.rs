@@ -15,7 +15,7 @@ pub enum Membership {
     Remove,
 }
 
-/// `kuria add` and `kuria remove`: members in or out of a container, one
+/// `kuria members add` and `members remove`: members in or out of a container, one
 /// change each.
 // r[impl cli.write]
 pub async fn membership(
@@ -55,7 +55,7 @@ pub async fn membership(
     })
 }
 
-/// `kuria transfer <member> <from> <to>`: one change.
+/// `kuria members transfer <member> <from> <to>`: one change.
 // r[impl cli.write]
 pub async fn transfer(
     session: &Session,
@@ -77,7 +77,7 @@ pub async fn transfer(
     })
 }
 
-/// `kuria move <number> --before|--after <number>`: its place in the
+/// `kuria members place <number> --before|--after <number>`: its place in the
 /// tenant's order, on every board.
 // r[impl cli.write]
 pub async fn move_akt(

@@ -135,18 +135,18 @@ test('local mode answers a sequence of commands as the server does', async () =>
 		[['link', three, 'blocks', two], 0],
 		[['unlink', two, 'blocks', one], 0],
 		[['unlink', two, 'blocks', one], 2],
-		[['move', three, '--before', one], 0],
-		[['move', three, '--after', three], 1],
-		[['add', b, three], 1],
-		[['transfer', two, a, b], 0],
-		[['transfer', two, a, b], 1],
-		[['remove', a, three], 0],
-		[['remove', a, three], 1],
-		[['add', b, three], 0],
+		[['members', 'place', three, '--before', one], 0],
+		[['members', 'place', three, '--after', three], 1],
+		[['members', 'add', b, three], 1],
+		[['members', 'transfer', two, a, b], 0],
+		[['members', 'transfer', two, a, b], 1],
+		[['members', 'remove', a, three], 0],
+		[['members', 'remove', a, three], 1],
+		[['members', 'add', b, three], 0],
 		[['do', b, 'pause'], 0],
-		[['add', b, one], 1],
+		[['members', 'add', b, one], 1],
 		[['do', a, 'shut'], 0],
-		[['remove', a, one], 1],
+		[['members', 'remove', a, one], 1],
 		[['set', 'NOPE-1', 'title=x'], 2]
 	];
 	for (const [args, code] of steps) {
@@ -327,7 +327,7 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 		[['set', p, `layout=@${layout}`], 0],
 		[['cat', p], 0],
 		[['cat', one], 0],
-		[['schema', protocol], 0],
+		[['types', 'schema', protocol], 0],
 		[['do', p, 'finish'], 1],
 		[['verdict', one, 'pass', '--reason', 'Ran it'], 0],
 		[['verdict', one, 'maybe'], 1],
@@ -347,7 +347,7 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 		[['copy', p, '--only', 'NOPE-1'], 1],
 		[['copy', p, '--only', one, '--reason', 'Run it'], 0],
 		[['copy', p], 0],
-		[['remove', p, three], 0],
+		[['members', 'remove', p, three], 0],
 		[['do', p, 'finish'], 0],
 		[['cat', p], 0]
 	];
@@ -424,7 +424,7 @@ test('local mode writes documents, releases and reads versions as the server doe
 	);
 	expect((await cli.run(['init', '--dir', dir])).code).toBe(0);
 	const git = (...args: string[]) =>
-		execFileSync('git', ['-C', dir, ...args], {
+		execFileSync('git', ['-C', dir, '-c', 'commit.gpgsign=false', ...args], {
 			env: {
 				...process.env,
 				GIT_AUTHOR_NAME: 'Ada',

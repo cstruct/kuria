@@ -51,7 +51,7 @@ pub mod writes;
 
 use std::process::ExitCode;
 
-use args::{Cli, Command, DocsCommand, TypesCommand};
+use args::{Cli, Command, DocsCommand, MembersCommand, TypesCommand};
 use error::CliError;
 use output::Answer;
 use profile::{Asked, Config, config_dir};
@@ -216,9 +216,8 @@ fn reads_only(command: &Command) -> bool {
     matches!(
         command,
         Command::Types {
-            action: None | Some(TypesCommand::Export { .. })
-        } | Command::Schema { .. }
-            | Command::Ls { .. }
+            action: None | Some(TypesCommand::Export { .. } | TypesCommand::Schema { .. })
+        } | Command::Ls { .. }
             | Command::Find { .. }
             | Command::Cat { .. }
             | Command::Show { .. }
@@ -237,7 +236,9 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
         Command::Types {
             action: Some(TypesCommand::Export { keys, output }),
         } => writes::export(source, &keys, output.as_deref()).await,
-        Command::Schema { key } => reads::schema(source, &key).await,
+        Command::Types {
+            action: Some(TypesCommand::Schema { key }),
+        } => reads::schema(source, &key).await,
         Command::Ls {
             akt_type,
             state,
@@ -396,7 +397,7 @@ async fn protocol(session: &Session, command: Command) -> Result<Answer, CliErro
 }
 
 fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answer, CliError> {
-    use local::{arrange, edits};
+    use local::edits;
     let mut w = local::write::Writer::open(root, me)?;
     let mut save = true;
     let answer = match command {
@@ -433,39 +434,7 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             sets,
             reason,
         } => edits::perform(&mut w, &number, &transition, &sets, reason.as_deref()),
-        Command::Add {
-            container,
-            members,
-            reason,
-        } => arrange::membership(
-            &mut w,
-            writes::Membership::Add,
-            &container,
-            &members,
-            reason.as_deref(),
-        ),
-        Command::Remove {
-            container,
-            members,
-            reason,
-        } => arrange::membership(
-            &mut w,
-            writes::Membership::Remove,
-            &container,
-            &members,
-            reason.as_deref(),
-        ),
-        Command::Transfer {
-            member,
-            from,
-            to,
-            reason,
-        } => arrange::transfer(&mut w, &member, &from, &to, reason.as_deref()),
-        Command::Move {
-            number,
-            before,
-            after,
-        } => arrange::move_akt(&mut w, &number, before.as_deref(), after.as_deref()),
+        Command::Members { action } => local_members(&mut w, action),
         command @ (Command::Link { .. }
         | Command::Unlink { .. }
         | Command::Verdict { .. }
@@ -615,45 +584,7 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             sets,
             reason,
         } => writes::perform(session, &number, &transition, &sets, reason.as_deref()).await,
-        Command::Add {
-            container,
-            members,
-            reason,
-        } => {
-            writes::membership(
-                session,
-                writes::Membership::Add,
-                &container,
-                &members,
-                reason.as_deref(),
-            )
-            .await
-        }
-        Command::Remove {
-            container,
-            members,
-            reason,
-        } => {
-            writes::membership(
-                session,
-                writes::Membership::Remove,
-                &container,
-                &members,
-                reason.as_deref(),
-            )
-            .await
-        }
-        Command::Transfer {
-            member,
-            from,
-            to,
-            reason,
-        } => writes::transfer(session, &member, &from, &to, reason.as_deref()).await,
-        Command::Move {
-            number,
-            before,
-            after,
-        } => writes::move_akt(session, &number, before.as_deref(), after.as_deref()).await,
+        Command::Members { action } => members(session, action).await,
         Command::Link {
             source,
             kind,
@@ -677,5 +608,90 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             reason,
         } => writes::draft(session, &number, &field, reason.as_deref()).await,
         _ => unreachable!("dispatched above"),
+    }
+}
+
+/// `kuria members …` in local mode.
+fn local_members(w: &mut local::write::Writer, action: MembersCommand) -> Result<Answer, CliError> {
+    use local::arrange;
+    match action {
+        MembersCommand::Add {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            w,
+            writes::Membership::Add,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
+        MembersCommand::Remove {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            w,
+            writes::Membership::Remove,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
+        MembersCommand::Transfer {
+            member,
+            from,
+            to,
+            reason,
+        } => arrange::transfer(w, &member, &from, &to, reason.as_deref()),
+        MembersCommand::Place {
+            number,
+            before,
+            after,
+        } => arrange::move_akt(w, &number, before.as_deref(), after.as_deref()),
+    }
+}
+
+/// `kuria members …` on a server.
+async fn members(session: &Session, action: MembersCommand) -> Result<Answer, CliError> {
+    match action {
+        MembersCommand::Add {
+            container,
+            members,
+            reason,
+        } => {
+            writes::membership(
+                session,
+                writes::Membership::Add,
+                &container,
+                &members,
+                reason.as_deref(),
+            )
+            .await
+        }
+        MembersCommand::Remove {
+            container,
+            members,
+            reason,
+        } => {
+            writes::membership(
+                session,
+                writes::Membership::Remove,
+                &container,
+                &members,
+                reason.as_deref(),
+            )
+            .await
+        }
+        MembersCommand::Transfer {
+            member,
+            from,
+            to,
+            reason,
+        } => writes::transfer(session, &member, &from, &to, reason.as_deref()).await,
+        MembersCommand::Place {
+            number,
+            before,
+            after,
+        } => writes::move_akt(session, &number, before.as_deref(), after.as_deref()).await,
     }
 }

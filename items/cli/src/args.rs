@@ -52,13 +52,6 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<TypesCommand>,
     },
-    /// An akt type's fields, states, transitions, what it contains and
-    /// links to, its board and presentation.
-    Schema {
-        /// The akt type's key.
-        #[arg(value_name = "TYPE")]
-        key: String,
-    },
     /// Akter as a table, most recently changed first, a page at a time.
     Ls {
         /// Only this akt type's akter, with its list fields as columns.
@@ -208,38 +201,11 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Add members to a container.
-    Add {
-        container: String,
-        #[arg(required = true, value_name = "MEMBER")]
-        members: Vec<String>,
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Remove members from a container.
-    Remove {
-        container: String,
-        #[arg(required = true, value_name = "MEMBER")]
-        members: Vec<String>,
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Move a member from one container to another, as one change.
-    Transfer {
-        member: String,
-        from: String,
-        to: String,
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Place an akt directly before or after another, on every board.
-    #[command(group(clap::ArgGroup::new("place").required(true).args(["before", "after"])))]
-    Move {
-        number: String,
-        #[arg(long, value_name = "NUMBER")]
-        before: Option<String>,
-        #[arg(long, value_name = "NUMBER")]
-        after: Option<String>,
+    /// A container's members: add, remove, transfer between containers,
+    /// or place on its boards.
+    Members {
+        #[command(subcommand)]
+        action: MembersCommand,
     },
     /// Link an akt to another by a kind its type declares, such as
     /// `ITEM-1 blocks ITEM-2`.
@@ -411,7 +377,51 @@ pub enum DocsCommand {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum MembersCommand {
+    /// Add members to a container.
+    Add {
+        container: String,
+        #[arg(required = true, value_name = "MEMBER")]
+        members: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Remove members from a container.
+    Remove {
+        container: String,
+        #[arg(required = true, value_name = "MEMBER")]
+        members: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Move a member from one container to another, as one change.
+    Transfer {
+        member: String,
+        from: String,
+        to: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Place an akt directly before or after another, on every board.
+    #[command(group(clap::ArgGroup::new("place").required(true).args(["before", "after"])))]
+    Place {
+        number: String,
+        #[arg(long, value_name = "NUMBER")]
+        before: Option<String>,
+        #[arg(long, value_name = "NUMBER")]
+        after: Option<String>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 pub enum TypesCommand {
+    /// An akt type's fields, states, transitions, what it contains and
+    /// links to, its board and presentation.
+    Schema {
+        /// The akt type's key.
+        #[arg(value_name = "TYPE")]
+        key: String,
+    },
     /// The documents the akt types were defined by, as JSON.
     Export {
         /// The akt types; all of them if none.
@@ -501,14 +511,45 @@ mod tests {
     }
 
     #[test]
-    fn add_and_diff_take_akter_and_versions() {
+    fn members_and_schema_are_grouped_and_diff_takes_versions() {
         let parsed = |args: &[&str]| Cli::try_parse_from(args).unwrap().command;
         assert!(matches!(
-            parsed(&["kuria", "add", "D-1", "D-2", "--reason", "Why"]),
-            Command::Add { container, members, reason: Some(_) } if container == "D-1" && members == ["D-2"]
+            parsed(&["kuria", "members", "add", "D-1", "D-2", "--reason", "Why"]),
+            Command::Members { action: MembersCommand::Add { container, members, reason: Some(_) } }
+                if container == "D-1" && members == ["D-2"]
         ));
-        assert!(Cli::try_parse_from(["kuria", "add", "D-1"]).is_err());
-        assert!(Cli::try_parse_from(["kuria", "add", "-p"]).is_err());
+        assert!(matches!(
+            parsed(&["kuria", "members", "remove", "D-1", "D-2"]),
+            Command::Members {
+                action: MembersCommand::Remove { .. }
+            }
+        ));
+        assert!(matches!(
+            parsed(&["kuria", "members", "transfer", "D-2", "D-1", "D-3"]),
+            Command::Members { action: MembersCommand::Transfer { member, .. } } if member == "D-2"
+        ));
+        assert!(matches!(
+            parsed(&["kuria", "members", "place", "D-2", "--before", "D-3"]),
+            Command::Members {
+                action: MembersCommand::Place {
+                    before: Some(_),
+                    after: None,
+                    ..
+                }
+            }
+        ));
+        assert!(Cli::try_parse_from(["kuria", "members", "add", "D-1"]).is_err());
+        assert!(Cli::try_parse_from(["kuria", "members", "place", "D-2"]).is_err());
+        assert!(matches!(
+            parsed(&["kuria", "types", "schema", "task"]),
+            Command::Types { action: Some(TypesCommand::Schema { key }) } if key == "task"
+        ));
+        for gone in ["add", "remove", "transfer", "move", "schema"] {
+            assert!(
+                Cli::try_parse_from(["kuria", gone, "D-1", "D-2"]).is_err(),
+                "{gone}"
+            );
+        }
         assert!(matches!(
             parsed(&["kuria", "diff", "D-1", "1", "2"]),
             Command::Diff { number, from: 1, to: Some(2) } if number == "D-1"

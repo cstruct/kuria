@@ -94,7 +94,7 @@ r[cli.read]
 The client MUST offer:
 
 - `types`: the akt types, with how many akter each has;
-- `schema <type>`: a type's fields with their kinds, whether required, and
+- `types schema <type>`: a type's fields with their kinds, whether required, and
   options; its states and their tones; its transitions with what they
   require and the outcomes they allow; the types it contains and links
   to; its board and presentation;
@@ -197,9 +197,10 @@ The client MUST offer:
 - `set <number> <field>=<value>…`: an edit without a file;
 - `do <number> <transition> [--set <field>=<value>]…`: a transition, with
   the fields it requires;
-- `add <container> <member>…` and `remove <container> <member>…`;
-- `transfer <member> <from> <to>`;
-- `move <number> --before <number>` or `--after <number>`;
+- `members add <container> <member>…` and `members remove <container>
+  <member>…`;
+- `members transfer <member> <from> <to>`;
+- `members place <number> --before <number>` or `--after <number>`;
 - `link <source> <kind> <target> [--pin]` and `unlink <source> <kind>
   <target>`;
 - `draft <number> <field>`;

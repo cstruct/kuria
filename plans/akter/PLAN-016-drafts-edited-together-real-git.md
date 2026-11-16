@@ -1,7 +1,7 @@
 ---
 number: PLAN-016
 type: plan
-revision: 33
+revision: 34
 rank: b4O
 state: active
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
@@ -705,6 +705,23 @@ assignee: albin@mattsson.io
 
 <!-- field: description -->
 Clone commands under `kuria docs` (`869f5b1`, built in a worktree, merged): `kuria docs clone/status/diff/add [-p]/pull/push -m/fmt`; top-level `add` and `diff` only their akt meaning again (clap's usage error for wrong arguments, as `remove`); every hint, the guide, READMEs, `clones.md`, `cli.md`, nomenclature, architecture and the e2e tests updated. Lint, tests and the full e2e pass.
+
+<!-- field: acceptance -->
+- Lint, tests and e2e pass with the commands moved and every mention updated.
+
+<!-- akt: PLAN-016-T16 -->
+---
+type: task
+revision: 5
+rank: b4t
+state: done
+in: [PLAN-016]
+title: Members and schema commands grouped
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+Members and schema commands grouped: `kuria members add|remove|transfer|place` instead of top-level `add`, `remove`, `transfer` and `move`; `kuria types schema <key>` instead of `schema`. Parsing tests, both write paths (`local_members`, `members`), every hint and doc comment, the guide, the CLI README, `docs/spec/cli.md`, the Rust tests and `cli.spec.ts` and `parity.spec.ts` updated; `parity.spec.ts`'s throwaway repository no longer signs commits. Lint, 455 Rust and 111 app tests, and those two browser specs (11 tests) pass.
 
 <!-- field: acceptance -->
 - Lint, tests and e2e pass with the commands moved and every mention updated.

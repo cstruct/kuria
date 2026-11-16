@@ -348,7 +348,10 @@ fn check_read_only(w: &Writer, number: &str, parsed: &Parsed) -> Result<(), CliE
             .collect()
     };
     if parsed.front.contains_key("in") && listed("in") != akt.containers.iter().cloned().collect() {
-        return Err(read_only("in", "use `kuria add`, `remove` or `transfer`"));
+        return Err(read_only(
+            "in",
+            "use `kuria members add`, `remove` or `transfer`",
+        ));
     }
     if parsed.front.contains_key("links") && listed("links") != akt.links.iter().cloned().collect()
     {

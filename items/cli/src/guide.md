@@ -48,7 +48,7 @@ in that shape, rather than editing the directory's files by hand.
 
 ```sh
 kuria types                    # the akt types, with how many akter each has
-kuria schema <type>            # its fields, states, transitions, links, board
+kuria types schema <type>      # its fields, states, transitions, links, board
 kuria ls <type> --state <s>    # akter, a page at a time (--all for every page)
 kuria ls <type> --where assignee=@me   # by a field's value
 kuria ls --in <container>      # a container's members
@@ -175,9 +175,10 @@ kuria docs fmt                         # the files as Kuria writes them
 kuria new <type> --in <container> --set title="…" --set description=@notes.md
 kuria set <number> assignee=@me
 kuria do <number> <transition> --set field=value --reason "…"
-kuria add <container> <member>…    kuria remove <container> <member>…
-kuria transfer <member> <from> <to>
-kuria move <number> --before <other>
+kuria members add <container> <member>…
+kuria members remove <container> <member>…
+kuria members transfer <member> <from> <to>    # out of one container, into another
+kuria members place <number> --before <other>  # on every board; or --after
 kuria link <number> blocks <other>      kuria unlink <number> blocks <other>
 kuria draft <number> <field>
 kuria verdict <test> pass|fail|skip|clear [--for <assignee>]
@@ -215,7 +216,7 @@ this guide.
 
 ## Planning work in Kuria
 
-Where a tenant uses the planning example (`kuria schema plan`):
+Where a tenant uses the planning example (`kuria types schema plan`):
 
 - A **plan** (`PLAN-007`) holds its goal, design and verification, and
   contains **tasks** (`PLAN-007-T03`), **gaps** (`PLAN-007-G01`) and
