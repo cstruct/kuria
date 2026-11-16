@@ -624,6 +624,17 @@ async fn write(
             updated_at: a.updated_at,
             rank,
             title: a.title.clone(),
+            state_since: a
+                .revisions
+                .iter()
+                .rev()
+                .find(|r| r.transition.is_some())
+                .map_or(a.created_at, |r| r.created_at),
+            archived: false,
+            archived_at: None,
+            archived_by: None,
+            archive_reason: None,
+            archive_kept: false,
         });
         revisions.extend(a.revisions.iter().map(|r| RevisionRow {
             akt_id: id,

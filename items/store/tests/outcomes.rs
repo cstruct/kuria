@@ -79,6 +79,12 @@ async fn the_outcome_filter_agrees_with_the_engine() {
             updated_at: Utc::now(),
             rank: format!("a{i:02}"),
             title: None,
+            state_since: Utc::now(),
+            archived: false,
+            archived_at: None,
+            archived_by: None,
+            archive_reason: None,
+            archive_kept: false,
         };
         akter::insert_akt(&mut conn, &row).await.unwrap();
     }

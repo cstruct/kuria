@@ -609,7 +609,9 @@ async fn change_in(
     } else {
         akt.title = title_of(&stored.ty, &outcome.fields);
     }
+    // r[impl archive.rules.state-since]
     akt.state = outcome.state.clone();
+    akt.state_since = now;
     akt.fields = Json::Object(fields_to_json(&outcome.fields));
     akt.revision = expected_revision + 1;
     akt.updated_at = now;

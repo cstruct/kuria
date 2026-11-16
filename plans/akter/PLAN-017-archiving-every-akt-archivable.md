@@ -198,16 +198,17 @@ Spec written: `docs/spec/archive.md` (`archive.flag`, `.act`, `.authz`, `.histor
 <!-- akt: PLAN-017-T02 -->
 ---
 type: task
-revision: 3
+revision: 8
 rank: b51
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T01, Blocks PLAN-017-T03]
 title: Partition akt on archived
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-The migration of D02: `akt` list-partitioned into `akt_live` and `akt_archived`, key `(id, archived)`, every referencing table gaining its `*_archived` columns and cascading keys, `akt_number`, `akt.state_since` filled from revisions; the store's queries naming the partition.
+Migration `000025_archive_partitions`: `akt_number` (id, tenant, number) unpartitioned, kept by a trigger, referenced by every table that only names an akt; `akt`, `akt_revision`, `akt_draft_update` and `change_event` list-partitioned on archived (`*_live`, `*_archived`), the last three referencing `akt (id, archived)` `on update cascade`, versions and commits their revision; append-only triggers allowing an archived-only update and, while `kuria.archiving` is set, the delete half of a move; live ranks unique per partition; `akt.state_since` filled from revisions and kept by transitions; archive columns. Diesel's 32-column tables; `AktRow` defaults to live. Store tests (`tests/archive.rs`): the migration keeps everything, a move carries revisions, events, draft updates and versions and leaves links, a move without `kuria.archiving` and rewrites refused, numbers unique across partitions, live reads plan only live partitions. 459 Rust tests pass.
 
 <!-- field: acceptance -->
 - A migration test on a seeded database: counts and keys kept, a move carrying its references, numbers unique across partitions, `EXPLAIN` pruning to `akt_live` for lists, boards, members and search.

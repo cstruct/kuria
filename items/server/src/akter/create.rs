@@ -101,6 +101,7 @@ pub(super) async fn create_in(
     super::check_sections(conn, tenant, &stored.ty, None, &outcome).await?;
     let parent = parents.first().map(|p| p.number.as_str());
     let number = next_number(conn, tenant, &stored.ty, parent, now).await?;
+    // r[impl archive.rules.state-since]: created in its initial state now.
     let akt = AktRow {
         id: Uuid::now_v7(),
         tenant_id: tenant,
@@ -113,6 +114,8 @@ pub(super) async fn create_in(
         updated_at: now,
         rank: rank_after_last(conn, tenant).await?,
         title: title_of(&stored.ty, &outcome.fields),
+        state_since: now,
+        ..AktRow::default()
     };
     store::insert_akt(conn, &akt).await?;
     check_contacts(conn, tenant, &outcome).await?;

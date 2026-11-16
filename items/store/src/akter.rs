@@ -153,8 +153,9 @@ pub async fn latest_type_versions(
         .await
 }
 
-/// An akt's current state, as stored.
-#[derive(Clone, Debug, Insertable, Queryable, Selectable)]
+/// An akt's current state, as stored. Its default is live, as a new akt
+/// is.
+#[derive(Clone, Debug, Default, Insertable, Queryable, Selectable)]
 #[diesel(table_name = akt)]
 pub struct AktRow {
     pub id: Uuid,
@@ -170,6 +171,17 @@ pub struct AktRow {
     pub rank: String,
     /// The value of its akt type's title field, kept by the write path.
     pub title: Option<String>,
+    /// When it reached its state (`archive.rules.state-since`).
+    pub state_since: DateTime<Utc>,
+    /// Whether it is archived (`archive.flag`), when, by whom and why.
+    pub archived: bool,
+    pub archived_at: Option<DateTime<Utc>>,
+    /// `{"subject": id}` or `{"rule": kind}`.
+    pub archived_by: Option<Json>,
+    pub archive_reason: Option<String>,
+    /// Unarchived by a person after a rule archived it
+    /// (`archive.rules.kept`).
+    pub archive_kept: bool,
 }
 
 /// An akt revision, as stored.
@@ -218,6 +230,7 @@ pub async fn update_akt(
         akt::revision.eq(row.revision),
         akt::updated_at.eq(row.updated_at),
         akt::title.eq(&row.title),
+        akt::state_since.eq(row.state_since),
     ))
     .execute(conn)
     .await?;

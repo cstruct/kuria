@@ -38,6 +38,12 @@ async fn insert(conn: &mut Connection, tenant: Uuid, ty: Uuid, number: &str, ran
         updated_at: Utc::now(),
         rank: rank.to_owned(),
         title: None,
+        state_since: Utc::now(),
+        archived: false,
+        archived_at: None,
+        archived_by: None,
+        archive_reason: None,
+        archive_kept: false,
     };
     akter::insert_akt(conn, &row).await.unwrap();
     row
