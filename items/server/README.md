@@ -309,6 +309,7 @@ redirect URI. The end-to-end seed registers it
 | `KURIA_S3_REGION` | The bucket's region, `us-east-1` by default |
 | `KURIA_S3_ACCESS_KEY`, `KURIA_S3_SECRET_KEY` | Credentials for the bucket; without them, the standard AWS environment and instance credentials |
 | `KURIA_ATTACHMENT_LIMIT` | The largest upload in bytes, 100 MiB by default |
+| `KURIA_ARCHIVE_SWEEP_SECONDS` | How often archive rules are applied to every akt, by one instance at a time; 3600 by default |
 | `KURIA_RENDER_SECONDS` | How long rendering a PDF or diagram may take, in a process of its own; 30 by default |
 | `KURIA_RENDER_CPU_SECONDS` | How much CPU time rendering may use; 20 by default |
 | `KURIA_RENDER_MEMORY_MB` | How much memory rendering may use, on Linux (macOS can't limit it); 1024 by default |

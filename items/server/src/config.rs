@@ -65,6 +65,9 @@ pub struct Config {
     pub render_limits: kuria_typst::Limits,
     /// The tenant a sign-in that names none is for (`KURIA_DEFAULT_TENANT`).
     pub default_tenant: Option<uuid::Uuid>,
+    /// How often archive rules are applied to every akt
+    /// (`KURIA_ARCHIVE_SWEEP_SECONDS`, 3600 by default; `archive.sweep`).
+    pub archive_sweep: std::time::Duration,
     /// The built app, to serve from the server's own origin
     /// (`KURIA_WEB_DIR`).
     pub web_dir: Option<std::path::PathBuf>,
@@ -165,6 +168,7 @@ impl Config {
             _ => 100 * 1024 * 1024,
         };
         let render_limits = render_limits(&lookup)?;
+        let archive_sweep = archive_sweep(&lookup)?;
         let default_tenant = match lookup("KURIA_DEFAULT_TENANT") {
             Some(tenant) if !tenant.is_empty() => Some(tenant.parse().map_err(|_| {
                 ConfigError::Invalid("KURIA_DEFAULT_TENANT", "expected a tenant id".to_owned())
@@ -198,6 +202,7 @@ impl Config {
             storage,
             attachment_limit,
             render_limits,
+            archive_sweep,
             default_tenant,
             web_dir: lookup("KURIA_WEB_DIR")
                 .filter(|d| !d.is_empty())
@@ -255,6 +260,28 @@ fn flag(
             name,
             format!("expected true or false, not {other}"),
         )),
+    }
+}
+
+/// How often archive rules are applied (`KURIA_ARCHIVE_SWEEP_SECONDS`,
+/// 3600 by default).
+// r[impl archive.sweep]
+fn archive_sweep(
+    lookup: &impl Fn(&str) -> Option<String>,
+) -> Result<std::time::Duration, ConfigError> {
+    match lookup("KURIA_ARCHIVE_SWEEP_SECONDS") {
+        Some(value) if !value.is_empty() => value
+            .parse::<u64>()
+            .ok()
+            .filter(|n| *n > 0)
+            .map(std::time::Duration::from_secs)
+            .ok_or_else(|| {
+                ConfigError::Invalid(
+                    "KURIA_ARCHIVE_SWEEP_SECONDS",
+                    "expected a whole number above 0".to_owned(),
+                )
+            }),
+        _ => Ok(std::time::Duration::from_secs(3600)),
     }
 }
 

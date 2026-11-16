@@ -13,7 +13,7 @@ use support::decider::FakeDecider;
 use support::{FakeHost, graphql_with, router_with, send};
 
 struct World {
-    _db: TestDatabase,
+    db: TestDatabase,
     router: Router,
     decider: Arc<FakeDecider>,
 }
@@ -48,7 +48,7 @@ impl World {
         let decider: Arc<FakeDecider> = FakeDecider::allowing_tenant();
         let router = router_with(&FakeHost::new(), db.pool().clone(), decider.clone());
         let world = Self {
-            _db: db,
+            db,
             router,
             decider,
         };
@@ -502,4 +502,95 @@ async fn an_akt_unarchived_by_hand_is_kept_from_rules() {
         world.archived_by(&item).await.as_deref(),
         Some("with_container")
     );
+}
+
+// r[verify archive.sweep]
+#[tokio::test(flavor = "multi_thread")]
+async fn the_sweep_applies_rules_to_akter_already_there() {
+    use chrono::{Duration, Utc};
+    use diesel_async::{AsyncConnection, RunQueryDsl};
+    use kuria_server::akter::Akter;
+
+    let world = World::new().await;
+    let folder = world.create("folder", "Box", &[]).await;
+    let items: Vec<String> = {
+        let mut items = Vec::new();
+        for title in ["One", "Two", "Three"] {
+            let number = world.create("item", title, &[&folder]).await;
+            world.finish(&number).await;
+            items.push(number);
+        }
+        items
+    };
+    let sweeper = Akter::new(world.db.pool().clone(), None);
+    // No rules yet: nothing.
+    assert_eq!(sweeper.sweep(Utc::now()).await.unwrap(), 0);
+
+    // A rule added later applies to akter already there.
+    world
+        .rules(item(), json!([{ "newer": 2, "in": ["done"] }]))
+        .await;
+    assert_eq!(sweeper.sweep(Utc::now()).await.unwrap(), 1);
+    assert_eq!(world.archived_by(&items[0]).await.as_deref(), Some("newer"));
+
+    // Days in a final state, counted from when it reached it.
+    world
+        .rules(item(), json!([{ "days_in": 90, "in": ["done"] }]))
+        .await;
+    assert_eq!(
+        sweeper
+            .sweep(Utc::now() + Duration::days(89))
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        sweeper
+            .sweep(Utc::now() + Duration::days(91))
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(
+        world.archived_by(&items[2]).await.as_deref(),
+        Some("days_in")
+    );
+
+    // Members of a container archived before the rule existed.
+    let shelf = world.create("folder", "Shelf", &[]).await;
+    let held = world.create("item", "Held", &[&shelf]).await;
+    world.archive_as("tenant", &shelf, true).await;
+    world
+        .rules(item(), json!([{ "with_container": "folder" }]))
+        .await;
+    assert_eq!(world.archived_by(&held).await, None);
+    assert_eq!(sweeper.sweep(Utc::now()).await.unwrap(), 1);
+    assert_eq!(
+        world.archived_by(&held).await.as_deref(),
+        Some("with_container")
+    );
+
+    // A tenant another instance is sweeping is passed over.
+    world
+        .rules(item(), json!([{ "days_in": 1, "in": ["done"] }]))
+        .await;
+    let late = world.create("item", "Late", &[]).await;
+    world.finish(&late).await;
+    let tomorrow = Utc::now() + Duration::days(2);
+    let mut holder = world.db.pool().get().await.unwrap();
+    holder
+        .transaction::<_, diesel::result::Error, _>(async |conn| {
+            diesel::sql_query(
+                "select pg_advisory_xact_lock(hashtext('kuria.archive_sweep'), hashtext(tenant_id::text)) from akt_type limit 1",
+            )
+            .execute(conn)
+            .await?;
+            assert_eq!(sweeper.sweep(tomorrow).await.unwrap(), 0, "locked by another");
+            Ok(())
+        })
+        .await
+        .unwrap();
+    assert_eq!(world.archived_by(&late).await, None);
+    assert_eq!(sweeper.sweep(tomorrow).await.unwrap(), 1);
+    assert_eq!(world.archived_by(&late).await.as_deref(), Some("days_in"));
 }

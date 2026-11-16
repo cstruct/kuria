@@ -203,4 +203,33 @@ impl Akter {
             .await;
         self.committed(result)
     }
+
+    /// Applies every archive rule to the akter already there, a tenant at a
+    /// time, skipping a tenant another instance is sweeping (`archive.sweep`).
+    /// Answers how many akter it archived.
+    // r[impl archive.sweep]
+    pub async fn sweep(&self, now: DateTime<Utc>) -> Result<usize, AktError> {
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        let mut tenants: Vec<(Uuid, Vec<String>)> = Vec::new();
+        for (tenant, key) in store::types_with_archive_rules(conn).await? {
+            match tenants.last_mut() {
+                Some((last, keys)) if *last == tenant => keys.push(key),
+                _ => tenants.push((tenant, vec![key])),
+            }
+        }
+        let mut archived = 0;
+        for (tenant, keys) in tenants {
+            let result = conn
+                .transaction::<_, AktError, _>(async |conn| {
+                    if !store::try_lock_sweep(conn, tenant).await? {
+                        return Ok(0);
+                    }
+                    super::rules::sweep_tenant(conn, tenant, &keys, now).await
+                })
+                .await;
+            archived += self.committed(result)?;
+        }
+        Ok(archived)
+    }
 }

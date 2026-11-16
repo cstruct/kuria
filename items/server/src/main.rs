@@ -144,6 +144,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(relay.run());
     let hub = Hub::new(pool.clone(), valkey_client.clone());
     tokio::spawn(hub.clone().run());
+    let sweep = sweep_archives(pool.clone(), waker.clone(), config.archive_sweep);
+    tokio::spawn(sweep);
 
     let storage = Storage::s3(
         &config.storage,
@@ -192,6 +194,20 @@ async fn wait_until_trusted(client: &RelyingClient) -> bool {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
     client.is_trusted()
+}
+
+/// Applies archive rules to every akt every `period` (`archive.sweep`).
+async fn sweep_archives(pool: Pool, published: Arc<tokio::sync::Notify>, period: Duration) {
+    let akter = kuria_server::akter::Akter::new(pool, Some(published));
+    let mut interval = tokio::time::interval(period);
+    loop {
+        interval.tick().await;
+        match akter.sweep(chrono::Utc::now()).await {
+            Ok(0) => {}
+            Ok(archived) => tracing::info!(archived, "archived akter by their rules"),
+            Err(e) => tracing::warn!("sweeping archive rules: {e:?}"),
+        }
+    }
 }
 
 /// Removes expired login attempts every ten minutes.

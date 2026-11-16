@@ -94,8 +94,9 @@ pub(crate) async fn follow(
     akt: &AktRow,
     ty: &StoredType,
     now: DateTime<Utc>,
-) -> Result<(), AktError> {
+) -> Result<usize, AktError> {
     let mut types = Types::default();
+    let mut moved_count = 0;
     let mut queue = vec![(akt.id, ty.ty.key().to_owned(), akt.archived)];
     while let Some((container, key, archived)) = queue.pop() {
         let took = json!({ "rule": "with_container", "container": container });
@@ -125,10 +126,11 @@ pub(crate) async fn follow(
                 container: Some(container),
             };
             let moved = set(conn, locked, &own, archived, by, None, now).await?;
+            moved_count += 1;
             queue.push((moved.id, member_key, archived));
         }
     }
-    Ok(())
+    Ok(moved_count)
 }
 
 /// After `akt` of `ty` reached its state, archives the akter of its type
@@ -213,7 +215,6 @@ pub(crate) async fn apply_newer(
 
 /// Archives each live akt of the type `key` that has been in one of
 /// `states` for at least `days` days. Answers how many it archived.
-#[allow(dead_code, reason = "the sweep, PLAN-017-T05")]
 pub(crate) async fn apply_days_in(
     conn: &mut kuria_store::Connection,
     tenant: Uuid,
@@ -230,6 +231,65 @@ pub(crate) async fn apply_days_in(
             && archive_by(conn, tenant, &a, "days_in", now).await?
         {
             archived += 1;
+        }
+    }
+    Ok(archived)
+}
+
+/// Applies every rule of every akt type of `tenant` that declares any to
+/// its akter (`archive.sweep`): `newer` and `days_in` to the type's live
+/// akter, `with_container` to the live members of archived containers.
+/// Answers how many akter it archived.
+pub(crate) async fn sweep_tenant(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    keys: &[String],
+    now: DateTime<Utc>,
+) -> Result<usize, AktError> {
+    let mut types = Types::default();
+    let mut archived = 0;
+    for key in keys {
+        let Some(ty) = types.latest(conn, tenant, key).await? else {
+            continue;
+        };
+        let rules: Vec<(&'static str, u32, Vec<String>, Option<String>)> = rules_of(ty)
+            .into_iter()
+            .map(|rule| match rule {
+                ArchiveRule::Newer {
+                    count,
+                    states,
+                    within,
+                } => ("newer", count, states.to_vec(), within.map(str::to_owned)),
+                ArchiveRule::DaysIn { days, states } => ("days_in", days, states.to_vec(), None),
+                ArchiveRule::WithContainer(container) => {
+                    ("with_container", 0, Vec::new(), Some(container.to_owned()))
+                }
+            })
+            .collect();
+        for (kind, n, states, other) in rules {
+            archived += match kind {
+                "newer" => {
+                    apply_newer(conn, tenant, key, n, &states, other.as_deref(), now).await?
+                }
+                "days_in" => apply_days_in(conn, tenant, key, n, &states, now).await?,
+                _ => {
+                    let container_key = other.unwrap_or_default();
+                    let mut moved = 0;
+                    for container in store::akter_in_states(
+                        conn,
+                        tenant,
+                        &container_key,
+                        &[],
+                        Archived::Archived,
+                    )
+                    .await?
+                    {
+                        let container_type = type_of(conn, tenant, &container).await?;
+                        moved += follow(conn, tenant, &container, &container_type, now).await?;
+                    }
+                    moved
+                }
+            };
         }
     }
     Ok(archived)

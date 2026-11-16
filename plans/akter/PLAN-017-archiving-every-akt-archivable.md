@@ -252,16 +252,17 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-017-T05 -->
 ---
 type: task
-revision: 3
+revision: 8
 rank: b54
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T04, Blocks PLAN-017-T08]
 title: The archive sweep
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-An hourly sweep (`KURIA_ARCHIVE_SWEEP_SECONDS`), one instance at a time by an advisory lock, applying every rule to every live akt of a type that declares any: `days_in`, and new rules to akter already there.
+The sweep (`Akter::sweep`, `rules::sweep_tenant`): for each tenant whose akt types' latest versions declare rules, in a transaction holding `pg_try_advisory_xact_lock` on the tenant (another instance's tenant is passed over), `newer` and `days_in` (counted from `state_since`) on each type's live akter, and `with_container` on the live members of archived containers of the named type. Run every `KURIA_ARCHIVE_SWEEP_SECONDS` (3600 by default) from the server binary, publishing its change events. Store: `types_with_archive_rules`, `try_lock_sweep`. Server test: nothing without rules, a rule added later, `days_in` at 89 and 91 days, a container archived before its members' rule, a locked tenant passed over then swept. 468 Rust tests pass.
 
 <!-- field: acceptance -->
 - Server tests with a short period and two instances: `days_in` archives, a changed rule applies, only one instance sweeps.

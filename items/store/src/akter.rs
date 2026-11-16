@@ -607,6 +607,44 @@ pub async fn akter_in_states(
     query.load(conn).await
 }
 
+/// Each tenant and akt type key whose latest version declares archive
+/// rules (`archive.sweep`).
+pub async fn types_with_archive_rules(conn: &mut Connection) -> QueryResult<Vec<(Uuid, String)>> {
+    use diesel::dsl::sql;
+    use diesel::sql_types::Bool;
+    akt_type_version::table
+        .inner_join(
+            akt_type::table.on(akt_type::tenant_id
+                .eq(akt_type_version::tenant_id)
+                .and(akt_type::key.eq(akt_type_version::key))
+                .and(akt_type::latest_version.eq(akt_type_version::version))),
+        )
+        .filter(sql::<Bool>(
+            "jsonb_array_length(coalesce(akt_type_version.definition -> 'archive' -> 'rules', '[]')) > 0",
+        ))
+        .order((akt_type_version::tenant_id, akt_type_version::key))
+        .select((akt_type_version::tenant_id, akt_type_version::key))
+        .load(conn)
+        .await
+}
+
+/// Takes the sweep's lock on `tenant` for the transaction, if no other
+/// instance holds it (`archive.sweep`).
+pub async fn try_lock_sweep(conn: &mut Connection, tenant: Uuid) -> QueryResult<bool> {
+    #[derive(diesel::QueryableByName)]
+    struct Taken {
+        #[diesel(sql_type = diesel::sql_types::Bool)]
+        taken: bool,
+    }
+    let taken: Taken = diesel::sql_query(
+        "select pg_try_advisory_xact_lock(hashtext('kuria.archive_sweep'), hashtext($1::text)) as taken",
+    )
+    .bind::<diesel::sql_types::Uuid, _>(tenant)
+    .get_result(conn)
+    .await?;
+    Ok(taken.taken)
+}
+
 /// Escapes `%`, `_` and `\` for a `like` pattern.
 fn like_escaped(text: &str) -> String {
     text.replace('\\', "\\\\")
