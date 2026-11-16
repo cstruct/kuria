@@ -190,7 +190,7 @@ yet ([`items/server`](../../../items/server/README.md#running)).
 tenant that hasn't defined these types. Against the end-to-end Konklav,
 
 ```sh
-mise run e2e:example -- documents
+mise run e2e:example documents
 ```
 
 serves it on <http://localhost:18090> to the seeded people, as themselves.

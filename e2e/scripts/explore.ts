@@ -3,7 +3,7 @@
 // defines the release-management, test-protocols and documents examples'
 // akt types once it answers, and prints who can sign in. Runs until Ctrl-C.
 //
-// `explore.ts <example>` (`mise run e2e:example -- <example>`) starts the
+// `explore.ts <example>` (`mise run e2e:example <example>`) starts the
 // server with that example's bundle loaded (docs/examples/<example>/bundle),
 // and defines the other examples' types as before.
 import { spawn } from 'node:child_process';

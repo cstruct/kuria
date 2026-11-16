@@ -32,7 +32,7 @@ test-protocols and documents examples' akt types, and prints who can sign in at 
 a fresh Konklav. Ctrl-C stops the server.
 
 ```sh
-mise run e2e:example -- planning
+mise run e2e:example planning
 ```
 
 does the same with an example's bundle loaded into the seeded tenant

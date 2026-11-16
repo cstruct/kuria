@@ -32,7 +32,7 @@ than import twice: unset it after the first start. Against the end-to-end
 Konklav, with its seeded people,
 
 ```sh
-mise run e2e:example -- planning
+mise run e2e:example planning
 ```
 
 runs Kuria as `mise run e2e:serve` does, with the example loaded and its
