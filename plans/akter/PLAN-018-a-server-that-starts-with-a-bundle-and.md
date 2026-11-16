@@ -1,9 +1,9 @@
 ---
 number: PLAN-018
 type: plan
-revision: 10
+revision: 11
 rank: b5B
-state: active
+state: done
 title: "A server that starts with a bundle, and example data in every example"
 owner: albin@mattsson.io
 ---
@@ -129,13 +129,18 @@ Each example's README says what its bundle holds and how to load it (`KURIA_BOOT
 <!-- akt: PLAN-018-T05 -->
 ---
 type: task
-revision: 3
+revision: 5
 rank: b5G
-state: doing
+state: done
 in: [PLAN-018]
 title: Verify and open the pull request
 assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+- Rebased on `main` after archiving (cstruct/kuria#3) merged: bundle format 3, archive rules in the release-management types. `tests/examples.rs` caught the changed types; `mise run examples:bundles` wrote the bundles again as format 3, the planning example now archives its dropped plan, and the read-back check leaves archived akter out of `akterCount`. PLAN-018's ranks, which collided with PLAN-017's, are set past them; `mise run plans -- check` is consistent.
+- `mise run e2e:example <example>` takes the example as a checked argument, listing the four in `--help`.
+- Verified on the rebased branch: `mise run lint`, `mise run test` and `mise run e2e` (42 passed).
 
 <!-- field: acceptance -->
 `mise run lint`, `mise run test` and `mise run e2e` pass; a PR against `main` is open.
