@@ -1,13 +1,16 @@
 # Konklav for serving an example (`mise run example <example>`): its
-# Postgres, its migrations and the server, at the Konklav release Kuria
-# pins (=1.8.0). It keeps its data, so it is seeded once and later starts
-# are quick: `mise run example:down` stops it, `mise run example:reset`
-# forgets it. Its ports don't clash with the end-to-end or dogfooding
-# stacks'.
+# Postgres, its migrations and the server, at Konklav's latest release. It
+# keeps its data, so it is seeded once and later starts are quick: `mise
+# run example:down` stops it, `mise run example:reset` forgets it. Its
+# ports don't clash with the end-to-end or dogfooding stacks'.
 name: kuria-example
 
 x-konklav: &konklav
-  image: cstruct/konklav:1.8.0
+  # Konklav's latest release, checked for a newer one once a day. Kuria's
+  # Konklav crates are pinned in Cargo.toml, so a release they don't yet
+  # match shows here first.
+  image: cstruct/konklav
+  pull_policy: daily
   volumes:
     - ./konklav/config.styx:/etc/konklav/config.styx:ro
     # Made once by scripts/prepare.ts, never committed.

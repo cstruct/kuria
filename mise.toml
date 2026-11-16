@@ -190,7 +190,7 @@ sources = ["package.json", "package-lock.json"]
 outputs = ["node_modules/.package-lock.json"]
 
 [tasks."e2e:up"]
-description = "Start and seed the end-to-end Konklav (cstruct/konklav:1.8.0)"
+description = "Start and seed the end-to-end Konklav (cstruct/konklav, its latest release)"
 depends = ["e2e:install"]
 dir = "e2e"
 run = [
