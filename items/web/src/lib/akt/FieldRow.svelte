@@ -66,6 +66,10 @@
 		liveDraft = false,
 		live = null
 	}: Props = $props();
+
+	// A markdown field's sheets are the page's document: they take the whole
+	// row, named only to assistive technology. Empty, it keeps its name.
+	const wide = $derived(field.kind === 'MARKDOWN' && Boolean(value));
 </script>
 
 <svelte:window onkeydown={(e) => editing && e.key === 'Escape' && onCancel()} />
@@ -74,7 +78,7 @@
 
 <!-- r[impl app.inline-edit]: each field opens its own editor, in place. -->
 <!-- A dt and dd pair, as its list requires, whether shown or edited. -->
-<div class="row" class:editing>
+<div class="row" class:editing class:wide>
 	{#if editing}
 		<dt class="visually-hidden">{field.name}</dt>
 		<dd>
@@ -103,7 +107,7 @@
 			</form>
 		</dd>
 	{:else}
-		<dt>{field.name}</dt>
+		<dt class:visually-hidden={wide}>{field.name}</dt>
 		<dd data-field={field.key}>
 			<div class="value">
 				{#if field.kind === 'VERDICT' && judged}
@@ -146,7 +150,8 @@
 		border-bottom: 0;
 	}
 
-	.row.editing {
+	.row.editing,
+	.row.wide {
 		display: block;
 	}
 

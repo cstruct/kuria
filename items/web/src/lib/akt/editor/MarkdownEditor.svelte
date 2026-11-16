@@ -56,7 +56,7 @@
 	import { upload } from '../upload';
 	import { pickable } from '../pickers';
 	import { destinationOf } from '../references';
-	import { A4, guideOffsets } from '../sheets';
+	import { A4, guideOffsets, pagesOf } from '../sheets';
 	import {
 		$toDiagram as toDiagram,
 		setDiagramRenderer,
@@ -278,6 +278,12 @@
 		if (height !== guides.height || tops.join() !== guides.tops.join()) {
 			guides = { tops, height };
 		}
+	}
+	/** Where the last sheet starts: after the last page break, or the top. */
+	function afterLastBreak(): number {
+		const breaks = root?.querySelectorAll<HTMLElement>(':scope > .page-break');
+		const last = breaks?.[breaks.length - 1];
+		return last ? last.offsetTop + last.offsetHeight : 0;
 	}
 	let block = $state('paragraph');
 
@@ -676,6 +682,7 @@
 			<div
 				class="content sheet edited"
 				bind:this={root}
+				use:pagesOf={afterLastBreak}
 				contenteditable="true"
 				role="textbox"
 				aria-multiline="true"
@@ -855,7 +862,8 @@
 	}
 
 	.content {
-		min-height: calc(var(--sheet-margin) * 2 + 8em);
+		/* A whole page, as the sheets it is shown as (app.sheets). */
+		min-height: var(--sheet-height);
 		outline: none;
 	}
 

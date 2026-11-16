@@ -104,9 +104,9 @@ PDF opening in a new tab from the versions list.
 
 r[app.sheets]
 The app MUST show and edit a `markdown` field as A4 sheets, white with
-dark text whatever the theme, with the PDF's margins, starting a new sheet
-at each page break, and marking where a sheet would otherwise end. The
-editor MUST offer inserting a page break.
+dark text whatever the theme, with the PDF's margins, each a whole number
+of pages tall, starting a new sheet at each page break, and marking where a
+sheet would otherwise end. The editor MUST offer inserting a page break.
 
 r[app.live]
 The app MUST show an akt with a live draft as its live draft, and edit it

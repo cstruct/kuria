@@ -3,7 +3,7 @@
 	import { renderMarkdown } from './markdown';
 	import { pictureOf } from './members';
 	import { renderReferenced, type Reference } from './references';
-	import { sheetsOf } from './sheets';
+	import { pagesOf, sheetsOf } from './sheets';
 	import { textOf, type Value } from './values';
 
 	/** Where a reference goes in the app: the akt's page, at its version and
@@ -44,7 +44,7 @@
 		{#each sheets as sheet, i (i)}
 			<!-- Sanitized by renderReferenced. -->
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			<div class="sheet" class:ended={i < sheets.length - 1}>{@html sheet}</div>
+			<div class="sheet" use:pagesOf>{@html sheet}</div>
 		{/each}
 	</div>
 {:else if value.__typename === 'TextValue' && multiline}

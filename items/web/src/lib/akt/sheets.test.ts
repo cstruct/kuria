@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { renderReferenced } from './references';
-import { guideOffsets, sheetsOf } from './sheets';
+import { guideOffsets, sheetsOf, wholePages } from './sheets';
 
 const href = (r: { number: string }) => `/akt/${r.number}`;
 const sheets = (markdown: string) => sheetsOf(renderReferenced(markdown, [], href));
@@ -51,5 +51,29 @@ describe('sheets', () => {
 		expect(guideOffsets([[0, 1000]], 1000)).toEqual([]);
 		expect(guideOffsets([[100, 3200]], 1000)).toEqual([1100, 2100, 3100]);
 		expect(guideOffsets([[0, 3000]], 0)).toEqual([]);
+	});
+});
+
+// r[verify app.sheets]
+describe('wholePages', () => {
+	it('is one page for a little text', () => {
+		expect(wholePages(0, 200, 1000)).toBe(1000);
+	});
+
+	it('rounds a longer text up to whole pages', () => {
+		expect(wholePages(0, 1001.5, 1000)).toBe(2000);
+		expect(wholePages(0, 2400, 1000)).toBe(3000);
+	});
+
+	it('is not another page for a pixel’s rounding', () => {
+		expect(wholePages(0, 1000.6, 1000)).toBe(1000);
+	});
+
+	it('counts from where the last page break leaves off', () => {
+		expect(wholePages(1300, 1500, 1000)).toBe(2300);
+	});
+
+	it('leaves a sheet without a width as it is', () => {
+		expect(wholePages(0, 300, 0)).toBe(300);
 	});
 });
