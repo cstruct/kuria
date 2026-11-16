@@ -245,6 +245,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `example bundle`
   - The bundle each example in `docs/examples` holds in `bundle/`: its akt types with akter made through Kuria's API, to bootstrap or import.
 
+- `example stack`
+  - The local Konklav, Kuria and Vite dev server that `mise run example <example>` serves one example's bundle on (`example/`), apart from the end-to-end stack so both can run at once.
+
 - `subject alias`
   - A record, made by an import, that a subject a bundle names is shown as, and filters as, a user of the importing tenant. Revisions keep naming the subject they recorded.
 

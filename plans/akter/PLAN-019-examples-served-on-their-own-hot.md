@@ -51,9 +51,9 @@ Success: with `mise run e2e` running, `mise run example planning` serves the pla
 <!-- akt: PLAN-019-T01 -->
 ---
 type: task
-revision: 2
+revision: 3
 rank: b5L
-state: doing
+state: done
 in: [PLAN-019]
 title: An example stack of its own
 ---
@@ -67,9 +67,9 @@ mise run example documents serves only the documents example on http://localhost
 <!-- akt: PLAN-019-T02 -->
 ---
 type: task
-revision: 1
+revision: 3
 rank: b5M
-state: todo
+state: done
 in: [PLAN-019]
 title: Take the examples out of e2e
 ---
@@ -83,15 +83,29 @@ No e2e:example; every README names mise run example.
 <!-- akt: PLAN-019-T03 -->
 ---
 type: task
-revision: 1
+revision: 4
 rank: b5N
-state: todo
+state: done
 in: [PLAN-019]
 title: Measure and speed up starting
 ---
 
 <!-- field: description -->
 Time a first and a second start, find what the second waits on, and cut it.
+
+Measured on an M-series Mac (2026-11-16):
+
+- `mise run e2e:example`: about a minute or more: `e2e:up` throws Konklav away and seeds it again, `web:build` builds the app, and the CLI is built.
+- `mise run example`, first start (seeding Konklav, starting its containers): 25 s, 11 s of it `npm ci` for `web:install`.
+- Second starts: 5.4 to 6.4 s from the command to the printed sign-in table, also beside `mise run e2e`.
+
+What the second start waited on, and what was done:
+
+- **`docker compose up`** took about 2 s even with Konklav running: `scripts/up.ts` skips it when Konklav's `/readyz` answers (0.5 s).
+- **`cargo run`** added about 3 s even with nothing to build, as did starting `target/debug/kuria-server` right after `cargo build`: on macOS a binary cargo has just checked starts seconds later. The server runs from a copy in `.state/`, cloned again only when the build changes (the first start after a change pays it once).
+- **Signing the checking admin in to Konklav** took about 1.5 s: it now starts with the script, while the database, build and server start.
+- **Migrations** on a fresh database take under 0.2 s, so a template database wasn't worth it. The server itself is ready about 1.8 s after it starts, most of it waiting for the relying client's caches to be trusted.
+- Running cargo outside mise's environment makes it rebuild everything (95 s): the script builds under it, as every stack does.
 
 <!-- field: acceptance -->
 A second start is ready in under 15 seconds, with times recorded here.

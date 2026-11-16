@@ -31,17 +31,9 @@ test-protocols and documents examples' akt types, and prints who can sign in at 
 `localhost`, not `127.0.0.1`). Each start begins with an empty Kuria and
 a fresh Konklav. Ctrl-C stops the server.
 
-```sh
-mise run e2e:example planning
-```
-
-does the same with only an example loaded into the seeded tenant, from its
-bundle ([`docs/examples`](../docs/examples/README.md)): release-management,
-documents, planning or test-protocols. The tenant holds that example's akt
-types and akter and no other example's types; the script checks so before
-printing who can sign in. Its people are mapped by email to
-the seeded ones, so signing in as the developer shows their tasks as
-yours.
+To click around in one example with its data loaded, while the tests run,
+use `mise run example <example>` ([`example/`](../example/README.md)), which
+has a stack of its own.
 
 ```sh
 mise run e2e:walk
