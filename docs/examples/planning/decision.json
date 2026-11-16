@@ -25,6 +25,7 @@
   "links": [
     { "key": "supersedes", "name": "Supersedes", "inverse": "Superseded by", "to": ["decision"] }
   ],
+  "archive": { "rules": [{ "with_container": "plan" }] },
   "presentation": {
     "icon": "milestone", "colour": "purple",
     "list": ["decided_by"],

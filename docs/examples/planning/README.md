@@ -41,6 +41,11 @@ kuria types define docs/examples/planning/{task,gap,decision,plan}.json
 - **Decisions** record the context, what was decided and why, and who
   decided, so that a later reader doesn't undo them without knowing.
   Deciding requires the first three; a later decision may supersede one.
+- **Archiving:** a plan is archived by hand once it is no longer read
+  ([archiving](../../spec/archive.md)), and its tasks, gaps and decisions
+  go with it (`with_container: plan`), coming back if it is unarchived. In
+  an akt directory, archiving removes the plan's file, git's history and
+  `akter/archived.md` keeping it: `kuria archive PLAN-001`.
 - **Presentation:** each type has an icon and a colour; cards show a task's
   assignee; tones show what is active, done or dropped.
 

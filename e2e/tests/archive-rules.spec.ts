@@ -6,6 +6,7 @@
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
 import { open } from '../support/app.ts';
+import { Cli } from '../support/cli.ts';
 import { defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -14,6 +15,7 @@ import { seeded } from '../support/stack.ts';
 // r[verify archive.rules.container]
 // r[verify archive.rules.kept]
 // r[verify app.archive]
+// r[verify cli.archive]
 test('old releases archive themselves with their candidates', async ({ browser }) => {
 	test.setTimeout(120_000);
 	const stamp = Date.now();
@@ -110,4 +112,21 @@ test('old releases archive themselves with their candidates', async ({ browser }
 	await move(fourth, 'close');
 	expect(await archived(releases[0])).toBeNull();
 	expect(await archived(releases[1])).toEqual({ rule: 'newer' });
+
+	// The CLI lists live releases unless asked, and unarchives too.
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const kuria = async (args: string[]) => {
+		const ran = await cli.run(args);
+		expect(ran.code, `kuria ${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return ran.stdout;
+	};
+	const live = await kuria(['ls', 'release', '--all']);
+	expect(live).toContain(fourth);
+	expect(live).not.toContain(releases[1]);
+	const old = await kuria(['ls', 'release', '--archived', '--all']);
+	expect(old).toContain(releases[1]);
+	expect(old).not.toContain(fourth);
+	await kuria(['unarchive', releases[1], '--reason', 'Still read']);
+	expect(await archived(releases[1])).toBeNull();
+	expect(await archived(candidates[1])).toBeNull();
 });

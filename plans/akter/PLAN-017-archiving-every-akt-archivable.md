@@ -1,9 +1,9 @@
 ---
 number: PLAN-017
 type: plan
-revision: 19
+revision: 20
 rank: b4u
-state: active
+state: done
 title: "Archiving: every akt archivable, partitioned, hidden by default, and archived by rules"
 owner: albin@mattsson.io
 ---
@@ -306,9 +306,9 @@ Built in a worktree (`c0c03c3`), merged. **Server:** `kuria archive|unarchive <n
 <!-- akt: PLAN-017-T08 -->
 ---
 type: task
-revision: 6
+revision: 9
 rank: b57
-state: doing
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T05, Blocked by PLAN-017-T06, Blocked by PLAN-017-T07]
 title: The examples and the walkthrough
@@ -316,7 +316,7 @@ assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Release management's rules (releases `newer: 2`, their members `with_container: release`, backlog items `days_in: 90` in `done`), the planning example's (`with_container: plan`), and the release-management walkthrough as the goal says; docs.
+Release management: `release` archives with `{ newer: 2, in: [closed] }` (closed, no longer maintained, rather than released too: a release still maintained shouldn't go, and the shared e2e stack's other flows keep their releases while working), `release_candidate`, `hotfix` and `release_notes` with `with_container: release`, `backlog_item` with `days_in: 90` in `done`; the README says so, and the release manager role gets `kuria:akter:archive`. Planning: tasks, gaps and decisions with `with_container: plan`, defined in `plans/` too. `e2e/tests/archive-rules.spec.ts`: three releases closed in turn, the first archived by `newer` with its candidate by `with_container`, out of the list until Show archived, the banners naming Kuria and the rule, unarchived by hand with its candidate and kept through a fourth close; the CLI's `ls --archived` and `unarchive`. All of `mise run e2e` (42), lint, 474 Rust and 116 app tests pass.
 
 <!-- field: acceptance -->
 - All of `mise run e2e` passes, with lint and the tests.

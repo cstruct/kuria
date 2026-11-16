@@ -29,6 +29,7 @@
   "links": [
     { "key": "blocks", "name": "Blocks", "inverse": "Blocked by", "to": ["task"] }
   ],
+  "archive": { "rules": [{ "with_container": "plan" }] },
   "presentation": {
     "icon": "list-checks", "colour": "teal",
     "card": ["assignee"], "list": ["assignee"],
