@@ -288,16 +288,17 @@ Built in a worktree (`e2a926e`), merged. `lib/akt/archive.ts`: `?archived=all` a
 <!-- akt: PLAN-017-T07 -->
 ---
 type: task
-revision: 3
+revision: 8
 rank: b56
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T03, Blocks PLAN-017-T08]
 title: "Archived in the CLI, local mode and bundles"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-`kuria archive`, `kuria unarchive`, `--archived` and `--all` on `ls`, `find` and `members`; local mode's `archived:` front matter and rules run by `kuria check --fix`; bundles and akt directories carry `archived`.
+Built in a worktree (`c0c03c3`), merged. **Server:** `kuria archive|unarchive <number>… [--reason]`, in order, stopping at the first refused (saying what was done); `ls`, `find`, and members in `cat`/`show` take `--archived` (only) and `--with-archived` (both; `--all` already means every page on `ls`, so the spec says `--with-archived`); an archived container's `show` lists all its members, as its board does; archived akter marked in Markdown and as an `archived` object in JSON and a read-only front-matter key. **Local mode** (`local/archive.rs`): archiving removes the entry (nested akter with it, as `with_container` of their parent), lists it in `akter/archived.md` (front matter: number, type, revision, at, by or rule, container, reason; `kept`), and writes `akter/archived/<NUMBER>.md` when git doesn't hold it as it is; unarchive reads that or git's latest commit at the revision, refused as `UNCOMMITTED` while git has changes; revisions as a server's; numbers never reused, references resolve, writes refused `ARCHIVED`; ranks kept free; `newer` after `do` (state reached from git), `with_container` on archive/unarchive, `check --fix` applies all with `days_in`; `check` names inconsistent entries. New rule `cli.local.archive.kept`. **Bundles:** format 3 (1–3 read), `archived` and `archiveKept` per akt, import archives last and remaps containers (`bundle.import.archived`); `export --to-dir` writes archived akter to `archived.md` and `akter/archived/`, `import --from-dir` sends them back. Tests: `cli/tests/archive.rs`, three local tests, server bundles test, parity e2e case. Left: `show` still lists transitions of an archived akt; `--version` reads of archived akter aren't special. 474 Rust tests pass.
 
 <!-- field: acceptance -->
 - CLI tests against a server and in local mode, parity e2e, bundles round-trip.
