@@ -137,7 +137,8 @@ user who has signed in to the tenant, else not at all. Revisions and values MUST
 they recorded, so that they and their hashes stay as they were; the tenant
 MUST instead record each mapping as an alias, and an aliased subject MUST
 be shown as the user it maps to (`person.name`), and match `me` for that
-user (`akt.filter`). A contact linked to a mapped subject MUST be linked to
+user (`akt.filter`); until Kuria holds a name or email for that user, by
+the name and email the bundle recorded. A contact linked to a mapped subject MUST be linked to
 the user it maps to. An unmapped subject MUST be shown by the name and
 email the bundle recorded for them, unless Kuria already holds a name for
 that subject.

@@ -32,6 +32,16 @@ test-protocols and documents examples' akt types, and prints who can sign in at 
 a fresh Konklav. Ctrl-C stops the server.
 
 ```sh
+mise run e2e:example -- planning
+```
+
+does the same with an example's bundle loaded into the seeded tenant
+([`docs/examples`](../docs/examples/README.md)): release-management,
+documents, planning or test-protocols. Its people are mapped by email to
+the seeded ones, so signing in as the developer shows their tasks as
+yours.
+
+```sh
 mise run e2e:walk
 ```
 

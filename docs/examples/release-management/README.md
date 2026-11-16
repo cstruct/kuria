@@ -94,6 +94,30 @@ mutation($document: JSON!) {
 }
 ```
 
+## With example data
+
+[`bundle/`](bundle/) is an example bundle of these akt types with akter:
+two releases of a web shop: spring's, worked through a rejected and an accepted candidate with the pipeline's artifacts and an SBOM, approved notes, the go given for the head of product and a deployed hotfix, then closed; and summer's, being planned, with a wish-list epic under way. Devi Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`)
+and Hedda Lund (`hedda@shop.example`) wrote them, the people the end-to-end
+seed signs in as. To start a server with it, set
+
+```sh
+KURIA_BOOTSTRAP_BUNDLE=docs/examples/release-management/bundle
+```
+
+and the server imports it into its default tenant (or
+`KURIA_BOOTSTRAP_TENANT`) before it serves; the tenant must hold nothing
+yet ([`items/server`](../../../items/server/README.md#running)).
+`kuria import docs/examples/release-management/bundle` takes it to a running server's
+tenant that hasn't defined these types. Against the end-to-end Konklav,
+
+```sh
+mise run e2e:example -- release-management
+```
+
+serves it on <http://localhost:18090> to the seeded people, as themselves.
+[`docs/examples`](../README.md) says how the bundles are made.
+
 ## Konklav roles
 
 Kuria's actions and its scope kind must be in Konklav's catalog (see the

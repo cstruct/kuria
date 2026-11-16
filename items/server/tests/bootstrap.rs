@@ -4,6 +4,7 @@
 mod support;
 
 use kuria_server::bundles::{Bootstrap, BundleError, bootstrap};
+use kuria_store::people::{self, Person};
 use serde_json::{Value, json};
 use uuid::Uuid;
 
@@ -26,12 +27,14 @@ fn note() -> Value {
 fn decider() -> std::sync::Arc<FakeDecider> {
     let decider = FakeDecider::allowing_tenant();
     decider.allow_everything("other-tenant");
+    decider.allow_everything("colleague");
     decider
 }
 
 /// A bundle of notes, two of them, written to a directory.
 async fn notes() -> std::path::PathBuf {
     let source = World::new(decider()).await;
+    record(&source, SUBJECT, "Ada Lovelace").await;
     source.define("tenant", &note()).await;
     let first = source
         .create(
@@ -60,6 +63,34 @@ async fn notes() -> std::path::PathBuf {
         &dir,
     );
     dir
+}
+
+async fn record(world: &World, subject: &str, name: &str) {
+    let mut conn = world.db.pool().get().await.unwrap();
+    people::record(
+        &mut conn,
+        &Person {
+            subject_id: subject.parse().unwrap(),
+            name: Some(name.to_owned()),
+            email: None,
+            updated_at: chrono::Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+}
+
+async fn author(world: &World, number: &str) -> String {
+    world
+        .ok(
+            "colleague",
+            "query($n: String!) { akt(number: $n) { revisions { by { name } } } }",
+            json!({ "n": number }),
+        )
+        .await["akt"]["revisions"][0]["by"]["name"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
 fn into(bundle: &std::path::Path, tenant: &str) -> Bootstrap {
@@ -255,6 +286,7 @@ async fn other_tenants_data_does_not_count() {
 
 // r[verify bundle.bootstrap.variables]
 // r[verify bundle.bootstrap.import]
+// r[verify bundle.import.subjects]
 #[tokio::test(flavor = "multi_thread")]
 async fn maps_subjects_and_fails_on_a_bundle_it_cannot_read() {
     let bundle = notes().await;
@@ -272,6 +304,10 @@ async fn maps_subjects_and_fails_on_a_bundle_it_cannot_read() {
     .await
     .unwrap();
     assert_eq!(imported.aliases, 1);
+    // Shown by the bundle's name until the user it maps to signs in.
+    assert_eq!(author(&target, "NOTE-1").await, "Ada Lovelace");
+    record(&target, COLLEAGUE, "Ada King").await;
+    assert_eq!(author(&target, "NOTE-1").await, "Ada King");
 
     let empty = World::new(decider()).await;
     let missing = scratch("missing").join("bundle");

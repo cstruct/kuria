@@ -109,12 +109,19 @@ assignee: albin@mattsson.io
 <!-- akt: PLAN-018-T04 -->
 ---
 type: task
-revision: 1
+revision: 5
 rank: b4y
-state: todo
+state: done
 in: [PLAN-018]
 title: "Load the examples: READMEs and mise run e2e:example"
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+- `docs/examples/README.md` lists the examples and says how their bundles are loaded and made; each example's README has "With example data": what `bundle/` holds, `KURIA_BOOTSTRAP_BUNDLE`, `kuria import`, `mise run e2e:example`.
+- `mise run e2e:example -- <example>` runs `e2e/scripts/explore.ts <example>`: `serve.ts` sets `KURIA_BOOTSTRAP_BUNDLE`, `KURIA_BOOTSTRAP_TENANT` (the seeded tenant) and `KURIA_BOOTSTRAP_SUBJECTS`, a mapping of the bundle's people to the seeded ones by email in `.state/example-subjects.json`; the other examples' types are defined as before. `e2e/README.md` mentions it.
+- Found doing it: an aliased subject was shown by its identifier until the user it maps to signs in. `bundle.import.subjects` now says it is shown by the bundle's recorded name until then (`graphql/people.rs`, `recorded`), checked in `tests/bootstrap.rs`.
+- Verified by hand: `mise run e2e:example -- planning` and `-- release-management` start with the bundle imported (4 types and 15 akter; 8 and 28), an assignee shows as "Devi Larsen" mapped to the seeded developer, and `kuria-server` started again on the same database refuses with the tenant and `KURIA_BOOTSTRAP_BUNDLE` named.
 
 <!-- field: acceptance -->
 Each example's README says what its bundle holds and how to load it (`KURIA_BOOTSTRAP_BUNDLE`, `kuria import`). `mise run e2e:example -- <example>` serves an example loaded into the seeded tenant with subjects mapped to the seeded people. `docs/examples` and `e2e/README.md` mention it.
