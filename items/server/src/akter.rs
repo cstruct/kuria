@@ -17,14 +17,20 @@
 mod batch;
 mod copy;
 mod create;
+pub mod diagrams;
 mod draft;
 mod links;
+pub mod live;
 mod membership;
 mod ordering;
 pub mod outcomes;
+mod push;
+mod references;
+pub mod versions;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
 pub use ordering::Place;
+pub use push::{DraftPush, MESSAGE_MOST, Part as PushPart, PushError, Pushed};
 
 use std::sync::Arc;
 
@@ -58,6 +64,13 @@ pub struct Actor {
 pub struct Caller<'a> {
     pub actor: Actor,
     pub auth: &'a Authorizer,
+    /// Where a write keeps the diagrams it renders
+    /// (`akt.field.markdown.diagrams`); without it, a write that renders
+    /// one is refused.
+    pub storage: Option<&'a crate::attachments::Storage>,
+    /// What renders diagrams; without it, a write that renders one is
+    /// refused.
+    pub renderer: Option<&'a kuria_typst::Renderer>,
 }
 
 /// Why a change to akt types or akter failed.
@@ -75,6 +88,21 @@ pub enum AktError {
     Refused(#[from] Refusal),
     #[error("the akt is at revision {current}, not {expected}")]
     Stale { expected: i32, current: i32 },
+    /// A push's update was made against a base that isn't `number`'s live
+    /// draft now, whose base is `base` and state vector `state_vector`
+    /// (`clone.server`).
+    #[error("{number}'s live draft has changed since the clone's base: pull, then push again")]
+    StaleDraft {
+        number: String,
+        base: Vec<u8>,
+        state_vector: Vec<u8>,
+    },
+    #[error("diagram {block} in `{field}` doesn't compile: {message}")]
+    InvalidDiagram {
+        field: String,
+        block: usize,
+        message: String,
+    },
     #[error("not permitted")]
     Forbidden,
     #[error("`{container}` can't contain akter of the type `{member}`")]
@@ -118,6 +146,12 @@ pub enum AktError {
     NotDraftable(String),
     #[error("{0}")]
     BadRequest(String),
+    #[error("the release has broken references: {}", broken.join("; "))]
+    BrokenReferences {
+        broken: Vec<String>,
+        /// The akter that releasing together would mend references to.
+        together: Vec<String>,
+    },
     #[error("{0}")]
     Unavailable(#[from] Unavailable),
     #[error("internal error")]
@@ -221,6 +255,10 @@ impl StoredType {
 #[derive(Clone)]
 pub struct Akter {
     pool: Pool,
+    /// Where rendered diagrams are kept.
+    storage: Option<crate::attachments::Storage>,
+    /// What renders diagrams.
+    renderer: Option<kuria_typst::Renderer>,
     /// Woken after a change commits, so its change event is published at
     /// once.
     published: Option<Arc<Notify>>,
@@ -229,7 +267,38 @@ pub struct Akter {
 impl Akter {
     #[must_use]
     pub fn new(pool: Pool, published: Option<Arc<Notify>>) -> Self {
-        Self { pool, published }
+        Self {
+            pool,
+            storage: None,
+            renderer: None,
+            published,
+        }
+    }
+
+    /// The same, keeping rendered diagrams in `storage`.
+    #[must_use]
+    pub fn with_storage(mut self, storage: crate::attachments::Storage) -> Self {
+        self.storage = Some(storage);
+        self
+    }
+
+    /// The same, rendering diagrams with `renderer`.
+    #[must_use]
+    pub fn with_renderer(mut self, renderer: kuria_typst::Renderer) -> Self {
+        self.renderer = Some(renderer);
+        self
+    }
+
+    /// What renders diagrams, if anything.
+    #[must_use]
+    pub fn renderer(&self) -> Option<&kuria_typst::Renderer> {
+        self.renderer.as_ref()
+    }
+
+    /// Where rendered diagrams are kept, if anywhere.
+    #[must_use]
+    pub fn storage(&self) -> Option<&crate::attachments::Storage> {
+        self.storage.as_ref()
     }
 
     /// Wakes the relay: a change has committed.
@@ -256,7 +325,7 @@ impl Akter {
         caller: Caller<'_>,
         document: Json,
     ) -> Result<StoredType, AktError> {
-        let Caller { actor, auth } = caller;
+        let Caller { actor, auth, .. } = caller;
         if !auth.allows(&Permission::DefineTypes).await? {
             return Err(AktError::Forbidden);
         }
@@ -294,6 +363,57 @@ impl Akter {
                     reason.clone(),
                 )
                 .await
+            })
+            .await;
+        self.committed(result)
+    }
+
+    /// The akt `number`, opened for a client of its live draft
+    /// (`live.sync`).
+    pub async fn open_live(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+    ) -> Result<live::Opened, AktError> {
+        let mut conn = self.pool.get().await?;
+        live::open_in(&mut conn, caller, number).await
+    }
+
+    /// The live draft of the akt `number` of `tenant`, as stored now.
+    pub async fn live_draft(
+        &self,
+        tenant: Uuid,
+        number: &str,
+    ) -> Result<kuria_engine::live::LiveDraft, AktError> {
+        let mut conn = self.pool.get().await?;
+        live::draft_in(&mut conn, tenant, number).await
+    }
+
+    /// Takes `update`, which `caller` sent to the live draft of the akt
+    /// `number` (`live.sync`).
+    // r[impl live.sync]
+    pub async fn take_live_update(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+        update: &[u8],
+    ) -> Result<live::Taken, AktError> {
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        conn.transaction::<_, AktError, _>(async |conn| {
+            live::take_in(conn, caller, number, update).await
+        })
+        .await
+    }
+
+    /// Records that the live draft of the akt `number` of `tenant` changed,
+    /// as a change event.
+    pub async fn live_draft_changed(&self, tenant: Uuid, number: &str) -> Result<(), AktError> {
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                live::changed_in(conn, tenant, number).await
             })
             .await;
         self.committed(result)
@@ -408,7 +528,7 @@ async fn change_in(
     ) -> Result<Outcome, Refusal>
     + Send,
 ) -> Result<AktRow, AktError> {
-    let Caller { actor, auth } = caller;
+    let Caller { actor, auth, .. } = caller;
     let tenant: Uuid = actor.tenant.into();
     let mut akt = store::lock_akt_by_number(conn, tenant, number)
         .await?
@@ -432,16 +552,29 @@ async fn change_in(
     if !auth.allows(&permission(&stored.ty)).await? {
         return Err(AktError::Forbidden);
     }
-    if akt.revision != expected_revision {
+    // r[impl live.edit]
+    // An edit of a live draft changes the draft only, which merges, so the
+    // revision it was based on isn't checked: revisions don't move with it.
+    let live = live::has_live_draft(&stored);
+    let to_draft = live && transition.is_none();
+    if akt.revision != expected_revision && !to_draft {
         return Err(AktError::Stale {
             expected: expected_revision,
             current: akt.revision,
         });
     }
+    let draft = if live {
+        Some(live::load(conn, &stored, &akt).await?)
+    } else {
+        None
+    };
     let current = Current {
         state: akt.state.clone(),
-        fields: fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
-            .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
+        fields: match &draft {
+            Some(loaded) if to_draft => loaded.fields.clone(),
+            _ => fields_from_json(&stored.ty, akt.fields.as_object().unwrap_or(&Map::new()))
+                .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
+        },
     };
     // r[impl akt.transition.outcomes]
     let held = match transition.as_deref().and_then(|t| stored.ty.transition(t)) {
@@ -460,10 +593,25 @@ async fn change_in(
         },
         held,
     )?;
+    if let Some(loaded) = draft {
+        if to_draft {
+            return write_draft(conn, caller, &stored, akt, loaded, &outcome, now).await;
+        }
+        // r[impl live.revisions]
+        // A transition of an akt with a live draft records its latest
+        // revision's fields: its fields are the draft's to change.
+        if !outcome.changes.is_empty() {
+            return Err(AktError::BadRequest(format!(
+                "{number}'s fields are its live draft's: edit them, then release them"
+            )));
+        }
+        akt.title = title_of(&stored.ty, &loaded.fields);
+    } else {
+        akt.title = title_of(&stored.ty, &outcome.fields);
+    }
     akt.state = outcome.state.clone();
     akt.fields = Json::Object(fields_to_json(&outcome.fields));
     akt.revision = expected_revision + 1;
-    akt.title = title_of(&stored.ty, &outcome.fields);
     akt.updated_at = now;
     if !store::update_akt(conn, &akt, expected_revision).await? {
         return Err(AktError::Internal(format!(
@@ -473,12 +621,56 @@ async fn change_in(
     check_sections(conn, tenant, &stored.ty, Some(akt.id), &outcome).await?;
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
-    store::append_revision(
+    diagrams::render_written(conn, caller, &stored.ty, &akt, &outcome).await?;
+    let mut recorded = revision(&akt, actor, transition, reason, &outcome, now);
+    references::record(conn, &stored.ty, &akt, &outcome.fields, &mut recorded).await?;
+    store::append_revision(conn, &recorded).await?;
+    if live {
+        return live::read_as_draft(conn, &stored, akt).await;
+    }
+    Ok(akt)
+}
+
+/// Writes an edit's `outcome` to `akt`'s live draft `loaded`, checked as a
+/// revision's would be, and answers the akt as reading it does
+/// (`live.edit`). Its revision stays; its title and when it changed move.
+// r[impl live.edit]
+// r[impl live.history]
+async fn write_draft(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &StoredType,
+    mut akt: AktRow,
+    loaded: live::Loaded,
+    outcome: &Outcome,
+    now: DateTime<Utc>,
+) -> Result<AktRow, AktError> {
+    let tenant = akt.tenant_id;
+    check_sections(conn, tenant, &ty.ty, Some(akt.id), outcome).await?;
+    check_contacts(conn, tenant, outcome).await?;
+    hold_attachments(conn, caller, &ty.ty, &akt, outcome).await?;
+    diagrams::render_written(conn, caller, &ty.ty, &akt, outcome).await?;
+    let fields = live::write(
         conn,
-        &revision(&akt, actor, transition, reason, &outcome, now),
+        ty,
+        &akt,
+        loaded,
+        &outcome.fields,
+        caller.actor.subject.into(),
+        now,
     )
     .await?;
-    Ok(akt)
+    akt.title = title_of(&ty.ty, &fields);
+    akt.updated_at = now;
+    if !store::update_akt(conn, &akt, akt.revision).await? {
+        return Err(AktError::Internal(format!(
+            "akt {} moved while locked",
+            akt.number
+        )));
+    }
+    // r[impl live.sync]
+    store::append_draft_change(conn, tenant, akt.id, akt.revision, now).await?;
+    Ok(live::with_fields(ty, &akt, &fields))
 }
 
 /// A rank after every akt of the tenant. The caller holds the tenant's
@@ -644,6 +836,17 @@ async fn hold_attachments(
             .is_some_and(|f| f.format == Some(AttachmentFormat::Sbom));
         if wants_sbom && row.sbom.is_none() {
             return Err(refused("the attachment is not an SBOM"));
+        }
+        // r[impl attachment.media-types]
+        if let Some(field) = ty.field(key)
+            && !field.media_types.is_empty()
+            && !field.media_types.contains(&row.media_type)
+        {
+            return Err(refused(&format!(
+                "the attachment is {}, and the field takes {}",
+                row.media_type,
+                field.media_types.join(", ")
+            )));
         }
     }
     let held: Vec<(String, Uuid)> = outcome

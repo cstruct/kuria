@@ -31,6 +31,14 @@ export type Draft =
 	| { kind: 'ATTACHMENT'; id: string | null; name: string | null }
 	| { kind: 'USERS'; who: Who[] }
 	| { kind: 'SECTIONS'; items: Item[] }
+	| {
+			kind: 'MARKDOWN';
+			text: string;
+			/** Each embedded image's picture, by destination, for the editor. */
+			pictures: [string, string][];
+			/** Each diagram block's rendering, by source, for the editor. */
+			drawings: [string, string][];
+	  }
 	// Shown here, and given elsewhere: verdicts, with their buttons
 	// (`app.verdicts`).
 	| { kind: 'SHOWN' };
@@ -67,6 +75,27 @@ export function draftOf(field: FieldDef, value: Value | undefined): Draft {
 			};
 		case 'VERDICT':
 			return { kind: 'SHOWN' };
+		case 'MARKDOWN':
+			return {
+				kind: 'MARKDOWN',
+				text: value?.__typename === 'MarkdownValue' ? value.markdown : '',
+				pictures:
+					value?.__typename === 'MarkdownValue'
+						? value.images.flatMap((i) =>
+								i.attachment && !i.broken
+									? [[i.destination, i.attachment.url] as [string, string]]
+									: []
+							)
+						: [],
+				drawings:
+					value?.__typename === 'MarkdownValue'
+						? value.diagrams.flatMap((d) =>
+								d.attachment
+									? [[d.source.replace(/\n$/, ''), d.attachment.url] as [string, string]]
+									: []
+							)
+						: []
+			};
 		case 'CHECKBOX': {
 			if (value?.__typename !== 'CheckboxValue')
 				return { kind: 'CHECKBOX', checked: false, for: null };
@@ -125,6 +154,8 @@ export function isEmpty(draft: Draft): boolean {
 			return draft.who.length === 0;
 		case 'SECTIONS':
 			return draft.items.length === 0;
+		case 'MARKDOWN':
+			return draft.text.trim() === '';
 		case 'SHOWN':
 			return false;
 	}
@@ -170,6 +201,8 @@ export function inputOf(draft: Draft): unknown {
 			return draft.who.map((who) => ('user' in who ? who.user : who));
 		case 'SECTIONS':
 			return inputOfSections(draft.items);
+		case 'MARKDOWN':
+			return draft.text;
 		case 'SHOWN':
 			return undefined;
 	}
@@ -229,6 +262,8 @@ export function textOf(value: Value): string {
 			const placed = numbersIn(readSections(value.value)).length;
 			return placed === 1 ? '1 member placed' : `${placed} members placed`;
 		}
+		case 'MarkdownValue':
+			return value.markdown;
 		case 'VerdictValue':
 			return value.verdicts
 				.map((v) => `${nameOf(v.assignee)}: ${v.verdict.toLowerCase()}`)

@@ -185,6 +185,7 @@ fn check_akter(dir: &AktDir, problems: &mut Problems) {
         if let Err(e) = answers::values(dir, akt) {
             problems.of(akt, e.message);
         }
+        check_attachments(dir, akt, problems);
         if t.ty.number().read(&akt.number).is_none() {
             problems.of(
                 akt,
@@ -218,6 +219,28 @@ fn check_akter(dir: &AktDir, problems: &mut Problems) {
         }
         check_containers(dir, akt, problems);
         check_links(dir, akt, problems);
+    }
+}
+
+/// Whether each attachment `akt` holds is a file of the directory that
+/// fits its field.
+// r[impl cli.local.check]
+// r[impl cli.local.attachments]
+fn check_attachments(dir: &AktDir, akt: &LocalAkt, problems: &mut Problems) {
+    let ty = &dir.type_of(akt).ty;
+    for field in ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == kuria_config::FieldKind::Attachment)
+    {
+        // A value that isn't a path, its value's check names.
+        let Some(path) = akt.values.get(&field.key).and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if let Some(problem) = super::attachments::problem(&dir.root, field, path) {
+            problems.of(akt, format!("`{}`: {problem}", field.key));
+        }
     }
 }
 

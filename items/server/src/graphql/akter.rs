@@ -16,9 +16,11 @@ use kuria_config::{
     FieldKind as ConfigKind,
 };
 use kuria_engine::board::{UNMAPPED, column_of};
+use kuria_engine::versions::Pin;
 use kuria_engine::{Value, fields_from_json};
 use kuria_store::akter::{self as store, AktRow, ChangedAfter, RevisionRow};
 use kuria_store::containers;
+use kuria_store::versions::VersionRow;
 use serde_json::{Map, Value as JsonValue};
 use uuid::Uuid;
 
@@ -106,6 +108,14 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::CreatedIn { .. } => coded(message, "CREATED_IN"),
         AktError::SelfMove | AktError::BadRequest(_) => coded(message, "BAD_REQUEST"),
         AktError::InvalidLink(_) => coded(message, "INVALID_LINK"),
+        AktError::BrokenReferences { broken, together } => {
+            let (broken, together) = (broken.clone(), together.clone());
+            async_graphql::Error::new(message).extend_with(move |_, e| {
+                e.set("code", "BROKEN_REFERENCES");
+                e.set("references", broken.clone());
+                e.set("together", together.clone());
+            })
+        }
         AktError::Unavailable(detail) => {
             tracing::warn!("akter: {detail}");
             coded(
@@ -113,10 +123,31 @@ fn error(error: AktError) -> async_graphql::Error {
                 "UNAVAILABLE",
             )
         }
+        AktError::InvalidDiagram { field, block, .. } => async_graphql::Error::new(message)
+            .extend_with(move |_, e| {
+                e.set("code", "INVALID_DIAGRAM");
+                e.set("field", field.clone());
+                e.set("block", i32::try_from(block).unwrap_or(i32::MAX));
+            }),
         AktError::Stale { current, .. } => {
             async_graphql::Error::new(message).extend_with(|_, e| {
                 e.set("code", "STALE");
                 e.set("currentRevision", current);
+            })
+        }
+        AktError::StaleDraft {
+            number,
+            base,
+            state_vector,
+        } => {
+            use base64::Engine as _;
+            let base64 = base64::engine::general_purpose::STANDARD;
+            let (base, state_vector) = (base64.encode(base), base64.encode(state_vector));
+            async_graphql::Error::new(message).extend_with(move |_, e| {
+                e.set("code", "STALE");
+                e.set("number", number.clone());
+                e.set("base", base.clone());
+                e.set("stateVector", state_vector.clone());
             })
         }
         AktError::Internal(detail) => {
@@ -190,8 +221,48 @@ impl AkterQuery {
         }
     }
 
+    /// A diagram block's `source` rendered to SVG, or typst's message if it
+    /// doesn't compile, storing nothing (`diagram.preview`).
+    // r[impl diagram.preview]
+    async fn render_diagram(
+        &self,
+        ctx: &Context<'_>,
+        source: String,
+    ) -> async_graphql::Result<RenderedDiagram> {
+        principal(ctx)?;
+        if source.len() > 64 * 1024 {
+            return Ok(RenderedDiagram {
+                svg: None,
+                error: Some("a diagram is at most 64 KiB of typst".to_owned()),
+            });
+        }
+        Ok(
+            match crate::akter::diagrams::render(akter(ctx)?.renderer(), source)
+                .await
+                .map_err(error)?
+            {
+                Ok(svg) => RenderedDiagram {
+                    svg: Some(svg),
+                    error: None,
+                },
+                Err(message) => RenderedDiagram {
+                    svg: None,
+                    error: Some(message),
+                },
+            },
+        )
+    }
+
     /// The akt numbered `number`.
-    async fn akt(&self, ctx: &Context<'_>, number: String) -> async_graphql::Result<Option<Akt>> {
+    async fn akt(
+        &self,
+        ctx: &Context<'_>,
+        number: String,
+        #[graphql(desc = "Read it as it was at this version of it (`version.read`).")]
+        version: Option<i32>,
+        #[graphql(desc = "Read it as it was at this revision, its fields, state and title.")]
+        revision: Option<i32>,
+    ) -> async_graphql::Result<Option<Akt>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
         let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
         let Some(row) = store::akt_by_number(&mut conn, tenant, &number)
@@ -202,10 +273,38 @@ impl AkterQuery {
         };
         let akt = with_types(&mut conn, tenant, vec![row]).await?.pop();
         // r[impl authz.read]
-        match akt {
-            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => Ok(Some(akt)),
-            _ => Ok(None),
+        let akt = match akt {
+            Some(akt) if reads(ctx, akt.ty.ty.key()).await? => akt,
+            _ => return Ok(None),
+        };
+        if let Some(revision) = revision.filter(|_| version.is_none()) {
+            return Ok(
+                crate::akter::versions::at(&mut conn, &akt.ty, &akt.row, revision)
+                    .await
+                    .map_err(error)?
+                    .map(|row| Akt {
+                        row,
+                        ty: akt.ty,
+                        version: None,
+                        at_revision: true,
+                    }),
+            );
         }
+        let Some(version) = version else {
+            return Ok(Some(akt));
+        };
+        // r[impl version.read]
+        Ok(
+            crate::akter::versions::at_version(&mut conn, &akt.ty, &akt.row, version)
+                .await
+                .map_err(error)?
+                .map(|(row, version)| Akt {
+                    row,
+                    ty: akt.ty,
+                    version: Some(version),
+                    at_revision: false,
+                }),
+        )
     }
 
     /// Akter, most recently changed first: of one akt type and in one state,
@@ -509,15 +608,28 @@ async fn with_types(
         .map(|row| StoredType::read(row).map(|t| (t.row.id, t)))
         .collect::<Result<_, _>>()
         .map_err(error)?;
-    rows.into_iter()
+    let mut paired = rows
+        .into_iter()
         .map(|row| {
             let ty = types
                 .get(&row.type_version_id)
-                .cloned()
                 .ok_or_else(|| internal(format!("akt {} has no akt type", row.number)))?;
-            Ok(Akt { row, ty })
+            Ok((row, ty))
         })
-        .collect()
+        .collect::<async_graphql::Result<Vec<_>>>()?;
+    // r[impl live.read]
+    crate::akter::live::read_as_drafts(conn, &mut paired)
+        .await
+        .map_err(error)?;
+    Ok(paired
+        .into_iter()
+        .map(|(row, ty)| Akt {
+            row,
+            ty: ty.clone(),
+            version: None,
+            at_revision: false,
+        })
+        .collect())
 }
 
 #[derive(Default)]
@@ -675,6 +787,59 @@ fn operation(input: OperationInput) -> async_graphql::Result<Operation> {
     })
 }
 
+/// One live draft's part of a push from a clone (`clone.server`).
+#[derive(InputObject)]
+pub struct DraftPushInput {
+    /// The akt's number.
+    number: String,
+    /// The live draft's `base` as the clone read it (`liveState`),
+    /// base64-encoded: the push is refused as `STALE` unless it is the
+    /// draft's now.
+    base: String,
+    /// What the clone changed, as one Yjs v1 update made against `base`,
+    /// base64-encoded.
+    update: String,
+}
+
+/// What a push from a clone takes (`clone.server`).
+#[derive(InputObject)]
+pub struct PushCloneInput {
+    /// One line of at most 200 characters, kept with each live draft's
+    /// change and as each revision's reason.
+    message: String,
+    /// Each live draft's update.
+    #[graphql(default)]
+    drafts: Vec<DraftPushInput>,
+    /// The writes to akter without a live draft, as a batch's, each at the
+    /// revision the clone read; their reasons are the message.
+    #[graphql(default)]
+    operations: Vec<OperationInput>,
+}
+
+/// What a push from a clone wrote, as reading answers it.
+#[derive(SimpleObject)]
+pub struct PushedClone {
+    /// Each akt whose live draft the push changed, in the order of its
+    /// drafts.
+    drafts: Vec<Akt>,
+    /// The akt each operation answers, in order.
+    operations: Vec<Akt>,
+}
+
+/// `text`, base64-decoded, or a `BAD_REQUEST` naming `what`, said of the
+/// push's draft `n`, counting from 1.
+fn base64_of(text: &str, what: &str, n: usize) -> async_graphql::Result<Vec<u8>> {
+    use base64::Engine as _;
+    base64::engine::general_purpose::STANDARD
+        .decode(text)
+        .map_err(|e| at_draft(coded(format!("{what} isn't base64: {e}"), "BAD_REQUEST"), n))
+}
+
+/// `error`, said of the push's draft `n`, counting from 1.
+fn at_draft(error: async_graphql::Error, n: usize) -> async_graphql::Error {
+    error.extend_with(|_, e| e.set("draft", n))
+}
+
 /// `error`, said of the batch's operation `n`, counting from 1.
 fn at_operation(error: async_graphql::Error, n: usize) -> async_graphql::Error {
     error.extend_with(|_, e| e.set("operation", n))
@@ -691,6 +856,8 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let mut operations = Vec::with_capacity(input.operations.len());
         for (i, op) in input.operations.into_iter().enumerate() {
@@ -711,6 +878,64 @@ impl AkterMutation {
         Ok(answered)
     }
 
+    /// Pushes from a clone, all of it or none (`clone.server`): each live
+    /// draft's update made against the base the clone read, refused as
+    /// `STALE`, with the draft's `number`, current `base` and
+    /// `stateVector`, unless the base is the draft's now, and checked as a
+    /// live edit; then the
+    /// operations, as a batch runs them, with the message as each one's
+    /// reason. Each draft's update is kept as one change, by the subject,
+    /// with the message. A refusal carries the draft's position, from 1, as
+    /// `draft`, or the operation's as `operation`.
+    // r[impl clone.server]
+    async fn push_clone(
+        &self,
+        ctx: &Context<'_>,
+        input: PushCloneInput,
+    ) -> async_graphql::Result<PushedClone> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let mut drafts = Vec::with_capacity(input.drafts.len());
+        for (i, draft) in input.drafts.into_iter().enumerate() {
+            drafts.push(crate::akter::DraftPush {
+                base: base64_of(&draft.base, "base", i + 1)?,
+                update: base64_of(&draft.update, "update", i + 1)?,
+                number: draft.number,
+            });
+        }
+        let mut operations = Vec::with_capacity(input.operations.len());
+        for (i, op) in input.operations.into_iter().enumerate() {
+            operations.push(operation(op).map_err(|e| at_operation(e, i + 1))?);
+        }
+        let akter = akter(ctx)?;
+        let pushed = akter
+            .push_clone(caller, &input.message, drafts, operations)
+            .await
+            .map_err(|refused| {
+                let e = error(refused.error);
+                match refused.part {
+                    Some(crate::akter::PushPart::Draft(n)) => at_draft(e, n),
+                    Some(crate::akter::PushPart::Operation(n)) => at_operation(e, n),
+                    None => e,
+                }
+            })?;
+        let mut answered = PushedClone {
+            drafts: Vec::with_capacity(pushed.drafts.len()),
+            operations: Vec::with_capacity(pushed.operations.len()),
+        };
+        for row in pushed.drafts {
+            answered.drafts.push(reload(ctx, akter, row).await?);
+        }
+        for row in pushed.operations {
+            answered.operations.push(reload(ctx, akter, row).await?);
+        }
+        Ok(answered)
+    }
+
     /// Submits an akt type document, creating the next version of its key.
     async fn define_akt_type(
         &self,
@@ -720,6 +945,8 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         akter(ctx)?
             .define_type(caller, document.0)
@@ -737,6 +964,8 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
@@ -754,6 +983,8 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -774,6 +1005,8 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(Some(input.fields))?;
         let akter = akter(ctx)?;
@@ -782,6 +1015,57 @@ impl AkterMutation {
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
+    }
+
+    /// Releases the akt's current revision as its next version
+    /// (`version.release`).
+    async fn release_version(
+        &self,
+        ctx: &Context<'_>,
+        input: ReleaseVersionInput,
+    ) -> async_graphql::Result<Version> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let row = akter(ctx)?
+            .release(caller, &input.number, input.revision, input.label)
+            .await
+            .map_err(error)?;
+        Ok(Version::from(&row))
+    }
+
+    /// Releases each akt's current revision as its next version, all or
+    /// nothing; a reference from one to another is checked against what
+    /// that one is released as, and pinned to the version it gets
+    /// (`version.together`). Answers the versions in order.
+    async fn release_versions(
+        &self,
+        ctx: &Context<'_>,
+        input: ReleaseVersionsInput,
+    ) -> async_graphql::Result<Vec<Version>> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let releasing: Vec<_> = input
+            .akter
+            .into_iter()
+            .map(|a| crate::akter::versions::Releasing {
+                number: a.number,
+                revision: a.revision,
+                label: a.label,
+            })
+            .collect();
+        let rows = akter(ctx)?
+            .release_together(caller, &releasing)
+            .await
+            .map_err(error)?;
+        Ok(rows.iter().map(Version::from).collect())
     }
 
     /// Moves an akt along one of its akt type's transitions.
@@ -793,6 +1077,8 @@ impl AkterMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
@@ -891,6 +1177,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -906,6 +1194,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -931,6 +1221,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -955,6 +1247,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -974,6 +1268,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -992,6 +1288,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1022,6 +1320,8 @@ impl ContainmentMutation {
         let caller = Caller {
             actor: principal(ctx)?.actor(),
             auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
         };
         let akter = akter(ctx)?;
         let row = akter
@@ -1100,6 +1400,8 @@ impl AktType {
             list: presentation.list.clone(),
             icon: presentation.icon.map(Into::into),
             colour: presentation.colour.unwrap_or_default().into(),
+            navigation: presentation.navigation.unwrap_or_default().into(),
+            image: presentation.image.clone(),
         }
     }
 
@@ -1128,6 +1430,12 @@ impl AktType {
     /// The document this version was defined by.
     async fn document(&self) -> Json<JsonValue> {
         Json(self.0.row.definition.clone())
+    }
+
+    /// Whether its akter have a live draft, edited together, that only
+    /// releases make revisions of (`live.declare`).
+    async fn live_drafts(&self) -> bool {
+        self.0.ty.document().live_drafts
     }
 
     async fn created_at(&self) -> DateTime<Utc> {
@@ -1170,6 +1478,7 @@ pub enum FieldKind {
     Attachment,
     Sections,
     Verdict,
+    Markdown,
 }
 
 impl From<ConfigKind> for FieldKind {
@@ -1187,10 +1496,15 @@ impl From<ConfigKind> for FieldKind {
             ConfigKind::Attachment => Self::Attachment,
             ConfigKind::Sections => Self::Sections,
             ConfigKind::Verdict => Self::Verdict,
+            ConfigKind::Markdown => Self::Markdown,
         }
     }
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "a field's document, as GraphQL answers it"
+)]
 #[derive(SimpleObject)]
 pub struct Field {
     key: String,
@@ -1209,6 +1523,12 @@ pub struct Field {
     of: Vec<String>,
     /// For verdict fields: the key of the user field naming the assignees.
     assignees: Option<String>,
+    /// For markdown fields: the link kind its references are kept as.
+    references: Option<String>,
+    /// For markdown fields: whether its `diagram` blocks are diagrams.
+    diagrams: bool,
+    /// For attachment fields: the media types it takes, any if none.
+    media_types: Vec<String>,
 }
 
 /// What files an attachment field holds.
@@ -1235,6 +1555,9 @@ impl From<&FieldDef> for Field {
             multiple: def.multiple,
             of: def.of.clone(),
             assignees: def.assignees.clone(),
+            references: def.references.clone(),
+            diagrams: def.diagrams,
+            media_types: def.media_types.clone(),
         }
     }
 }
@@ -1318,6 +1641,13 @@ mirrored! {
     }
 }
 
+mirrored! {
+    /// Where the app's sidebar lists an akt type.
+    AktTypeNavigation from kuria_config::Navigation {
+        Main, More,
+    }
+}
+
 /// How an akt type's akter are shown.
 #[derive(SimpleObject)]
 pub struct Presentation {
@@ -1331,6 +1661,11 @@ pub struct Presentation {
     icon: Option<AktTypeIcon>,
     /// The colour the type is shown in.
     colour: AktTypeColour,
+    /// Where the app's sidebar lists the type (`app.navigation`).
+    navigation: AktTypeNavigation,
+    /// The `attachment` field holding each akt's picture, if its akter are
+    /// images (`akt.field.markdown.images`).
+    image: Option<String>,
 }
 
 #[derive(SimpleObject)]
@@ -1350,6 +1685,7 @@ pub struct Link {
     kind: String,
     name: String,
     outgoing: bool,
+    by_reference: bool,
     pinned_revision: Option<i32>,
     akt: Akt,
 }
@@ -1370,6 +1706,12 @@ impl Link {
     /// Whether the link goes from this akt to the other.
     async fn outgoing(&self) -> bool {
         self.outgoing
+    }
+
+    /// Whether a reference in the source's text keeps it
+    /// (`link.referenced`), so that it is changed by changing the text.
+    async fn by_reference(&self) -> bool {
+        self.by_reference
     }
 
     /// The other akt.
@@ -1457,6 +1799,11 @@ pub struct BoardColumn {
 }
 
 impl Akt {
+    /// Whether it is read as it was, at a version or a revision.
+    fn is_past(&self) -> bool {
+        self.version.is_some() || self.at_revision
+    }
+
     /// Up to `limit` members that the subject may read, of the akt type
     /// `key` if given, in rank order, in a fixed number of queries.
     async fn readable_members(
@@ -1489,10 +1836,14 @@ impl Akt {
     }
 }
 
-/// An akt, with the akt type version it was created with.
+/// An akt, with the akt type version it was created with; read at one of
+/// its versions, if `version` says so.
 pub struct Akt {
     row: AktRow,
     ty: StoredType,
+    version: Option<VersionRow>,
+    /// Whether it is read at a revision: as it was, not as it is.
+    at_revision: bool,
 }
 
 #[Object]
@@ -1547,8 +1898,31 @@ impl Akt {
             .document()
             .fields
             .iter()
-            .filter_map(|def| values.get(&def.key).map(|v| FieldValue::new(def, v)))
+            .filter_map(|def| {
+                values
+                    .get(&def.key)
+                    .map(|v| FieldValue::new(def, v, &self.pins(), self.row.id))
+            })
             .collect())
+    }
+
+    /// The version it is read at, if it is read at one (`version.read`).
+    async fn version(&self) -> Option<Version> {
+        self.version.as_ref().map(Version::from)
+    }
+
+    /// Its versions, latest first (`version.list`).
+    // r[impl version.list]
+    async fn versions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Version>> {
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        Ok(
+            kuria_store::versions::of(&mut conn, self.row.tenant_id, self.row.id)
+                .await
+                .map_err(internal)?
+                .iter()
+                .map(Version::from)
+                .collect(),
+        )
     }
 
     async fn created_at(&self) -> DateTime<Utc> {
@@ -1745,10 +2119,17 @@ impl Akt {
                     (Some(def), false) => def.inverse.clone(),
                     (None, _) => row.kind.clone(),
                 };
+                let by_reference = source_ty
+                    .ty
+                    .document()
+                    .fields
+                    .iter()
+                    .any(|f| f.references.as_deref() == Some(row.kind.as_str()));
                 links.push(Link {
                     kind: row.kind,
                     name,
                     outgoing,
+                    by_reference,
                     pinned_revision: row.pinned_revision,
                     akt: other,
                 });
@@ -1789,6 +2170,69 @@ impl Akt {
             .map(Into::into))
     }
 
+    /// The changes to its live draft since its latest release, or all of
+    /// them with `all`, oldest first: who made each, when, and which fields
+    /// it changed (`live.history`). None for an akt without a live draft,
+    /// or read at a version or revision.
+    // r[impl live.history]
+    async fn draft_changes(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(default)] all: bool,
+    ) -> async_graphql::Result<Vec<DraftChange>> {
+        if !crate::akter::live::has_live_draft(&self.ty) || self.is_past() {
+            return Ok(Vec::new());
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let tenant = self.row.tenant_id;
+        let after = if all {
+            0
+        } else {
+            kuria_store::drafts::released_seq(&mut conn, tenant, self.row.id)
+                .await
+                .map_err(internal)?
+                .unwrap_or(0)
+        };
+        Ok(
+            kuria_store::drafts::updates_after(&mut conn, tenant, self.row.id, after)
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .map(|row| DraftChange {
+                    seq: row.seq,
+                    by: User(row.by),
+                    at: row.at,
+                    fields: serde_json::from_value(row.fields).unwrap_or_default(),
+                    message: row.message,
+                })
+                // A refused update, kept with what undid it, changed
+                // nothing.
+                .filter(|change| !change.fields.is_empty())
+                .collect(),
+        )
+    }
+
+    /// Its live draft's state, for a clone to make updates against
+    /// (`live.state`, `clone.server`). None for an akt without a live
+    /// draft, or read at a version or revision.
+    // r[impl live.state]
+    async fn live_state(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<LiveState>> {
+        use base64::Engine as _;
+        if !crate::akter::live::has_live_draft(&self.ty) || self.is_past() {
+            return Ok(None);
+        }
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let loaded = crate::akter::live::load(&mut conn, &self.ty, &self.row)
+            .await
+            .map_err(error)?;
+        let base64 = base64::engine::general_purpose::STANDARD;
+        Ok(Some(LiveState {
+            state: base64.encode(loaded.draft.state()),
+            state_vector: base64.encode(loaded.draft.state_vector()),
+            base: base64.encode(loaded.draft.base()),
+        }))
+    }
+
     /// Every revision, oldest first.
     async fn revisions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<AktRevision>> {
         let tenant: Uuid = principal(ctx)?.tenant.into();
@@ -1803,6 +2247,35 @@ impl Akt {
             })
             .collect())
     }
+}
+
+/// One change to an akt's live draft (`live.history`).
+#[derive(SimpleObject)]
+pub struct DraftChange {
+    /// Its place among the live draft's changes, from 1.
+    seq: i64,
+    /// Who made it.
+    by: User,
+    at: DateTime<Utc>,
+    /// The keys of the fields it changed.
+    fields: Vec<String>,
+    /// Its message, if it was pushed from a clone (`clone.server`); none
+    /// for live typing and other writes.
+    message: Option<String>,
+}
+
+/// An akt's live draft, as a clone makes updates against it
+/// (`live.state`).
+#[derive(SimpleObject)]
+pub struct LiveState {
+    /// The whole draft, as one Yjs v1 update, base64-encoded.
+    state: String,
+    /// Its state vector, Yjs v1, base64-encoded.
+    state_vector: String,
+    /// What a push made against it names as its base, base64-encoded: its
+    /// Yjs v1 snapshot, its state vector and what it deleted, which moves
+    /// with every change, also one that only deletes.
+    base: String,
 }
 
 /// A field's value, by its kind.
@@ -1821,6 +2294,320 @@ pub enum FieldValue {
     Users(UsersValue),
     Sections(SectionsValue),
     Verdict(VerdictValue),
+    Markdown(MarkdownValue),
+}
+
+/// A `markdown` field's text, with its headings and references
+/// (`akt.field.markdown`).
+#[derive(SimpleObject)]
+#[graphql(complex)]
+pub struct MarkdownValue {
+    field: String,
+    /// The text, every heading with its id.
+    markdown: String,
+    headings: Vec<MarkdownHeading>,
+    #[graphql(skip)]
+    found: Vec<kuria_engine::markdown::Reference>,
+    #[graphql(skip)]
+    embedded: Vec<kuria_engine::markdown::Reference>,
+    /// The akt, if the field allows diagrams, whose renderings it holds.
+    #[graphql(skip)]
+    drawn_by: Option<Uuid>,
+    /// What its references meant, if it is read at a version.
+    #[graphql(skip)]
+    pins: Vec<Pin>,
+}
+
+/// A heading of a `markdown` field.
+#[derive(SimpleObject)]
+pub struct MarkdownHeading {
+    id: String,
+    /// 1 to 6.
+    level: i32,
+    text: String,
+}
+
+/// A reference in a `markdown` field to an akt, one of its versions and
+/// one of its headings (`akt.field.markdown.references`).
+#[derive(SimpleObject)]
+pub struct MarkdownReference {
+    /// As the text says it: `kuria:<number>[@<version>][#<heading>]`.
+    destination: String,
+    number: String,
+    version: Option<i32>,
+    heading: Option<String>,
+    /// The akt, if it exists and the subject may read it.
+    akt: Option<Akt>,
+    /// The version a version read pinned it to, if it names none
+    /// (`version.pins`).
+    pinned_version: Option<i32>,
+    /// The revision a version read pinned it to, for a target that had no
+    /// version then.
+    pinned_revision: Option<i32>,
+    /// Why the reference is broken, if it is.
+    broken: Option<String>,
+}
+
+impl MarkdownValue {
+    /// `text`, the value of the `markdown` field `def` of the akt `akt`.
+    fn of(def: &FieldDef, text: &str, pins: &[Pin], akt: Uuid) -> Self {
+        Self::new(def.key.clone(), text, pins, def.diagrams.then_some(akt))
+    }
+
+    fn new(field: String, text: &str, pins: &[Pin], drawn_by: Option<Uuid>) -> Self {
+        use kuria_engine::markdown;
+        Self {
+            drawn_by,
+            pins: pins.to_vec(),
+            field,
+            markdown: text.to_owned(),
+            headings: markdown::headings(text)
+                .into_iter()
+                .filter_map(|h| {
+                    Some(MarkdownHeading {
+                        id: h.id?,
+                        level: i32::from(h.level),
+                        text: h.text,
+                    })
+                })
+                .collect(),
+            found: markdown::references(text),
+            embedded: markdown::images(text),
+        }
+    }
+}
+
+#[ComplexObject]
+impl MarkdownValue {
+    /// The references in the text, in order, each once, each with its akt
+    /// or why it is broken.
+    // r[impl akt.field.markdown.references]
+    async fn references(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownReference>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let auth = authorizer(ctx)?;
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut answered = Vec::new();
+        for reference in &self.found {
+            let target = crate::akter::versions::target(&mut conn, tenant, auth, &reference.number)
+                .await
+                .map_err(error)?;
+            let akt = match &target {
+                Some(_) => match store::akt_by_number(&mut conn, tenant, &reference.number)
+                    .await
+                    .map_err(internal)?
+                {
+                    Some(row) => with_types(&mut conn, tenant, vec![row]).await?.pop(),
+                    None => None,
+                },
+                None => None,
+            };
+            // r[impl version.read]
+            // Read at a version, a reference naming none follows its pin.
+            let (pinned_version, pinned_revision) =
+                kuria_engine::versions::as_pinned(reference, &self.pins);
+            let pinned_version = pinned_version.filter(|_| reference.version.is_none());
+            let as_read = kuria_engine::markdown::Reference {
+                version: reference.version.or(pinned_version),
+                ..reference.clone()
+            };
+            let broken = if pinned_revision.is_some() {
+                // Unbroken at release, and a revision never changes.
+                target
+                    .is_none()
+                    .then(|| format!("there is no akt `{}`", reference.number))
+            } else {
+                kuria_engine::markdown::broken(&as_read, target.as_ref())
+            };
+            answered.push(MarkdownReference {
+                destination: reference.to_string(),
+                number: reference.number.clone(),
+                version: reference.version.and_then(|v| i32::try_from(v).ok()),
+                heading: reference.heading.clone(),
+                broken,
+                akt,
+                pinned_version: pinned_version.and_then(|v| i32::try_from(v).ok()),
+                pinned_revision,
+            });
+        }
+        Ok(answered)
+    }
+
+    /// The diagram blocks of the text, in order, each with its rendering,
+    /// in a field that allows them; none in any other.
+    // r[impl akt.field.markdown.diagrams]
+    async fn diagrams(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownDiagram>> {
+        let Some(akt) = self.drawn_by else {
+            return Ok(Vec::new());
+        };
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let held = kuria_store::attachments::diagrams_of(&mut conn, &[akt])
+            .await
+            .map_err(internal)?;
+        Ok(kuria_engine::markdown::diagrams(&self.markdown)
+            .into_iter()
+            .map(|source| {
+                let hash = crate::akter::diagrams::source_hash(&source);
+                let attachment = held
+                    .iter()
+                    .find(|d| d.field == self.field && d.source_sha256 == hash)
+                    .map(|d| Attachment(d.attachment_id));
+                MarkdownDiagram { source, attachment }
+            })
+            .collect())
+    }
+
+    /// The images the text embeds, in order, each once, each with the
+    /// picture it shows or why it is broken.
+    // r[impl akt.field.markdown.images]
+    // r[impl version.read]
+    async fn images(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<MarkdownImage>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let auth = authorizer(ctx)?;
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut answered = Vec::new();
+        for reference in &self.embedded {
+            let target = crate::akter::versions::target(&mut conn, tenant, auth, &reference.number)
+                .await
+                .map_err(error)?;
+            let (pinned_version, pinned_revision) =
+                kuria_engine::versions::as_pinned(reference, &self.pins);
+            let version = reference.version.or(pinned_version);
+            let as_read = kuria_engine::markdown::Reference {
+                version,
+                ..reference.clone()
+            };
+            let picture = match &target {
+                Some(_) => crate::akter::versions::picture_at(
+                    &mut conn,
+                    tenant,
+                    &reference.number,
+                    version,
+                    pinned_revision,
+                )
+                .await
+                .map_err(error)?,
+                None => None,
+            };
+            let broken = if pinned_revision.is_some() && target.is_some() {
+                // Unbroken at release, and a revision never changes.
+                picture
+                    .is_none()
+                    .then(|| format!("`{}` has no picture", reference.number))
+            } else {
+                kuria_engine::markdown::broken_image(&as_read, target.as_ref())
+            };
+            answered.push(MarkdownImage {
+                destination: reference.to_string(),
+                number: reference.number.clone(),
+                version: reference.version.and_then(|v| i32::try_from(v).ok()),
+                attachment: picture.filter(|_| broken.is_none()).map(Attachment),
+                broken,
+            });
+        }
+        Ok(answered)
+    }
+}
+
+/// A diagram block of a `markdown` field that allows them
+/// (`akt.field.markdown.diagrams`).
+#[derive(SimpleObject)]
+pub struct MarkdownDiagram {
+    /// The block's typst, as the text has it.
+    source: String,
+    /// Its rendering, an SVG.
+    attachment: Option<Attachment>,
+}
+
+/// What `renderDiagram` answers: the SVG, or why it didn't compile.
+#[derive(SimpleObject)]
+pub struct RenderedDiagram {
+    svg: Option<String>,
+    error: Option<String>,
+}
+
+/// An image a `markdown` field embeds (`akt.field.markdown.images`).
+#[derive(SimpleObject)]
+pub struct MarkdownImage {
+    /// As the text says it: `kuria:<number>[@<version>]`.
+    destination: String,
+    number: String,
+    version: Option<i32>,
+    /// The picture it shows, as read: at its version, at a version read's
+    /// pin, else now.
+    attachment: Option<Attachment>,
+    /// Why it is broken, if it is.
+    broken: Option<String>,
+}
+
+/// A version of an akt (`version.number`).
+#[derive(SimpleObject)]
+pub struct Version {
+    number: i32,
+    /// The revision it names.
+    revision: i32,
+    label: Option<String>,
+    released_by: User,
+    released_at: DateTime<Utc>,
+    /// What its references naming no version meant (`version.pins`).
+    pins: Vec<VersionPin>,
+}
+
+/// What a reference meant when its akt was released.
+#[derive(SimpleObject)]
+pub struct VersionPin {
+    destination: String,
+    number: String,
+    version: Option<i32>,
+    revision: Option<i32>,
+}
+
+impl From<&VersionRow> for Version {
+    fn from(row: &VersionRow) -> Self {
+        let pins: Vec<Pin> = serde_json::from_value(row.pins.clone()).unwrap_or_default();
+        Self {
+            number: row.number,
+            revision: row.revision,
+            label: row.label.clone(),
+            released_by: User(row.released_by),
+            released_at: row.released_at,
+            pins: pins
+                .into_iter()
+                .map(|p| VersionPin {
+                    destination: p.destination,
+                    number: p.number,
+                    version: p.version.and_then(|v| i32::try_from(v).ok()),
+                    revision: p.revision,
+                })
+                .collect(),
+        }
+    }
+}
+
+impl Akt {
+    /// What its references meant, if it is read at a version.
+    fn pins(&self) -> Vec<Pin> {
+        self.version
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.pins.clone()).ok())
+            .unwrap_or_default()
+    }
+}
+
+/// What releasing a version takes.
+#[derive(InputObject)]
+pub struct ReleaseVersionInput {
+    number: String,
+    /// The revision read, which must be the akt's current one.
+    revision: i32,
+    /// One line, at most 100 characters.
+    label: Option<String>,
+}
+
+/// What releasing several akter together takes.
+#[derive(InputObject)]
+pub struct ReleaseVersionsInput {
+    /// Each akt to release, at the revision read, with its label.
+    akter: Vec<ReleaseVersionInput>,
 }
 
 /// A `multiple` user field's users and contacts, in order.
@@ -1982,7 +2769,7 @@ pub enum VerdictKind {
 }
 
 impl FieldValue {
-    fn new(def: &FieldDef, value: &Value) -> Self {
+    fn new(def: &FieldDef, value: &Value, pins: &[Pin], akt: Uuid) -> Self {
         let field = def.key.clone();
         let option = |key: &str| {
             def.options.iter().find(|o| o.key == key).map_or_else(
@@ -1998,6 +2785,7 @@ impl FieldValue {
                 field,
                 text: text.clone(),
             }),
+            Value::Markdown(text) => Self::Markdown(MarkdownValue::of(def, text, pins, akt)),
             Value::Choice(key) => Self::Choice(ChoiceValue {
                 field,
                 option: option(key),
@@ -2176,6 +2964,20 @@ pub struct AktRevision {
 impl AktRevision {
     async fn revision(&self) -> i32 {
         self.row.revision
+    }
+
+    /// The git commit the revision was pushed in, if it was, as bundles
+    /// carry it: `{author, committer, message}`.
+    async fn commit(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Json<JsonValue>>> {
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        Ok(
+            kuria_store::versions::commits_of(&mut conn, self.row.tenant_id, self.row.akt_id)
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .find(|(revision, _)| *revision == self.row.revision)
+                .map(|(_, commit)| Json(commit)),
+        )
     }
 
     /// The subject who made the change.

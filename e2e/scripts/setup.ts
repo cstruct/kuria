@@ -56,7 +56,8 @@ const ACTIONS = {
 	'kuria:contacts:manage': 'Add, edit and erase contacts',
 	'kuria:tenant:export': "Export the tenant's akt types and akter as bundles",
 	'kuria:tenant:import': 'Import bundles into the tenant',
-	'release:approve': 'Release, deploy hotfixes and approve release notes'
+	'release:approve': 'Release, deploy hotfixes and approve release notes',
+	'documents:release': "Release a document's version"
 };
 
 const allow = (actions: string[], scopeBound = false) =>
@@ -70,6 +71,10 @@ const ROLES: Record<string, ReturnType<typeof allow>> = {
 	'contacts-manager': allow(['kuria:contacts:manage']),
 	'developer-work': allow(['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition'], true),
 	'release-work': allow(['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'release:approve'], true),
+	'document-release': allow(
+		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'documents:release'],
+		true
+	),
 	'pipeline-work': allow(['kuria:akter:read', 'kuria:akter:create'], true)
 };
 
@@ -142,13 +147,17 @@ for (const t of [tenant, lab]) {
 const people = {
 	developer: await person(tenant, 'dev@shop.example', [
 		'reader',
-		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case'] }
+		{
+			role: 'developer-work',
+			at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'document', 'image']
+		}
 	]),
 	releaseManager: await person(tenant, 'rm@shop.example', [
 		'reader',
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] },
-		{ role: 'developer-work', at: ['test_protocol', 'test_case'] }
+		{ role: 'developer-work', at: ['test_protocol', 'test_case', 'document_index'] },
+		{ role: 'document-release', at: ['document'] }
 	]),
 	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])
 };

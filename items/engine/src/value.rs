@@ -95,6 +95,8 @@ pub enum Value {
     Sections(Vec<crate::sections::Item>),
     /// Each assignee's verdict.
     Verdicts(Vec<crate::verdicts::Given>),
+    /// A `markdown` field's text, its headings with ids once written.
+    Markdown(String),
 }
 
 /// Who makes a change, and when: what the server supplies to values such as
@@ -126,6 +128,11 @@ impl Value {
         }
         // r[impl akt.field.multiple]
         if field.multiple && json.as_array().is_some_and(Vec::is_empty) {
+            return Ok(Input::Clear);
+        }
+        // r[impl akt.field.markdown]
+        if field.kind == FieldKind::Markdown && json.as_str().is_some_and(crate::markdown::is_empty)
+        {
             return Ok(Input::Clear);
         }
         if field.kind == FieldKind::Checkbox {
@@ -228,6 +235,14 @@ impl Value {
             FieldKind::User => Someone::from_json(json).map(Self::User),
             FieldKind::Sections => crate::sections::from_json(json).map(Self::Sections),
             FieldKind::Verdict => crate::verdicts::all_from_json(json).map(Self::Verdicts),
+            // r[impl akt.field.markdown]
+            FieldKind::Markdown => {
+                let text = json.as_str().ok_or("expected Markdown, as a string")?;
+                if crate::markdown::is_empty(text) {
+                    return Err("empty Markdown is no value".to_owned());
+                }
+                Ok(Self::Markdown(text.to_owned()))
+            }
             FieldKind::Checkbox => checkbox(json),
             FieldKind::Reference => reference(json),
             FieldKind::Git => git(json),
@@ -274,7 +289,7 @@ impl Value {
                 .map_or_else(|| key.to_owned(), |o| o.name.clone())
         };
         match self {
-            Self::Text(text) => text.clone(),
+            Self::Text(text) | Self::Markdown(text) => text.clone(),
             Self::Choice(key) => name(key),
             Self::Choices(keys) => keys.iter().map(|k| name(k)).collect::<Vec<_>>().join(", "),
             Self::Date(date) => date.format("%Y-%m-%d").to_string(),
@@ -339,7 +354,7 @@ impl Value {
             other => other,
         };
         match self {
-            Self::Text(text) | Self::Choice(text) => json!(text),
+            Self::Text(text) | Self::Choice(text) | Self::Markdown(text) => json!(text),
             Self::Choices(keys) => json!(keys),
             Self::Date(date) => json!(date.format("%Y-%m-%d").to_string()),
             Self::User(someone) => someone.to_json(),

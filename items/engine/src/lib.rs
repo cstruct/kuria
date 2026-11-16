@@ -8,13 +8,18 @@ pub mod board;
 pub mod copying;
 pub mod draft;
 mod hash;
+pub mod live;
+pub mod markdown;
+pub mod merge;
 pub mod outcomes;
 mod rank;
 pub mod rules;
 pub mod sbom;
 pub mod sections;
+pub mod typst;
 mod value;
 pub mod verdicts;
+pub mod versions;
 
 use std::collections::BTreeMap;
 
@@ -187,7 +192,7 @@ pub fn transition(
     Ok(outcome(def.to.clone(), fields, changes))
 }
 
-fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {
+pub(crate) fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {
     if ty.state(&current.state).is_some_and(|s| s.is_final) {
         return Err(Refusal::Final);
     }
@@ -203,6 +208,7 @@ fn apply(
     input: &Map<String, Json>,
     change: Change,
 ) -> Result<Applied, Refusal> {
+    let before = fields;
     let mut fields = fields.clone();
     let mut changes = BTreeMap::new();
     // Verdicts last, against the assignees as the input leaves them.
@@ -278,17 +284,73 @@ fn apply(
         let kept = verdicts::only_of(&given, &assignees_of(&fields, def));
         set_verdicts(&mut fields, &mut changes, &def.key, &given, kept);
     }
+    give_heading_ids(ty, before, &mut fields, &mut changes)?;
     Ok((fields, changes))
 }
 
-fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {
+/// Gives the headings of the akt's `markdown` fields their ids, unique
+/// across them, and counts a field as changed only if it now differs from
+/// `before`, so that text sent without the ids it already had changes
+/// nothing.
+// r[impl akt.field.markdown]
+fn give_heading_ids(
+    ty: &AktType,
+    before: &BTreeMap<String, Value>,
+    fields: &mut BTreeMap<String, Value>,
+    changes: &mut BTreeMap<String, Option<Value>>,
+) -> Result<(), Refusal> {
+    let keys: Vec<String> = ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Markdown && fields.contains_key(&f.key))
+        .map(|f| f.key.clone())
+        .collect();
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let mut texts: Vec<String> = keys
+        .iter()
+        .map(|k| match &fields[k] {
+            Value::Markdown(text) => text.clone(),
+            _ => String::new(),
+        })
+        .collect();
+    // Each field alone first, so a refusal names the field it is in.
+    for (key, text) in keys.iter().zip(&texts) {
+        markdown::give_ids(&mut [&mut text.clone()]).map_err(|reason| Refusal::InvalidValue {
+            field: key.clone(),
+            reason,
+        })?;
+    }
+    let mut all: Vec<&mut String> = texts.iter_mut().collect();
+    markdown::give_ids(&mut all).map_err(|reason| Refusal::InvalidValue {
+        field: keys.last().cloned().unwrap_or_default(),
+        reason,
+    })?;
+    for (key, text) in keys.into_iter().zip(texts) {
+        let value = Value::Markdown(text);
+        if before.get(&key) == Some(&value) {
+            changes.remove(&key);
+        } else {
+            changes.insert(key.clone(), Some(value.clone()));
+        }
+        fields.insert(key, value);
+    }
+    Ok(())
+}
+
+pub(crate) fn verdicts_of(fields: &BTreeMap<String, Value>, key: &str) -> Vec<verdicts::Given> {
     match fields.get(key) {
         Some(Value::Verdicts(given)) => given.clone(),
         _ => Vec::new(),
     }
 }
 
-fn assignees_of(fields: &BTreeMap<String, Value>, def: &kuria_config::FieldDef) -> Vec<Someone> {
+pub(crate) fn assignees_of(
+    fields: &BTreeMap<String, Value>,
+    def: &kuria_config::FieldDef,
+) -> Vec<Someone> {
     match def.assignees.as_ref().and_then(|key| fields.get(key)) {
         Some(Value::Users(people)) => people.clone(),
         _ => Vec::new(),
@@ -316,7 +378,7 @@ fn set_verdicts(
     }
 }
 
-fn outcome(
+pub(crate) fn outcome(
     state: String,
     fields: BTreeMap<String, Value>,
     changes: BTreeMap<String, Option<Value>>,

@@ -179,19 +179,24 @@ fn reads_types_and_schemas_from_the_directory() {
         task,
         json!({ "key": "task", "name": "Task", "version": 1, "numberPattern": "{parent}-T{seq:2}", "akterCount": 2 })
     );
-    let schema = dir.ok(&["schema", "task", "--format", "json"]).json;
+    let schema = dir
+        .ok(&["types", "schema", "task", "--format", "json"])
+        .json;
     assert_eq!(
         schema["type"]["fields"][3],
         json!({
             "key": "assignee", "name": "Assignee", "kind": "user", "required": false, "multiline": false,
-            "description": null, "options": [], "format": null, "draft": null,
+            "description": null, "options": [], "format": null, "draft": null, "references": null,
         })
     );
     assert_eq!(schema["type"]["presentation"]["icon"], "list_checks");
     assert_eq!(schema["type"]["links"][0]["key"], "blocks");
     let exported = dir.ok(&["types", "export", "gap", "--format", "json"]).json;
     assert_eq!(exported["types"][0]["key"], "gap");
-    assert_eq!(dir.refused(&["schema", "nope"]).kind.exit_code(), 2);
+    assert_eq!(
+        dir.refused(&["types", "schema", "nope"]).kind.exit_code(),
+        2
+    );
 }
 
 // r[verify cli.local.layout]
@@ -700,38 +705,59 @@ fn arranges_members_order_and_links() {
         2
     );
     // Order.
-    dir.ok(&["move", "PLAN-001-T02", "--before", "PLAN-001-T01"]);
+    dir.ok(&[
+        "members",
+        "place",
+        "PLAN-001-T02",
+        "--before",
+        "PLAN-001-T01",
+    ]);
     assert_eq!(
         numbers(&dir.ok(&["ls", "task", "--in", "PLAN-001", "--format", "json"])),
         ["PLAN-001-T02", "PLAN-001-T01"]
     );
     assert_eq!(
-        dir.refused(&["move", "PLAN-001-T02", "--after", "PLAN-001-T02"])
-            .code,
+        dir.refused(&[
+            "members",
+            "place",
+            "PLAN-001-T02",
+            "--after",
+            "PLAN-001-T02"
+        ])
+        .code,
         "BAD_REQUEST"
     );
     // Membership: a transfer is one change of all three.
     let before = revision_of(&dir, "PLAN-002");
-    dir.ok(&["transfer", "PLAN-001-T02", "PLAN-001", "PLAN-002"]);
+    dir.ok(&[
+        "members",
+        "transfer",
+        "PLAN-001-T02",
+        "PLAN-001",
+        "PLAN-002",
+    ]);
     assert_eq!(
         dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json["akt"]["in"],
         json!(["PLAN-002"])
     );
     assert_eq!(revision_of(&dir, "PLAN-002"), before + 1);
     assert_eq!(
-        dir.refused(&["add", "PLAN-002", "PLAN-001-T02"]).code,
+        dir.refused(&["members", "add", "PLAN-002", "PLAN-001-T02"])
+            .code,
         "ALREADY_MEMBER"
     );
     assert_eq!(
-        dir.refused(&["add", "PLAN-001", "PLAN-002"]).code,
+        dir.refused(&["members", "add", "PLAN-001", "PLAN-002"])
+            .code,
         "NOT_CONTAINABLE"
     );
     assert_eq!(
-        dir.refused(&["remove", "PLAN-001", "PLAN-001-T02"]).code,
+        dir.refused(&["members", "remove", "PLAN-001", "PLAN-001-T02"])
+            .code,
         "NOT_MEMBER"
     );
-    dir.ok(&["remove", "PLAN-002", "PLAN-001-T02"]);
-    dir.ok(&["add", "PLAN-001", "PLAN-001-T02"]);
+    dir.ok(&["members", "remove", "PLAN-002", "PLAN-001-T02"]);
+    dir.ok(&["members", "add", "PLAN-001", "PLAN-001-T02"]);
     assert_eq!(
         dir.ok(&["show", "PLAN-001-T02", "--format", "json"]).json["akt"]["in"],
         json!(["PLAN-001"])
@@ -762,7 +788,8 @@ fn redefines_types_only_where_their_akter_fit() {
         "task"
     );
     assert_eq!(
-        dir.ok(&["schema", "task", "--format", "json"]).json["type"]["name"],
+        dir.ok(&["types", "schema", "task", "--format", "json"])
+            .json["type"]["name"],
         "Job"
     );
     // Without `assignee`, PLAN-001-T01, which has one, wouldn't fit.
@@ -979,9 +1006,10 @@ fn a_directory_goes_to_a_bundle_and_back_unchanged() {
     // Written by hand in files of their own, then moved as the layout says.
     dir.ok(&["check", "--fix"]);
     dir.commit("Planned");
-    let bundle =
+    let unpacked =
         kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
             .unwrap();
+    let bundle = &unpacked.bundle;
 
     // As the server's import checks it: revisions from 1 to the file's,
     // each hash its state's and values'.
@@ -1031,7 +1059,7 @@ fn a_directory_goes_to_a_bundle_and_back_unchanged() {
 
     // And back: every akt as it was, nested in its plan's file.
     let again = dir.root.parent().unwrap().join("again");
-    kuria_cli::local::convert::to_dir(&bundle, &again).unwrap();
+    kuria_cli::local::convert::to_dir(&unpacked, &again).unwrap();
     let back = Dir {
         _temp: tempfile::tempdir().unwrap(),
         root: again.clone(),
@@ -1174,7 +1202,13 @@ fn writes_akter_into_their_parent_s_file_named_by_title() {
     assert!(at("<!-- akt: PLAN-001-T02 -->") < at("<!-- akt: PLAN-001-G01 -->"));
 
     // Its order is the directory's.
-    dir.ok(&["move", "PLAN-001-G01", "--before", "PLAN-001-T01"]);
+    dir.ok(&[
+        "members",
+        "place",
+        "PLAN-001-G01",
+        "--before",
+        "PLAN-001-T01",
+    ]);
     let text = std::fs::read_to_string(dir.root.join("akter/PLAN-001-local-writes.md")).unwrap();
     assert!(text.find("PLAN-001-G01 -->") < text.find("PLAN-001-T01 -->"));
 
@@ -1189,7 +1223,7 @@ fn writes_akter_into_their_parent_s_file_named_by_title() {
     dir.ok(&["set", "PLAN-001-T01", "title=Renamed task"]);
     assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
     // Removed from its plan, a task stays in its file, in nothing.
-    dir.ok(&["remove", "PLAN-001", "PLAN-001-T02"]);
+    dir.ok(&["members", "remove", "PLAN-001", "PLAN-001-T02"]);
     assert_eq!(akt_files(&dir), ["PLAN-001-writes-nested.md"]);
     assert!(!file(&dir, "PLAN-001-T02").contains("in:"));
     dir.ok(&["check"]);
@@ -1357,7 +1391,13 @@ fn cat_gives_an_akt_with_its_members_as_one_file() {
     let dir = Dir::new();
     worked(&dir);
     dir.ok(&["new", "gap", "--in", "PLAN-001", "--set", "title=Open"]);
-    dir.ok(&["move", "PLAN-001-G01", "--before", "PLAN-001-T02"]);
+    dir.ok(&[
+        "members",
+        "place",
+        "PLAN-001-G01",
+        "--before",
+        "PLAN-001-T02",
+    ]);
     let json = |args: &[&str]| {
         let mut all = args.to_vec();
         all.extend(["--format", "json"]);
@@ -1563,14 +1603,15 @@ fn protocols(dir: &Dir) {
 fn a_protocol_finishes_only_with_an_outcome_it_allows() {
     let dir = Dir::new();
     released(&dir);
-    let schema = dir.ok(&["schema", "protocol"]).markdown;
+    let schema = dir.ok(&["types", "schema", "protocol"]).markdown;
     assert!(
         schema
             .contains("- `finish` Finish: open → done, only if the outcome is pass, fail, skip\n"),
         "{schema}"
     );
     assert_eq!(
-        dir.ok(&["schema", "protocol", "--format", "json"]).json["type"]["transitions"][0]["outcomes"],
+        dir.ok(&["types", "schema", "protocol", "--format", "json"])
+            .json["type"]["transitions"][0]["outcomes"],
         json!(["pass", "fail", "skip"])
     );
     let pending = dir.refused(&["do", "PROT-001", "finish"]);
@@ -1611,7 +1652,7 @@ fn tests_and_protocols_filter_by_outcome() {
     std::fs::write(dir.root.join("types/suite.json"), suite.to_string()).unwrap();
     dir.ok(&["new", "suite", "--set", "title=Nightly"]);
     dir.ok(&["new", "protocol", "--in", "S-1", "--set", "title=Smoke"]);
-    dir.ok(&["add", "S-1", "PROT-001"]);
+    dir.ok(&["members", "add", "S-1", "PROT-001"]);
     dir.ok(&["verdict", "PROT-001-T2", "fail"]);
     let ls = |args: &[&str]| {
         let mut all = vec!["ls"];
@@ -1852,7 +1893,7 @@ fn protocol_files_apply_and_a_test_leaves_its_section() {
     );
 
     // A test that leaves takes its place in the sections with it.
-    dir.ok(&["remove", "PROT-001", "PROT-001-T3"]);
+    dir.ok(&["members", "remove", "PROT-001", "PROT-001-T3"]);
     assert!(
         !dir.ok(&["cat", "PROT-001"])
             .markdown
@@ -1936,4 +1977,711 @@ fn copies_a_protocol_with_the_tests_chosen() {
         ["PROT-003-T1", "PROT-003-T2"]
     );
     dir.ok(&["check"]);
+}
+
+/// A document type with a `markdown` body whose references are kept as
+/// `refers_to` links.
+fn documents(dir: &Dir) {
+    let document = json!({
+        "key": "document", "name": "Document", "number": "DOC-{seq}",
+        "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to" }
+        ],
+        "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }],
+        "versions": {}
+    });
+    std::fs::write(
+        dir.root.join("types/document.json"),
+        serde_json::to_string_pretty(&document).unwrap(),
+    )
+    .unwrap();
+}
+
+// r[verify akt.field.markdown]
+// r[verify akt.field.markdown.references]
+// r[verify cli.local.references]
+// r[verify cli.file.kinds]
+#[test]
+fn markdown_fields_get_heading_ids_and_keep_reference_links() {
+    let dir = Dir::new();
+    documents(&dir);
+    let body = |text: &str| {
+        let file = dir.root.parent().unwrap().join("body.md");
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n\nRun it.\n"),
+    ]);
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("See [install](kuria:DOC-1#install) and [gone](kuria:DOC-1#gone).\n\n# Install\n"),
+    ]);
+    let setup = dir.ok(&["cat", "DOC-1"]).markdown;
+    assert!(
+        setup.contains("<!-- field: body -->\n# Install {#install}\n\nRun it.\n"),
+        "{setup}"
+    );
+    // The text says its links: neither file lists them.
+    let guide = dir.ok(&["cat", "DOC-2"]).markdown;
+    assert!(!guide.contains("links:"), "{guide}");
+    assert!(!setup.contains("links:"), "{setup}");
+    // But they are read, from both sides, and the broken reference says why.
+    let shown = dir.ok(&["show", "DOC-1", "--format", "json"]).json;
+    assert_eq!(
+        shown["akt"]["links"][0]["name"], "Referred to by",
+        "{shown}"
+    );
+    assert_eq!(shown["akt"]["links"][0]["akt"]["number"], "DOC-2");
+    let read = dir.ok(&["show", "DOC-2", "--format", "json"]).json;
+    assert_eq!(
+        read["akt"]["references"],
+        json!([
+            { "field": "body", "destination": "kuria:DOC-1#install", "broken": null },
+            { "field": "body", "destination": "kuria:DOC-1#gone", "broken": "`DOC-1` has no heading `gone`" }
+        ])
+    );
+    let said = dir.ok(&["show", "DOC-2"]).markdown;
+    assert!(
+        said.contains(
+            "## Broken references\n\n- Body: `kuria:DOC-1#gone`: `DOC-1` has no heading `gone`\n"
+        ),
+        "{said}"
+    );
+    // Its file applied unchanged changes nothing; the text owns the links.
+    let file = dir.root.parent().unwrap().join("guide.md");
+    std::fs::write(&file, &guide).unwrap();
+    assert!(
+        dir.ok(&["apply", file.to_str().unwrap()])
+            .markdown
+            .contains("nothing changed")
+    );
+    assert_eq!(
+        dir.refused(&["link", "DOC-2", "refers_to", "DOC-1"]).code,
+        "INVALID_LINK"
+    );
+    assert_eq!(
+        dir.refused(&["set", "DOC-1", &body("# A {#same}\n\n# B {#same}\n")])
+            .code,
+        "REFUSED"
+    );
+    let schema = dir.ok(&["types", "schema", "document"]).markdown;
+    assert!(
+        schema.contains("references kept as `refers_to` links"),
+        "{schema}"
+    );
+    assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
+}
+
+// r[verify cli.local.versions]
+// r[verify version.together]
+// r[verify version.references]
+#[test]
+fn documents_referring_to_each_other_are_released_together() {
+    let dir = Dir::new();
+    documents(&dir);
+    let file = dir.root.parent().unwrap().join("body.md");
+    let body = |text: &str| {
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n\n[use it](kuria:DOC-2#use)\n"),
+    ]);
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("# Use\n\n[install](kuria:DOC-1#install)\n"),
+    ]);
+    dir.commit("Two documents");
+    // Neither has a version: alone, each is refused, naming the other.
+    let alone = dir.refused(&["release", "DOC-2"]);
+    assert_eq!(alone.code, "BROKEN_REFERENCES");
+    assert!(
+        alone.message.contains("`DOC-1` has no version yet")
+            && alone.message.contains("released together with DOC-1"),
+        "{}",
+        alone.message
+    );
+    assert_eq!(
+        dir.refused(&["release", "DOC-2", "DOC-2"]).code,
+        "BAD_REQUEST"
+    );
+    // Together: each pinned to the other's version 1.
+    let released = dir.ok(&["release", "DOC-2", "DOC-1", "--label", "1.0"]);
+    let all = released.json["released"].as_array().unwrap();
+    assert_eq!(all.len(), 2, "{}", released.markdown);
+    assert_eq!(all[0]["number"], "DOC-2");
+    assert_eq!(all[1]["version"], 1);
+    dir.commit("Release both");
+    for (number, other) in [("DOC-1", "DOC-2"), ("DOC-2", "DOC-1")] {
+        let versions = dir.ok(&["versions", number]).json;
+        assert_eq!(versions["versions"][0]["label"], "1.0", "{versions}");
+        let pins = dir.ok(&["show", number, "--version", "1"]).json;
+        assert!(pins.to_string().contains(other), "{pins}");
+    }
+}
+
+// r[verify cli.local.versions]
+// r[verify version.release]
+// r[verify version.references]
+// r[verify version.read]
+// r[verify version.diff]
+// r[verify version.history]
+#[test]
+fn documents_are_released_and_read_at_their_versions() {
+    let dir = Dir::new();
+    documents(&dir);
+    let file = dir.root.parent().unwrap().join("body.md");
+    let body = |text: &str| {
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n\nRun it.\n"),
+    ]);
+    // Not committed yet: refused.
+    assert_eq!(dir.refused(&["release", "DOC-1"]).code, "UNCOMMITTED");
+    dir.commit("Setup");
+    let released = dir.ok(&["release", "DOC-1", "--label", "1.0"]);
+    assert_eq!(released.json["version"], 1, "{}", released.markdown);
+    dir.commit("Release DOC-1 1.0");
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("[install](kuria:DOC-1#install) [gone](kuria:DOC-1@1#gone)\n"),
+    ]);
+    dir.commit("Guide");
+    let broken = dir.refused(&["release", "DOC-2"]);
+    assert_eq!(broken.code, "BROKEN_REFERENCES");
+    assert!(
+        broken
+            .message
+            .contains("`DOC-1` has no heading `gone` in version 1"),
+        "{}",
+        broken.message
+    );
+    dir.ok(&["set", "DOC-2", &body("[install](kuria:DOC-1#install)\n")]);
+    dir.commit("Fix the guide");
+    dir.ok(&["release", "DOC-2"]);
+    dir.commit("Release DOC-2");
+    // The living version changes on.
+    dir.ok(&["set", "DOC-1", &body("# Running {#run}\n")]);
+    dir.commit("Rewrite the setup");
+
+    // A file never lists its versions; read at one, it says which.
+    let living = dir.ok(&["cat", "DOC-1"]).markdown;
+    assert!(!living.contains("versions"), "{living}");
+    let at = dir.ok(&["cat", "DOC-1", "--version", "1"]).markdown;
+    assert!(
+        at.contains("revision: 1\nversion: 1\nstate: draft\n"),
+        "{at}"
+    );
+    assert!(at.contains("# Install {#install}"), "{at}");
+    let path = dir.root.parent().unwrap().join("at.md");
+    std::fs::write(&path, &at).unwrap();
+    assert_eq!(
+        dir.refused(&["apply", path.to_str().unwrap()]).code,
+        "READ_ONLY"
+    );
+    // DOC-2's version 1 follows its pin to DOC-1's version 1, where the
+    // heading still is; its living version doesn't.
+    let pinned = dir
+        .ok(&["show", "DOC-2", "--version", "1", "--format", "json"])
+        .json;
+    assert_eq!(
+        pinned["akt"]["references"][0]["broken"],
+        json!(null),
+        "{pinned}"
+    );
+    let now = dir.ok(&["show", "DOC-2", "--format", "json"]).json;
+    assert_eq!(
+        now["akt"]["references"][0]["broken"],
+        "`DOC-1` has no heading `install`"
+    );
+
+    let listed = dir.ok(&["versions", "DOC-1", "--format", "json"]).json;
+    assert_eq!(listed["versions"][0]["number"], 1);
+    assert_eq!(listed["versions"][0]["label"], "1.0");
+    let diff = dir.ok(&["diff", "DOC-1", "1"]).markdown;
+    assert!(
+        diff.contains("-# Install {#install}") && diff.contains("+# Running {#run}"),
+        "{diff}"
+    );
+    let history = dir.ok(&["history", "DOC-1"]).markdown;
+    assert!(history.contains("released as version 1 (1.0)"), "{history}");
+    assert!(
+        dir.ok(&["show", "DOC-1"])
+            .markdown
+            .contains("## Versions\n\n- 1 (1.0) · revision 1")
+    );
+    assert_eq!(
+        dir.refused(&["cat", "DOC-1", "--version", "9"]).code,
+        "NOT_FOUND"
+    );
+    assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
+}
+
+/// A bundle's `revisions` replayed as the server's import replays them,
+/// checking each hash is that of what the changes so far result in;
+/// answers the fields they end with.
+fn replayed(ty: &kuria_config::AktType, revisions: &[Value]) -> serde_json::Map<String, Value> {
+    let mut raw = serde_json::Map::new();
+    for r in revisions {
+        for (k, v) in r["changes"].as_object().unwrap() {
+            if v.is_null() {
+                raw.remove(k);
+            } else {
+                raw.insert(k.clone(), v.clone());
+            }
+        }
+        let fields = kuria_engine::fields_from_json(ty, &raw).unwrap();
+        let hash = kuria_engine::state_hash(r["state"].as_str().unwrap(), &fields)
+            .iter()
+            .fold(String::new(), |mut s, b| {
+                write!(s, "{b:02x}").unwrap();
+                s
+            });
+        assert_eq!(r["hash"], hash.as_str(), "revision {}", r["revision"]);
+    }
+    raw
+}
+
+// r[verify cli.local.convert]
+// r[verify cli.local.versions]
+#[test]
+fn versions_go_to_a_bundle_and_back() {
+    let dir = Dir::new();
+    documents(&dir);
+    let file = dir.root.parent().unwrap().join("body.md");
+    let body = |text: &str| {
+        std::fs::write(&file, text).unwrap();
+        format!("body=@{}", file.display())
+    };
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        &body("# Install\n"),
+    ]);
+    dir.commit("Setup");
+    dir.ok(&["release", "DOC-1", "--label", "1.0"]);
+    dir.commit("Release DOC-1");
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Guide",
+        "--set",
+        &body("[install](kuria:DOC-1#install)\n"),
+    ]);
+    dir.commit("Guide");
+    dir.ok(&["release", "DOC-2"]);
+    dir.commit("Release DOC-2");
+    dir.ok(&["set", "DOC-1", &body("# Running {#run}\n")]);
+    dir.commit("Rewrite the setup");
+
+    let unpacked =
+        kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
+            .unwrap();
+    let bundle = &unpacked.bundle;
+    assert_eq!(bundle["format"], 2);
+    let akt = |number: &str| {
+        bundle["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["number"] == number)
+            .unwrap()
+            .clone()
+    };
+    // Each revision is what git holds at it, so a version reads on the
+    // server as it was released.
+    let setup = akt("DOC-1");
+    let revisions = setup["revisions"].as_array().unwrap();
+    assert_eq!(revisions.len(), 2, "{setup}");
+    assert_eq!(revisions[0]["changes"]["body"], "# Install {#install}");
+    assert_eq!(
+        revisions[1]["changes"],
+        json!({ "body": "# Running {#run}" })
+    );
+    // As the server's import replays them: each hash is that of what the
+    // changes so far result in.
+    let doc: kuria_config::AktTypeDocument = serde_json::from_value(
+        bundle["aktTypes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["key"] == "document")
+            .unwrap()["versions"][0]["definition"]
+            .clone(),
+    )
+    .unwrap();
+    let ty = kuria_config::validate(doc).unwrap();
+    let raw = replayed(&ty, revisions);
+    assert_eq!(json!(raw), setup["fields"]);
+    assert_eq!(
+        setup["versions"],
+        json!([{
+            "number": 1, "revision": 1, "label": "1.0",
+            "releasedBy": setup["versions"][0]["releasedBy"],
+            "releasedAt": setup["versions"][0]["releasedAt"],
+            "pins": []
+        }])
+    );
+    let guide = akt("DOC-2");
+    assert_eq!(guide["versions"][0]["pins"][0]["version"], 1, "{guide}");
+
+    // And back: the versions are listed, and a pin still finds the heading
+    // the version it names had.
+    let again = dir.root.parent().unwrap().join("again");
+    kuria_cli::local::convert::to_dir(&unpacked, &again).unwrap();
+    let back = Dir {
+        _temp: tempfile::tempdir().unwrap(),
+        root: again.clone(),
+    };
+    for number in ["DOC-1", "DOC-2"] {
+        assert_eq!(
+            back.ok(&["versions", number, "--format", "json"]).json,
+            dir.ok(&["versions", number, "--format", "json"]).json,
+            "{number}"
+        );
+    }
+    let pinned = back.ok(&["show", "DOC-2", "--format", "json"]).json;
+    assert_eq!(
+        pinned["akt"]["references"][0]["broken"],
+        "`DOC-1` has no heading `install`"
+    );
+    assert_eq!(back.ok(&["check"]).json["problems"], json!([]));
+}
+
+/// Images whose pictures are PNG or SVG files, builds holding an SBOM, and
+/// documents that embed images, released as versions.
+fn pictured(dir: &Dir) {
+    let image =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/documents/image.json");
+    std::fs::copy(image, dir.root.join("types/image.json")).unwrap();
+    let types = [
+        json!({
+            "key": "build", "name": "Build", "number": "BLD-{seq}",
+            "states": [{ "key": "built", "name": "Built", "initial": true }],
+            "fields": [
+                { "key": "title", "name": "Title", "kind": "text", "required": true },
+                { "key": "sbom", "name": "SBOM", "kind": "attachment", "format": "sbom" }
+            ]
+        }),
+        json!({
+            "key": "document", "name": "Document", "number": "DOC-{seq}",
+            "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+            "fields": [
+                { "key": "title", "name": "Title", "kind": "text", "required": true },
+                { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to" }
+            ],
+            "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document", "image"] }],
+            "versions": {}
+        }),
+    ];
+    for t in types {
+        std::fs::write(
+            dir.root
+                .join(format!("types/{}.json", t["key"].as_str().unwrap())),
+            serde_json::to_string_pretty(&t).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+/// A file beside the directory, as `@<path>` gives it.
+fn outside(dir: &Dir, name: &str, bytes: &[u8]) -> String {
+    let path = dir.root.parent().unwrap().join(name);
+    std::fs::write(&path, bytes).unwrap();
+    format!("@{}", path.display())
+}
+
+const PNG: &[u8] = b"\x89PNG\r\n\x1a\n one picture";
+const SPDX: &str =
+    r#"{ "spdxVersion": "SPDX-2.3", "name": "backend", "packages": [{ "name": "serde" }] }"#;
+
+// r[verify cli.local.attachments]
+// r[verify cli.local.unsupported]
+// r[verify attachment.media-types]
+#[test]
+fn attachments_are_files_of_the_directory() {
+    let dir = Dir::new();
+    pictured(&dir);
+    let logo = outside(&dir, "logo.png", PNG);
+    dir.ok(&[
+        "new",
+        "image",
+        "--set",
+        "title=Logo",
+        "--set",
+        &format!("file={logo}"),
+    ]);
+    assert_eq!(
+        std::fs::read(dir.root.join("attachments/IMG-1/logo.png")).unwrap(),
+        PNG
+    );
+    assert!(
+        dir.ok(&["cat", "IMG-1"])
+            .markdown
+            .contains("file: attachments/IMG-1/logo.png\n"),
+        "named by its path"
+    );
+    // The same name with other bytes is a file of its own.
+    let other = outside(&dir, "logo.png", b"\x89PNG another");
+    dir.ok(&["set", "IMG-1", &format!("file={other}")]);
+    assert!(file(&dir, "IMG-1").contains("file: attachments/IMG-1/logo-2.png\n"));
+    assert_eq!(
+        std::fs::read(dir.root.join("attachments/IMG-1/logo.png")).unwrap(),
+        PNG,
+        "an attachment never changes"
+    );
+    // A file of the directory, named by its path.
+    dir.ok(&["set", "IMG-1", "file=attachments/IMG-1/logo.png"]);
+
+    let sbom = outside(&dir, "backend.spdx.json", SPDX.as_bytes());
+    dir.ok(&[
+        "new",
+        "build",
+        "--set",
+        "title=4.2",
+        "--set",
+        &format!("sbom={sbom}"),
+    ]);
+    assert!(
+        dir.root
+            .join("attachments/BLD-1/backend.spdx.json")
+            .is_file()
+    );
+
+    // What the field doesn't take, a file the directory lacks, and an
+    // upload's identifier are refused, changing nothing.
+    let text = format!("file={}", outside(&dir, "notes.txt", b"not a picture"));
+    let not_sbom = format!("sbom={}", outside(&dir, "other.json", b"{}"));
+    for (args, code) in [
+        (["set", "IMG-1", text.as_str()], "REFUSED"),
+        (["set", "BLD-1", not_sbom.as_str()], "REFUSED"),
+        (
+            ["set", "IMG-1", "file=attachments/IMG-1/gone.png"],
+            "REFUSED",
+        ),
+        (["set", "IMG-1", "file=attachments/logo.png"], "REFUSED"),
+        (["set", "IMG-1", "file=../logo.png"], "REFUSED"),
+        (
+            ["set", "IMG-1", "file=0190f5a4-8f0e-7c2a-9e1b-3a4b5c6d7e8f"],
+            "LOCAL_UNSUPPORTED",
+        ),
+    ] {
+        let refused = dir.refused(&args);
+        assert_eq!(refused.code, code, "{args:?}: {}", refused.message);
+    }
+    assert!(!dir.root.join("attachments/IMG-1/notes.txt").exists());
+    assert_eq!(dir.ok(&["check"]).json["problems"], json!([]));
+
+    // `check` names a file that went, and one the field doesn't take.
+    std::fs::write(dir.root.join("attachments/BLD-1/notes.txt"), "x").unwrap();
+    edit_akt(&dir, "BLD-1", "backend.spdx.json", "notes.txt");
+    std::fs::remove_file(dir.root.join("attachments/IMG-1/logo.png")).unwrap();
+    let refused = dir.refused(&["check"]);
+    assert_eq!(refused.code, "INCONSISTENT");
+    for problem in [
+        "akter/IMG-1-logo.md: `file`: the directory has no file `attachments/IMG-1/logo.png`",
+        "akter/BLD-1-4-2.md: `sbom`: `attachments/BLD-1/notes.txt` isn't an SBOM",
+    ] {
+        assert!(refused.message.contains(problem), "{}", refused.message);
+    }
+}
+
+// r[verify cli.local.attachments]
+// r[verify akt.field.markdown.images]
+// r[verify version.references]
+#[test]
+fn a_document_embedding_a_picture_in_the_directory_releases() {
+    let dir = Dir::new();
+    pictured(&dir);
+    let logo = outside(&dir, "logo.png", PNG);
+    dir.ok(&[
+        "new",
+        "image",
+        "--set",
+        "title=Logo",
+        "--set",
+        &format!("file={logo}"),
+    ]);
+    dir.ok(&["new", "image", "--set", "title=Not yet"]);
+    dir.ok(&[
+        "new",
+        "document",
+        "--set",
+        "title=Setup",
+        "--set",
+        "body=![Logo](kuria:IMG-1) ![Later](kuria:IMG-2)",
+    ]);
+    dir.commit("Setup");
+    let refused = dir.refused(&["release", "DOC-1"]);
+    assert_eq!(refused.code, "BROKEN_REFERENCES");
+    assert!(
+        refused.message.contains("`IMG-2` has no picture") && !refused.message.contains("IMG-1"),
+        "{}",
+        refused.message
+    );
+    dir.ok(&["set", "DOC-1", "body=![Logo](kuria:IMG-1)"]);
+    dir.commit("Only the logo");
+    let released = dir.ok(&["release", "DOC-1"]);
+    assert_eq!(released.json["version"], 1, "{}", released.markdown);
+}
+
+// r[verify cli.local.attachments]
+// r[verify cli.local.convert]
+#[test]
+fn attachments_go_to_a_bundle_and_back() {
+    let dir = Dir::new();
+    pictured(&dir);
+    let logo = outside(&dir, "logo.png", PNG);
+    dir.ok(&[
+        "new",
+        "image",
+        "--set",
+        "title=Logo",
+        "--set",
+        &format!("file={logo}"),
+    ]);
+    let sbom = outside(&dir, "backend.spdx.json", SPDX.as_bytes());
+    dir.ok(&[
+        "new",
+        "build",
+        "--set",
+        "title=4.2",
+        "--set",
+        &format!("sbom={sbom}"),
+    ]);
+    dir.commit("Logo and build");
+    // A picture replaced, its old file removed: git still has it.
+    let svg = outside(
+        &dir,
+        "logo.svg",
+        b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+    );
+    dir.ok(&["set", "IMG-1", &format!("file={svg}")]);
+    std::fs::remove_file(dir.root.join("attachments/IMG-1/logo.png")).unwrap();
+    dir.commit("An SVG logo");
+
+    let unpacked =
+        kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
+            .unwrap();
+    let bundle = &unpacked.bundle;
+    let attachments = bundle["attachments"].as_array().unwrap();
+    let named = |name: &str| {
+        attachments
+            .iter()
+            .find(|a| a["name"] == name)
+            .unwrap_or_else(|| panic!("no {name} in {attachments:?}"))
+            .clone()
+    };
+    let (png, svg, spdx) = (
+        named("logo.png"),
+        named("logo.svg"),
+        named("backend.spdx.json"),
+    );
+    assert_eq!(attachments.len(), 3);
+    assert_eq!(
+        (png["mediaType"].as_str(), svg["mediaType"].as_str()),
+        (Some("image/png"), Some("image/svg+xml"))
+    );
+    assert_eq!(spdx["sbom"]["format"], "spdx");
+    assert!(png["sbom"].is_null());
+    // As the server's import checks them: each one's bytes by its hash.
+    for a in attachments {
+        let bytes = &unpacked.attachments[a["sha256"].as_str().unwrap()];
+        assert_eq!(a["size"], bytes.len());
+    }
+    assert_eq!(unpacked.attachments[png["sha256"].as_str().unwrap()], PNG);
+    let akt = |number: &str| {
+        bundle["akter"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["number"] == number)
+            .unwrap()
+            .clone()
+    };
+    let image = akt("IMG-1");
+    assert_eq!(
+        image["attachments"],
+        json!([{ "field": "file", "attachment": svg["id"] }])
+    );
+    assert_eq!(image["fields"]["file"], svg["id"]);
+    let revisions = image["revisions"].as_array().unwrap();
+    assert_eq!(
+        revisions[0]["changes"]["file"], png["id"],
+        "the file it held first"
+    );
+    let doc: kuria_config::AktTypeDocument =
+        serde_json::from_str(&std::fs::read_to_string(dir.root.join("types/image.json")).unwrap())
+            .unwrap();
+    replayed(&kuria_config::validate(doc).unwrap(), revisions);
+    // Another client names other attachments, so a directory imports twice.
+    let again = kuria_cli::local::convert::bundle_of(&dir.root, None).unwrap();
+    assert_ne!(again.bundle["attachments"][0]["id"], attachments[0]["id"]);
+    written_back(&dir, &unpacked);
+}
+
+/// `unpacked`, the bundle of `dir`, back as a directory: each file as it
+/// was, where it was.
+fn written_back(dir: &Dir, unpacked: &kuria_cli::local::convert::Unpacked) {
+    let back_root = dir.root.parent().unwrap().join("again");
+    let wrote = kuria_cli::local::convert::to_dir(unpacked, &back_root).unwrap();
+    assert_eq!(wrote["attachments"], 2, "the files akter hold now");
+    let back = Dir {
+        _temp: tempfile::tempdir().unwrap(),
+        root: back_root.clone(),
+    };
+    for path in [
+        "attachments/IMG-1/logo.svg",
+        "attachments/BLD-1/backend.spdx.json",
+    ] {
+        assert_eq!(
+            std::fs::read(back_root.join(path)).unwrap(),
+            std::fs::read(dir.root.join(path)).unwrap(),
+            "{path}"
+        );
+    }
+    for number in ["IMG-1", "BLD-1"] {
+        assert_eq!(
+            back.ok(&["cat", number]).markdown,
+            dir.ok(&["cat", number]).markdown,
+            "{number}"
+        );
+    }
+    assert_eq!(back.ok(&["check"]).json["problems"], json!([]));
 }

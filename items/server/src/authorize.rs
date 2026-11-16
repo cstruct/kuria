@@ -61,6 +61,7 @@ pub enum Permission {
     Create { key: String },
     Edit { key: String },
     Transition { key: String, action: Option<String> },
+    Release { key: String, action: Option<String> },
     ReadContacts,
     ManageContacts,
     Export,
@@ -97,6 +98,14 @@ impl Permission {
             // r[impl authz.transition-action]
             Self::Transition { key, action } => {
                 let mut actions = vec![TRANSITION];
+                if let Some(action) = action {
+                    actions.push(action);
+                }
+                at_type(key, &actions)
+            }
+            // r[impl authz.release]
+            Self::Release { key, action } => {
+                let mut actions = vec![EDIT];
                 if let Some(action) = action {
                     actions.push(action);
                 }

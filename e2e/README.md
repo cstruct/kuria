@@ -26,8 +26,8 @@ mise exec -- npx --prefix e2e playwright test -g "release"
 mise run e2e:serve
 ```
 
-starts the same stack, defines the release-management and
-test-protocols examples' akt types, and prints who can sign in at <http://localhost:18090> (use
+starts the same stack, defines the release-management,
+test-protocols and documents examples' akt types, and prints who can sign in at <http://localhost:18090> (use
 `localhost`, not `127.0.0.1`). Each start begins with an empty Kuria and
 a fresh Konklav. Ctrl-C stops the server.
 
@@ -107,6 +107,10 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   moved from `shop` to `lab`; selected types converted to an akt
   directory and back into `lab`; and the planning example, defined from
   `docs/examples/planning` and worked as `kuria guide` says.
+- [`tests/clone.spec.ts`](tests/clone.spec.ts): a document index cloned
+  with the binary while its document is typed in in the app: a push
+  behind the live edit refused as stale, a pull merging it, and the push
+  shown in the browser as it is typed in.
 - [`tests/parity.spec.ts`](tests/parity.spec.ts): local mode's parity
   with a server. One sequence of some thirty commands (types, creation,
   edits, transitions, links with pins, order, membership, transfers, and
@@ -133,6 +137,21 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   that leads there (or refused where none does); an akt type's list
   filtered by state and by field values in the address, sorted, and
   loading more a page at a time.
+- [`tests/documents.spec.ts`](tests/documents.spec.ts): the
+  [documents example](../docs/examples/documents/README.md):
+  - the developer writes a document in the rich-text editor, with a reference to another document's heading;
+  - a picture is uploaded as an image akt and a diagram written as code is toggled to its picture, and the image type sits under "Show more";
+  - the release manager's release is refused while another reference is broken, and taken once it isn't;
+  - version 1 reads as released, its links pinned and its picture and diagram shown, and is downloaded as a PDF with the picture in it and compared with the living version.
+  
+  axe checks the diagram as code, the body with its picture and diagram, the refused release, the version and the comparison.
+- [`tests/markdown-editor.spec.ts`](tests/markdown-editor.spec.ts): a
+  `markdown` field written and formatted in the editor, with a reference
+  inserted through the picker and a footnote, saved as Markdown, rendered as
+  a link that opens the heading, and downloaded as a PDF; an image uploaded
+  from the Image dialog, shown as a figure and on its own page; a diagram
+  written as code, previewed through a compile error and back, toggled to
+  its picture and saved; axe on each dialog and view.
 - [`tests/test-protocols.spec.ts`](tests/test-protocols.spec.ts): the
   [test-protocols example](../docs/examples/test-protocols/README.md):
   a template of three sections copied with two of them from the copy
@@ -144,8 +163,9 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   finished, and the template unchanged. axe checks the copy dialog, the
   run in its sections and the outline.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
-  the drawer and no sideways scrolling at 390 pixels, and signing out of
-  Kuria and of the login page's Konklav session.
+  the drawer and no sideways scrolling at 390 pixels, signing out of
+  Kuria and of the login page's Konklav session, and akt types under "Show
+  more", remembered across reloads.
 - [`tests/release-flow.spec.ts`](tests/release-flow.spec.ts): the
   [release-management example](../docs/examples/release-management/README.md)
   from planning to a closed release, as a developer and a release manager

@@ -1,0 +1,26 @@
+{
+  "key": "document_index",
+  "name": "Document index",
+  "number": "DOCS-{seq}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "owner", "name": "Owner", "kind": "user" },
+    { "key": "about", "name": "About", "kind": "text", "multiline": true,
+      "description": "What the documents in it are for." },
+    { "key": "folders", "name": "Folders", "kind": "sections", "of": ["document"],
+      "description": "Its documents, in folders nested as deep as needed." }
+  ],
+  "states": [
+    { "key": "open", "name": "Open", "initial": true },
+    { "key": "archived", "name": "Archived", "final": true }
+  ],
+  "transitions": [
+    { "key": "archive", "name": "Archive", "from": ["open"], "to": "archived" }
+  ],
+  "contains": [{ "type": "document", "exclusive": true }],
+  "presentation": {
+    "icon": "book-open", "colour": "teal",
+    "list": ["owner"],
+    "tones": { "open": "active", "archived": "neutral" }
+  }
+}

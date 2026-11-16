@@ -101,6 +101,8 @@ pub struct Writer {
     pub now: DateTime<Utc>,
     touched: BTreeSet<String>,
     types: BTreeSet<String>,
+    /// Files to copy into the directory: each source, and its path there.
+    copies: Vec<(PathBuf, String)>,
     _lock: Lock,
 }
 
@@ -115,8 +117,96 @@ impl Writer {
             now: Utc::now(),
             touched: BTreeSet::new(),
             types: BTreeSet::new(),
+            copies: Vec::new(),
             _lock: lock,
         })
+    }
+
+    /// The value `raw` given for the attachment field `key` of `ty`, for
+    /// the akt `number`, as the path of a file of the directory that fits
+    /// the field: a path given as one, or `@<file>`, a file copied into
+    /// `attachments/<number>/` when the change is saved, under a name of
+    /// its own if another file has it. An attachment's identifier names an
+    /// upload, which local mode doesn't do.
+    // r[impl cli.local.attachments]
+    // r[impl cli.local.unsupported]
+    pub fn attachment(
+        &mut self,
+        ty: &kuria_config::AktType,
+        key: &str,
+        number: &str,
+        raw: &Json,
+    ) -> Result<Json, CliError> {
+        let field = ty.field(key).expect("a field of the type");
+        let refused = |reason: String| CliError {
+            field: Some(key.to_owned()),
+            ..CliError::from_server(
+                "REFUSED",
+                kuria_engine::Refusal::InvalidValue {
+                    field: key.to_owned(),
+                    reason,
+                }
+                .to_string(),
+                None,
+            )
+        };
+        let given = match raw {
+            Json::Null => return Ok(Json::Null),
+            Json::String(text) => text.trim(),
+            Json::Object(o) if o.contains_key("id") => "",
+            _ => {
+                return Err(refused(format!(
+                    "`{raw}` isn't a file's path under attachments/"
+                )));
+            }
+        };
+        if given.is_empty() || uuid::Uuid::parse_str(given).is_ok() {
+            return Err(CliError {
+                field: Some(key.to_owned()),
+                ..super::unsupported(
+                    "An uploaded attachment",
+                    "an akt directory holds its attachments as files: name one under attachments/<number>/, or copy one in with `@<file>`",
+                )
+            });
+        }
+        let Some(source) = given.strip_prefix('@') else {
+            return match super::attachments::problem(&self.dir.root, field, given) {
+                Some(reason) => Err(refused(reason)),
+                None => Ok(given.into()),
+            };
+        };
+        let source = PathBuf::from(source);
+        let bytes = std::fs::read(&source).map_err(|e| io_error(&source, &e))?;
+        let name = source
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        let name = super::attachments::file_name(name, super::attachments::media_type(name));
+        if let Some(reason) = super::attachments::unfit(field, &name, &bytes) {
+            return Err(refused(reason));
+        }
+        for n in 1.. {
+            let path = format!(
+                "{}/{number}/{}",
+                super::attachments::DIRECTORY,
+                super::attachments::numbered(&name, n)
+            );
+            let staged = self.copies.iter().find(|(_, p)| *p == path);
+            let same = match staged {
+                Some((from, _)) => std::fs::read(from).ok().as_ref() == Some(&bytes),
+                None => match std::fs::read(self.dir.root.join(&path)) {
+                    Ok(there) => there == bytes,
+                    Err(_) => {
+                        self.copies.push((source.clone(), path.clone()));
+                        true
+                    }
+                },
+            };
+            if same {
+                return Ok(path.into());
+            }
+        }
+        unreachable!("a name is found")
     }
 
     pub fn akt(&self, number: &str) -> Result<&LocalAkt, CliError> {
@@ -211,6 +301,15 @@ impl Writer {
                 + "\n";
             write_whole(&path, &text)?;
         }
+        // Written before the akter that name them.
+        for (source, path) in &self.copies {
+            let to = self.dir.root.join(path);
+            if let Some(parent) = to.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| io_error(parent, &e))?;
+            }
+            let bytes = std::fs::read(source).map_err(|e| io_error(source, &e))?;
+            write_whole(&to, &bytes)?;
+        }
         let from: BTreeSet<PathBuf> = self
             .touched
             .iter()
@@ -219,7 +318,7 @@ impl Writer {
         let to = layout::relocate(&mut self.dir, &from);
         // Written first, so that an akt is never in no file.
         for path in &to {
-            write_whole(path, &layout::file_text(&self.dir, path))?;
+            write_whole(path, layout::file_text(&self.dir, path))?;
         }
         for path in from.difference(&to) {
             if self.dir.akter.iter().all(|a| a.path != *path) {
@@ -351,13 +450,14 @@ impl Writer {
                 sections: Vec::new(),
             },
             nested: false,
+            versions: Vec::new(),
         }
     }
 }
 
 /// Writes `text` to `path` through a file beside it, renamed over it, so
 /// that a reader never sees half of it.
-fn write_whole(path: &Path, text: &str) -> Result<(), CliError> {
+fn write_whole(path: &Path, text: impl AsRef<[u8]>) -> Result<(), CliError> {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
     let partial = path.with_file_name(format!(".{name}.partial"));
     std::fs::write(&partial, text).map_err(|e| io_error(&partial, &e))?;
@@ -381,6 +481,10 @@ pub fn text_of(dir: &AktDir, akt: &LocalAkt, numbered: bool) -> String {
         ("rank", akt.rank.clone().into()),
         ("state", akt.state.clone().into()),
     ]);
+    // r[impl cli.local.versions]
+    if !akt.versions.is_empty() {
+        front.push(("versions", akt.versions.clone().into()));
+    }
     if !akt.containers.is_empty() {
         front.push(("in", akt.containers.clone().into()));
     }
@@ -399,7 +503,9 @@ pub fn text_of(dir: &AktDir, akt: &LocalAkt, numbered: bool) -> String {
         };
         let text = field.kind == kuria_config::FieldKind::Text;
         match value {
-            Json::String(body) if text && field.multiline => {
+            Json::String(body)
+                if (text && field.multiline) || field.kind == kuria_config::FieldKind::Markdown =>
+            {
                 sections.push((field.key.clone(), body.clone()));
             }
             _ if field.kind == kuria_config::FieldKind::Sections => {

@@ -199,6 +199,9 @@ pub struct Times {
     tracked: bool,
     changes: HashMap<String, Vec<(Commit, i32)>>,
     head: HashMap<String, i32>,
+    /// Per akt and revision, the text of the file that first held it at
+    /// that revision in a commit, and the file's path.
+    texts: HashMap<(String, i32), (String, String)>,
 }
 
 impl Times {
@@ -235,8 +238,15 @@ impl Times {
             let touched: Vec<(String, i32)> = l
                 .files
                 .iter()
-                .filter_map(|(_, blob)| texts.get(blob.as_ref()?))
-                .flat_map(|t| revisions(t))
+                .filter_map(|(path, blob)| Some((path, texts.get(blob.as_ref()?)?)))
+                .flat_map(|(path, t)| revisions(t).into_iter().map(move |(n, r)| (path, t, n, r)))
+                .map(|(path, t, n, r)| {
+                    times
+                        .texts
+                        .entry((n.clone(), r))
+                        .or_insert_with(|| (path.clone(), t.clone()));
+                    (n, r)
+                })
                 .collect();
             // An akt changed when it reached a revision it hadn't, so that
             // one moved between files, or seen again on a merge, didn't.
@@ -258,8 +268,18 @@ impl Times {
         times
     }
 
+    /// The path and text of the file a commit held `number` at `revision`
+    /// in, if git has it (`cli.local.versions`).
+    #[must_use]
+    pub fn text_at(&self, number: &str, revision: i32) -> Option<(&str, &str)> {
+        self.texts
+            .get(&(number.to_owned(), revision))
+            .map(|(path, text)| (path.as_str(), text.as_str()))
+    }
+
     /// Whether `akt` has changes not committed yet.
-    fn dirty(&self, akt: &LocalAkt) -> bool {
+    #[must_use]
+    pub fn dirty(&self, akt: &LocalAkt) -> bool {
         self.head.get(&akt.number) != Some(&akt.revision)
     }
 
@@ -279,6 +299,17 @@ impl Times {
         (created, changed)
     }
 
+    /// When git's latest commit at `revision` of the akt `number` was made.
+    #[must_use]
+    pub fn revision_at(&self, number: &str, revision: i32) -> Option<String> {
+        self.changes
+            .get(number)?
+            .iter()
+            .rev()
+            .find(|(_, r)| *r == revision)
+            .map(|(c, _)| c.at.clone())
+    }
+
     /// The commits that changed `akt`, oldest first, each with its revision
     /// after it, and whether it has changes not committed yet; `None`
     /// outside a work tree.
@@ -292,6 +323,26 @@ impl Times {
             )
         })
     }
+}
+
+/// The bytes git last held at `path` in `root`, from the latest commit that
+/// had a file there, such as one since removed.
+#[must_use]
+pub fn last_bytes(root: &Path, path: &str) -> Option<Vec<u8>> {
+    let commits = git(root, &["rev-list", "HEAD", "--", path])?;
+    let show = |object: &str| {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(["cat-file", "blob", object])
+            .stderr(Stdio::null())
+            .output()
+            .ok()?;
+        out.status.success().then_some(out.stdout)
+    };
+    // The latest commit to touch it either holds it or removed it.
+    let latest = commits.lines().next()?.trim();
+    show(&format!("{latest}:{path}")).or_else(|| show(&format!("{latest}^:{path}")))
 }
 
 /// The email `git config user.email` gives in `root`, if any.

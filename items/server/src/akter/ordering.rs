@@ -48,7 +48,7 @@ pub(super) async fn move_akt_in(
     number: &str,
     place: Place<'_>,
 ) -> Result<AktRow, AktError> {
-    let Caller { actor, auth } = caller;
+    let Caller { actor, auth, .. } = caller;
     let tenant: Uuid = actor.tenant.into();
     let neighbour_number = match place {
         Place::Before(n) | Place::After(n) => n,

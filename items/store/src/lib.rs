@@ -10,6 +10,7 @@ pub mod attachments;
 pub mod bundles;
 pub mod contacts;
 pub mod containers;
+pub mod drafts;
 pub mod erasure;
 pub mod links;
 mod migrate;
@@ -17,6 +18,7 @@ pub mod people;
 mod pool;
 pub mod schema;
 pub mod sessions;
+pub mod versions;
 
 pub use migrate::{MigrationError, run_next_migration, run_pending_migrations};
 pub use pool::{ConnectOptions, Pool, PoolError, connect};

@@ -8,10 +8,12 @@ function field(kind: FieldDef['kind'], extra: Partial<FieldDef> = {}): FieldDef 
 		kind,
 		description: null,
 		required: false,
+		diagrams: false,
 		multiline: false,
 		multiple: false,
 		of: [],
 		assignees: null,
+		references: null,
 		options: [
 			{ key: 'a', name: 'A' },
 			{ key: 'b', name: 'B' }
@@ -115,5 +117,30 @@ describe('field values', () => {
 		const after = { ...before, title: { kind: 'TEXT' as const, text: 'New' } };
 		expect(changes(fields, before, after)).toEqual({ title: 'New' });
 		expect(changes(fields, before, before)).toEqual({});
+	});
+});
+
+// r[verify app.fields]
+describe('markdown fields', () => {
+	it('are edited as their Markdown, and empty clears them', () => {
+		const value: Value = {
+			__typename: 'MarkdownValue',
+			field: 'f',
+			markdown: '# Scope {#scope}\n',
+			headings: [{ id: 'scope', level: 1, text: 'Scope' }],
+			references: [],
+			images: [],
+			diagrams: []
+		};
+		const draft = draftOf(field('MARKDOWN'), value);
+		expect(draft).toEqual({
+			kind: 'MARKDOWN',
+			text: '# Scope {#scope}\n',
+			pictures: [],
+			drawings: []
+		});
+		expect(inputOf(draft)).toBe('# Scope {#scope}\n');
+		expect(inputOf({ kind: 'MARKDOWN', text: '  \n', pictures: [], drawings: [] })).toBeNull();
+		expect(textOf(value)).toBe('# Scope {#scope}\n');
 	});
 });

@@ -1,6 +1,8 @@
 //! What Kuria's GraphQL would answer for the CLI's reads, built from an akt
 //! directory, so that every read renders as it does against a server.
 
+use std::collections::BTreeMap;
+
 use kuria_config::FieldKind;
 use kuria_engine::outcomes::{self, Outcome};
 use serde::Serialize;
@@ -71,6 +73,7 @@ pub fn shape(t: &LocalType) -> Json {
             "multiple": f.multiple,
             "of": f.of,
             "assignees": f.assignees,
+            "references": f.references,
         })).collect::<Vec<_>>(),
         "states": d.states.iter().map(|s| state(t, &s.key)).collect::<Vec<_>>(),
         "transitions": d.transitions.iter().map(|tr| json!({
@@ -163,6 +166,9 @@ fn value(akt: &LocalAkt, t: &LocalType, key: &str, raw: &Json) -> Result<Option<
             json!({ "__typename": "SectionsValue", "value": raw })
         }
         "sections" => return Err(bad("a list of akt numbers and sections")),
+        "markdown" => {
+            json!({ "__typename": "MarkdownValue", "markdown": text()?, "references": [] })
+        }
         "checkbox" => {
             let nobody = json!({ "id": "", "name": "", "email": null });
             let checked_for = match raw {
@@ -196,18 +202,31 @@ fn value(akt: &LocalAkt, t: &LocalType, key: &str, raw: &Json) -> Result<Option<
                 .ok_or_else(|| bad("a Docker value with a `digest`"))?;
             json!({ "__typename": "DockerValue", "repository": repository, "digest": digest, "tag": raw["tag"] })
         }
-        "attachment" => json!({
-            "__typename": "AttachmentValue",
-            "attachment": {
-                "id": raw["id"].as_str().or_else(|| raw.as_str()).unwrap_or_default(),
-                "name": raw["name"].as_str().unwrap_or_default(),
-                "mediaType": "", "size": 0, "sha256": "", "url": "",
-            },
-        }),
+        // A file of the directory, named by its path (`cli.local.attachments`).
+        "attachment" => text()
+            .ok()
+            .and_then(attachment)
+            .ok_or_else(|| bad("the path of a file under attachments/<number>/"))?,
         other => return Err(bad(&format!("of a kind ({other}) this client knows"))),
     };
     answer["field"] = json!(key);
     Ok(Some(answer))
+}
+
+/// An attachment, the file of the directory at `path`, as
+/// `AttachmentValue`, or `None` if `path` isn't one under
+/// `attachments/<number>/` (`cli.local.attachments`).
+fn attachment(path: &str) -> Option<Json> {
+    super::attachments::holder(path)?;
+    Some(json!({
+        "__typename": "AttachmentValue",
+        "attachment": {
+            "id": path,
+            "name": path.rsplit('/').next(),
+            "mediaType": super::attachments::media_type(path),
+            "size": 0, "sha256": "", "url": path,
+        },
+    }))
 }
 
 /// A multiple user field's value in the file's form as `UsersValue`, or
@@ -289,12 +308,100 @@ pub fn values(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
     let mut answers = Vec::new();
     for field in &t.ty.document().fields {
         if let Some(raw) = akt.values.get(&field.key).filter(|v| !v.is_null())
-            && let Some(answer) = value(akt, t, &field.key, raw)?
+            && let Some(mut answer) = value(akt, t, &field.key, raw)?
         {
+            if answer["__typename"] == "MarkdownValue" {
+                answer["references"] = references(dir, raw.as_str().unwrap_or_default()).into();
+            }
             answers.push(answer);
         }
     }
     Ok(answers)
+}
+
+/// An akt's `markdown` fields as the engine holds them, read from its file,
+/// leaving out any other field.
+#[must_use]
+pub fn markdown_of(dir: &AktDir, akt: &LocalAkt) -> BTreeMap<String, kuria_engine::Value> {
+    dir.type_of(akt)
+        .ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.kind == FieldKind::Markdown)
+        .filter_map(|f| {
+            let text = akt.values.get(&f.key)?.as_str()?;
+            Some((
+                f.key.clone(),
+                kuria_engine::Value::Markdown(text.to_owned()),
+            ))
+        })
+        .collect()
+}
+
+/// The references in `text`, each with why it is broken, if it is, among
+/// the directory's akter (`akt.field.markdown.references`).
+// r[impl akt.field.markdown.references]
+fn references(dir: &AktDir, text: &str) -> Vec<Json> {
+    use kuria_engine::markdown;
+    markdown::references(text)
+        .iter()
+        .map(|reference| {
+            let target = super::versions::target(dir, &reference.number);
+            json!({
+                "destination": reference.to_string(),
+                "broken": markdown::broken(reference, target.as_ref()),
+            })
+        })
+        .collect()
+}
+
+/// The links references keep, to and from `akt`, worked out from the
+/// directory's `markdown` fields: they are never stored
+/// (`cli.local.references`).
+// r[impl cli.local.references]
+// r[impl link.referenced]
+fn reference_links(dir: &AktDir, akt: &LocalAkt) -> Vec<Json> {
+    let kept_by = |source: &LocalAkt| {
+        let ty = &dir.type_of(source).ty;
+        kuria_engine::markdown::referenced(ty, &markdown_of(dir, source))
+            .into_iter()
+            .filter_map(|(kind, numbers)| {
+                let def = ty.link(&kind)?.clone();
+                Some((def, numbers))
+            })
+            .collect::<Vec<_>>()
+    };
+    let fits = |def: &kuria_config::LinkDef, source: &LocalAkt, target: &LocalAkt| {
+        source.number != target.number && def.to.contains(&target.type_key)
+    };
+    let link = |def: &kuria_config::LinkDef, outgoing: bool, other_akt: &LocalAkt| {
+        json!({
+            "kind": def.key,
+            "name": if outgoing { &def.name } else { &def.inverse },
+            "outgoing": outgoing,
+            "pinnedRevision": null,
+            "byReference": true,
+            "akt": other(dir, other_akt),
+            "pinned": null,
+        })
+    };
+    let mut answers = Vec::new();
+    for (def, numbers) in kept_by(akt) {
+        for target in numbers.iter().filter_map(|n| dir.akt(n)) {
+            if fits(&def, akt, target) {
+                answers.push(link(&def, true, target));
+            }
+        }
+    }
+    for source in &dir.akter {
+        for (def, numbers) in kept_by(source) {
+            if numbers.contains(&akt.number) && fits(&def, source, akt) {
+                answers.push(link(&def, false, source));
+            }
+        }
+    }
+    answers
 }
 
 /// The akt's title: its type's title field's text.
@@ -381,6 +488,7 @@ pub fn links(dir: &AktDir, akt: &LocalAkt) -> Result<Vec<Json>, CliError> {
             "pinned": null,
         }));
     }
+    answers.extend(reference_links(dir, akt));
     Ok(answers)
 }
 
@@ -440,6 +548,8 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
         "fields": values(dir, akt)?,
         "containers": containers,
         "links": links(dir, akt)?,
+        "version": null,
+        "versions": super::versions::listed(akt),
         "board": { "columns": columns },
         "members": {
             "nodes": members
@@ -453,4 +563,67 @@ pub fn akt(dir: &AktDir, times: &Times, number: &str) -> Result<Option<Json>, Cl
             "pageInfo": { "endCursor": null, "hasNextPage": false },
         },
     })))
+}
+
+/// The akt `number` as it was at its version `n`, as the CLI's akt query
+/// answers it with `version:`, its references following the version's
+/// pins; `None` if it has no such version (`version.read`).
+// r[impl version.read]
+pub fn akt_at(dir: &AktDir, times: &Times, number: &str, n: i64) -> Result<Option<Json>, CliError> {
+    let Some((read, version)) = super::versions::at(dir, times, number, n)? else {
+        return Ok(None);
+    };
+    let pins = super::versions::pins_of(&version);
+    let mut at = AktDir {
+        root: dir.root.clone(),
+        types: dir.types.clone(),
+        akter: dir.akter.clone(),
+    };
+    if let Some(slot) = at.akter.iter_mut().find(|a| a.number == number) {
+        *slot = read;
+    }
+    let Some(mut answer) = akt(&at, times, number)? else {
+        return Ok(None);
+    };
+    answer["version"] = super::versions::shown(&version);
+    // Each reference naming no version, as its pin says.
+    if let Some(fields) = answer["fields"].as_array_mut() {
+        for field in fields
+            .iter_mut()
+            .filter(|f| f["__typename"] == "MarkdownValue")
+        {
+            let text = field["markdown"].as_str().unwrap_or_default().to_owned();
+            field["references"] = pinned_references(dir, &text, &pins).into();
+        }
+    }
+    Ok(Some(answer))
+}
+
+/// The references in `text` as a version reads them, following `pins`.
+fn pinned_references(dir: &AktDir, text: &str, pins: &[kuria_engine::versions::Pin]) -> Vec<Json> {
+    use kuria_engine::markdown;
+    markdown::references(text)
+        .iter()
+        .map(|reference| {
+            let (version, revision) = kuria_engine::versions::as_pinned(reference, pins);
+            let target = super::versions::target(dir, &reference.number);
+            let broken = if revision.is_some() {
+                target
+                    .is_none()
+                    .then(|| format!("there is no akt `{}`", reference.number))
+            } else {
+                let as_read = markdown::Reference {
+                    version: reference.version.or(version),
+                    ..reference.clone()
+                };
+                markdown::broken(&as_read, target.as_ref())
+            };
+            json!({
+                "destination": reference.to_string(),
+                "broken": broken,
+                "pinnedVersion": version.filter(|_| reference.version.is_none()),
+                "pinnedRevision": revision,
+            })
+        })
+        .collect()
 }

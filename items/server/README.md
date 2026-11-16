@@ -6,8 +6,11 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 
 - Serving the GraphQL endpoint (`POST /graphql`), GraphQL subscriptions over
   WebSocket (`GET /graphql/ws`, `graphql-transport-ws`), attachments
-  (`POST /attachments`, `GET /attachments/{id}`), and a health check
-  (`GET /healthz`).
+  (`POST /attachments`, `GET /attachments/{id}`), `markdown` fields as
+  PDFs (`GET /akter/{number}/pdf`, [`src/pdf.rs`](src/pdf.rs)), and a
+  health check (`GET /healthz`). PDFs and diagram blocks, rendered when
+  written ([`src/akter/diagrams.rs`](src/akter/diagrams.rs)), go through
+  [`kuria-typst`](../typst), with its bundled fonts and packages.
 - Publishing every change event from the outbox to Valkey, and delivering
   them to `changes` subscriptions in order, after catching a client up from
   its cursor.
@@ -110,6 +113,40 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   never stored. `SectionsValue.value` gives the value as `editAkt` takes
   it, whatever its depth, which `items` can only be asked for as deep as
   the query's depth limit allows.
+- Documents: `markdown` fields keep their references as links
+  ([`src/akter/references.rs`](src/akter/references.rs)).
+  - `releaseVersion` names an akt's current revision as its next version, once no reference is broken, pinning what each meant.
+  - `akt(number:, version:)` and `akt(number:, revision:)` read an akt as it was ([`src/akter/versions.rs`](src/akter/versions.rs), `akt_version`).
+  - The git commit a revision was pushed in, if any, is kept in `akt_commit` and carried by bundles.
+- Live drafts ([`src/akter/live.rs`](src/akter/live.rs), `live.*`): for an
+  akt type that says `"live_drafts": true`, `editAkt`, batch edits and
+  `draftField` write to the akt's live draft only (`akt_draft`,
+  `akt_draft_update`), checked as a revision would be and without checking
+  the revision they name; creating one starts its draft from its first
+  revision. Reading answers the draft's fields and title with the latest
+  revision; `releaseVersion` records the draft as a new revision and names
+  it; transitions and membership changes record the latest revision's
+  fields, refusing a transition that sets fields. `Akt.draftChanges` lists
+  the draft's changes by author since the latest release, or all of them,
+  each with a push's message. `Akt.liveState` answers the draft's Yjs state,
+  state vector and base (its Yjs snapshot, which also moves with a change
+  that only deletes), base64-encoded, for clones (`live.state`).
+- Editing live drafts together ([`src/live.rs`](src/live.rs),
+  `live.sync`, `live.instances`, `live.presence`): `GET
+  /akter/{number}/live` upgrades to a WebSocket speaking the y-websocket
+  sync and awareness protocols, authenticated as `/graphql` is. A client's
+  update is taken through the write path (`Akter::take_live_update`):
+  checked as a write would be (diagrams excepted, rendered at release) and
+  kept with its author; refused, it is kept with the update that undoes
+  it, every client is sent both, and the sender an auth message saying
+  why. Readers get every change and are told their edits aren't taken.
+  Each akt's room on an instance sends its clients the draft's kept
+  updates from Postgres, woken by its clients, by the other instances
+  through the Valkey channel `kuria:live:<tenant>:<akt>` (which says only
+  that there are new updates, or carries awareness), and every second, so
+  `editAkt` and pushes reach clients too. Awareness is stamped with who
+  each client is (`person.name`). Draft edits are `DRAFT` change events,
+  a room's at most once a second.
 - Copying: `copyAkt` copies an akt and the part of its member tree chosen,
   in one transaction, into new akter of the same types in their initial
   states, with their sections remapped and their links out; each copy's
@@ -118,6 +155,18 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
 - Batches: several akt writes run in order in one transaction, all of them
   or none, a later one naming an akt an earlier one created as `@<n>`
   (`akt.batch`).
+- Pushes from clones ([`src/akter/push.rs`](src/akter/push.rs),
+  `clone.server`): `pushClone` takes a one-line message of at most 200
+  characters, each live draft's Yjs update made against the base the
+  clone read, and a batch's operations for other akter, in one
+  transaction, with every lock taken first as a batch takes them. A
+  draft whose base moved on is refused as `STALE` with its `number` and
+  current `base` and `stateVector`; otherwise its update is applied,
+  checked as a WebSocket update is, its diagrams rendered as an edit's
+  are, and kept as one `akt_draft_update` with the message, a `DRAFT`
+  change event, and reaches rooms as any kept update does. The operations
+  run as a batch's, the message their reason. A refusal names the
+  `draft` or `operation`, from 1, and keeps nothing.
 
 - Authorizing every operation on akt types and akter by asking Konklav,
   through the relying client, for Kuria's actions tenant-wide or at the akt
@@ -260,6 +309,9 @@ redirect URI. The end-to-end seed registers it
 | `KURIA_S3_REGION` | The bucket's region, `us-east-1` by default |
 | `KURIA_S3_ACCESS_KEY`, `KURIA_S3_SECRET_KEY` | Credentials for the bucket; without them, the standard AWS environment and instance credentials |
 | `KURIA_ATTACHMENT_LIMIT` | The largest upload in bytes, 100 MiB by default |
+| `KURIA_RENDER_SECONDS` | How long rendering a PDF or diagram may take, in a process of its own; 30 by default |
+| `KURIA_RENDER_CPU_SECONDS` | How much CPU time rendering may use; 20 by default |
+| `KURIA_RENDER_MEMORY_MB` | How much memory rendering may use, on Linux (macOS can't limit it); 1024 by default |
 | `KURIA_WEB_DIR` | The built app (`items/web/build`) to serve; none by default |
 | `KURIA_LOGIN_APP` | `true` to be Konklav's login application: proxying its subject-facing surface, with Konklav's issuer this server's public URL and its login URL `<public URL>/login`; `false` by default |
 | `KURIA_DEFAULT_TENANT` | The tenant a sign-in that names none is for; none by default |
@@ -296,6 +348,26 @@ mise run test
   recording the person, and linking a contact by a verified email only, in
   the tenant signed in to only, and never relinking one.
   They need the development Postgres and Valkey (`mise run db:up`).
+- [`tests/live_sync.rs`](tests/live_sync.rs), with `yrs` clients over
+  WebSocket against two instances sharing a fresh database and the
+  development Valkey: two clients on two instances editing one draft,
+  kept by author; an `editAkt` reaching a client; a reader's update not
+  taken; a refused update undone for both; awareness stamped with who
+  each client is, reaching another instance and a late joiner, and gone
+  on leaving; and akter without a live draft, or unreadable, not found.
+- [`tests/live_drafts.rs`](tests/live_drafts.rs), against a fresh database:
+  edits changing the live draft and not the revisions, refused edits
+  leaving it, releases recording it as a revision and a version and refused
+  when it is already released, transitions carrying the last release,
+  references checked on the draft at release, and its changes by author.
+- [`tests/clones.rs`](tests/clones.rs), against a fresh database, with
+  updates made by the engine's `LiveDraft` from `liveState` as a clone
+  makes them: a push kept as one change with its author and message, and
+  pushed again from the draft it left; a stale base refused, keeping
+  nothing; a field left invalid refusing two drafts and an operation
+  together; operations as revisions with the message as reason, refused
+  at a stale revision; bad messages; and the live state loading as the
+  server's draft.
 - [`tests/bundles.rs`](tests/bundles.rs), between two fresh databases and
   two tenants of one: a whole tenant moved, reading the same through
   GraphQL (history, hashes, links, contacts, attachments' bytes) and

@@ -65,6 +65,18 @@ fn answered(mut answer: Value) -> Result<Value, CliError> {
                 ));
             }
         }
+        // A release's refusal names the akter releasing together would
+        // mend references to (`version.together`).
+        if let Some(together) = error["extensions"]["together"]
+            .as_array()
+            .filter(|t| !t.is_empty())
+        {
+            let numbers: Vec<&str> = together.iter().filter_map(Value::as_str).collect();
+            message.push_str(&format!(
+                " (released together with {}, they would be mended: `kuria release` them all at once)",
+                numbers.join(", ")
+            ));
+        }
         // A batch's refusal names its operation, counting from 1.
         if let Some(n) = error["extensions"]["operation"].as_u64() {
             message = format!("operation {n}: {message}");

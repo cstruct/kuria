@@ -108,8 +108,25 @@ impl Operation {
         }
     }
 
+    /// Makes `reason` its reason, as a push's message is each of its
+    /// revisions' (`clone.server`); a move has none.
+    pub(super) fn set_reason(&mut self, message: &str) {
+        match self {
+            Self::Create { reason, .. }
+            | Self::Edit { reason, .. }
+            | Self::Transition { reason, .. }
+            | Self::AddMember { reason, .. }
+            | Self::RemoveMember { reason, .. }
+            | Self::Transfer { reason, .. }
+            | Self::AddLink { reason, .. }
+            | Self::RemoveLink { reason, .. }
+            | Self::Draft { reason, .. } => *reason = Some(message.to_owned()),
+            Self::Move { .. } => {}
+        }
+    }
+
     /// Whether it takes the tenant's order lock: it gives an akt a rank.
-    fn orders(&self) -> bool {
+    pub(super) fn orders(&self) -> bool {
         matches!(self, Self::Create { .. } | Self::Move { .. })
     }
 }
@@ -185,43 +202,20 @@ impl Akter {
     pub async fn batch(
         &self,
         caller: Caller<'_>,
-        mut operations: Vec<Operation>,
+        operations: Vec<Operation>,
     ) -> Result<Vec<AktRow>, BatchError> {
-        check(&mut operations)?;
-        let tenant: Uuid = caller.actor.tenant.into();
         let mut conn = self.pool.get().await.map_err(AktError::from)?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
-            .transaction::<_, BatchError, _>(async |conn| {
-                lock(conn, tenant, &mut operations).await?;
-                // Each operation's akt, by position, for `@<n>`.
-                let mut created: Vec<String> = Vec::with_capacity(operations.len());
-                let mut rows = Vec::with_capacity(operations.len());
-                for (i, operation) in operations.iter().enumerate() {
-                    let mut operation = operation.clone();
-                    // r[impl akt.batch.refer]
-                    for number in operation.numbers_mut() {
-                        if let Some(Ok(n)) = referred(number) {
-                            let made = created.get(n - 1).ok_or_else(|| BatchError {
-                                operation: Some(i + 1),
-                                error: AktError::Internal(format!("`{number}` passed the check")),
-                            })?;
-                            number.clone_from(made);
-                        }
-                    }
-                    let row = run(conn, caller, operation)
-                        .await
-                        .map_err(|error| BatchError {
-                            operation: Some(i + 1),
-                            error,
-                        })?;
-                    created.push(row.number.clone());
-                    rows.push(row);
-                }
-                Ok(rows)
-            })
+            .transaction::<_, BatchError, _>(async |conn| batch_in(conn, caller, operations).await)
             .await;
         // The relay is woken once, and only if it all committed.
+        self.woken(result)
+    }
+
+    /// Wakes the relay if `result`, of a transaction that wrote akter, is
+    /// committed.
+    pub(crate) fn woken<T, E>(&self, result: Result<T, E>) -> Result<T, E> {
         if result.is_ok()
             && let Some(published) = &self.published
         {
@@ -229,6 +223,42 @@ impl Akter {
         }
         result
     }
+}
+
+/// Runs `operations` as [`Akter::batch`] does, in `conn`'s transaction.
+pub(super) async fn batch_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    mut operations: Vec<Operation>,
+) -> Result<Vec<AktRow>, BatchError> {
+    check(&mut operations)?;
+    let tenant: Uuid = caller.actor.tenant.into();
+    lock(conn, tenant, &mut operations).await?;
+    // Each operation's akt, by position, for `@<n>`.
+    let mut created: Vec<String> = Vec::with_capacity(operations.len());
+    let mut rows = Vec::with_capacity(operations.len());
+    for (i, operation) in operations.iter().enumerate() {
+        let mut operation = operation.clone();
+        // r[impl akt.batch.refer]
+        for number in operation.numbers_mut() {
+            if let Some(Ok(n)) = referred(number) {
+                let made = created.get(n - 1).ok_or_else(|| BatchError {
+                    operation: Some(i + 1),
+                    error: AktError::Internal(format!("`{number}` passed the check")),
+                })?;
+                number.clone_from(made);
+            }
+        }
+        let row = run(conn, caller, operation)
+            .await
+            .map_err(|error| BatchError {
+                operation: Some(i + 1),
+                error,
+            })?;
+        created.push(row.number.clone());
+        rows.push(row);
+    }
+    Ok(rows)
 }
 
 /// Takes the batch's locks before any operation: the tenant's order lock if
@@ -242,18 +272,23 @@ async fn lock(
     if operations.iter().any(Operation::orders) {
         containers::lock_order(conn, tenant).await?;
     }
-    let mut named: Vec<String> = operations
-        .iter_mut()
-        .flat_map(Operation::numbers_mut)
-        .filter(|n| referred(n).is_none())
-        .map(|n| n.clone())
-        .collect();
+    let mut named = named(operations);
     named.sort();
     named.dedup();
     let refs: Vec<&str> = named.iter().map(String::as_str).collect();
     // Those missing are refused by the operation that names them.
     containers::lock_akter(conn, tenant, &refs).await?;
     Ok(())
+}
+
+/// Every existing akt `operations` name: not those `@<n>` names.
+pub(super) fn named(operations: &mut [Operation]) -> Vec<String> {
+    operations
+        .iter_mut()
+        .flat_map(Operation::numbers_mut)
+        .filter(|n| referred(n).is_none())
+        .map(|n| n.clone())
+        .collect()
 }
 
 /// One operation, run as its mutation would run it, in `conn`'s

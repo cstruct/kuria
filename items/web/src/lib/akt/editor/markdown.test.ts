@@ -1,0 +1,171 @@
+// @vitest-environment jsdom
+import { createHeadlessEditor } from '@lexical/headless';
+import { describe, expect, it } from 'vitest';
+import { $getRoot, $isElementNode } from 'lexical';
+import {
+	$fromMarkdown,
+	$isFootnoteDefinitionNode,
+	$isImageNode,
+	$isFootnoteReferenceNode,
+	$isDiagramNode,
+	$isPageBreakNode,
+	$nextFootnoteLabel,
+	$toMarkdown,
+	atx,
+	NODES
+} from './markdown';
+
+/** `markdown` through the editor and back, as a field that allows diagrams
+ * if `diagrams`. */
+function roundTrip(markdown: string, diagrams = false): string {
+	const editor = createHeadlessEditor({
+		nodes: NODES,
+		onError: (e) => {
+			throw e;
+		}
+	});
+	editor.update(() => $fromMarkdown(markdown, new Map(), { diagrams }), { discrete: true });
+	return editor.getEditorState().read(() => $toMarkdown());
+}
+
+// r[verify app.editor]
+describe('the editor’s Markdown', () => {
+	// Each construct the editor offers, as it writes it.
+	const constructs: [string, string][] = [
+		['headings with ids', '# Installing {#install}\n\n## Set up `kuria` {#set-up}'],
+		['emphasis', 'Some **bold**, *italic* and ~~struck~~ text, and `code`.'],
+		['lists', '- one\n- two\n\n1. first\n2. second'],
+		['task lists', '- [ ] to do\n- [x] done'],
+		['quotes', '> Quoted.'],
+		['code', '```\nlet x = 1;\n```'],
+		['links and references', '[web](https://example.com) and [setup](kuria:DOCS-1-D04@2#install)'],
+		['tables', '| Name | Value |\n| --- | --- |\n| a | 1 |\n| b | 2 |'],
+		['rules', 'Above\n\n---\n\nBelow'],
+		[
+			'page breaks',
+			'# One {#one}\n\nText.\n\n<!-- pagebreak -->\n\n## Two {#two}\n\n- a\n\n<!-- pagebreak -->\n\nEnd.'
+		],
+		['images', '![The chart](kuria:IMG-1) inline, and ![a \\[bracket\\]](kuria:IMG-2@3).'],
+		[
+			'footnotes',
+			'Said[^1], and *done*[^note].\n\n[^1]: First, with a [link](kuria:D-4#run).\n\n[^note]: Second **note**.'
+		]
+	];
+	for (const [name, markdown] of constructs) {
+		it(`come back unchanged: ${name}`, () => {
+			expect(roundTrip(markdown)).toBe(markdown);
+		});
+	}
+
+	it('read setext headings as ATX ones', () => {
+		expect(atx('Overview {#overview}\n========\n\nText.\n')).toBe(
+			'# Overview {#overview}\n\nText.\n'
+		);
+		expect(roundTrip('Overview {#overview}\n========\n\nText.')).toBe(
+			'# Overview {#overview}\n\nText.'
+		);
+	});
+
+	it('hold footnotes as their own nodes, and number the next one', () => {
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(() => $fromMarkdown('Said[^1] and[^x].\n\n[^1]: One.\n\n[^x]: Ex.'), {
+			discrete: true
+		});
+		editor.getEditorState().read(() => {
+			const [paragraph, one, ex] = $getRoot().getChildren();
+			const children = $isElementNode(paragraph) ? paragraph.getChildren() : [];
+			const references = children.filter($isFootnoteReferenceNode);
+			expect(references.length).toBe(2);
+			expect($isFootnoteDefinitionNode(one) && one.getLabel()).toBe('1');
+			expect($isFootnoteDefinitionNode(ex) && ex.getLabel()).toBe('x');
+			expect($nextFootnoteLabel()).toBe('2');
+		});
+	});
+
+	// r[verify app.images]
+	it('show an embedded image as its picture, once it knows it', () => {
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(
+			() =>
+				$fromMarkdown(
+					'A ![chart](kuria:IMG-1) and ![gone](kuria:IMG-9).',
+					new Map([['kuria:IMG-1', '/attachments/x']])
+				),
+			{ discrete: true }
+		);
+		editor.getEditorState().read(() => {
+			const [paragraph] = $getRoot().getChildren();
+			const images = ($isElementNode(paragraph) ? paragraph.getChildren() : []).filter(
+				$isImageNode
+			);
+			expect(images.map((i) => [i.getDestination(), i.getAlt(), i.__src])).toEqual([
+				['kuria:IMG-1', 'chart', '/attachments/x'],
+				['kuria:IMG-9', 'gone', null]
+			]);
+		});
+	});
+
+	// r[verify app.diagrams]
+	it('hold diagram blocks as pictures where the field allows them, unchanged either way', () => {
+		const markdown =
+			'Before.\n\n```diagram\n#diagram(node((0, 0), [A]), edge("-|>"), node((1, 0), [B]))\n```\n\n```rust\nfn x() {}\n```';
+		expect(roundTrip(markdown, true)).toBe(markdown);
+		expect(roundTrip(markdown, false)).toBe(markdown);
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(() => $fromMarkdown(markdown, new Map(), { diagrams: true }), { discrete: true });
+		editor.getEditorState().read(() => {
+			const kinds = $getRoot()
+				.getChildren()
+				.map((n) => ($isDiagramNode(n) ? `diagram:${n.getSource().slice(0, 8)}` : n.getType()));
+			expect(kinds).toEqual(['paragraph', 'diagram:#diagram', 'code']);
+		});
+		// Shown as code, and back, it is the same block.
+		editor.update(
+			() => {
+				const diagram = $getRoot().getChildren()[1];
+				if ($isDiagramNode(diagram)) diagram.toCode();
+			},
+			{ discrete: true }
+		);
+		expect(editor.getEditorState().read(() => $toMarkdown())).toBe(markdown);
+	});
+
+	// r[verify app.sheets]
+	it('hold a page break as its own node, written exactly as the field holds it', () => {
+		const editor = createHeadlessEditor({
+			nodes: NODES,
+			onError: (e) => {
+				throw e;
+			}
+		});
+		editor.update(
+			() => $fromMarkdown('One.\n\n  <!-- pagebreak -->  \n\nTwo.\n\n<!-- pagebreak -->'),
+			{
+				discrete: true
+			}
+		);
+		editor.getEditorState().read(() => {
+			const kinds = $getRoot()
+				.getChildren()
+				.map((n) => ($isPageBreakNode(n) ? 'page break' : n.getType()));
+			// Somewhere to type after a page break that ends the text.
+			expect(kinds).toEqual(['paragraph', 'page break', 'paragraph', 'page break', 'paragraph']);
+			expect($toMarkdown()).toBe('One.\n\n<!-- pagebreak -->\n\nTwo.\n\n<!-- pagebreak -->');
+		});
+	});
+});

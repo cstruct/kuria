@@ -24,7 +24,8 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   names an akt type ([spec](../../docs/spec/frontend.md)).
 - Talking to the server only through GraphQL and the attachment endpoints,
   on its own origin, with the server's session cookie: urql with
-  Graphcache, the `changes` subscription over a WebSocket, and sending the
+  Graphcache, the `changes` subscription over a WebSocket, an akt's live
+  draft over another (`/akter/{number}/live`, y-websocket), and sending the
   browser to `/auth/login` when it isn't signed in.
 - The login page at `/login`, Konklav's login application
   ([spec](../../docs/spec/login.md)).
@@ -72,13 +73,26 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   them; `PeopleSelect`, several people for a `multiple` user field),
   the
   header's title and actions (`header.ts`), sanitized Markdown
-  (`markdown.ts`), pickers that search akter (`pickers.ts`), and
+  (`markdown.ts`), a `markdown` field as white A4 sheets, split at its
+  page breaks, with guides where a sheet would otherwise end (`sheets.ts`,
+  styled by `src/lib/design/sheets.css`), pickers that search akter (`pickers.ts`), and
   whom pickers offer (`people.ts`: me, the tenant's users, contacts),
   linking a contact to a user (`contacts.ts`), each field kind's editor,
   input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
   (`labels.ts`), uploads, and the field editor and display components.
+  An akt whose type has live drafts is edited live (`app.live`):
+  `live.svelte.ts` opens its Yjs document over y-websocket, says whether
+  the person's edits have reached the server (comparing what it has with
+  what the server sent), who else is there and why an edit was undone
+  (`LivePresence`); its text fields are edited as they are typed, others
+  set in its map when saved, checkboxes and verdicts through `editAkt`.
+  `editor/live.ts` binds the Markdown editor to a field's `Y.Text`: a
+  local change as the one span of Markdown that differs, a remote one by
+  re-reading the top-level blocks it touched and keeping the selection
+  through Markdown offsets; it also places others' cursors, and binds a
+  multiline text's text area.
 - [`src/lib/home`](src/lib/home): Home's wording and "My work"
   (`work.ts`: one filtered list per user field and checkbox naming the
   viewer); the page shows the akter changed most recently, "My work", and
@@ -101,7 +115,7 @@ implemented, and annotated, in `.ts` modules the components call.
 mise run web:dev
 ```
 
-serves the app on <http://localhost:5173>, passing `/graphql`, `/auth`,
+serves the app on <http://localhost:5173>, passing `/graphql`, `/akter`, `/auth`,
 `/attachments`, `/v1` and `/.well-known` to `mise run serve` (or
 `KURIA_DEV_SERVER`). `mise run web:build` builds it into `build/`, which
 the server serves with `KURIA_WEB_DIR`.

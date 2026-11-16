@@ -169,7 +169,9 @@ test('a release from planning to closed', async ({ browser }) => {
 		...releasing,
 		'Go for release': { check: true, for: 'Hedda Product' }
 	});
-	expect(await shown(rm, 'go')).toBe(`Yes, for Hedda Product (checked by ${people.releaseManager.email})`);
+	await expect(rm.locator('dd[data-field="go"]')).toHaveText(
+		`Yes, for Hedda Product (checked by ${people.releaseManager.email})`
+	);
 
 	// A hotfix after the release, with an item and a new backend.
 	const hotfix = await create(rm, 'hotfix', { "Why it can't wait": 'Sessions are lost on restart' }, release);
@@ -234,7 +236,9 @@ test('a release from planning to closed', async ({ browser }) => {
 	const hedda = await signIn(browser, people.headOfProduct);
 	await open(hedda, release);
 	await open(rm, release);
-	expect(await shown(rm, 'go')).toBe(`Yes, for Hedda Product (checked by ${people.releaseManager.email})`);
+	await expect(rm.locator('dd[data-field="go"]')).toHaveText(
+		`Yes, for Hedda Product (checked by ${people.releaseManager.email})`
+	);
 
 	// Closing the release freezes it.
 	await moved(rm, 'End maintenance', 'Closed');

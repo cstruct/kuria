@@ -34,7 +34,7 @@ pub fn handle_of(someone: &Someone) -> &str {
 #[must_use]
 pub fn text_of(value: &Value) -> String {
     match value {
-        Value::TextValue { text, .. } => text.clone(),
+        Value::TextValue { text, .. } | Value::MarkdownValue { markdown: text, .. } => text.clone(),
         Value::ChoiceValue { option, .. } => option.name.clone(),
         Value::ChoicesValue { options, .. } => options
             .iter()
@@ -165,12 +165,15 @@ fn is(someone: &Someone, user: &User) -> bool {
 
 /// A value as the akt file and JSON answers hold it: options by key, users
 /// and contacts by email or name, a checkbox as `true` or `for:<someone>`,
-/// and references, Git and Docker values and attachments as objects.
+/// and references, Git and Docker values and attachments as objects, but
+/// an akt directory's attachment as its path.
 // r[impl cli.file]
 #[must_use]
 pub fn file_value(value: &Value) -> Json {
     match value {
-        Value::TextValue { text, .. } => text.clone().into(),
+        Value::TextValue { text, .. } | Value::MarkdownValue { markdown: text, .. } => {
+            text.clone().into()
+        }
         Value::ChoiceValue { option, .. } => option.key.clone().into(),
         Value::ChoicesValue { options, .. } => options.iter().map(|o| o.key.clone()).collect(),
         Value::DateValue { date, .. } => date.clone().into(),
@@ -217,6 +220,14 @@ pub fn file_value(value: &Value) -> Json {
                 object["tag"] = tag.clone().into();
             }
             object
+        }
+        // An akt directory's attachment is its path (`cli.local.attachments`).
+        Value::AttachmentValue { attachment, .. }
+            if attachment
+                .id
+                .starts_with(&format!("{}/", crate::clone::pictures::DIRECTORY)) =>
+        {
+            attachment.id.clone().into()
         }
         Value::AttachmentValue { attachment, .. } => {
             json!({ "id": attachment.id, "name": attachment.name })
@@ -422,7 +433,7 @@ pub fn input_of(field: &FieldDef, value: &Json, people: &People) -> Result<Json,
         });
     }
     match field.kind.as_str() {
-        "TEXT" => text()
+        "TEXT" | "MARKDOWN" => text()
             .map(Json::from)
             .ok_or_else(|| refused(format!("{} takes text", field.name))),
         "CHOICE" => {
@@ -655,7 +666,7 @@ pub fn set_value(field: &FieldDef, text: &str) -> Result<Json, CliError> {
                 ..CliError::refused("BAD_REQUEST", format!("{} isn't JSON: {e}", field.name))
             })
         }
-        "TEXT" | "SECTIONS" => match text.strip_prefix('@') {
+        "TEXT" | "SECTIONS" | "MARKDOWN" => match text.strip_prefix('@') {
             Some(path) => read(path).map(Json::from),
             None => Ok(text.into()),
         },
@@ -692,6 +703,7 @@ mod tests {
             description: None,
             required: false,
             multiline: false,
+            references: None,
             options: vec![Opt {
                 key: "fix".to_owned(),
                 name: "Bug fix".to_owned(),

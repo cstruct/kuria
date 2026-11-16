@@ -34,17 +34,21 @@ in that shape, rather than editing the directory's files by hand.
   `kuria check --fix` first moves akter into the files they belong in and
   renames files by their titles.
 - Writes lock the directory, so agents may write at once.
-- Signing in, users, contacts, drafts, attachments and bundles aren't
+- An attachment is a file `attachments/<number>/<name>`, and its field's
+  value is that path. `kuria set IMG-1 file=@logo.png` copies a file in;
+  `kuria check` names one that is missing, of a media type its field
+  doesn't take, or not an SBOM where one belongs.
+- Signing in, users, contacts, drafts, uploads and bundles aren't
   there (`LOCAL_UNSUPPORTED`, exit 1). Signed in, `kuria export --types
   <key>,… --to-dir <path>` makes a directory from a server's akter, and
   `kuria import --from-dir <path>` takes one to a server that lacks its
-  types, keeping numbers.
+  types, keeping numbers, versions and attachments.
 
 ## Finding your way
 
 ```sh
 kuria types                    # the akt types, with how many akter each has
-kuria schema <type>            # its fields, states, transitions, links, board
+kuria types schema <type>      # its fields, states, transitions, links, board
 kuria ls <type> --state <s>    # akter, a page at a time (--all for every page)
 kuria ls <type> --where assignee=@me   # by a field's value
 kuria ls --in <container>      # a container's members
@@ -100,6 +104,10 @@ Markdown, as long as it needs.
 - `verdict` (each assignee's `pass`, `fail` or `skip`) and `outcome` (what
   verdicts, or members' outcomes, add up to) are read-only: give verdicts
   with `kuria verdict`.
+- A `markdown` field is a section of its own, Markdown whose headings keep
+  ids (`## Install {#install}`) and whose links `kuria:<number>[@<version>][#<heading>]`
+  are references to other akter. A release is refused while one is broken;
+  `kuria show` says which.
 - `revision` is the revision you read. If the akt changed since, `apply`
   is refused as `STALE` (exit 3) and says what changed: `cat` it again,
   merge, and apply again. Never force it.
@@ -119,19 +127,69 @@ changing any: one that is stale, or a changed read-only key, anywhere,
 and nothing changes. Members are direct ones only, in the container's
 order.
 
+## A container as files: clones
+
+`kuria docs` works on a clone, run in it; it needs a server, so not
+`--dir`.
+
+```sh
+kuria docs clone <container> [<dir>]   # it and its members as files, the base in <dir>/.kuria/
+cd <dir>                               # then edit the files with any editor
+kuria docs status                      # staged, changed, removed, conflicted
+kuria docs diff [<path>…]              # what isn't staged; --staged: what is
+kuria docs add <path>…                 # stage files as they are now; `.` for all
+kuria docs add -p [<path>…]            # choose hunks: y, n, q, a, d, ?
+kuria docs push -m "Why"               # send what is staged, as one push
+kuria docs pull                        # Kuria's changes merged into the files
+kuria docs fmt                         # the files as Kuria writes them
+```
+
+- A clone is the container's file at its root, each member's in a
+  directory per section of the container's `sections`, and the pictures
+  its documents embed in `attachments/`, linked relatively. Files have no
+  `revision`, `in`, `links` or `outcome`: the base in `.kuria/` (which
+  ignores itself in git) records each akt's revision and, for an akt with
+  a live draft, the draft's state.
+- `push` fetches first and is refused (`STALE`, exit 3) unless every
+  staged akt is still as the base has it: `pull`, then push again. A live
+  draft's staged change goes as an update merged with what others type
+  meanwhile, kept as one change with your message; any other akt's as an
+  edit, a revision with your message as its reason. New or removed files
+  and changed pictures are refused: akter and pictures are made in Kuria.
+  A file not in normal form is refused too: `kuria docs fmt`, then add it
+  again.
+- `pull` merges three ways into the files, and where both changed the same
+  text writes `<<<<<<< ours`, `=======`, `>>>>>>> kuria` around both and
+  names the file. Resolve, then `kuria docs add`: a file holding markers
+  can't be staged.
+- git, if the clone is also a repository, is yours: Kuria sees only the
+  files. To push part of your work, `git branch keep`, take the rest out
+  of the working files (`git reset --hard <commit>`, or `git revert`),
+  `kuria docs add` and `kuria docs push`; later bring it back
+  (`git merge keep`, or revert the revert), `kuria docs add`,
+  `kuria docs push`.
+
 ## Changing things with verbs
 
 ```sh
 kuria new <type> --in <container> --set title="…" --set description=@notes.md
 kuria set <number> assignee=@me
 kuria do <number> <transition> --set field=value --reason "…"
-kuria add <container> <member>…    kuria remove <container> <member>…
-kuria transfer <member> <from> <to>
-kuria move <number> --before <other>
+kuria members add <container> <member>…
+kuria members remove <container> <member>…
+kuria members transfer <member> <from> <to>    # out of one container, into another
+kuria members place <number> --before <other>  # on every board; or --after
 kuria link <number> blocks <other>      kuria unlink <number> blocks <other>
 kuria draft <number> <field>
 kuria verdict <test> pass|fail|skip|clear [--for <assignee>]
 kuria copy <template> [--only <number>…] [--in <container>]   # with its members
+kuria release <number> [--label 2.0]   # its current revision as its next version
+kuria release <number> <other>…        # together, all or nothing: links between them
+                                       # read as they are released
+kuria versions <number>                # its versions, latest first
+kuria cat <number> --version 2         # as it was at version 2 (read-only)
+kuria diff <number> 1 [2]              # what changed since version 1, or up to 2
+kuria pdf <number> [--version 2] -o doc.pdf   # a markdown field as a PDF
 ```
 
 Values: options by key or name; users and contacts by email, name or
@@ -158,7 +216,7 @@ this guide.
 
 ## Planning work in Kuria
 
-Where a tenant uses the planning example (`kuria schema plan`):
+Where a tenant uses the planning example (`kuria types schema plan`):
 
 - A **plan** (`PLAN-007`) holds its goal, design and verification, and
   contains **tasks** (`PLAN-007-T03`), **gaps** (`PLAN-007-G01`) and

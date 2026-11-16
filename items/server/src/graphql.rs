@@ -14,7 +14,7 @@ mod changes;
 mod contacts;
 mod filter;
 mod page;
-mod people;
+pub(crate) mod people;
 
 pub(crate) use people::someone_name;
 
@@ -71,7 +71,7 @@ pub(crate) struct Principal {
 }
 
 impl Principal {
-    fn actor(self) -> Actor {
+    pub(crate) fn actor(self) -> Actor {
         Actor {
             subject: self.subject,
             tenant: self.tenant,

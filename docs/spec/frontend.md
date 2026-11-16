@@ -47,8 +47,8 @@ multiline box, a choice or choices from the field's options, a date, a user
 or contact chosen by name, a checkbox that can be checked for someone else,
 a reference's URL and label, a git repository with a SHA or tag, a Docker
 repository with a digest and tag, an attachment uploaded or downloaded,
-several users or contacts for a `multiple` field, and each assignee's
-verdict.
+several users or contacts for a `multiple` field, each assignee's
+verdict, and a `markdown` field in a rich-text editor (`app.editor`).
 
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
@@ -58,6 +58,62 @@ r[app.markdown]
 The app MUST render multiline text as Markdown, as sanitized HTML: no
 scripts, styles, frames, forms or event handlers, and links only to
 `http`, `https` and `mailto` addresses, opened without the opener.
+
+r[app.editor]
+The app MUST edit a `markdown` field in a rich-text editor offering
+headings, paragraphs, emphasis, strikethrough, lists, task lists, quotes,
+code, tables, horizontal rules, links, references, footnotes of one
+paragraph each, embedded images and, in a field that allows them, diagram
+blocks, and nothing the field's Markdown can't hold. Inserting an image
+MUST let a person find an image akt (`app.pickers`), or upload a file,
+which creates an image akt of an image type they choose, at the top
+level, titled by the file's name. A diagram block MUST be shown as its
+picture, rendered without being stored (`diagram.preview`), or as its
+code, as the person toggles it, showing typst's message while it doesn't
+compile. Inserting a
+footnote MUST put the next unused number at the cursor and its
+definition at the end, starting plain, where typing goes on. Saving MUST give the field as Markdown, and
+opening and saving an unchanged value MUST change nothing, its heading ids
+included. Inserting a reference MUST let a person find an akt
+(`app.pickers`), then choose one of its headings or none, and its living
+version or one of its versions.
+
+r[app.references]
+The app MUST render a `markdown` field's headings with their ids as
+anchors, and each reference as a link to the akt's page, at its version if
+it names one or a version read pins it (`version.read`), and to its
+heading if it names one. A broken reference MUST be shown as broken,
+saying why. Each reference to a footnote MUST be its number, in the order
+first referred to, linking to the note, and the notes MUST be listed after
+the text, each linking back; a definition nothing refers to MUST NOT be
+shown.
+
+r[app.versions]
+An akt's page MUST list its versions, if its type declares them, and let a
+person release its current revision with an optional label, showing each
+broken reference a refusal names, and offering to release it together
+with each akt the refusal names under `together` (`version.together`),
+chosen by default. It MUST let a person read the akt at a
+version, saying which and that it is not the living version, and compare
+two versions, or a version and the living version (`version.diff`).
+
+r[app.pdf]
+The app MUST offer a `markdown` field as a PDF, of the living version or
+of the version being read (`pdf.route`), to download, and each version's
+PDF opening in a new tab from the versions list.
+
+r[app.sheets]
+The app MUST show and edit a `markdown` field as A4 sheets, white with
+dark text whatever the theme, with the PDF's margins, starting a new sheet
+at each page break, and marking where a sheet would otherwise end. The
+editor MUST offer inserting a page break.
+
+r[app.live]
+The app MUST show an akt with a live draft as its live draft, and edit it
+together with everyone else editing it (`live.sync`): each person's edits
+appearing to the others as they make them, without saving, and who else
+is editing, and where, shown (`live.presence`). Releasing it MUST release
+the live draft as it is (`live.release`).
 
 r[app.transitions]
 The app MUST offer the transitions an akt's state allows, asking for the
@@ -95,6 +151,27 @@ Dropping a card on another column of a board MUST offer the transitions
 from the member's state to a state that column names for its akt type,
 and perform the one chosen as `app.transitions` does, asking for the fields
 it requires. A column no such transition leads to MUST refuse the drop.
+
+r[app.navigation]
+The sidebar MUST list the akt types whose `navigation` is `more`
+(`akt.type.presentation`) after the others, under a "Show more"
+disclosure saying how many there are, closed until opened, remembering in
+the browser whether it was. Every other place that lists akt types MUST
+list them as before.
+
+r[app.images]
+The app MUST show an embedded image (`akt.field.markdown.images`) as its
+picture, with its alt text as the picture's text, and one alone in its
+paragraph as a figure captioned by it; a broken one, or an image of
+anything but an akt, MUST be shown as its alt text, saying why. A picture
+MUST only ever be an image of an attachment's download, never markup put
+in the page, so that an SVG's scripts never run. An attachment of an
+image's media type MUST be shown as its picture on an akt's page, on
+cards and in lists.
+
+r[app.diagrams]
+The app MUST show a diagram block (`akt.field.markdown.diagrams`) as the
+picture of its rendering, its source as the picture's text.
 
 r[app.type-identity]
 Wherever the app names an akt type, in the sidebar, on Home, in an akt's

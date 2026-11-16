@@ -49,6 +49,9 @@ pub struct LocalAkt {
     /// Whether it is a nested akt, after another in its file
     /// (`cli.local.nesting`).
     pub nested: bool,
+    /// Its versions, as the directory's file keeps them
+    /// (`cli.local.versions`): `{number, revision, label, by, at, pins}`.
+    pub versions: Vec<Json>,
 }
 
 /// An akt directory, loaded.
@@ -236,6 +239,17 @@ pub fn read_file(
         Ok(text) => text,
         Err(e) => return vec![Err(io_error(path, &e))],
     };
+    read_text(path, &text, types)
+}
+
+/// The akter of a file's `text`, as `read_file` reads them, `path` saying
+/// where it was read from.
+#[must_use]
+pub fn read_text(
+    path: &Path,
+    text: &str,
+    types: &BTreeMap<String, LocalType>,
+) -> Vec<Result<LocalAkt, CliError>> {
     let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n");
     file::split(&text)
         .into_iter()
@@ -314,6 +328,12 @@ fn read_akt(
         rank,
         values,
         nested: nested.is_some(),
+        versions: parsed
+            .front
+            .get("versions")
+            .and_then(Json::as_array)
+            .cloned()
+            .unwrap_or_default(),
         parsed,
     })
 }

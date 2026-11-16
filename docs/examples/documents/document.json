@@ -1,0 +1,29 @@
+{
+  "key": "document",
+  "name": "Document",
+  "number": "{parent}-D{seq:2}",
+  "created_in": ["document_index"],
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "owner", "name": "Owner", "kind": "user" },
+    { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to", "diagrams": true,
+      "description": "The document. Link to another document, or a heading in it, with Reference; add a picture with Image, and a fletcher diagram or a cetz plot with Diagram." }
+  ],
+  "states": [
+    { "key": "draft", "name": "Draft", "initial": true },
+    { "key": "retired", "name": "Retired", "final": true }
+  ],
+  "transitions": [
+    { "key": "retire", "name": "Retire", "from": ["draft"], "to": "retired" }
+  ],
+  "links": [
+    { "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document", "image"] }
+  ],
+  "versions": { "action": "documents:release" },
+  "live_drafts": true,
+  "presentation": {
+    "icon": "file-text", "colour": "blue",
+    "list": ["owner"],
+    "tones": { "draft": "active", "retired": "neutral" }
+  }
+}

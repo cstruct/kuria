@@ -55,6 +55,23 @@ pub struct AktTypeDocument {
     /// The kinds of link this type's akter may have to other akter.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<LinkDef>,
+    /// Whether this type's akter release versions, and what a release
+    /// needs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub versions: Option<VersionsDef>,
+    /// Whether this type's akter have a live draft, edited together, that
+    /// only releases make revisions of (`live.declare`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub live_drafts: bool,
+}
+
+/// That an akt type releases versions (`version.declare`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionsDef {
+    /// A Konklav action a release requires, besides `kuria:akter:edit`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
 }
 
 /// A kind of link an akt type's akter may have:
@@ -101,6 +118,28 @@ pub struct PresentationDef {
     /// The colour the type is shown in; `neutral` if not given.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<Colour>,
+    /// Where the sidebar lists the type; `main` if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation: Option<Navigation>,
+    /// The `attachment` field whose value is the akt's picture, making
+    /// its akter images (`akt.field.markdown.images`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
+}
+
+/// The media types an image's picture may have.
+pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
+
+/// Where the app's sidebar lists an akt type (`app.navigation`).
+// r[impl akt.type.presentation]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Navigation {
+    /// With the others.
+    #[default]
+    Main,
+    /// Under "Show more".
+    More,
 }
 
 impl PresentationDef {
@@ -216,6 +255,10 @@ pub struct ColumnDef {
 /// One field.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each is a member of the field's document, as its author writes it"
+)]
 pub struct FieldDef {
     pub key: String,
     pub name: String,
@@ -237,6 +280,9 @@ pub struct FieldDef {
     /// For `attachment`: what files it holds, any file by default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<AttachmentFormat>,
+    /// For `attachment`: the media types it takes, any if empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub media_types: Vec<String>,
     /// For `user`: whether it holds a list of users and contacts.
     #[serde(default, skip_serializing_if = "is_false")]
     pub multiple: bool,
@@ -248,6 +294,14 @@ pub struct FieldDef {
     /// gives verdicts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub assignees: Option<String>,
+    /// For `markdown`: the key of the link kind its references are kept
+    /// as, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub references: Option<String>,
+    /// For `markdown`: whether its `diagram` code blocks are diagrams,
+    /// rendered when it is written (`akt.field.markdown.diagrams`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub diagrams: bool,
 }
 
 /// What files an `attachment` field holds.
@@ -278,6 +332,8 @@ pub enum FieldKind {
     Sections,
     /// Each assignee's verdict.
     Verdict,
+    /// Markdown whose headings keep ids and whose links may name akter.
+    Markdown,
 }
 
 impl FieldKind {

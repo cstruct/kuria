@@ -1,4 +1,5 @@
 <script lang="ts">
+	import MarkdownEditor from './editor/MarkdownEditor.svelte';
 	import PeopleSelect from './PeopleSelect.svelte';
 	import SectionsEditor from './SectionsEditor.svelte';
 	import SomeoneSelect from './SomeoneSelect.svelte';
@@ -6,6 +7,8 @@
 	import { upload } from './upload';
 	import type { Person } from './people';
 	import type { Draft, FieldDef } from './values';
+	import { bindTextarea } from './editor/live';
+	import type { LiveDraft } from './live.svelte';
 
 	interface Props {
 		field: FieldDef;
@@ -15,9 +18,17 @@
 		error?: string;
 		/** The akt's members, which a sections field places. */
 		members?: readonly { number: string; title?: string | null }[];
+		/** The live draft whose text the field's editor edits, if it is a
+		 * text field of one (`app.live`). */
+		live?: LiveDraft | null;
 	}
 
-	let { field, draft = $bindable(), people, error, members = [] }: Props = $props();
+	let { field, draft = $bindable(), people, error, members = [], live = null }: Props = $props();
+
+	/** A text area bound to the live draft's text of the field. */
+	function boundTo(area: HTMLTextAreaElement, draft: LiveDraft) {
+		return { destroy: bindTextarea(area, draft.text(field.key), draft.origin) };
+	}
 
 	let uploading = $state(false);
 	let uploadError = $state('');
@@ -44,11 +55,22 @@
 	{#if field.description}<p class="hint">{field.description}</p>{/if}
 
 	{#if draft.kind === 'TEXT'}
-		{#if field.multiline}
+		{#if field.multiline && live}
+			<textarea aria-label={field.name} rows="6" use:boundTo={live}></textarea>
+		{:else if field.multiline}
 			<textarea aria-label={field.name} rows="6" bind:value={draft.text}></textarea>
 		{:else}
 			<input aria-label={field.name} bind:value={draft.text} />
 		{/if}
+	{:else if draft.kind === 'MARKDOWN'}
+		<MarkdownEditor
+			bind:text={draft.text}
+			pictures={draft.pictures}
+			drawings={draft.drawings}
+			diagrams={field.diagrams}
+			label={field.name}
+			live={live ? { draft: live, field: field.key } : null}
+		/>
 	{:else if draft.kind === 'CHOICE'}
 		<select aria-label={field.name} bind:value={draft.key}>
 			<option value="">None</option>

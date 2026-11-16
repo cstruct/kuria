@@ -33,7 +33,9 @@
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
-	import { changes, draftOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
+	import { changes, draftOf, inputOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
+	import { LiveDraft } from '#lib/akt/live.svelte.ts';
+	import LivePresence from '#lib/akt/LivePresence.svelte';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import type { AktPageQuery, Verdict } from '#lib/graphql/generated/graphql.ts';
 	import {
@@ -48,12 +50,17 @@
 		EditAkt,
 		MoveAkt,
 		PerformTransition,
+		ReleaseVersion,
+		ReleaseVersions,
+		AktRevision,
 		RemoveFromContainer,
 		TransferMember
 	} from '#lib/graphql/operations.ts';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
+	import VersionsCard from '#lib/akt/VersionsCard.svelte';
+	import DiffDialog from '#lib/akt/DiffDialog.svelte';
 	import Combobox from '#lib/ui/Combobox.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
@@ -68,11 +75,24 @@
 
 	const client = getClient();
 	const number = $derived(page.params.number ?? '');
-	const view = query(AktPage, () => ({ number }));
+	// r[impl app.versions]: `?version=` reads the akt at one of its versions.
+	const atVersion = $derived(Number(page.url.searchParams.get('version')) || null);
+	const view = query(AktPage, () => ({ number, version: atVersion }));
 	const contacts = query(Contacts, () => ({}));
 	const users = query(Users, () => ({}));
 
-	const akt = $derived(view.data?.akt ?? undefined);
+	// While a refetch is under way the query has no data: the akt shown
+	// stays until it answers, so nothing on the page, such as an editor
+	// someone is typing in, is taken down and put back.
+	let shown: { number: string; version: number | null; akt: Akt } | undefined;
+	const akt = $derived.by(() => {
+		const read = view.data?.akt ?? undefined;
+		if (read) {
+			shown = { number, version: atVersion, akt: read };
+			return read;
+		}
+		return shown && shown.number === number && shown.version === atVersion ? shown.akt : undefined;
+	});
 	setCrumbs(() =>
 		akt
 			? [
@@ -95,10 +115,84 @@
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
+	// A version never changes: read at one, nothing is offered to change.
 	const actions = $derived(
-		actionsOf(akt ? availableTransitions(akt.type.transitions, akt.state) : [])
+		actionsOf(akt && !atVersion ? availableTransitions(akt.type.transitions, akt.state) : [])
 	);
-	const editable = $derived(Boolean(akt && !akt.state.final));
+	// r[impl app.live]: an akt with a live draft is its live draft, edited
+	// together with everyone else who has it open.
+	// Kept while a refetch has no akt yet, so that refreshing the page's data
+	// doesn't drop the connection and the editor bound to it.
+	let liveFor = $state<string | null>(null);
+	$effect(() => {
+		if (akt) liveFor = akt.type.liveDrafts && !atVersion ? akt.number : null;
+	});
+	let live = $state<LiveDraft | null>(null);
+	$effect(() => {
+		if (!liveFor) return;
+		const opened = new LiveDraft(liveFor);
+		live = opened;
+		return () => {
+			opened.destroy();
+			if (live === opened) live = null;
+		};
+	});
+	/** Whether the field is a text of the live draft, edited as it is typed. */
+	const isLiveText = (field: FieldDef) =>
+		field.kind === 'MARKDOWN' || (field.kind === 'TEXT' && field.multiline);
+	const editable = $derived(
+		// A live draft is edited once it is in hand, by those who may.
+		Boolean(akt && !akt.state.final && !atVersion && !(live && (live.readOnly || !live.synced)))
+	);
+	const versioned = $derived(
+		Boolean(akt && (akt.type.document as { versions?: unknown } | null)?.versions)
+	);
+	// r[impl app.pdf]: each markdown field as a PDF, of what is being read,
+	// to download.
+	const markdownFields = $derived((akt?.type.fields ?? []).filter((f) => f.kind === 'MARKDOWN'));
+	const pdfs = $derived(
+		markdownFields.map((f, _, all) => ({
+			key: f.key,
+			label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
+			href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}&download`
+		}))
+	);
+	let comparing = $state<{ from: number; to: number | null } | null>(null);
+	let compareOpen = $state(false);
+
+	async function releaseVersion(label: string, together: string[] = []) {
+		if (!akt) return false;
+		// r[impl app.live]: the live draft as it is, with every edit made.
+		if (live && !(await live.settled())) {
+			toast('Your last edits haven’t reached the server yet: try again', 'danger');
+			return false;
+		}
+		const named = label.trim() || null;
+		const input = { number: akt.number, revision: akt.revision, label: named };
+		if (together.length === 0) {
+			const released = await run(() => mutate(client, ReleaseVersion, { input }));
+			if (released) toast(`${akt.number}: released`, 'success');
+			return released;
+		}
+		// r[impl app.versions]: released together, each at the revision read now.
+		const others: { number: string; revision: number; label: string | null }[] = [];
+		for (const number of together) {
+			const read = await client
+				.query(AktRevision, { number }, { requestPolicy: 'network-only' })
+				.toPromise();
+			const other = read.data?.akt;
+			if (!other) {
+				toast(`${number} can’t be read`, 'danger');
+				return false;
+			}
+			others.push({ number, revision: other.revision, label: named });
+		}
+		const released = await run(() =>
+			mutate(client, ReleaseVersions, { input: { akter: [input, ...others] } })
+		);
+		if (released) toast(`${[akt.number, ...together].join(', ')}: released together`, 'success');
+		return released;
+	}
 	const me = $derived(view.data?.viewer.subject);
 
 	// r[impl app.sections]: the members in the akt's sections, and those
@@ -144,6 +238,15 @@
 	let movingOpen = $state(false);
 	// The transition `?transition=` asked for, opened once per akt.
 	let askedFor = $state('');
+	// r[impl app.references]: a reference's heading, scrolled to once the
+	// akt it is in has loaded, since it isn't there when the page opens.
+	let scrolledTo = $state('');
+	$effect(() => {
+		const hash = page.url.hash.slice(1);
+		if (!akt || !hash || scrolledTo === `${number}#${hash}`) return;
+		scrolledTo = `${number}#${hash}`;
+		requestAnimationFrame(() => document.getElementById(hash)?.scrollIntoView());
+	});
 
 	function snapshot(of: Akt): Record<string, Draft> {
 		return Object.fromEntries(
@@ -205,6 +308,18 @@
 
 	async function save(key: string) {
 		if (!akt) return;
+		// r[impl app.live]: a field of a live draft is set in it, but for a
+		// checkbox, which the server checks for whoever checks it.
+		const kind = akt.type.fields.find((f) => f.key === key)?.kind;
+		if (live && kind !== 'CHECKBOX' && drafts[key]) {
+			if (JSON.stringify(base[key]) !== JSON.stringify(drafts[key])) {
+				live.setField(key, inputOf(drafts[key]));
+				base[key] = structuredClone($state.snapshot(drafts[key]));
+			}
+			editingField = null;
+			if (await live.settled(2000)) await refetch();
+			return;
+		}
 		const fields = oneField(key, base[key], drafts[key]);
 		if (Object.keys(fields).length === 0) {
 			editingField = null;
@@ -389,6 +504,16 @@
 					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
 						>{/if}
 				</div>
+				{#if live}
+					<LivePresence {live} />
+				{/if}
+				{#if akt.version}
+					<p class="origin" role="status">
+						Version {akt.version.number}{akt.version.label ? ` (${akt.version.label})` : ''},
+						released
+						{new Date(akt.version.releasedAt).toLocaleDateString()}: not the living version.
+					</p>
+				{/if}
 				{#if akt.copiedFrom}
 					<p class="origin">
 						Copied from <a href={resolve('/akt/[number]', { number: akt.copiedFrom.number })}
@@ -398,8 +523,12 @@
 				{/if}
 			</div>
 			<div class="actions">
+				{#each pdfs as pdf (pdf.key)}
+					<!-- The server's PDF route, not a page of the app. -->
+					<Button href={pdf.href} download="">{pdf.label}</Button>
+				{/each}
 				<Button
-					disabled={busy}
+					disabled={busy || atVersion !== null}
 					onclick={() => {
 						refusal = null;
 						copyOpen = true;
@@ -462,6 +591,8 @@
 								number={akt.number}
 								judged={ownVerdicts}
 								onVerdict={(verdict) => giveVerdict(akt, verdict)}
+								liveDraft={Boolean(live)}
+								live={live && isLiveText(field) ? live : null}
 							/>
 						{/each}
 					</dl>
@@ -571,6 +702,22 @@
 					</div>
 				</Card>
 
+				{#if versioned}
+					<VersionsCard
+						number={akt.number}
+						versions={akt.versions}
+						pdfFields={markdownFields}
+						reading={atVersion}
+						releasable={!atVersion}
+						{busy}
+						{refusal}
+						onRelease={releaseVersion}
+						onCompare={(from, to) => {
+							comparing = { from, to };
+							compareOpen = true;
+						}}
+					/>
+				{/if}
 				<LinksCard
 					links={akt.links}
 					kinds={linkKinds(akt.type.document)}
@@ -592,11 +739,25 @@
 					onRemove={removeLink}
 				/>
 				<Card title="History">
-					<HistoryList revisions={akt.revisions} {fieldNames} {transitionNames} />
+					<HistoryList
+						revisions={akt.revisions}
+						{fieldNames}
+						{transitionNames}
+						versions={akt.versions}
+					/>
 				</Card>
 			</aside>
 		</div>
 
+		{#if comparing}
+			<DiffDialog
+				bind:open={compareOpen}
+				number={akt.number}
+				from={comparing.from}
+				to={comparing.to}
+				fields={akt.type.fields}
+			/>
+		{/if}
 		{#if pending}
 			<TransitionDialog
 				bind:open={transitionOpen}

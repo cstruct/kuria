@@ -48,7 +48,7 @@ type.
   permitted, 5 unavailable.
 
 - **Reads** (`cli.read`):
-  - `types`; `schema <type>` (fields with kinds, required and options,
+  - `types`; `types schema <type>` (fields with kinds, required and options,
     states and tones, transitions with what they require and the outcomes
     they allow, and from the
     type's document what it contains and links to, its board and
@@ -106,13 +106,80 @@ type.
     ([`src/writes/copy.rs`](src/writes/copy.rs)): `copyAkt`, then the
     copy's members walked, parents first, to answer each copy with its
     original;
-  - `add <container> <member>…`, `remove …`, `transfer <member> <from>
-    <to>`, `move <number> --before|--after <number>`;
+  - `release <number>… [--label]` (several together:
+    `releaseVersions`), `versions <number>`, `diff <number>
+    <from> [<to>]`, `pdf <number> [--field] [--version] -o <file>`, and
+    `cat`/`show --version` ([`src/versions.rs`](src/versions.rs));
+    `release` and version reads work in local mode too, from git
+    ([`src/local/versions.rs`](src/local/versions.rs));
+  - `members add <container> <member>…`, `members remove …`,
+    `members transfer <member> <from> <to>`, `members place <number>
+    --before|--after <number>`;
   - `link <source> <kind> <target> [--pin]` (the kind by key or name;
     `--pin` pins the target's current revision), `unlink …`;
   - `types export [<key>…] [-o <dir>]`, `types define <file>… [--check]`
     (a file holds a document or a list of them; `--check` validates each
     with `kuria-config`, offline, without signing in).
+
+- **Clones** ([`src/clone.rs`](src/clone.rs), docs/spec/clones.md,
+  `clone.*`): a container and its members as files, synced with Kuria,
+  by the commands under `docs`, run in the clone. They need a server, and
+  are refused in local mode (`--dir` or `KURIA_DIR`).
+  - `docs clone <number> [<dir>]` ([`src/clone/sync.rs`](src/clone/sync.rs)):
+    refuses an akt that isn't there or readable (`NOT_FOUND`) and one
+    whose type contains nothing (`NOT_A_CONTAINER`); writes into `<dir>`,
+    by default a new directory named as the container's file, which must
+    be new or empty. Files are laid out as `clone.tree` says
+    ([`src/clone/layout.rs`](src/clone/layout.rs)), with pictures
+    ([`src/clone/pictures.rs`](src/clone/pictures.rs)).
+  - `.kuria/` ([`src/clone/base.rs`](src/clone/base.rs)): `.gitignore`
+    (`*`, so git ignores the folder), `clone.json` (`{url, number}`),
+    `base.json` (`{akter: {<number>: {path, revision, live?: {state,
+    base}}}}`, the live draft's state and base base64, as `liveState`
+    answers them), `base/<path>` (each file and picture as Kuria last had
+    them), `staged/<path>` and `pictures/<id>` (pictures' bytes, fetched
+    once).
+  - `docs status`, `docs diff [--staged] [<path>…]`, `docs add <path>…`
+    and `docs add -p [<path>…]` ([`src/clone/work.rs`](src/clone/work.rs)),
+    offline: the working files against what is staged, else the base.
+    `add` takes
+    files or directories, refuses pictures, removed files, files the base
+    lacks and files holding conflict markers, and never changes a working
+    file; `-p` offers each hunk (`y`, `n`, `q`, `a`, `d`, `?`), reading a
+    line of standard input per answer, a terminal or not, and asking on
+    standard error.
+  - `docs push -m <message>`: fetches each staged akt (its revision, live
+    draft's base and type) and refuses (`STALE`, exit 3), changing
+    nothing, unless each is as the base has it; refuses a new file, a
+    changed picture, a changed `number`, `type` or `state`, verdicts, and
+    a file not in normal form. For an akt with a live draft, it loads
+    `kuria_engine::live::LiveDraft` from the base's state, writes each
+    field the staged file changed from the base's file (a text merged into
+    the draft's text from the base's by characters), and sends the update
+    with the base; for any other akt an `editAkt` of those fields at the
+    base's revision. All go as one `pushClone`. Then the base's files are
+    what was pushed, its revisions what Kuria answered, its live drafts'
+    states and bases the drafts after the update, and the staged files
+    are cleared; the working files are left as they are.
+  - `docs pull`: fetches the container and its members and merges each file
+    three ways with `kuria_engine::merge::merge_marked`, base to Kuria
+    into the working file, by lines then characters, writing
+    `<<<<<<< ours` / `=======` / `>>>>>>> kuria` where both changed the
+    same text; moves a file whose path changed; writes new members;
+    removes members gone unless changed here (kept and named); takes
+    Kuria's pictures unless changed here; restages what was staged,
+    merged the same way, or unstages it where that conflicts; and makes
+    Kuria's state the base.
+  - `docs fmt` ([`src/clone/fmt.rs`](src/clone/fmt.rs)): the clone's files,
+    every file under it but those in `.git/` and `.kuria/`, put in normal
+    form, each where its container's sections put it, and the pictures
+    of the images they embed. The clone is the nearest directory holding
+    `.kuria/`, else the current one; its container the one
+    `.kuria/clone.json` names, else the akt of the root's file that no
+    other file there is a member of.
+  - `docs push`, `docs pull` and `docs fmt` use the clone's URL when
+    neither `--url`, `KURIA_URL` nor the profile names one, and are
+    refused against another Kuria.
 
 - **Bundles** ([`src/writes/bundles.rs`](src/writes/bundles.rs)):
   `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` writes the
@@ -224,19 +291,35 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   `cli.local.convert`), signed in, by way of a bundle:
   `export --types <key>,… --to-dir <path>` writes the bundle of those types
   and their akter as a new directory (each type's latest document, links
-  ordered as the server lists them, people by email or name), then checks
-  it. `import --from-dir <path>` sends a consistent directory as a `types`
-  bundle: each akt with revisions numbered up to its file's `revision`,
-  the first recording it as it is and the rest changing nothing, so that
-  every hash matches and pins hold; each person as a subject named by
-  their email, which the import maps to a user who has signed in.
+  ordered as the server lists them, people by email or name, versions with
+  the headings they had and whether an image had its picture, each
+  attachment's bytes as `attachments/<number>/<name>`), then checks it.
+  `import --from-dir <path>` sends
+  a consistent directory as a `types` bundle: each akt with revisions
+  numbered up to its file's `revision`, each as git's latest commit at that
+  revision holds it, so that every hash matches, pins hold and each
+  version reads as it was released; its versions; each file an akt holds,
+  now or at an earlier revision (from git if it was since removed), as an
+  attachment with its bytes, under an identifier new to that bundle; each
+  person as a subject named by their email, which the import maps to a
+  user who has signed in.
+- **Attachments** ([`src/local/attachments.rs`](src/local/attachments.rs),
+  `cli.local.attachments`): files `attachments/<number>/<name>`, an
+  `attachment` field's value being that path (`cat` prints it so). A write
+  takes such a path, or `@<file>`, copied in when the change is saved,
+  under a name of its own (`logo-2.png`) if another file has the name;
+  either is checked: the file is there, its media type by extension one
+  its field takes, an SBOM where the field holds SBOMs (`kuria-engine`'s
+  `sbom`). An attachment's identifier, an upload, is `LOCAL_UNSUPPORTED`.
+  `check` names each that doesn't hold. An image with its file has its
+  picture, for embeds and releases.
 - **People** are text: `@me` is `KURIA_ME`, else git's `user.email`. On
   their way through the engine, each name or email stands in as a subject
   derived from its text ([`src/local/values.rs`](src/local/values.rs)); a
   checkbox records whom it is for (`true`, or `for:<someone>`), not who
   checked it, which git keeps.
 - **Refused** as `LOCAL_UNSUPPORTED`: signing in, `users`, `contacts`,
-  `draft`, attachments and bundles (convert instead).
+  `draft`, uploading attachments, and bundles (convert instead).
 
 ### JSON answers
 
@@ -258,8 +341,13 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `copy` | `{number, from, members: [{from, number}]}` |
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
 | `guide` | `{guide}` |
+| `docs clone` | `{dir, number, files, members}` |
+| `docs status` | `{number, staged, unstaged, removed, conflicted, untracked}` |
+| `docs diff`, `docs add` | `{staged, files}`, `{staged}` |
+| `docs push`, `docs pull` | `{pushed, message}`, `{merged, added, removed, kept, conflicted, unstaged}` |
+| `docs fmt` | `{changed}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
-| `export --to-dir` | `{dir, aktTypes, akter}` |
+| `export --to-dir` | `{dir, aktTypes, akter, attachments}` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
 `fields` maps field keys to values in the akt file's form.
@@ -288,6 +376,10 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   `apply`, `set`, `do`, `draft`, `verdict`), `writes/copy.rs`,
   `writes/arrange.rs` (membership, order, links) and `writes/types.rs`
   (documents).
+- [`src/clone.rs`](src/clone.rs): clones (`docs …`), in `clone/sync.rs`
+  (`clone`, `pull`, `push`), `clone/work.rs` (`status`, `diff`, `add`),
+  `clone/base.rs` (`.kuria/`), `clone/fmt.rs`, `clone/layout.rs` and
+  `clone/pictures.rs`.
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),
   [`src/output.rs`](src/output.rs), [`src/error.rs`](src/error.rs).
 
@@ -325,10 +417,27 @@ cargo test -p kuria-cli
   transfers, redefining types, and eight writers at once; a protocol of
   tests in sections taking verdicts, its outcome adding up, its file
   applied unchanged and with read-only verdicts and outcome refused, a
-  test leaving its section, and copies of the whole and of a part; and
-  `check`, on a
+  test leaving its section, and copies of the whole and of a part;
+  attachments copied in or named by path, refused when missing, of a
+  media type the field doesn't take or not an SBOM, a document embedding
+  a picture released, and attachments through a bundle and back, one
+  since removed read from git; and `check`, on a
   consistent directory and on one with eight kinds of problem, each named
   with its file.
+- Clones ([`tests/clones.rs`](tests/clones.rs)), against a Kuria server
+  on a local port with a fresh database and a relying host standing in
+  for Konklav ([`tests/support/mod.rs`](tests/support/mod.rs)), with the
+  documents example's types, documents with live drafts: a clone and its
+  `.kuria/`, `docs fmt` in it, refusals of a non-container and a missing akt;
+  a live draft's edit pushed as one change with its message, and the
+  index's as a revision with it as its reason; `docs add -p` staging one hunk
+  of two and pushing only it; a push behind a live edit refused, then a
+  pull merging it and the push again; a conflict marked, refused by `docs add`,
+  resolved and pushed; and git's branch workflow end to end. Needs
+  `mise run db:up`.
+- End to end ([`e2e/tests/clone.spec.ts`](../../e2e/tests/clone.spec.ts)):
+  the binary clones an index while the app types in its document; a push
+  behind it is refused, a pull merges, and the push shows in the browser.
 - End to end ([`e2e/tests/cli.spec.ts`](../../e2e/tests/cli.spec.ts)): the
   built binary against the e2e stack. Playwright authorizes the link
   `kuria login` prints; then `whoami` from the profile, a refresh, `logout`
@@ -361,7 +470,9 @@ cargo test -p kuria-cli
 - Spec: [`docs/spec/cli.md`](../../docs/spec/cli.md) (`cli.profile`,
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
   `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`, and
-  `local.*` for local mode); `app.history` for the history's wording.
-- Annotations: `r[impl cli.*]` in `src/`, `r[verify cli.*]` in the unit
-  tests, `tests/local.rs`, `e2e/tests/cli.spec.ts` and
-  `e2e/tests/parity.spec.ts`.
+  `local.*` for local mode); [`docs/spec/clones.md`](../../docs/spec/clones.md)
+  (`clone.*`); `app.history` for the history's wording.
+- Annotations: `r[impl cli.*]` and `r[impl clone.*]` in `src/`,
+  `r[verify cli.*]` and `r[verify clone.*]` in the unit tests,
+  `tests/local.rs`, `tests/clones.rs`, `e2e/tests/cli.spec.ts`,
+  `e2e/tests/clone.spec.ts` and `e2e/tests/parity.spec.ts`.

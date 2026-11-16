@@ -25,8 +25,17 @@ const TRUSTED_WAIT: Duration = Duration::from_secs(30);
 /// read failed.
 const ERASURE_RETRY: Duration = Duration::from_secs(30);
 
+fn main() -> ExitCode {
+    // `kuria-server render` renders one PDF or diagram under limits, for
+    // the server that started it (`render.limits`).
+    if std::env::args().nth(1).as_deref() == Some("render") {
+        return kuria_typst::worker::main();
+    }
+    serve()
+}
+
 #[tokio::main]
-async fn main() -> ExitCode {
+async fn serve() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -158,6 +167,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 None
             },
             cli_relay: Some(cli_relay(valkey.clone(), &config)?),
+            renderer: kuria_typst::Renderer::current(config.render_limits)?,
         },
     )?;
     let listener = tokio::net::TcpListener::bind(config.listen).await?;

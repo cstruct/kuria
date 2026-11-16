@@ -52,13 +52,6 @@ pub enum Command {
         #[command(subcommand)]
         action: Option<TypesCommand>,
     },
-    /// An akt type's fields, states, transitions, what it contains and
-    /// links to, its board and presentation.
-    Schema {
-        /// The akt type's key.
-        #[arg(value_name = "TYPE")]
-        key: String,
-    },
     /// Akter as a table, most recently changed first, a page at a time.
     Ls {
         /// Only this akt type's akter, with its list fields as columns.
@@ -119,6 +112,9 @@ pub enum Command {
         /// order.
         #[arg(long)]
         all_members: bool,
+        /// The akt as it was at this version of it.
+        #[arg(long)]
+        version: Option<i64>,
     },
     /// Everything about one akt: fields, containers, members, links and the
     /// transitions its state allows.
@@ -127,6 +123,33 @@ pub enum Command {
         /// Its revisions too.
         #[arg(long)]
         history: bool,
+        /// The akt as it was at this version of it.
+        #[arg(long)]
+        version: Option<i64>,
+    },
+    /// An akt's versions, latest first.
+    Versions { number: String },
+    /// A `markdown` field as a PDF: of the living version, or a version.
+    Pdf {
+        number: String,
+        /// The field, if its type has more than one `markdown` field.
+        #[arg(long)]
+        field: Option<String>,
+        /// The version to render.
+        #[arg(long)]
+        version: Option<i64>,
+        /// Where to write it.
+        #[arg(long, short)]
+        output: PathBuf,
+    },
+    /// What changed in an akt between two versions, or since a version:
+    /// `kuria diff <number> <from> [<to>]`.
+    Diff {
+        number: String,
+        /// The version to compare from.
+        from: i64,
+        /// The version to compare to; the living version if left out.
+        to: Option<i64>,
     },
     /// An akt's revisions: who changed what, and when.
     History { number: String },
@@ -178,38 +201,11 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
-    /// Add members to a container.
-    Add {
-        container: String,
-        #[arg(required = true, value_name = "MEMBER")]
-        members: Vec<String>,
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Remove members from a container.
-    Remove {
-        container: String,
-        #[arg(required = true, value_name = "MEMBER")]
-        members: Vec<String>,
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Move a member from one container to another, as one change.
-    Transfer {
-        member: String,
-        from: String,
-        to: String,
-        #[arg(long)]
-        reason: Option<String>,
-    },
-    /// Place an akt directly before or after another, on every board.
-    #[command(group(clap::ArgGroup::new("place").required(true).args(["before", "after"])))]
-    Move {
-        number: String,
-        #[arg(long, value_name = "NUMBER")]
-        before: Option<String>,
-        #[arg(long, value_name = "NUMBER")]
-        after: Option<String>,
+    /// A container's members: add, remove, transfer between containers,
+    /// or place on its boards.
+    Members {
+        #[command(subcommand)]
+        action: MembersCommand,
     },
     /// Link an akt to another by a kind its type declares, such as
     /// `ITEM-1 blocks ITEM-2`.
@@ -242,6 +238,22 @@ pub enum Command {
         for_whom: Option<String>,
         #[arg(long)]
         reason: Option<String>,
+    },
+    /// A container's documents as files on this machine: a clone, worked
+    /// on with any editor and synced with Kuria.
+    Docs {
+        #[command(subcommand)]
+        action: DocsCommand,
+    },
+    /// Release an akt's current revision as its next version, once none
+    /// of its references is broken; several, together, all or nothing, a
+    /// reference from one to another read as what that one is released as.
+    Release {
+        #[arg(required = true, value_name = "NUMBER")]
+        numbers: Vec<String>,
+        /// A label beside the version's number, such as `2.0`.
+        #[arg(long)]
+        label: Option<String>,
     },
     /// Copy an akt and its members, or the part `--only` names, as new
     /// akter of the same types.
@@ -317,8 +329,99 @@ pub enum Command {
     },
 }
 
+/// `kuria docs`: a clone's commands (`clone.*`).
+#[derive(Debug, Subcommand)]
+pub enum DocsCommand {
+    /// Clone a container and its members as files, recording the base
+    /// they were cloned from in `<dir>/.kuria/`.
+    Clone {
+        number: String,
+        /// Where to write it; a new directory named as its file is, if
+        /// left out. (Not `dir`, which would be the global `--dir`.)
+        #[arg(value_name = "DIR")]
+        into: Option<PathBuf>,
+    },
+    /// The files staged, changed, removed, and holding conflict markers.
+    Status,
+    /// The working files against what is staged, or with `--staged` what
+    /// is staged against the base.
+    Diff {
+        /// The files to compare; every one if none.
+        #[arg(value_name = "PATH")]
+        paths: Vec<String>,
+        /// What is staged against the base.
+        #[arg(long)]
+        staged: bool,
+    },
+    /// Stage files to push, a directory for its changed files, or with
+    /// `-p` the hunks chosen.
+    Add {
+        /// The files to stage.
+        #[arg(value_name = "PATH")]
+        paths: Vec<String>,
+        /// Offer each changed hunk in turn, and stage those chosen.
+        #[arg(short = 'p', long = "patch")]
+        patch: bool,
+    },
+    /// Kuria's changes merged into the files, conflicts marked.
+    Pull,
+    /// What is staged, sent to Kuria as one push.
+    Push {
+        /// What the push changes, on one line.
+        #[arg(short, long)]
+        message: String,
+    },
+    /// The files as Kuria writes them, each where its container's sections
+    /// put it, with the pictures of the images they embed.
+    Fmt,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum MembersCommand {
+    /// Add members to a container.
+    Add {
+        container: String,
+        #[arg(required = true, value_name = "MEMBER")]
+        members: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Remove members from a container.
+    Remove {
+        container: String,
+        #[arg(required = true, value_name = "MEMBER")]
+        members: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Move a member from one container to another, as one change.
+    Transfer {
+        member: String,
+        from: String,
+        to: String,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Place an akt directly before or after another, on every board.
+    #[command(group(clap::ArgGroup::new("place").required(true).args(["before", "after"])))]
+    Place {
+        number: String,
+        #[arg(long, value_name = "NUMBER")]
+        before: Option<String>,
+        #[arg(long, value_name = "NUMBER")]
+        after: Option<String>,
+    },
+}
+
 #[derive(Debug, Subcommand)]
 pub enum TypesCommand {
+    /// An akt type's fields, states, transitions, what it contains and
+    /// links to, its board and presentation.
+    Schema {
+        /// The akt type's key.
+        #[arg(value_name = "TYPE")]
+        key: String,
+    },
     /// The documents the akt types were defined by, as JSON.
     Export {
         /// The akt types; all of them if none.
@@ -368,6 +471,101 @@ mod tests {
                 "exit code {code}"
             );
         }
+    }
+
+    #[test]
+    fn a_clone_s_commands_are_under_docs() {
+        let docs = |args: &[&str]| match Cli::try_parse_from(args).unwrap().command {
+            Command::Docs { action } => action,
+            command => panic!("not a docs command: {command:?}"),
+        };
+        assert!(matches!(
+            docs(&["kuria", "docs", "add", "-p"]),
+            DocsCommand::Add { patch: true, paths } if paths.is_empty()
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "add", "a.md", "b.md"]),
+            DocsCommand::Add { patch: false, paths } if paths == ["a.md", "b.md"]
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "diff", "--staged", "a.md"]),
+            DocsCommand::Diff { staged: true, paths } if paths == ["a.md"]
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "push", "-m", "Why"]),
+            DocsCommand::Push { message } if message == "Why"
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "status"]),
+            DocsCommand::Status
+        ));
+        assert!(matches!(
+            docs(&["kuria", "docs", "pull"]),
+            DocsCommand::Pull
+        ));
+        assert!(matches!(docs(&["kuria", "docs", "fmt"]), DocsCommand::Fmt));
+        assert!(Cli::try_parse_from(["kuria", "docs", "push"]).is_err());
+        for gone in ["clone", "status", "pull", "push", "fmt"] {
+            assert!(Cli::try_parse_from(["kuria", gone]).is_err(), "{gone}");
+        }
+    }
+
+    #[test]
+    fn members_and_schema_are_grouped_and_diff_takes_versions() {
+        let parsed = |args: &[&str]| Cli::try_parse_from(args).unwrap().command;
+        assert!(matches!(
+            parsed(&["kuria", "members", "add", "D-1", "D-2", "--reason", "Why"]),
+            Command::Members { action: MembersCommand::Add { container, members, reason: Some(_) } }
+                if container == "D-1" && members == ["D-2"]
+        ));
+        assert!(matches!(
+            parsed(&["kuria", "members", "remove", "D-1", "D-2"]),
+            Command::Members {
+                action: MembersCommand::Remove { .. }
+            }
+        ));
+        assert!(matches!(
+            parsed(&["kuria", "members", "transfer", "D-2", "D-1", "D-3"]),
+            Command::Members { action: MembersCommand::Transfer { member, .. } } if member == "D-2"
+        ));
+        assert!(matches!(
+            parsed(&["kuria", "members", "place", "D-2", "--before", "D-3"]),
+            Command::Members {
+                action: MembersCommand::Place {
+                    before: Some(_),
+                    after: None,
+                    ..
+                }
+            }
+        ));
+        assert!(Cli::try_parse_from(["kuria", "members", "add", "D-1"]).is_err());
+        assert!(Cli::try_parse_from(["kuria", "members", "place", "D-2"]).is_err());
+        assert!(matches!(
+            parsed(&["kuria", "types", "schema", "task"]),
+            Command::Types { action: Some(TypesCommand::Schema { key }) } if key == "task"
+        ));
+        for gone in ["add", "remove", "transfer", "move", "schema"] {
+            assert!(
+                Cli::try_parse_from(["kuria", gone, "D-1", "D-2"]).is_err(),
+                "{gone}"
+            );
+        }
+        assert!(matches!(
+            parsed(&["kuria", "diff", "D-1", "1", "2"]),
+            Command::Diff { number, from: 1, to: Some(2) } if number == "D-1"
+        ));
+        assert!(Cli::try_parse_from(["kuria", "diff", "--staged"]).is_err());
+        assert!(Cli::try_parse_from(["kuria", "diff", "D-1", "one"]).is_err());
+    }
+
+    #[test]
+    fn a_clone_s_directory_is_not_the_global_dir() {
+        let cli = Cli::try_parse_from(["kuria", "docs", "clone", "DOCS-1", "handbook"]).unwrap();
+        assert!(cli.dir.is_none());
+        assert!(matches!(
+            cli.command,
+            Command::Docs { action: DocsCommand::Clone { number, into: Some(into) } } if number == "DOCS-1" && into == std::path::Path::new("handbook")
+        ));
     }
 
     #[test]

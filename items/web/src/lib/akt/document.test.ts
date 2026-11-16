@@ -3,6 +3,7 @@ import {
 	availableTransitions,
 	containedTypes,
 	draftedFields,
+	linkKinds,
 	outcomeRefusal,
 	requiredFields
 } from './document';
@@ -45,5 +46,17 @@ describe('outcomeRefusal', () => {
 	it('lets the outcomes it allows, and any for a transition naming none, through', () => {
 		expect(outcomeRefusal(finish, 'FAIL')).toBeNull();
 		expect(outcomeRefusal({ outcomes: [] }, null)).toBeNull();
+	});
+});
+
+// r[verify link.referenced]
+describe('linkKinds', () => {
+	it('leaves out the kinds a markdown field keeps its references as', () => {
+		const kind = (key: string) => ({ key, name: key, inverse: key, to: ['document'] });
+		const document = {
+			fields: [{ key: 'body', references: 'refers_to' }],
+			links: [kind('refers_to'), kind('replaces')]
+		};
+		expect(linkKinds(document).map((k) => k.key)).toEqual(['replaces']);
 	});
 });

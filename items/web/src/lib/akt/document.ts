@@ -6,7 +6,7 @@
 
 interface Document {
 	contains?: { type: string }[];
-	fields?: { key: string; draft?: unknown }[];
+	fields?: { key: string; draft?: unknown; references?: string }[];
 	links?: LinkKind[];
 }
 
@@ -30,7 +30,11 @@ export function containedTypes(document: unknown): string[] {
 /** The kinds of link an akt of this type may have to others. */
 // r[impl app.links]
 export function linkKinds(document: unknown): LinkKind[] {
-	return documentOf(document).links ?? [];
+	const doc = documentOf(document);
+	// A kind a markdown field keeps its references as is changed in the
+	// text, never by hand (`link.referenced`).
+	const kept = new Set((doc.fields ?? []).flatMap((f) => (f.references ? [f.references] : [])));
+	return (doc.links ?? []).filter((kind) => !kept.has(kind.key));
 }
 
 /** The keys of the fields that have a draft recipe. */

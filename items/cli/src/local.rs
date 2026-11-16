@@ -12,9 +12,12 @@
 //! - [`write`], [`edits`] and [`arrange`]: writes, through the engine's
 //!   rules, under the directory's lock; [`values`]: values to and from the
 //!   engine's, people as text.
+//! - [`attachments`]: files under `attachments/<number>/`, and what fits a
+//!   field.
 
 pub mod answers;
 pub mod arrange;
+pub mod attachments;
 pub mod check;
 pub mod convert;
 pub mod copy;
@@ -23,6 +26,7 @@ pub mod edits;
 pub mod git;
 pub mod layout;
 pub mod values;
+pub mod versions;
 pub mod write;
 
 pub use dir::{AktDir, init};

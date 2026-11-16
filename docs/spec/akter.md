@@ -39,7 +39,13 @@ Kuria MUST refuse an akt type document, saying why, unless:
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
 - every draft recipe is valid (`draft.recipe`, `draft.line`);
-- its presentation is valid (`akt.type.presentation`).
+- its presentation is valid (`akt.type.presentation`);
+- every `markdown` field's `references` names a link kind the document
+  declares (`akt.field.markdown.references`);
+- every `attachment` field's `media_types` are valid
+  (`akt.field.attachment`);
+- its `versions` are valid (`version.declare`);
+- `live_drafts` comes with `versions` (`live.declare`).
 
 r[akt.type.tenant]
 Akt types MUST belong to one tenant. A request MUST only read, use or
@@ -70,6 +76,8 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `tones` | Per state key, a tone: `neutral`, `active`, `success`, `warning` or `danger`. |
 | `icon` | An icon shown with the type's name: `archive`, `book-open`, `box`, `bug`, `calendar`, `circle-check`, `clipboard-check`, `file-text`, `flag`, `flask-conical`, `git-branch`, `layers`, `list-checks`, `milestone`, `notebook-pen`, `package`, `rocket`, `shield-check`, `tag`, `target`, `triangle-alert`, `users`, `wrench` or `zap`. |
 | `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
+| `navigation` | Where the app's sidebar lists the type: `main`, the default, or `more`, under "Show more" (`app.navigation`). |
+| `image` | The key of an `attachment` field whose `media_types` are all images: an akt of the type is an image, and that field's value is its picture (`akt.field.markdown.images`). |
 
 Every key MUST name a field or state the type defines, each at most once
 in its list, and the title a single-line `text` field; otherwise the
@@ -77,7 +85,10 @@ document MUST be refused. Without a `title`, an akt's title MUST be the
 value of the type's first required single-line `text` field, if it has
 one. A state without a tone MUST be shown as `neutral`. An icon or colour
 not in its list MUST be refused; without one, a type MUST be shown without
-an icon, in `neutral`.
+an icon, in `neutral`. A `navigation` other than `main` or `more` MUST be
+refused, and an `image` naming a field that isn't an `attachment` field,
+or one that doesn't list media types, or lists one that isn't `image/png`,
+`image/jpeg`, `image/svg+xml` or `image/webp`.
 
 ## Fields
 
@@ -99,6 +110,7 @@ fits the field's kind:
 | `attachment` | A file uploaded to Kuria, by its identifier; see `akt.field.attachment`. |
 | `sections` | The akt's members laid out in nested sections; see `akt.field.sections`. |
 | `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`; see `akt.field.verdict`. |
+| `markdown` | Markdown whose headings keep ids and whose links may name akter; see `akt.field.markdown`. |
 
 r[akt.field.checkbox]
 A `checkbox` field MUST take `true` to check it and `false` to clear it.
@@ -113,8 +125,12 @@ checked.
 r[akt.field.attachment]
 An `attachment` field MUST only hold an attachment of the akt's tenant. A
 field that says `"format": "sbom"` MUST only hold an attachment Kuria
-recognised as an SBOM ([attachments](attachments.md)). `format` MUST be
-refused on any other kind of field.
+recognised as an SBOM ([attachments](attachments.md)). A field MAY list,
+as `media_types`, the media types it takes: it MUST then only hold an
+attachment of one of them (`attachment.media-types`). `format` and
+`media_types` MUST be refused on any other kind of field, and a
+`media_types` list naming a type twice, or something that isn't a media
+type, MUST be refused.
 
 r[akt.field.multiple]
 A `user` field that says `multiple` MUST hold a list of distinct users and
@@ -131,6 +147,66 @@ MUST also refuse a member of any other type. Members it doesn't name are
 outside every section. A member removed from the akt MUST leave its
 sections in the same change. An akt type MUST have at most one `sections`
 field.
+
+r[akt.field.markdown]
+A line holding only `<!-- pagebreak -->` in a `markdown` field is a page
+break (`pdf.render`, `app.sheets`).
+
+A `markdown` field MUST hold CommonMark text, with GitHub's tables, task
+lists, strikethrough and footnotes, and is without a value when empty. A
+footnote is referred to as `[^<label>]` and defined, anywhere in the text,
+as `[^<label>]: …`; one referred to but never defined is its text. A heading MAY
+end with an id, `{#<id>}`, of lowercase ASCII letters, digits, `-` and
+`_`, starting with a letter. Writing the field MUST give every heading
+without an id one, the heading's text in lower case with every run of
+other characters made one `-`, trimmed of `-` (`section` if that leaves
+nothing), and followed by `-2`, `-3`, … if needed, so that every heading
+id is unique within the akt across its `markdown` fields. A heading that
+has an id MUST keep it when its text changes. A value giving one id to
+two headings MUST be refused.
+
+r[akt.field.markdown.references]
+A link in a `markdown` field whose destination is `kuria:<number>`,
+optionally followed by `@<version>` (`version.number`) and `#<heading
+id>`, is a reference to that akt, that version of it and that heading. A
+`markdown` field MAY name, as `references`, a link kind its type
+declares: every write of the akt MUST then make the akt's links of that
+kind the akter its `markdown` fields reference that exist and are of a
+type the kind's `to` names, each once, unpinned. Any other reference is
+broken. A write MUST NOT be refused for a broken reference; a release is
+(`version.references`). `references` MUST be refused on any other kind of
+field. An image whose destination is a reference embeds it
+(`akt.field.markdown.images`), and is a reference like any other.
+
+r[akt.field.markdown.images]
+An image in a `markdown` field, `![<alt text>](kuria:<number>[@<version>])`,
+embeds that akt's picture: the value, at the revision read, of the field
+its type names as `image` (`akt.type.presentation`). An embedded image
+MUST be served with the attachment it shows and that attachment's media
+type, or as broken, saying why: the akt doesn't exist or the reader may
+not read it, it isn't an image, it has no picture at that revision, it
+doesn't have the version named, or the destination names a heading.
+
+r[akt.field.markdown.diagrams]
+A `markdown` field MAY say `"diagrams": true`. In such a field, a fenced
+code block whose language is `diagram` is a diagram block: typst markup
+in which fletcher 0.5.8 (`fletcher`, with `diagram`, `node` and `edge`),
+cetz 0.5.2 (`cetz`, with `canvas` and `draw`) and cetz-plot 0.1.4 (`plot`
+and `chart`) are imported, and nothing else can be imported or read
+(`pdf.packages`). Every write of the field MUST render each of its
+diagram blocks to SVG, sized to the diagram, and MUST be refused as
+`INVALID_DIAGRAM`, naming the field, the block by its number counting
+from 1, and typst's message, when one doesn't compile. Each rendering
+MUST be kept as an attachment the akt holds as a diagram, by the field
+and the block's source, and never let go of, so that every revision and
+version is shown with its diagrams. A diagram block MUST be served with
+its source and the attachment of its SVG. In any other field a `diagram`
+block is code. `diagrams` MUST be refused on any other kind of field.
+
+r[diagram.preview]
+`renderDiagram(source)` MUST answer the SVG a diagram block with that
+source renders to, or typst's message when it doesn't compile, to any
+authenticated subject, storing nothing.
 
 r[akt.field.verdict]
 A `verdict` field MUST name, as `assignees`, a `multiple` `user` field of
@@ -297,7 +373,8 @@ one transaction (`akt.batch.atomic`).
 ## Akt revisions
 
 r[akt.revision.record]
-Every change to an akt MUST append an akt revision, numbered from 1 without
+Every change to an akt, save one to the live draft of an akt that has one
+(`live.edit`), MUST append an akt revision, numbered from 1 without
 gaps, recording the subject who made it, the transition if there was one,
 the reason if one was given, the field values it changed, the resulting
 state, and the SHA-256 hash of the akt's resulting state and field values.
@@ -306,7 +383,8 @@ Akt revisions MUST never change or be removed by any operation of Kuria's.
 r[akt.revision.concurrency]
 An edit or a transition MUST name the akt revision it was based on, and MUST
 be refused if the akt has moved past it, so that no change is made on top of
-one its author did not see.
+one its author did not see; an edit of a live draft is not checked so
+(`live.edit`).
 
 r[akt.revision.atomic]
 An akt's current state, its new akt revision and its change event MUST be
@@ -360,5 +438,5 @@ a batch rolled back.
 r[akt.change-event]
 Every akt revision MUST append a change event naming the tenant, the akt and
 the revision, numbered from 1 per tenant in the order the changes committed.
-Moves append change events too (`order.not-recorded`), numbered in the same
-sequence.
+Moves and releases append change events too (`order.not-recorded`,
+`version.history`), numbered in the same sequence.

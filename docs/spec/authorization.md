@@ -82,6 +82,11 @@ Performing a transition MUST require `kuria:akter:transition` at its akt
 type, and the transition's own action if it names one, and be refused as
 `FORBIDDEN` otherwise.
 
+r[authz.release]
+Releasing a version (`version.release`) MUST require `kuria:akter:edit`
+at the akt's type, and the action its `versions` names if it names one,
+and be refused as `FORBIDDEN` otherwise.
+
 r[authz.membership]
 Adding a member to a container, or removing one, MUST require
 `kuria:akter:edit` at the container's akt type and `kuria:akter:read` at the

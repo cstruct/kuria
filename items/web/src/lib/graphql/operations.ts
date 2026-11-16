@@ -158,6 +158,34 @@ export const FieldValues = graphql(`
 			field
 			value
 		}
+		... on MarkdownValue {
+			field
+			markdown
+			headings {
+				id
+				level
+				text
+			}
+			references {
+				destination
+				broken
+				pinnedVersion
+			}
+			images {
+				destination
+				broken
+				attachment {
+					url
+					mediaType
+				}
+			}
+			diagrams {
+				source
+				attachment {
+					url
+				}
+			}
+		}
 		... on VerdictValue {
 			field
 			verdicts {
@@ -242,6 +270,7 @@ export const TypeShape = graphql(`
 	fragment TypeShape on AktType {
 		...TypeMark
 		document
+		liveDrafts
 		fields {
 			key
 			name
@@ -252,6 +281,8 @@ export const TypeShape = graphql(`
 			multiple
 			of
 			assignees
+			references
+			diagrams
 			options {
 				key
 				name
@@ -276,7 +307,7 @@ export const TypeShape = graphql(`
 `);
 
 export const AktPage = graphql(`
-	query AktPage($number: String!) {
+	query AktPage($number: String!, $version: Int) {
 		viewer {
 			subject
 		}
@@ -285,12 +316,18 @@ export const AktPage = graphql(`
 			version
 			name
 		}
-		akt(number: $number) {
+		akt(number: $number, version: $version) {
 			id
 			number
 			title
 			revision
 			outcome
+			version {
+				...VersionShown
+			}
+			versions {
+				...VersionShown
+			}
 			copiedFrom {
 				id
 				number
@@ -347,6 +384,7 @@ export const AktPage = graphql(`
 				kind
 				name
 				outgoing
+				byReference
 				pinnedRevision
 				pinned {
 					revision
@@ -632,6 +670,9 @@ export const Shell = graphql(`
 		aktTypes {
 			...TypeMark
 			akterCount
+			presentation {
+				navigation
+			}
 		}
 	}
 `);
@@ -654,6 +695,132 @@ export const SearchAkter = graphql(`
 					name
 				}
 			}
+		}
+	}
+`);
+
+export const VersionShown = graphql(`
+	fragment VersionShown on Version {
+		number
+		revision
+		label
+		releasedAt
+		releasedBy {
+			id
+			name
+		}
+	}
+`);
+
+export const ReleaseVersion = graphql(`
+	mutation ReleaseVersion($input: ReleaseVersionInput!) {
+		releaseVersion(input: $input) {
+			...VersionShown
+		}
+	}
+`);
+
+/** Several akter released together, all or nothing (`version.together`). */
+export const ReleaseVersions = graphql(`
+	mutation ReleaseVersions($input: ReleaseVersionsInput!) {
+		releaseVersions(input: $input) {
+			...VersionShown
+		}
+	}
+`);
+
+/** An akt's title and current revision, to release it with another. */
+export const AktRevision = graphql(`
+	query AktRevision($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			revision
+		}
+	}
+`);
+
+/** An akt's field values at one of its versions, or now, to compare. */
+export const AktFieldsAt = graphql(`
+	query AktFieldsAt($number: String!, $version: Int) {
+		akt(number: $number, version: $version) {
+			id
+			version {
+				number
+			}
+			fields {
+				...FieldValues
+			}
+		}
+	}
+`);
+
+/** What a reference to an akt can name: its headings and versions. */
+export const AktReferable = graphql(`
+	query AktReferable($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			versions {
+				number
+				label
+			}
+			fields {
+				... on MarkdownValue {
+					field
+					headings {
+						id
+						level
+						text
+					}
+				}
+			}
+		}
+	}
+`);
+
+export const ImageTypes = graphql(`
+	query ImageTypes {
+		aktTypes {
+			key
+			name
+			presentation {
+				title
+				image
+			}
+		}
+	}
+`);
+
+export const ImagePicture = graphql(`
+	query ImagePicture($number: String!) {
+		akt(number: $number) {
+			number
+			title
+			type {
+				presentation {
+					image
+				}
+			}
+			fields {
+				... on AttachmentValue {
+					field
+					attachment {
+						url
+					}
+				}
+			}
+		}
+	}
+`);
+
+export const RenderDiagram = graphql(`
+	query RenderDiagram($source: String!) {
+		renderDiagram(source: $source) {
+			svg
+			error
 		}
 	}
 `);

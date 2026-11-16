@@ -151,9 +151,80 @@ diesel::table! {
 
 diesel::joinable!(akt_origin -> akt (origin_id));
 
+diesel::table! {
+    akt_commit (akt_id, revision) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        revision -> Int4,
+        commit -> Jsonb,
+    }
+}
+
+diesel::table! {
+    akt_version (akt_id, number) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        number -> Int4,
+        revision -> Int4,
+        label -> Nullable<Text>,
+        released_by -> Uuid,
+        released_at -> Timestamptz,
+        pins -> Jsonb,
+    }
+}
+
+diesel::table! {
+    akt_diagram (akt_id, field, source_sha256) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        field -> Text,
+        source_sha256 -> Bytea,
+        attachment_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    akt_held (akt_id, attachment_id) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        attachment_id -> Uuid,
+    }
+}
+
+diesel::table! {
+    akt_draft (akt_id) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        state -> Bytea,
+        fields -> Jsonb,
+        compacted_seq -> Int8,
+        released_seq -> Int8,
+        updated_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    akt_draft_update (akt_id, seq) {
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        seq -> Int8,
+        update -> Bytea,
+        by -> Uuid,
+        at -> Timestamptz,
+        fields -> Jsonb,
+        message -> Nullable<Text>,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
+    akt_diagram,
+    akt_draft,
+    akt_draft_update,
+    akt_held,
     akt_origin,
+    akt_commit,
+    akt_version,
     akt_type,
     akt_type_version,
     akt_revision,

@@ -31,18 +31,38 @@ fn refusal(r: &Refusal) -> CliError {
     CliError::from_server("REFUSED", r.to_string(), None)
 }
 
-/// The inputs the engine takes for `given` values of `shape`'s fields.
+/// The inputs the engine takes for `given` values of `shape`'s fields, for
+/// the akt `number`.
 fn inputs(
     w: &mut Writer,
     shape: &Shape,
+    number: &str,
     given: &Map<String, Json>,
 ) -> Result<Map<String, Json>, CliError> {
     let mut inputs = Map::new();
     for (key, raw) in given {
         let field = known_field(shape, key)?;
-        inputs.insert(key.clone(), input(field, raw, &mut w.ids)?);
+        inputs.insert(key.clone(), field_input(w, shape, number, field, raw)?);
     }
     Ok(inputs)
+}
+
+/// The input the engine takes for `raw` given for `field` of the akt
+/// `number`: an attachment as a file of the directory.
+fn field_input(
+    w: &mut Writer,
+    shape: &Shape,
+    number: &str,
+    field: &crate::model::FieldDef,
+    raw: &Json,
+) -> Result<Json, CliError> {
+    let raw = if field.kind == "ATTACHMENT" {
+        let ty = w.dir.types[&shape.key].ty.clone();
+        w.attachment(&ty, &field.key, number, raw)?
+    } else {
+        raw.clone()
+    };
+    input(field, &raw, &mut w.ids)
 }
 
 /// `kuria new <type>` in local mode.
@@ -74,7 +94,14 @@ pub fn create(
     }
     containers.extend(inside.iter().cloned());
     given.extend(split_sets(&shape, sets)?);
-    let mut fields = inputs(w, &shape, &given)?;
+    // The number it will have, for the attachments it is given.
+    let number = numbering::next_from(
+        &w.dir.types[akt_type].ty,
+        w.now,
+        containers.first().map(String::as_str),
+        numbers(&w.dir),
+    );
+    let mut fields = inputs(w, &shape, &number, &given)?;
     fields.retain(|_, v| !v.is_null());
 
     let number = create_with(w, akt_type, &fields, &containers)?;
@@ -145,7 +172,7 @@ pub fn set(
     let key = w.akt(number)?.type_key.clone();
     let shape = w.shape(&key)?;
     let given = split_sets(&shape, sets)?;
-    let fields = inputs(w, &shape, &given)?;
+    let fields = inputs(w, &shape, number, &given)?;
     let current = w.current(number)?;
     let t = w.dir.types[&key].clone();
     let change = w.change();
@@ -210,7 +237,7 @@ pub fn perform(
             )
         })?;
     let given = split_sets(&shape, sets)?;
-    let fields = inputs(w, &shape, &given)?;
+    let fields = inputs(w, &shape, number, &given)?;
     let current = w.current(number)?;
     let t = w.dir.types[&akt.type_key].clone();
     let change = w.change();
@@ -296,6 +323,12 @@ fn check_read_only(w: &Writer, number: &str, parsed: &Parsed) -> Result<(), CliE
             format!("`{key}` can't be changed in a file of {number}: {how}"),
         )
     };
+    if parsed.front.contains_key("version") {
+        return Err(read_only(
+            "version",
+            "a version never changes; edit the living version",
+        ));
+    }
     if parsed.text("type").is_some_and(|t| t != akt.type_key) {
         return Err(read_only("type", "an akt keeps its type"));
     }
@@ -315,7 +348,10 @@ fn check_read_only(w: &Writer, number: &str, parsed: &Parsed) -> Result<(), CliE
             .collect()
     };
     if parsed.front.contains_key("in") && listed("in") != akt.containers.iter().cloned().collect() {
-        return Err(read_only("in", "use `kuria add`, `remove` or `transfer`"));
+        return Err(read_only(
+            "in",
+            "use `kuria members add`, `remove` or `transfer`",
+        ));
     }
     if parsed.front.contains_key("links") && listed("links") != akt.links.iter().cloned().collect()
     {
@@ -374,7 +410,8 @@ pub fn apply(
                 continue;
             }
             let raw = given.get(&field.key).cloned().unwrap_or(Json::Null);
-            fields.insert(field.key.clone(), input(field, &raw, &mut w.ids)?);
+            let input = field_input(w, &shape, &number, field, &raw)?;
+            fields.insert(field.key.clone(), input);
         }
         let current = w.current(&number)?;
         let t = w.dir.types[&akt.type_key].clone();

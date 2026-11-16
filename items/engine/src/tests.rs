@@ -901,3 +901,76 @@ fn says_whether_an_edit_changes_anything_also_of_a_final_akt() {
         Err(Refusal::Final)
     );
 }
+
+fn document_type() -> AktType {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "document", "name": "Document", "number": "D-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to" },
+            { "key": "appendix", "name": "Appendix", "kind": "markdown" }
+        ],
+        "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+        "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }]
+    }))
+    .unwrap();
+    validate(document).unwrap()
+}
+
+// r[verify akt.field.markdown]
+#[test]
+fn markdown_fields_get_heading_ids_unique_across_the_akt() {
+    let ty = document_type();
+    let made = create(
+        &ty,
+        &input(json!({ "title": "Guide", "body": "# Scope\n\nText.\n", "appendix": "# Scope\n" })),
+        change(),
+    )
+    .unwrap();
+    assert_eq!(
+        made.fields["body"],
+        Value::Markdown("# Scope {#scope}\n\nText.\n".to_owned())
+    );
+    assert_eq!(
+        made.fields["appendix"],
+        Value::Markdown("# Scope {#scope-2}\n".to_owned())
+    );
+    let now = Current {
+        state: made.state,
+        fields: made.fields,
+    };
+    // The same text, sent without the id it was given, changes nothing.
+    assert_eq!(
+        edit(
+            &ty,
+            &now,
+            &input(json!({ "body": "# Scope\n\nText.\n" })),
+            change()
+        ),
+        Err(Refusal::NoChange)
+    );
+    // A renamed heading keeps its id.
+    let renamed = edit(
+        &ty,
+        &now,
+        &input(json!({ "body": "# Purpose {#scope}\n\nText.\n" })),
+        change(),
+    )
+    .unwrap();
+    assert_eq!(renamed.changes.keys().collect::<Vec<_>>(), ["body"]);
+    // Empty Markdown clears; an id given twice is refused by field.
+    let cleared = edit(&ty, &now, &input(json!({ "appendix": "  \n" })), change()).unwrap();
+    assert!(!cleared.fields.contains_key("appendix"));
+    assert_eq!(
+        edit(
+            &ty,
+            &now,
+            &input(json!({ "appendix": "# A {#scope}\n" })),
+            change()
+        ),
+        Err(Refusal::InvalidValue {
+            field: "appendix".to_owned(),
+            reason: "two headings have the id `scope`".to_owned()
+        })
+    );
+}

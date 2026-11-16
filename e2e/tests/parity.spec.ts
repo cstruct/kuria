@@ -1,6 +1,7 @@
 /** Local mode's parity with a server: one sequence of commands, run against
  * the end-to-end Kuria and against a new akt directory, answers and akter
  * compared step by step (`cli.local.rules`, `cli.local.revision`). */
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -134,18 +135,18 @@ test('local mode answers a sequence of commands as the server does', async () =>
 		[['link', three, 'blocks', two], 0],
 		[['unlink', two, 'blocks', one], 0],
 		[['unlink', two, 'blocks', one], 2],
-		[['move', three, '--before', one], 0],
-		[['move', three, '--after', three], 1],
-		[['add', b, three], 1],
-		[['transfer', two, a, b], 0],
-		[['transfer', two, a, b], 1],
-		[['remove', a, three], 0],
-		[['remove', a, three], 1],
-		[['add', b, three], 0],
+		[['members', 'place', three, '--before', one], 0],
+		[['members', 'place', three, '--after', three], 1],
+		[['members', 'add', b, three], 1],
+		[['members', 'transfer', two, a, b], 0],
+		[['members', 'transfer', two, a, b], 1],
+		[['members', 'remove', a, three], 0],
+		[['members', 'remove', a, three], 1],
+		[['members', 'add', b, three], 0],
 		[['do', b, 'pause'], 0],
-		[['add', b, one], 1],
+		[['members', 'add', b, one], 1],
 		[['do', a, 'shut'], 0],
-		[['remove', a, one], 1],
+		[['members', 'remove', a, one], 1],
 		[['set', 'NOPE-1', 'title=x'], 2]
 	];
 	for (const [args, code] of steps) {
@@ -326,7 +327,7 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 		[['set', p, `layout=@${layout}`], 0],
 		[['cat', p], 0],
 		[['cat', one], 0],
-		[['schema', protocol], 0],
+		[['types', 'schema', protocol], 0],
 		[['do', p, 'finish'], 1],
 		[['verdict', one, 'pass', '--reason', 'Ran it'], 0],
 		[['verdict', one, 'maybe'], 1],
@@ -346,7 +347,7 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 		[['copy', p, '--only', 'NOPE-1'], 1],
 		[['copy', p, '--only', one, '--reason', 'Run it'], 0],
 		[['copy', p], 0],
-		[['remove', p, three], 0],
+		[['members', 'remove', p, three], 0],
 		[['do', p, 'finish'], 0],
 		[['cat', p], 0]
 	];
@@ -375,4 +376,120 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 		expect(JSON.parse(refused.stderr).error.code, where).toBe('READ_ONLY');
 	}
 	expect((await cli.run(['--dir', dir, 'check'])).code).toBe(0);
+});
+
+// r[verify cli.local.rules]
+// r[verify cli.local.versions]
+// r[verify cli.local.references]
+// r[verify akt.field.markdown]
+// r[verify version.release]
+// r[verify version.references]
+// r[verify version.read]
+// r[verify version.diff]
+test('local mode writes documents, releases and reads versions as the server does', async () => {
+	test.setTimeout(300_000);
+	const stamp = Date.now();
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const dir = join(cli.dir, 'documents');
+	const index = `parity_index_${stamp}`;
+	const doc = `parity_doc_${stamp}`;
+	writeFileSync(
+		join(cli.dir, 'types.json'),
+		JSON.stringify([
+			{
+				key: index,
+				name: 'Parity index',
+				number: `PI${stamp}-{seq}`,
+				fields: [
+					{ key: 'title', name: 'Title', kind: 'text', required: true },
+					{ key: 'folders', name: 'Folders', kind: 'sections', of: [doc] }
+				],
+				states: [{ key: 'open', name: 'Open', initial: true }],
+				contains: [{ type: doc, exclusive: true }]
+			},
+			{
+				key: doc,
+				name: 'Parity document',
+				number: '{parent}-D{seq:2}',
+				created_in: [index],
+				fields: [
+					{ key: 'title', name: 'Title', kind: 'text', required: true },
+					{ key: 'body', name: 'Body', kind: 'markdown', references: 'refers_to' }
+				],
+				states: [{ key: 'draft', name: 'Draft', initial: true }],
+				links: [{ key: 'refers_to', name: 'Refers to', inverse: 'Referred to by', to: [doc] }],
+				versions: {}
+			}
+		])
+	);
+	expect((await cli.run(['init', '--dir', dir])).code).toBe(0);
+	const git = (...args: string[]) =>
+		execFileSync('git', ['-C', dir, '-c', 'commit.gpgsign=false', ...args], {
+			env: {
+				...process.env,
+				GIT_AUTHOR_NAME: 'Ada',
+				GIT_AUTHOR_EMAIL: 'ada@shop.example',
+				GIT_COMMITTER_NAME: 'Ada',
+				GIT_COMMITTER_EMAIL: 'ada@shop.example'
+			}
+		});
+	git('init', '-q');
+	const commit = () => {
+		git('add', '-A');
+		git('commit', '-qm', 'Saved', '--allow-empty');
+	};
+	const viewer = JSON.parse((await cli.run(['whoami', '--format', 'json'])).stdout);
+	const me = { KURIA_ME: viewer.email ?? viewer.name };
+	const both = async (args: string[]): Promise<Said> => {
+		const server = said(await cli.run(args));
+		const local = said(await cli.run(['--dir', dir, ...args], me));
+		expect(local, args.join(' ')).toEqual(server);
+		return server;
+	};
+	const body = (name: string, text: string) => {
+		const path = join(cli.dir, `${name}.md`);
+		writeFileSync(path, text);
+		return `body=@${path}`;
+	};
+	const p = `PI${stamp}-1`;
+	const [setup, guide] = [`${p}-D01`, `${p}-D02`];
+
+	await both(['types', 'define', join(cli.dir, 'types.json')]);
+	await both(['new', index, '--set', 'title=Handbook']);
+	await both(['new', doc, '--in', p, '--set', 'title=Setup', '--set', body('setup', '# Install\n\nRun it.\n')]);
+	await both([
+		'new',
+		doc,
+		'--in',
+		p,
+		'--set',
+		'title=Guide',
+		'--set',
+		body('guide', `[install](kuria:${setup}#install) and [gone](kuria:${setup}#gone)\n`)
+	]);
+	commit();
+	const steps: [string[], number][] = [
+		[['cat', setup], 0],
+		[['cat', guide], 0],
+		[['release', guide], 1],
+		[['link', guide, 'refers_to', setup], 1],
+		[['set', guide, body('fixed', `[install](kuria:${setup}#install)\n`)], 0]
+	];
+	for (const [args, code] of steps) {
+		expect((await both(args)).code, args.join(' ')).toBe(code);
+	}
+	commit();
+	// The setup has no version: the guide is released together with it.
+	expect((await both(['release', guide, '--label', '1.0'])).code).toBe(1);
+	expect((await both(['release', guide, setup, '--label', '1.0'])).code).toBe(0);
+	commit();
+	await both(['set', guide, body('more', `[install](kuria:${setup}#install)\n\nMore.\n`)]);
+	commit();
+	for (const args of [
+		['cat', guide, '--version', '1'],
+		['diff', guide, '1'],
+		['cat', guide, '--version', '2']
+	]) {
+		await both(args);
+	}
 });

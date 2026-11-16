@@ -23,4 +23,24 @@ describe('refusals', () => {
 		});
 		expect(refusalOf(new CombinedError({ networkError: new Error('down') })).code).toBe('NETWORK');
 	});
+
+	// r[verify app.versions]
+	it('names the akter a broken release could go together with', () => {
+		const error = new CombinedError({
+			graphQLErrors: [
+				new GraphQLError('the release has broken references', {
+					extensions: {
+						code: 'BROKEN_REFERENCES',
+						references: ['`kuria:D-2#run` in `body`: `D-2` has no version yet'],
+						together: ['D-2']
+					}
+				})
+			]
+		});
+		expect(refusalOf(error)).toMatchObject({
+			code: 'BROKEN_REFERENCES',
+			references: ['`kuria:D-2#run` in `body`: `D-2` has no version yet'],
+			together: ['D-2']
+		});
+	});
 });

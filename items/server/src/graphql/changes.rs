@@ -24,6 +24,11 @@ pub enum ChangeKind {
     Revision,
     /// The akt moved in its tenant's order.
     Rank,
+    /// The akt released a version, of the revision `revision` (`version.history`).
+    Version,
+    /// The akt's live draft changed; `revision` is its latest revision,
+    /// unchanged (`live.sync`).
+    Draft,
 }
 
 /// That an akt changed. Fetch what you need about it with a query.
@@ -43,10 +48,11 @@ impl From<&Change> for ChangeEvent {
     fn from(change: &Change) -> Self {
         Self {
             seq: change.seq,
-            kind: if change.kind == "rank" {
-                ChangeKind::Rank
-            } else {
-                ChangeKind::Revision
+            kind: match change.kind.as_str() {
+                "rank" => ChangeKind::Rank,
+                "version" => ChangeKind::Version,
+                "draft" => ChangeKind::Draft,
+                _ => ChangeKind::Revision,
             },
             akt: ID(change.akt_id.to_string()),
             number: change.number.clone(),

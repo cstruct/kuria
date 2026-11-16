@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	groupMembers,
 	mappedTypes,
+	pictureOf,
 	placeFor,
 	shownFields,
 	sortAkter,
@@ -96,11 +97,24 @@ describe('shownFields', () => {
 	};
 
 	it('names the fields the presentation picks, with their values', () => {
-		expect(shownFields(akt, 'card')).toEqual([{ name: 'Kind', text: 'Feature' }]);
+		expect(shownFields(akt, 'card')).toEqual([{ name: 'Kind', text: 'Feature', picture: null }]);
 		expect(shownFields(akt, 'list')).toEqual([
-			{ name: 'Owner', text: '' },
-			{ name: 'Kind', text: 'Feature' }
+			{ name: 'Owner', text: '', picture: null },
+			{ name: 'Kind', text: 'Feature', picture: null }
 		]);
+	});
+
+	// r[verify app.images]
+	it('shows an image attachment as its picture', () => {
+		const value = (mediaType: string) =>
+			({
+				__typename: 'AttachmentValue',
+				field: 'file',
+				attachment: { id: 'a', url: '/attachments/a', name: 'a', mediaType, size: 1, sbom: null }
+			}) as Value;
+		expect(pictureOf(value('image/svg+xml'))).toBe('/attachments/a');
+		expect(pictureOf(value('application/pdf'))).toBeNull();
+		expect(pictureOf(undefined)).toBeNull();
 	});
 });
 

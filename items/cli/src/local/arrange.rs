@@ -51,7 +51,7 @@ fn check_joins(
     Ok(())
 }
 
-/// `kuria add` and `kuria remove` in local mode.
+/// `kuria members add` and `members remove` in local mode.
 // r[impl cli.local.rules]
 // r[impl cli.local.revision]
 pub fn membership(
@@ -101,7 +101,7 @@ pub fn membership(
     ))
 }
 
-/// `kuria transfer <member> <from> <to>` in local mode: one change.
+/// `kuria members transfer <member> <from> <to>` in local mode: one change.
 pub fn transfer(
     w: &mut Writer,
     member: &str,
@@ -143,7 +143,7 @@ pub fn transfer(
     ))
 }
 
-/// `kuria move <number> --before|--after <number>` in local mode: its
+/// `kuria members place <number> --before|--after <number>` in local mode: its
 /// place in the directory's order, which no revision records.
 pub fn move_akt(
     w: &mut Writer,
@@ -271,7 +271,7 @@ pub fn unlink(
 ) -> Result<Answer, CliError> {
     w.akt(target)?;
     let key = kind_key(w, source, kind)?.unwrap_or_else(|| kind.to_owned());
-    let def = links::to_remove(&w.akt_ref(source)?, &key);
+    let def = links::to_remove(&w.akt_ref(source)?, &key)?;
     let existed = w
         .akt(source)?
         .links

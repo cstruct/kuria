@@ -14,7 +14,9 @@ A bundle MUST be a directory holding `bundle.json` and, if any akt holds an
 attachment, `attachments/`, one file per attachment's bytes named by its
 SHA-256 in hex. `bundle.json` MUST say the bundle's format version, its
 scope (`types` or `tenant`), the akt type keys a `types` bundle selected,
-whether it holds akter, and when it was exported. On the wire, to and from
+whether it holds akter, and when it was exported. Kuria MUST write format
+2, and read formats 1 and 2: format 1 is format 2 without versions or the
+commits revisions were pushed in. On the wire, to and from
 the server, a bundle MUST travel as a tar archive of that directory.
 
 r[bundle.contents]
@@ -26,13 +28,17 @@ A bundle that holds akter MUST hold, for them:
 - every akt revision of each, as stored: its number, author, time,
   transition, reason, changes, resulting state, membership or link change,
   and hash;
+- every version of each, as stored: its number, the revision it names, its
+  label, who released it and when, and its pins (`version.pins`);
 - the memberships and links among them, with any pinned revisions;
 - for each copy among them, the akt it was copied from, if the bundle holds
   that one too (`akt.copy.record`);
 - the tenant's number counters;
 - the contacts their values name, and the people their revisions and
   values name: subject, recorded name and email;
-- the attachments they hold, with their metadata and bytes.
+- the attachments they hold, in fields and as diagrams, with their
+  metadata and bytes, and which akt holds each diagram, for which field
+  and source (`akt.field.markdown.diagrams`).
 
 A bundle without akter MUST hold the latest version of each selected akt
 type's document only.
@@ -101,9 +107,13 @@ its order, in the order the bundle gave them. A whole tenant's akter MUST
 keep their places.
 
 r[bundle.import.history]
-Imported akter MUST keep their numbers, their akt type versions, and their
-revisions exactly as the bundle records them, authors and times included;
-an import MUST NOT append revisions to them.
+Imported akter MUST keep their numbers, their akt type versions, their
+revisions and the commits kept with them, and their versions exactly as the
+bundle records them, authors and times included; an import MUST NOT append
+revisions or versions to them. An import MUST refuse, as `INVALID_BUNDLE`
+and before writing anything, an akt whose versions aren't numbered from 1
+on, in order, name a revision it lacks or another version names, or hold
+pins that don't read.
 
 r[bundle.import.counters]
 After an import, the tenant's number counters MUST be past every imported

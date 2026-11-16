@@ -94,7 +94,7 @@ r[cli.read]
 The client MUST offer:
 
 - `types`: the akt types, with how many akter each has;
-- `schema <type>`: a type's fields with their kinds, whether required, and
+- `types schema <type>`: a type's fields with their kinds, whether required, and
   options; its states and their tones; its transitions with what they
   require and the outcomes they allow; the types it contains and links
   to; its board and presentation;
@@ -110,8 +110,17 @@ The client MUST offer:
   the container's order (`cli.members`);
 - `show <number>`: an akt's fields, its outcome, containers, members by
   column and type, or in their sections with each section's outcome,
-  links, and the transitions its state allows, and with `--history` its
-  revisions;
+  links, its broken references (`akt.field.markdown.references`), its
+  versions, and the transitions its state allows, and with
+  `--history` its revisions;
+- `cat`, `show` and `pdf` with `--version <n>`: the akt at that version
+  (`version.read`);
+- `versions <number>`: its versions, latest first (`version.list`), and
+  `diff <number> <from> [<to>]`: what changed between two versions, or a
+  version and the living version, `markdown` fields line by line
+  (`version.diff`);
+- `pdf <number> [--field <key>] [--version <n>] -o <file>`: a `markdown`
+  field as a PDF (`pdf.route`), the type's only one if no field is named;
 - `history <number>`: its revisions, as the app's history says them
   (`app.history`);
 - `users` and `contacts`: whom values can name.
@@ -138,7 +147,13 @@ contacts; a `sections` field MUST be a section of its own whose body is
 the field's value as YAML, akter by number; and a `verdict` field MUST be
 a front-matter mapping of each assignee to their verdict, read-only, given
 with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
-key after `state`.
+key after `state`. A `markdown` field MUST be a section of its own whose
+body is its value. `links` MUST leave out the links references keep
+(`link.referenced`), to or from the akt: the text says them, and they
+change without a revision of their target. An akt file MUST NOT list its versions, which change without a
+revision. An akt read at a version MUST have a read-only `version` key
+after `revision`, and `apply` of it MUST be refused as
+`READ_ONLY`.
 
 r[cli.file.multi]
 A multi-akt file MUST hold its first akt as an akt file, and each other
@@ -182,9 +197,10 @@ The client MUST offer:
 - `set <number> <field>=<value>…`: an edit without a file;
 - `do <number> <transition> [--set <field>=<value>]…`: a transition, with
   the fields it requires;
-- `add <container> <member>…` and `remove <container> <member>…`;
-- `transfer <member> <from> <to>`;
-- `move <number> --before <number>` or `--after <number>`;
+- `members add <container> <member>…` and `members remove <container>
+  <member>…`;
+- `members transfer <member> <from> <to>`;
+- `members place <number> --before <number>` or `--after <number>`;
 - `link <source> <kind> <target> [--pin]` and `unlink <source> <kind>
   <target>`;
 - `draft <number> <field>`;
@@ -192,6 +208,12 @@ The client MUST offer:
   verdict, or one for another assignee (`akt.field.verdict`);
 - `copy <number> [--only <number>…] [--in <container>…]`, answering the
   copy's number and the numbers of the copies of its members (`akt.copy`);
+- `release <number> [--label <label>]`: its current revision as its next
+  version, answering the version's number, or each broken reference
+  (`version.release`, `version.references`);
+- `docs clone`, `docs status`, `docs diff`, `docs add`, `docs pull` and
+  `docs push`: a container as files synced with Kuria (`clone.*`);
+- `docs fmt`, in a clone: its files in normal form (`clone.normal`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
@@ -303,10 +325,34 @@ A write in local mode MUST hold an exclusive lock on the directory for the
 whole change, so that two clients writing at once neither lose a change
 nor read one half made.
 
+r[cli.local.references]
+In local mode the links references keep (`link.referenced`) MUST NOT be
+stored in akt files: they MUST be worked out from the directory's
+`markdown` fields whenever they are read, as a server keeps them.
+
+r[cli.local.versions]
+In local mode an akt's versions MUST be kept in the directory's file, as
+a front-matter `versions` list of what `version.number` and
+`version.pins` record, which, like `rank`, `cat` leaves out: a release
+makes no revision, so an akt file can't change with one. A release MUST be refused as `UNCOMMITTED` while
+the akt has changes git hasn't committed, and reading an akt at a version
+MUST read it from the latest commit at which it had the version's
+revision (`cli.local.history`).
+
+r[cli.local.attachments]
+In an akt directory, an attachment MUST be a file under
+`attachments/<number>/<name>`, which the akt file's value for an
+`attachment` field names by that path from the directory. Local mode MUST
+check that the file exists, that its media type, by its extension, is one
+its field takes (`attachment.media-types`), and that a field holding SBOMs
+holds one (`attachment.sbom`), and MUST read pictures from those files
+(`akt.field.markdown.images`). A value naming anything else MUST be
+refused.
+
 r[cli.local.unsupported]
-In local mode `login`, `logout`, `users`, `contacts`, `draft`, attachments,
-`export` and `import` of bundles MUST be refused as `LOCAL_UNSUPPORTED`,
-saying why. `whoami` MUST answer the directory and who `@me` is.
+In local mode `login`, `logout`, `users`, `contacts`, `draft`, uploading
+attachments, `pdf`, `export` and `import` of bundles MUST be refused as
+`LOCAL_UNSUPPORTED`, saying why. `whoami` MUST answer the directory and who `@me` is.
 
 r[cli.local.check]
 `kuria check --dir <path>` MUST check the whole directory as a server
@@ -325,9 +371,19 @@ r[cli.local.convert]
 write the selected akt types and their akter as a new akt directory, in
 the server's order, each akt reading through `cat` as it does on the
 server, refusing an akt that doesn't fit its type's latest document, which
-is the one an akt directory keeps, and one holding an attachment.
+is the one an akt directory keeps. Each attachment MUST be written as
+its file (`cli.local.attachments`). Each
+akt's versions MUST be written into its directory file's `versions`
+(`cli.local.versions`), each with the headings it had at its revision; a
+version's text stays with the server, since git holds none of the
+revisions before the directory's.
 `kuria import --from-dir <path>` MUST import a directory `kuria check`
 finds consistent as a bundle of its types and akter (`bundle.import.*`),
-keeping their numbers, memberships, links and pins. Since git holds a
-directory's history, each akt MUST get revisions numbered up to its file's
-`revision`: the first recording it as it is, the rest changing nothing.
+keeping their numbers, memberships, links, pins, versions and
+attachments, each uploaded from its file. Since git
+holds a directory's history, each akt MUST get revisions numbered up to its
+file's `revision`, each recording the akt as git's latest commit at that
+revision holds it, else as at the next revision git has, and its file as it
+is for its own; the first records it whole, and each later one what
+changed. An import MUST be refused as `NOT_FOUND` when git has no commit at
+a revision one of its versions names.

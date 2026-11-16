@@ -184,11 +184,13 @@ pub(super) async fn copy_in(
             None => inside.clone(),
             Some(parent) => vec![copies[&parent].number.clone()],
         };
+        // An akt with a live draft is copied as reading answers it.
+        let read = super::live::read_as_draft(conn, &node.ty, node.row.clone()).await?;
         let made = super::create::create_in(
             conn,
             caller,
             node.ty.ty.key(),
-            &copied_fields(&node.ty, &node.row.fields),
+            &copied_fields(&node.ty, &read.fields),
             Some(said(&format!("copied from {}", node.row.number))),
             &into,
         )

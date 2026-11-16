@@ -14,6 +14,7 @@ use kuria_store::contacts::Contact;
 use kuria_store::containers::MembershipRow;
 use kuria_store::links::LinkRow;
 use kuria_store::people::Person;
+use kuria_store::versions::VersionRow;
 use kuria_store::{Connection, Pool};
 use serde_json::{Map, Value as Json};
 use sha2::{Digest, Sha256};
@@ -22,7 +23,7 @@ use uuid::Uuid;
 use super::BundleError;
 use super::archive::{self, Unpacked};
 use super::export::unhex;
-use super::format::{Bundle, FORMAT, Scope};
+use super::format::{Bundle, READS, Scope};
 use crate::akter::{define_in, read_document};
 use crate::attachments::{Storage, hex};
 
@@ -73,10 +74,11 @@ fn read_bundle(bytes: &[u8]) -> Result<Bundle, BundleError> {
     let invalid = |e: serde_json::Error| BundleError::Invalid(format!("`bundle.json`: {e}"));
     let raw: Json = serde_json::from_slice(bytes).map_err(invalid)?;
     match raw["format"].as_u64() {
-        Some(format) if format == u64::from(FORMAT) => {}
+        Some(format) if READS.iter().any(|r| u64::from(*r) == format) => {}
         Some(format) => {
             return Err(BundleError::Invalid(format!(
-                "the bundle's format is {format}; this Kuria reads format {FORMAT}"
+                "the bundle's format is {format}; this Kuria reads formats {}",
+                READS.map(|r| r.to_string()).join(" and ")
             )));
         }
         None => {
@@ -149,16 +151,8 @@ fn check(bundle: &Bundle, unpacked: &Unpacked) -> Result<HashMap<Uuid, AktType>,
             ));
         };
         replay(akt, ty)?;
-        if let Some(held) = akt
-            .attachments
-            .iter()
-            .find(|h| !attachments.contains(&h.attachment))
-        {
-            return invalid(format!(
-                "{} holds the attachment {}, which the bundle lacks",
-                akt.number, held.attachment
-            ));
-        }
+        check_versions(akt)?;
+        check_held(akt, &attachments)?;
     }
     if let Some(akt) = bundle
         .akter
@@ -293,6 +287,51 @@ fn replay(akt: &super::format::BundleAkt, ty: &AktType) -> Result<(), BundleErro
     Ok(())
 }
 
+/// Every attachment `akt` holds, in a field or as a diagram, is one the
+/// bundle holds.
+fn check_held(
+    akt: &super::format::BundleAkt,
+    attachments: &HashSet<Uuid>,
+) -> Result<(), BundleError> {
+    match akt
+        .attachments
+        .iter()
+        .map(|h| h.attachment)
+        .chain(akt.diagrams.iter().map(|d| d.attachment))
+        .find(|a| !attachments.contains(a))
+    {
+        Some(held) => Err(BundleError::Invalid(format!(
+            "{} holds the attachment {held}, which the bundle lacks",
+            akt.number
+        ))),
+        None => Ok(()),
+    }
+}
+
+/// `akt`'s versions: numbered from 1 on, in order, each naming a revision
+/// of its own that the akt has, with its pins as `version.pins` keeps them.
+// r[impl bundle.import.history]
+fn check_versions(akt: &super::format::BundleAkt) -> Result<(), BundleError> {
+    let invalid = |message: String| Err(BundleError::Invalid(format!("{}: {message}", akt.number)));
+    let last = akt.revisions.last().map_or(0, |r| r.revision);
+    let mut named = HashSet::new();
+    for (i, v) in akt.versions.iter().enumerate() {
+        if usize::try_from(v.number).ok() != Some(i + 1) {
+            return invalid("its versions aren't numbered from 1 on, in order".to_owned());
+        }
+        if !(1..=last).contains(&v.revision) || !named.insert(v.revision) {
+            return invalid(format!(
+                "version {} names revision {}, which it lacks or another version names",
+                v.number, v.revision
+            ));
+        }
+        if serde_json::from_value::<Vec<kuria_engine::versions::Pin>>(v.pins.clone()).is_err() {
+            return invalid(format!("version {}'s pins don't read", v.number));
+        }
+    }
+    Ok(())
+}
+
 /// Who each subject the bundle names is in the tenant: by the mapping,
 /// else by email to a user who signed in to the tenant.
 // r[impl bundle.import.subjects]
@@ -322,6 +361,79 @@ async fn subjects(
     }
     mapped.retain(|from, to| from != to);
     Ok(mapped)
+}
+
+/// Every attachment each akt held, now or at any revision, recorded as
+/// held for good (`attachment.download`).
+async fn keep_held(
+    conn: &mut Connection,
+    tenant: Uuid,
+    bundle: &Bundle,
+    types: &HashMap<Uuid, AktType>,
+    akt_ids: &HashMap<Uuid, Uuid>,
+) -> Result<(), BundleError> {
+    for a in &bundle.akter {
+        let ty = &types[&a.type_version];
+        let mut ids: Vec<Uuid> = a.attachments.iter().map(|h| h.attachment).collect();
+        for r in &a.revisions {
+            for (key, raw) in r.changes.as_object().into_iter().flatten() {
+                if let Some(Value::Attachment(id)) = ty
+                    .field(key)
+                    .filter(|_| !raw.is_null())
+                    .and_then(|f| Value::from_json(f, raw).ok())
+                    && !ids.contains(&id)
+                {
+                    ids.push(id);
+                }
+            }
+        }
+        kuria_store::attachments::keep_held(conn, tenant, akt_ids[&a.id], &ids).await?;
+        let diagrams: Vec<kuria_store::attachments::DiagramRow> = a
+            .diagrams
+            .iter()
+            .map(|d| kuria_store::attachments::DiagramRow {
+                tenant_id: tenant,
+                akt_id: akt_ids[&a.id],
+                field: d.field.clone(),
+                source_sha256: unhex(&d.source_sha256).unwrap_or_default(),
+                attachment_id: d.attachment,
+            })
+            .collect();
+        kuria_store::attachments::insert_diagrams(conn, &diagrams).await?;
+    }
+    Ok(())
+}
+
+/// The bundle's versions and commits, with the akter's new identifiers
+/// (`bundle.import.history`).
+async fn insert_versions(
+    conn: &mut Connection,
+    tenant: Uuid,
+    bundle: &Bundle,
+    akt_ids: &HashMap<Uuid, Uuid>,
+) -> Result<(), BundleError> {
+    let mut versions = Vec::new();
+    let mut commits = Vec::new();
+    for a in &bundle.akter {
+        let id = akt_ids[&a.id];
+        versions.extend(a.versions.iter().map(|v| VersionRow {
+            tenant_id: tenant,
+            akt_id: id,
+            number: v.number,
+            revision: v.revision,
+            label: v.label.clone(),
+            released_by: v.released_by,
+            released_at: v.released_at,
+            pins: v.pins.clone(),
+        }));
+        commits.extend(
+            a.revisions
+                .iter()
+                .filter_map(|r| Some((tenant, id, r.revision, r.commit.clone()?))),
+        );
+    }
+    kuria_store::versions::insert_imported(conn, &versions, &commits).await?;
+    Ok(())
 }
 
 #[expect(
@@ -558,6 +670,8 @@ async fn write(
         })
         .collect();
     store::insert_akter(conn, &akter, &revisions, &memberships, &links, &held).await?;
+    insert_versions(conn, tenant, bundle, &akt_ids).await?;
+    keep_held(conn, tenant, bundle, types, &akt_ids).await?;
     for a in &bundle.akter {
         if let Some(origin) = a.copied_from.and_then(|o| akt_ids.get(&o)) {
             kuria_store::akter::insert_origin(conn, tenant, akt_ids[&a.id], *origin).await?;

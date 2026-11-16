@@ -271,7 +271,7 @@ pub(crate) async fn download(
 }
 
 /// Whether `subject` may read the attachment `row`: may read an akt that
-/// holds it, or uploaded it and no akt holds it yet.
+/// holds it or held it, or uploaded it and no akt has held it yet.
 // r[impl attachment.download]
 // r[impl attachment.references]
 pub(crate) async fn may_read(

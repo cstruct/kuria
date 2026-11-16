@@ -316,7 +316,8 @@ async fn a_held_attachment_is_read_by_whoever_reads_its_akt() {
     assert_eq!(world.download("colleague", &id).await.status, 200);
     assert_eq!(world.download("colleague-stranger", &id).await.status, 404);
 
-    // Once no akt holds it, it is the uploader's alone again.
+    // Cleared from the field, it is still the akt's, as its history shows
+    // it: whoever reads the akt reads it, and no one else.
     let number = created["data"]["createAkt"]["number"].as_str().unwrap();
     world
         .data(
@@ -324,7 +325,8 @@ async fn a_held_attachment_is_read_by_whoever_reads_its_akt() {
             json!({ "n": number }),
         )
         .await;
-    assert_eq!(world.download("colleague", &id).await.status, 404);
+    assert_eq!(world.download("colleague", &id).await.status, 200);
+    assert_eq!(world.download("colleague-stranger", &id).await.status, 404);
     assert_eq!(world.download("tenant", &id).await.status, 200);
 }
 

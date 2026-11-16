@@ -44,6 +44,11 @@ produces, or why it is refused.
   value of that field, and then leaves out what `exclude` names.
 - `sbom::detect`: whether a file is an SPDX or CycloneDX JSON document, and
   its summary: format, specification version, name and component count.
+- `live::LiveDraft`: an akt's live draft as a Yjs document (`yrs`, v1
+  updates): each `markdown` and multiline `text` field a `Y.Text`, the rest
+  in the `Y.Map` `fields`. It reads field values from the document, and
+  writes them as the least change, a text by the characters that differ
+  (`similar`), so that concurrent edits merge.
 - `state_hash`: the SHA-256 of an akt's state and field values as canonical
   JSON (no whitespace, object members in key order), independent of how
   `serde_json` orders maps.

@@ -1,0 +1,28 @@
+[package]
+name = "kuria-typst"
+description = "typst for Kuria: bundled fonts and packages, PDFs and diagrams, reading no network or file system"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# Kuria's code is MIT; the bundled packages carry their own licenses
+# (packages/README.md).
+license = "MIT AND LGPL-3.0-or-later"
+publish.workspace = true
+include = ["src/**", "packages/**", "build.rs"]
+
+[dependencies]
+nix = { version = "0.31.3", default-features = false, features = ["resource", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["process", "io-util", "time", "rt"] }
+typst = "0.14.0"
+typst-assets = { version = "0.14.0", features = ["fonts"] }
+typst-pdf = "0.14.0"
+typst-svg = "0.14.0"
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

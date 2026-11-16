@@ -13,6 +13,8 @@
 		kind: string;
 		name: string;
 		outgoing: boolean;
+		/** Kept by a reference in the source's text, so changed there. */
+		byReference?: boolean;
 		pinnedRevision?: number | null;
 		pinned?: {
 			revision: number;
@@ -76,7 +78,9 @@
 							{/if}
 						</span>
 						<Badge tone={link.akt.state.tone}>{link.akt.state.name}</Badge>
-						{#if editable}
+						{#if link.byReference}
+							<span class="hint">From the text</span>
+						{:else if editable}
 							<IconButton
 								label="Remove link {link.name} {link.akt.number}"
 								icon={X}

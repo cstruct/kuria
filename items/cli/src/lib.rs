@@ -15,6 +15,8 @@
 //! - [`writes`]: `new`, `apply`, `set`, `do`, `draft`, `add`, `remove`,
 //!   `transfer`, `move`, `link`, `unlink`, `types export` and `define`, and
 //!   bundles' `export` and `import`.
+//! - [`clone`]: clones, `docs clone`, `status`, `diff`, `add`, `pull`,
+//!   `push` and `fmt` on a container's files.
 //! - [`output`] and [`error`]: answers, refusals and exit codes.
 #![expect(
     clippy::missing_panics_doc,
@@ -27,6 +29,7 @@
 
 pub mod account;
 pub mod args;
+pub mod clone;
 pub mod dpop;
 pub mod error;
 pub mod file;
@@ -43,11 +46,12 @@ pub mod reads;
 pub mod secret;
 pub mod session;
 pub mod values;
+pub mod versions;
 pub mod writes;
 
 use std::process::ExitCode;
 
-use args::{Cli, Command, TypesCommand};
+use args::{Cli, Command, DocsCommand, MembersCommand, TypesCommand};
 use error::CliError;
 use output::Answer;
 use profile::{Asked, Config, config_dir};
@@ -90,7 +94,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         env_tenant,
     }
     .resolve(&config);
-    let context = Context {
+    let mut context = Context {
         target,
         store: Store::new(&dir),
         dir,
@@ -101,6 +105,19 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         .dir
         .clone()
         .or_else(|| env("KURIA_DIR").map(PathBuf::from));
+    if let Command::Docs { action } = cli.command {
+        if root.is_some() {
+            return Err(local::unsupported(
+                "Clones",
+                "a clone syncs with a server; leave out `--dir`",
+            ));
+        }
+        let here = std::env::current_dir().map_err(|e| CliError::unavailable(e.to_string()))?;
+        if context.target.url.is_none() {
+            context.target.url = clone::sync::url_of(&here);
+        }
+        return docs(&context, action, &here).await;
+    }
     match (cli.command, root) {
         (Command::Guide, _) => Ok(guide()),
         (Command::Init, Some(root)) => {
@@ -133,6 +150,33 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         ) => writes::define(None, &files, true).await,
         (command, Some(root)) => local(&root, command).await,
         (command, None) => server(&context, command).await,
+    }
+}
+
+/// `kuria docs`: a clone's command, run in `here` (`clone.*`).
+async fn docs(context: &Context, action: DocsCommand, here: &Path) -> Result<Answer, CliError> {
+    match action {
+        DocsCommand::Status => clone::work::status(here),
+        DocsCommand::Diff { paths, staged } => clone::work::diff(here, staged, &paths),
+        DocsCommand::Add { paths, patch: true } => {
+            let stdin = std::io::stdin();
+            clone::work::add_patch(here, &paths, &mut stdin.lock(), &mut std::io::stderr())
+        }
+        DocsCommand::Add { paths, .. } => clone::work::add(here, &paths),
+        action => {
+            let session = Session::open(context).await?;
+            let answer = match action {
+                DocsCommand::Clone { number, into } => {
+                    clone::sync::clone(&session, &number, into.as_deref(), here).await
+                }
+                DocsCommand::Pull => clone::sync::pull(&session, here).await,
+                DocsCommand::Push { message } => clone::sync::push(&session, here, &message).await,
+                // r[impl clone.normal]
+                _ => clone::fmt::fmt(&session, here).await,
+            };
+            session.close().await;
+            answer
+        }
     }
 }
 
@@ -172,13 +216,14 @@ fn reads_only(command: &Command) -> bool {
     matches!(
         command,
         Command::Types {
-            action: None | Some(TypesCommand::Export { .. })
-        } | Command::Schema { .. }
-            | Command::Ls { .. }
+            action: None | Some(TypesCommand::Export { .. } | TypesCommand::Schema { .. })
+        } | Command::Ls { .. }
             | Command::Find { .. }
             | Command::Cat { .. }
             | Command::Show { .. }
             | Command::History { .. }
+            | Command::Versions { .. }
+            | Command::Diff { .. }
             | Command::Users
             | Command::Contacts
     )
@@ -191,7 +236,9 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
         Command::Types {
             action: Some(TypesCommand::Export { keys, output }),
         } => writes::export(source, &keys, output.as_deref()).await,
-        Command::Schema { key } => reads::schema(source, &key).await,
+        Command::Types {
+            action: Some(TypesCommand::Schema { key }),
+        } => reads::schema(source, &key).await,
         Command::Ls {
             akt_type,
             state,
@@ -222,15 +269,24 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             output,
             members,
             all_members,
+            version,
         } => {
             let members = match (all_members, members.is_empty()) {
                 (true, _) => reads::WithMembers::All,
                 (false, false) => reads::WithMembers::Types(&members),
                 (false, true) => reads::WithMembers::None,
             };
-            reads::cat(source, &numbers, output.as_deref(), members).await
+            reads::cat(source, &numbers, output.as_deref(), members, version).await
         }
-        Command::Show { number, history } => reads::show(source, &number, history).await,
+        Command::Show {
+            number,
+            history,
+            version,
+        } => reads::show(source, &number, history, version).await,
+        Command::Versions { number } => crate::versions::list(source, &number).await,
+        Command::Diff { number, from, to } => {
+            crate::versions::diff(source, &number, from, to).await
+        }
         Command::History { number } => reads::history(source, &number).await,
         Command::Users => reads::users(source).await,
         Command::Contacts => reads::contacts(source).await,
@@ -249,6 +305,11 @@ async fn local(root: &Path, command: Command) -> Result<Answer, CliError> {
         Command::Draft { .. } => Err(local::unsupported(
             "`draft`",
             "drafting looks through a server's akter",
+        )),
+        // r[impl cli.local.unsupported]
+        Command::Pdf { .. } => Err(local::unsupported(
+            "`pdf`",
+            "Kuria renders PDFs; the client doesn't carry the renderer",
         )),
         Command::Export { .. } | Command::Import { .. } => Err(local::unsupported(
             "Bundles",
@@ -301,6 +362,15 @@ fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, 
 /// `verdict` and `copy`, on a server.
 async fn protocol(session: &Session, command: Command) -> Result<Answer, CliError> {
     match command {
+        Command::Release { numbers, label } => {
+            versions::release(session, &numbers, label.as_deref()).await
+        }
+        Command::Pdf {
+            number,
+            field,
+            version,
+            output,
+        } => versions::pdf(session, &number, field.as_deref(), version, &output).await,
         Command::Verdict {
             number,
             verdict,
@@ -327,7 +397,7 @@ async fn protocol(session: &Session, command: Command) -> Result<Answer, CliErro
 }
 
 fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answer, CliError> {
-    use local::{arrange, edits};
+    use local::edits;
     let mut w = local::write::Writer::open(root, me)?;
     let mut save = true;
     let answer = match command {
@@ -364,43 +434,15 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             sets,
             reason,
         } => edits::perform(&mut w, &number, &transition, &sets, reason.as_deref()),
-        Command::Add {
-            container,
-            members,
-            reason,
-        } => arrange::membership(
-            &mut w,
-            writes::Membership::Add,
-            &container,
-            &members,
-            reason.as_deref(),
-        ),
-        Command::Remove {
-            container,
-            members,
-            reason,
-        } => arrange::membership(
-            &mut w,
-            writes::Membership::Remove,
-            &container,
-            &members,
-            reason.as_deref(),
-        ),
-        Command::Transfer {
-            member,
-            from,
-            to,
-            reason,
-        } => arrange::transfer(&mut w, &member, &from, &to, reason.as_deref()),
-        Command::Move {
-            number,
-            before,
-            after,
-        } => arrange::move_akt(&mut w, &number, before.as_deref(), after.as_deref()),
+        Command::Members { action } => local_members(&mut w, action),
         command @ (Command::Link { .. }
         | Command::Unlink { .. }
         | Command::Verdict { .. }
         | Command::Copy { .. }) => local_more(&mut w, command),
+        Command::Release { numbers, label } => {
+            let times = local::git::Times::of(&w.dir.root);
+            local::versions::release(&mut w, &times, &numbers, label.as_deref())
+        }
         Command::Types {
             action: Some(TypesCommand::Define { files, .. }),
         } => {
@@ -458,9 +500,9 @@ async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliErro
                 .ok()
                 .filter(|v| !v.is_empty())
                 .or_else(|| local::git::email(&from_dir));
-            let bundle = local::convert::bundle_of(&from_dir, me)?;
-            let bytes = serde_json::to_vec(&bundle).expect("serializable");
-            writes::bundles::post(session, &bytes, None, map_subjects.as_deref()).await
+            let unpacked = local::convert::bundle_of(&from_dir, me)?;
+            let bytes = serde_json::to_vec(&unpacked.bundle).expect("serializable");
+            writes::bundles::post(session, &bytes, &unpacked.files(), map_subjects.as_deref()).await
         }
         Command::Export {
             types,
@@ -495,12 +537,13 @@ async fn to_dir_of(session: &Session, types: &[String], dir: &Path) -> Result<An
     let query = format!("types={}&akter=true", types.join(","));
     let files = writes::bundles::fetch(session, &query).await?;
     let bundle = writes::bundles::bundle_json(&files)?;
-    let wrote = local::convert::to_dir(&bundle, dir)?;
+    let wrote = local::convert::to_dir(&local::convert::Unpacked::of(bundle, &files), dir)?;
     Ok(Answer {
         markdown: format!(
-            "Wrote {} akt types and {} akter to the akt directory {}; commit it to start its history.",
+            "Wrote {} akt types, {} akter and {} attachments to the akt directory {}; commit it to start its history.",
             wrote["aktTypes"],
             wrote["akter"],
+            wrote["attachments"],
             dir.display()
         ),
         json: wrote,
@@ -541,45 +584,7 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             sets,
             reason,
         } => writes::perform(session, &number, &transition, &sets, reason.as_deref()).await,
-        Command::Add {
-            container,
-            members,
-            reason,
-        } => {
-            writes::membership(
-                session,
-                writes::Membership::Add,
-                &container,
-                &members,
-                reason.as_deref(),
-            )
-            .await
-        }
-        Command::Remove {
-            container,
-            members,
-            reason,
-        } => {
-            writes::membership(
-                session,
-                writes::Membership::Remove,
-                &container,
-                &members,
-                reason.as_deref(),
-            )
-            .await
-        }
-        Command::Transfer {
-            member,
-            from,
-            to,
-            reason,
-        } => writes::transfer(session, &member, &from, &to, reason.as_deref()).await,
-        Command::Move {
-            number,
-            before,
-            after,
-        } => writes::move_akt(session, &number, before.as_deref(), after.as_deref()).await,
+        Command::Members { action } => members(session, action).await,
         Command::Link {
             source,
             kind,
@@ -593,14 +598,100 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             target,
             reason,
         } => writes::unlink(session, &source, &kind, &target, reason.as_deref()).await,
-        command @ (Command::Verdict { .. } | Command::Copy { .. }) => {
-            protocol(session, command).await
-        }
+        command @ (Command::Verdict { .. }
+        | Command::Copy { .. }
+        | Command::Release { .. }
+        | Command::Pdf { .. }) => protocol(session, command).await,
         Command::Draft {
             number,
             field,
             reason,
         } => writes::draft(session, &number, &field, reason.as_deref()).await,
         _ => unreachable!("dispatched above"),
+    }
+}
+
+/// `kuria members …` in local mode.
+fn local_members(w: &mut local::write::Writer, action: MembersCommand) -> Result<Answer, CliError> {
+    use local::arrange;
+    match action {
+        MembersCommand::Add {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            w,
+            writes::Membership::Add,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
+        MembersCommand::Remove {
+            container,
+            members,
+            reason,
+        } => arrange::membership(
+            w,
+            writes::Membership::Remove,
+            &container,
+            &members,
+            reason.as_deref(),
+        ),
+        MembersCommand::Transfer {
+            member,
+            from,
+            to,
+            reason,
+        } => arrange::transfer(w, &member, &from, &to, reason.as_deref()),
+        MembersCommand::Place {
+            number,
+            before,
+            after,
+        } => arrange::move_akt(w, &number, before.as_deref(), after.as_deref()),
+    }
+}
+
+/// `kuria members …` on a server.
+async fn members(session: &Session, action: MembersCommand) -> Result<Answer, CliError> {
+    match action {
+        MembersCommand::Add {
+            container,
+            members,
+            reason,
+        } => {
+            writes::membership(
+                session,
+                writes::Membership::Add,
+                &container,
+                &members,
+                reason.as_deref(),
+            )
+            .await
+        }
+        MembersCommand::Remove {
+            container,
+            members,
+            reason,
+        } => {
+            writes::membership(
+                session,
+                writes::Membership::Remove,
+                &container,
+                &members,
+                reason.as_deref(),
+            )
+            .await
+        }
+        MembersCommand::Transfer {
+            member,
+            from,
+            to,
+            reason,
+        } => writes::transfer(session, &member, &from, &to, reason.as_deref()).await,
+        MembersCommand::Place {
+            number,
+            before,
+            after,
+        } => writes::move_akt(session, &number, before.as_deref(), after.as_deref()).await,
     }
 }

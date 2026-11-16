@@ -49,6 +49,7 @@ async fn router_with(windows: &[RateLimitWindow], hold: Duration) -> Router {
             web: None,
             login_proxy: None,
             cli_relay: Some(Arc::new(relay)),
+            renderer: support::renderer(),
         },
     )
     .unwrap()

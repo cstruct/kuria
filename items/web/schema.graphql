@@ -23,6 +23,14 @@ type Akt {
 	The fields that hold a value, in the akt type's order.
 	"""
 	fields: [FieldValue!]!
+	"""
+	The version it is read at, if it is read at one (`version.read`).
+	"""
+	version: Version
+	"""
+	Its versions, latest first (`version.list`).
+	"""
+	versions: [Version!]!
 	createdAt: DateTime!
 	updatedAt: DateTime!
 	"""
@@ -73,6 +81,19 @@ type Akt {
 	"""
 	outcome: Outcome
 	"""
+	The changes to its live draft since its latest release, or all of
+	them with `all`, oldest first: who made each, when, and which fields
+	it changed (`live.history`). None for an akt without a live draft,
+	or read at a version or revision.
+	"""
+	draftChanges(all: Boolean! = false): [DraftChange!]!
+	"""
+	Its live draft's state, for a clone to make updates against
+	(`live.state`, `clone.server`). None for an akt without a live
+	draft, or read at a version or revision.
+	"""
+	liveState: LiveState
+	"""
 	Every revision, oldest first.
 	"""
 	revisions: [AktRevision!]!
@@ -91,6 +112,11 @@ type AktConnection {
 
 type AktRevision {
 	revision: Int!
+	"""
+	The git commit the revision was pushed in, if it was, as bundles
+	carry it: `{author, committer, message}`.
+	"""
+	commit: JSON
 	"""
 	The subject who made the change.
 	"""
@@ -148,6 +174,11 @@ type AktType {
 	The document this version was defined by.
 	"""
 	document: JSON!
+	"""
+	Whether its akter have a live draft, edited together, that only
+	releases make revisions of (`live.declare`).
+	"""
+	liveDrafts: Boolean!
 	createdAt: DateTime!
 	"""
 	How many akter of this type the tenant has, to a subject who may
@@ -199,6 +230,14 @@ enum AktTypeIcon {
 	USERS
 	WRENCH
 	ZAP
+}
+
+"""
+Where the app's sidebar lists an akt type.
+"""
+enum AktTypeNavigation {
+	MAIN
+	MORE
 }
 
 type Attachment {
@@ -294,6 +333,15 @@ enum ChangeKind {
 	The akt moved in its tenant's order.
 	"""
 	RANK
+	"""
+	The akt released a version, of the revision `revision` (`version.history`).
+	"""
+	VERSION
+	"""
+	The akt's live draft changed; `revision` is its latest revision,
+	unchanged (`live.sync`).
+	"""
+	DRAFT
 }
 
 type ChangesSubscription {
@@ -442,6 +490,30 @@ type DockerValue {
 }
 
 """
+One change to an akt's live draft (`live.history`).
+"""
+type DraftChange {
+	"""
+	Its place among the live draft's changes, from 1.
+	"""
+	seq: Int!
+	"""
+	Who made it.
+	"""
+	by: User!
+	at: DateTime!
+	"""
+	The keys of the fields it changed.
+	"""
+	fields: [String!]!
+	"""
+	Its message, if it was pushed from a clone (`clone.server`); none
+	for live typing and other writes.
+	"""
+	message: String
+}
+
+"""
 What drafting a field takes.
 """
 input DraftFieldInput {
@@ -455,6 +527,27 @@ input DraftFieldInput {
 	"""
 	field: String!
 	reason: String
+}
+
+"""
+One live draft's part of a push from a clone (`clone.server`).
+"""
+input DraftPushInput {
+	"""
+	The akt's number.
+	"""
+	number: String!
+	"""
+	The live draft's `base` as the clone read it (`liveState`),
+	base64-encoded: the push is refused as `STALE` unless it is the
+	draft's now.
+	"""
+	base: String!
+	"""
+	What the clone changed, as one Yjs v1 update made against `base`,
+	base64-encoded.
+	"""
+	update: String!
 }
 
 """
@@ -504,6 +597,18 @@ type Field {
 	For verdict fields: the key of the user field naming the assignees.
 	"""
 	assignees: String
+	"""
+	For markdown fields: the link kind its references are kept as.
+	"""
+	references: String
+	"""
+	For markdown fields: whether its `diagram` blocks are diagrams.
+	"""
+	diagrams: Boolean!
+	"""
+	For attachment fields: the media types it takes, any if none.
+	"""
+	mediaTypes: [String!]!
 }
 
 """
@@ -535,12 +640,13 @@ enum FieldKind {
 	ATTACHMENT
 	SECTIONS
 	VERDICT
+	MARKDOWN
 }
 
 """
 A field's value, by its kind.
 """
-union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue | UsersValue | SectionsValue | VerdictValue
+union FieldValue = TextValue | ChoiceValue | ChoicesValue | DateValue | UserValue | CheckboxValue | GitValue | DockerValue | ReferenceValue | AttachmentValue | UsersValue | SectionsValue | VerdictValue | MarkdownValue
 
 """
 A commit in a git repository.
@@ -584,6 +690,11 @@ type Link {
 	Whether the link goes from this akt to the other.
 	"""
 	outgoing: Boolean!
+	"""
+	Whether a reference in the source's text keeps it
+	(`link.referenced`), so that it is changed by changing the text.
+	"""
+	byReference: Boolean!
 	"""
 	The other akt.
 	"""
@@ -633,6 +744,135 @@ input LinkInput {
 }
 
 """
+An akt's live draft, as a clone makes updates against it
+(`live.state`).
+"""
+type LiveState {
+	"""
+	The whole draft, as one Yjs v1 update, base64-encoded.
+	"""
+	state: String!
+	"""
+	Its state vector, Yjs v1, base64-encoded.
+	"""
+	stateVector: String!
+	"""
+	What a push made against it names as its base, base64-encoded: its
+	Yjs v1 snapshot, its state vector and what it deleted, which moves
+	with every change, also one that only deletes.
+	"""
+	base: String!
+}
+
+"""
+A diagram block of a `markdown` field that allows them
+(`akt.field.markdown.diagrams`).
+"""
+type MarkdownDiagram {
+	"""
+	The block's typst, as the text has it.
+	"""
+	source: String!
+	"""
+	Its rendering, an SVG.
+	"""
+	attachment: Attachment
+}
+
+"""
+A heading of a `markdown` field.
+"""
+type MarkdownHeading {
+	id: String!
+	"""
+	1 to 6.
+	"""
+	level: Int!
+	text: String!
+}
+
+"""
+An image a `markdown` field embeds (`akt.field.markdown.images`).
+"""
+type MarkdownImage {
+	"""
+	As the text says it: `kuria:<number>[@<version>]`.
+	"""
+	destination: String!
+	number: String!
+	version: Int
+	"""
+	The picture it shows, as read: at its version, at a version read's
+	pin, else now.
+	"""
+	attachment: Attachment
+	"""
+	Why it is broken, if it is.
+	"""
+	broken: String
+}
+
+"""
+A reference in a `markdown` field to an akt, one of its versions and
+one of its headings (`akt.field.markdown.references`).
+"""
+type MarkdownReference {
+	"""
+	As the text says it: `kuria:<number>[@<version>][#<heading>]`.
+	"""
+	destination: String!
+	number: String!
+	version: Int
+	heading: String
+	"""
+	The akt, if it exists and the subject may read it.
+	"""
+	akt: Akt
+	"""
+	The version a version read pinned it to, if it names none
+	(`version.pins`).
+	"""
+	pinnedVersion: Int
+	"""
+	The revision a version read pinned it to, for a target that had no
+	version then.
+	"""
+	pinnedRevision: Int
+	"""
+	Why the reference is broken, if it is.
+	"""
+	broken: String
+}
+
+"""
+A `markdown` field's text, with its headings and references
+(`akt.field.markdown`).
+"""
+type MarkdownValue {
+	field: String!
+	"""
+	The text, every heading with its id.
+	"""
+	markdown: String!
+	headings: [MarkdownHeading!]!
+	"""
+	The references in the text, in order, each once, each with its akt
+	or why it is broken.
+	"""
+	references: [MarkdownReference!]!
+	"""
+	The diagram blocks of the text, in order, each with its rendering,
+	in a field that allows them; none in any other.
+	"""
+	diagrams: [MarkdownDiagram!]!
+	"""
+	The images the text embeds, in order, each once, each with the
+	picture it shows or why it is broken.
+	"""
+	images: [MarkdownImage!]!
+}
+
+"""
 What adding to or removing from a container takes.
 """
 input MembershipInput {
@@ -670,6 +910,18 @@ type Mutation {
 	"""
 	batch(input: BatchInput!): [Akt!]!
 	"""
+	Pushes from a clone, all of it or none (`clone.server`): each live
+	draft's update made against the base the clone read, refused as
+	`STALE`, with the draft's `number`, current `base` and
+	`stateVector`, unless the base is the draft's now, and checked as a
+	live edit; then the
+	operations, as a batch runs them, with the message as each one's
+	reason. Each draft's update is kept as one change, by the subject,
+	with the message. A refusal carries the draft's position, from 1, as
+	`draft`, or the operation's as `operation`.
+	"""
+	pushClone(input: PushCloneInput!): PushedClone!
+	"""
 	Submits an akt type document, creating the next version of its key.
 	"""
 	defineAktType(document: JSON!): AktType!
@@ -686,6 +938,18 @@ type Mutation {
 	Edits an akt's field values.
 	"""
 	editAkt(input: EditAktInput!): Akt!
+	"""
+	Releases the akt's current revision as its next version
+	(`version.release`).
+	"""
+	releaseVersion(input: ReleaseVersionInput!): Version!
+	"""
+	Releases each akt's current revision as its next version, all or
+	nothing; a reference from one to another is checked against what
+	that one is released as, and pinned to the version it gets
+	(`version.together`). Answers the versions in order.
+	"""
+	releaseVersions(input: ReleaseVersionsInput!): [Version!]!
 	"""
 	Moves an akt along one of its akt type's transitions.
 	"""
@@ -830,6 +1094,50 @@ type Presentation {
 	The colour the type is shown in.
 	"""
 	colour: AktTypeColour!
+	"""
+	Where the app's sidebar lists the type (`app.navigation`).
+	"""
+	navigation: AktTypeNavigation!
+	"""
+	The `attachment` field holding each akt's picture, if its akter are
+	images (`akt.field.markdown.images`).
+	"""
+	image: String
+}
+
+"""
+What a push from a clone takes (`clone.server`).
+"""
+input PushCloneInput {
+	"""
+	One line of at most 200 characters, kept with each live draft's
+	change and as each revision's reason.
+	"""
+	message: String!
+	"""
+	Each live draft's update.
+	"""
+	drafts: [DraftPushInput!]! = []
+	"""
+	The writes to akter without a live draft, as a batch's, each at the
+	revision the clone read; their reasons are the message.
+	"""
+	operations: [OperationInput!]! = []
+}
+
+"""
+What a push from a clone wrote, as reading answers it.
+"""
+type PushedClone {
+	"""
+	Each akt whose live draft the push changed, in the order of its
+	drafts.
+	"""
+	drafts: [Akt!]!
+	"""
+	The akt each operation answers, in order.
+	"""
+	operations: [Akt!]!
 }
 
 type Query {
@@ -846,9 +1154,23 @@ type Query {
 	"""
 	aktType(key: String!, version: Int): AktType
 	"""
+	A diagram block's `source` rendered to SVG, or typst's message if it
+	doesn't compile, storing nothing (`diagram.preview`).
+	"""
+	renderDiagram(source: String!): RenderedDiagram!
+	"""
 	The akt numbered `number`.
 	"""
-	akt(number: String!): Akt
+	akt(		number: String!,
+		"""
+		Read it as it was at this version of it (`version.read`).
+		"""
+		version: Int,
+		"""
+		Read it as it was at this revision, its fields, state and title.
+		"""
+		revision: Int
+	): Akt
 	"""
 	Akter, most recently changed first: of one akt type and in one state,
 	if given, a page of at most `first` (50 by default, 200 at most)
@@ -882,6 +1204,39 @@ type ReferenceValue {
 	field: String!
 	url: String!
 	label: String
+}
+
+"""
+What releasing a version takes.
+"""
+input ReleaseVersionInput {
+	number: String!
+	"""
+	The revision read, which must be the akt's current one.
+	"""
+	revision: Int!
+	"""
+	One line, at most 100 characters.
+	"""
+	label: String
+}
+
+"""
+What releasing several akter together takes.
+"""
+input ReleaseVersionsInput {
+	"""
+	Each akt to release, at the revision read, with its label.
+	"""
+	akter: [ReleaseVersionInput!]!
+}
+
+"""
+What `renderDiagram` answers: the SVG, or why it didn't compile.
+"""
+type RenderedDiagram {
+	svg: String
+	error: String
 }
 
 """
@@ -1064,6 +1419,34 @@ Each assignee's verdict.
 type VerdictValue {
 	field: String!
 	verdicts: [GivenVerdict!]!
+}
+
+"""
+A version of an akt (`version.number`).
+"""
+type Version {
+	number: Int!
+	"""
+	The revision it names.
+	"""
+	revision: Int!
+	label: String
+	releasedBy: User!
+	releasedAt: DateTime!
+	"""
+	What its references naming no version meant (`version.pins`).
+	"""
+	pins: [VersionPin!]!
+}
+
+"""
+What a reference meant when its akt was released.
+"""
+type VersionPin {
+	destination: String!
+	number: String!
+	version: Int
+	revision: Int
 }
 
 """

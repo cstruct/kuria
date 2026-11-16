@@ -82,7 +82,7 @@ pub async fn create(session: &Session, asked: &Created<'_>) -> Result<Answer, Cl
 
 /// What a file changes of `akt`: each field whose value differs from the
 /// akt's, by its input; a field the file leaves out is cleared.
-async fn changes(
+pub(crate) async fn changes(
     session: &Session,
     akt: &Akt,
     parsed: &Parsed,
@@ -158,7 +158,7 @@ pub(crate) fn outcome_unchanged(
 }
 
 /// Refuses a file whose read-only keys differ from the akt's.
-fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
+pub(crate) fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
     let read_only = |key: &str, how: &str| CliError {
         field: Some(key.to_owned()),
         ..CliError::refused(
@@ -171,6 +171,13 @@ fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
     };
     if parsed.text("type").is_some_and(|t| t != akt.shape.key) {
         return Err(read_only("type", "an akt keeps its type"));
+    }
+    // r[impl cli.file.kinds]
+    if parsed.front.contains_key("version") {
+        return Err(read_only(
+            "version",
+            "a version never changes; edit the living version",
+        ));
     }
     if parsed.text("state").is_some_and(|s| s != akt.state.key) {
         return Err(read_only("state", "perform a transition with `kuria do`"));
@@ -188,9 +195,12 @@ fn check_read_only(akt: &Akt, parsed: &Parsed) -> Result<(), CliError> {
     };
     let containers: BTreeSet<String> = akt.containers.iter().map(|c| c.number.clone()).collect();
     if parsed.front.contains_key("in") && listed("in") != containers {
-        return Err(read_only("in", "use `kuria add`, `remove` or `transfer`"));
+        return Err(read_only(
+            "in",
+            "use `kuria members add`, `remove` or `transfer`",
+        ));
     }
-    let links: BTreeSet<String> = akt.links.iter().map(file::Link::said).collect();
+    let links: BTreeSet<String> = file::filed(&akt.links).map(file::Link::said).collect();
     if parsed.front.contains_key("links") && listed("links") != links {
         return Err(read_only("links", "use `kuria link` or `unlink`"));
     }
@@ -264,6 +274,20 @@ pub(crate) fn read_akter(
             ..e
         };
         for (number, parsed) in file::parse_all(&text).map_err(in_file)? {
+            // r[impl cli.file.kinds]
+            // A version never changes: refused whatever revision it names.
+            if parsed.front.contains_key("version") {
+                return Err(CliError {
+                    field: Some("version".to_owned()),
+                    ..CliError::refused(
+                        "READ_ONLY",
+                        format!(
+                            "{}: {number} is read at a version, which never changes; edit the living version",
+                            path.display()
+                        ),
+                    )
+                });
+            }
             let revision = parsed
                 .front
                 .get("revision")

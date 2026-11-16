@@ -50,6 +50,7 @@ fn router(web: Option<Web>, login_proxy: Option<LoginProxy>) -> Router {
             web,
             login_proxy,
             cli_relay: None,
+            renderer: support::renderer(),
         },
     )
     .unwrap()

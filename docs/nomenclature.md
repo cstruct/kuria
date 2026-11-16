@@ -58,7 +58,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - One named value an akt type defines, such as `severity`. Every field has a `field kind`.
 
 - `field kind`
-  - What values a field takes: `text`, `choice`, `choices`, `date`, `user`, `checkbox`, `reference`, `git`, `docker` or `attachment`, so far.
+  - What values a field takes: `text`, `choice`, `choices`, `date`, `user`, `checkbox`, `reference`, `git`, `docker`, `attachment`, `sections`, `verdict` or `markdown`, so far.
 
 - `person`
   - What Kuria knows about a subject to show them: the name and email recorded at their last browser sign-in.
@@ -90,7 +90,78 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A change of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
 
 - `change event`
-  - The record that an akt changed, numbered per tenant: either a new akt revision, or a new rank. Change events are what subscriptions and catching up deliver.
+  - The record that an akt changed, numbered per tenant: a new akt revision, a new rank, a released version, or a change to its live draft (at most one a second per server for edits made live). Change events are what subscriptions and catching up deliver.
+
+## Documents and versions
+
+- `markdown` (field kind)
+  - A field holding Markdown whose headings keep ids and whose links can name other akter: a document's body. Prefer it over `rich text`; the app edits it with a rich-text editor, but what it holds is Markdown.
+
+- `heading id`
+  - The id a heading in a `markdown` field keeps, written `## Installing {#install}`, unique within its akt. Given from the heading's text when it is first written, and kept when the text changes, so links to it survive renaming.
+
+- `reference`
+  - A link in a `markdown` field's text to an akt, written `kuria:<NUMBER>`, optionally to one of its versions (`@<n>`) and one of its headings (`#<heading id>`), such as `kuria:DOCS-1-D04@2#install`. Recorded as a link of the kind the field names. Not to be confused with the `reference` field kind, a link to something outside Kuria.
+
+- `deep link`
+  - A reference to a heading of another akt.
+
+- `footnote`
+  - A note in a `markdown` field, referred to in its text as `[^label]` and defined anywhere in it as `[^label]: …`, as GitHub writes them. Numbered in the order it is first referred to, and shown at the end of the text, or at the foot of the page in a PDF. Not to be confused with a `reference`, which links to an akt.
+
+- `broken reference`
+  - A reference to an akt that doesn't exist or the reader can't read, a version it doesn't have, or a heading it doesn't have.
+
+- `image` (akt)
+  - An akt whose type names, as `presentation.image`, an attachment field taking only image media types: its picture is that field's value. Not a field kind.
+
+- `embedded image`
+  - An image in a `markdown` field whose destination is a reference, `![Alt text](kuria:IMG-1)`: the image akt's picture shown in the text. A reference like any other.
+
+- `diagram block`
+  - A fenced code block with the language `diagram`, in a `markdown` field that says `"diagrams": true`: typst markup drawing a fletcher diagram or a cetz plot, rendered to SVG when the field is written.
+
+- `picture` (in a clone)
+  - An embedded image's picture as a file of a clone, `attachments/IMG-1.png`, which the document links to relatively. Pictures are uploaded in Kuria, never pushed.
+
+- `bundled package`
+  - A typst package vendored in Kuria, unmodified with its license, the only kind a diagram or a PDF can import: fletcher, cetz and cetz-plot.
+
+- `live draft`
+  - The fields of an akt whose type says `"live_drafts": true`, edited together, live, with Yjs. Edits change the live draft only; a release records it as a revision. Not to be confused with a `draft`, which a recipe fills a field with.
+
+- `page break`
+  - A line holding only `<!-- pagebreak -->` in a `markdown` field: a new page in its PDF, a new sheet in the app.
+
+- `sheet`
+  - One A4 page of a `markdown` field as the app shows and edits it, white whatever the theme.
+
+- `living version`
+  - An akt as it is now, which edits change; as opposed to its versions.
+
+- `version`
+  - One revision of an akt, named by releasing it: numbered 1, 2, … per akt, with an optional label, recording who released it and when and what each of its references meant then. It never changes. Not to be confused with an `akt type version`.
+
+- `release` (verb)
+  - To name the current revision of an akt as its next version. Prefer `version` for the result: `release` is also an akt type in the release-management example.
+
+- `release together`
+  - To release several akter as one step, all or nothing, a reference from one to another read as what that one is released as, at the version it gets. How documents that refer to each other's new text are released.
+
+- `pin` (of a version)
+  - What a version records for each of its references without a version: the target's latest version when it was released, else the target's revision then, so that the version's links keep their meaning.
+
+- `clone`
+  - A container and its members as files on someone's machine, made with `kuria docs clone`, worked on with any editor and synced with Kuria by `kuria docs pull` and `kuria docs push`. It may also be a git repository, which is the person's own.
+
+- `base`
+  - What a clone last had from Kuria: each file, each akt's revision, and each live draft's state. Pushes are made against it; pulls merge from it.
+
+- `change set`
+  - What one push from a clone changed in a live draft, kept as one change with its author and message.
+
+- `normal form`
+  - The files exactly as Kuria writes a container and its members to a clone; `kuria docs fmt` puts them in it.
 
 ## Links
 
@@ -138,7 +209,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - How strongly, and in which sense, a state is shown: `neutral`, `active`, `success`, `warning` or `danger`.
 
 - `draft`
-  - Text a field is filled with from the akter around its akt, by the recipe its field declares, such as release notes from the items a release shipped. A draft is an ordinary edit.
+  - Text a field is filled with from the akter around its akt, by the recipe its field declares, such as release notes from the items a release shipped. A draft is an ordinary edit. Not to be confused with a `live draft`.
 
 - `parent` (in a number pattern)
   - The container an akt was created in, whose akt number `{parent}` renders, as in `RELEASE-2026-0001-RC-0001`.

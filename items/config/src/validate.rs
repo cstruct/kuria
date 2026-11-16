@@ -163,6 +163,31 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
 
     let contained = containment(&mut problems, &document);
     links(&mut problems, &document);
+    // r[impl version.declare]
+    if let Some(action) = document.versions.as_ref().and_then(|v| v.action.as_ref())
+        && let Err(message) = check_action(action)
+    {
+        problems.add("versions.action", message);
+    }
+    // r[impl live.declare]
+    if document.live_drafts && document.versions.is_none() {
+        problems.add(
+            "live_drafts",
+            "a live draft is released as versions, so `versions` must be declared",
+        );
+    }
+    // r[impl live.fields]
+    if document.live_drafts
+        && let Some(i) = document.fields.iter().position(|f| {
+            f.key == "fields"
+                && (f.kind == FieldKind::Markdown || (f.kind == FieldKind::Text && f.multiline))
+        })
+    {
+        problems.add(
+            &format!("fields[{i}].key"),
+            "`fields` names the live draft's map of the other fields, so no text can be keyed so",
+        );
+    }
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
     }
@@ -220,6 +245,32 @@ fn fields<'a>(problems: &mut Problems, document: &'a AktTypeDocument) -> BTreeSe
                 &format!("{path}.format"),
                 "only attachment fields have a format",
             );
+        }
+        // r[impl akt.field.markdown.diagrams]
+        if field.diagrams && field.kind != FieldKind::Markdown {
+            problems.add(
+                &format!("{path}.diagrams"),
+                "only markdown fields have diagrams",
+            );
+        }
+        if !field.media_types.is_empty() && field.kind != FieldKind::Attachment {
+            problems.add(
+                &format!("{path}.media_types"),
+                "only attachment fields have media types",
+            );
+        }
+        for (i, media_type) in field.media_types.iter().enumerate() {
+            if field.media_types[..i].contains(media_type) {
+                problems.add(
+                    &format!("{path}.media_types[{i}]"),
+                    format!("`{media_type}` is used twice"),
+                );
+            } else if !is_media_type(media_type) {
+                problems.add(
+                    &format!("{path}.media_types[{i}]"),
+                    format!("`{media_type}` isn't a media type, such as `image/png`"),
+                );
+            }
         }
         if field.multiline && field.kind != FieldKind::Text {
             problems.add(
@@ -286,6 +337,22 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
         (_, Some(_)) => problems.add(
             &format!("{path}.assignees"),
             "only verdict fields have assignees",
+        ),
+        (_, None) => {}
+    }
+    // r[impl akt.field.markdown.references]
+    match (field.kind, &field.references) {
+        (FieldKind::Markdown, Some(key)) => {
+            if !document.links.iter().any(|l| &l.key == key) {
+                problems.add(
+                    &format!("{path}.references"),
+                    format!("`{key}` isn't a link kind this akt type declares"),
+                );
+            }
+        }
+        (_, Some(_)) => problems.add(
+            &format!("{path}.references"),
+            "only markdown fields keep references",
         ),
         (_, None) => {}
     }
@@ -418,6 +485,27 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             format!("a card shows at most {MAX_CARD_FIELDS} fields"),
         );
     }
+    if let Some(image) = &presentation.image {
+        match field(image) {
+            None => problems.add("presentation.image", format!("no field `{image}`")),
+            Some(f)
+                if f.kind != FieldKind::Attachment
+                    || f.media_types.is_empty()
+                    || f.media_types
+                        .iter()
+                        .any(|t| !crate::IMAGE_MEDIA_TYPES.contains(&t.as_str())) =>
+            {
+                problems.add(
+                    "presentation.image",
+                    format!(
+                        "the picture must be an attachment field taking only {}, and `{image}` isn't",
+                        crate::IMAGE_MEDIA_TYPES.join(", ")
+                    ),
+                );
+            }
+            Some(_) => {}
+        }
+    }
     for state in presentation.tones.keys() {
         if !document.states.iter().any(|s| &s.key == state) {
             problems.add(
@@ -426,6 +514,17 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             );
         }
     }
+}
+
+/// Whether `text` reads as a media type: `type/subtype`, lowercase, of
+/// letters, digits and `.+-`.
+fn is_media_type(text: &str) -> bool {
+    let part = |p: &str| {
+        !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || ".+-".contains(c))
+    };
+    matches!(text.split_once('/'), Some((t, s)) if part(t) && part(s))
 }
 
 /// Checks a field's draft recipe.
@@ -815,6 +914,95 @@ mod tests {
         );
     }
 
+    // r[verify version.declare]
+    #[test]
+    fn checks_the_action_a_release_needs() {
+        let mut document = capa();
+        document["versions"] = json!({});
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["versions"] = json!({ "action": "documents:release" });
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["versions"] = json!({ "action": "konklav:anything" });
+        assert_eq!(problems(document.clone()).len(), 1);
+        assert!(problems(document)[0].starts_with("versions.action: "));
+        let mut stray = capa();
+        stray["versions"] = json!({ "label": "x" });
+        assert!(serde_json::from_value::<AktTypeDocument>(stray).is_err());
+    }
+
+    // r[verify live.declare]
+    #[test]
+    fn live_drafts_need_versions() {
+        let mut document = capa();
+        document["live_drafts"] = json!(true);
+        assert_eq!(
+            problems(document.clone()),
+            vec![
+                "live_drafts: a live draft is released as versions, so `versions` must be declared"
+            ]
+        );
+        document["versions"] = json!({});
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        let ty = validate(serde_json::from_value(document).unwrap()).unwrap();
+        assert!(ty.document().live_drafts);
+        document = capa();
+        document["live_drafts"] = json!(false);
+        assert_eq!(problems(document), Vec::<String>::new());
+    }
+
+    // r[verify live.fields]
+    #[test]
+    fn no_text_of_a_live_draft_is_keyed_as_its_map() {
+        let mut document = capa();
+        document["live_drafts"] = json!(true);
+        document["versions"] = json!({});
+        let n = document["fields"].as_array().unwrap().len();
+        let with = |field: serde_json::Value| {
+            let mut document = document.clone();
+            document["fields"].as_array_mut().unwrap().push(field);
+            problems(document)
+        };
+        assert_eq!(
+            with(json!({ "key": "fields", "name": "Fields", "kind": "markdown" })),
+            vec![format!(
+                "fields[{n}].key: `fields` names the live draft's map of the other fields, so no text can be keyed so"
+            )]
+        );
+        assert_eq!(
+            with(json!({ "key": "fields", "name": "Fields", "kind": "text" })),
+            Vec::<String>::new()
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.field.markdown.references]
+    #[test]
+    fn checks_the_link_kind_a_markdown_field_keeps_references_as() {
+        let document = |references: serde_json::Value| {
+            json!({
+                "key": "document", "name": "Document", "number": "D-{seq}",
+                "fields": [
+                    { "key": "title", "name": "Title", "kind": "text", "required": true },
+                    { "key": "body", "name": "Body", "kind": "markdown", "references": references },
+                    { "key": "notes", "name": "Notes", "kind": "text", "multiline": true }
+                ],
+                "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+                "links": [{ "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document"] }]
+            })
+        };
+        assert_eq!(problems(document(json!("refers_to"))), Vec::<String>::new());
+        assert_eq!(
+            problems(document(json!("blocks"))),
+            ["fields[1].references: `blocks` isn't a link kind this akt type declares"]
+        );
+        let mut on_text = document(json!("refers_to"));
+        on_text["fields"][2]["references"] = json!("refers_to");
+        assert_eq!(
+            problems(on_text),
+            ["fields[2].references: only markdown fields keep references"]
+        );
+    }
+
     // r[verify akt.type.validation]
     // r[verify akt.transition.outcomes]
     #[test]
@@ -1074,8 +1262,54 @@ mod tests {
                 "{expected} not in {found:?}"
             );
         }
-        document["presentation"] = json!({ "tones": { "open": "loud" } });
-        assert!(serde_json::from_value::<AktTypeDocument>(document).is_err());
+        document["presentation"] = json!({ "navigation": "more" });
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert_eq!(
+            ty.document().presentation.navigation,
+            Some(crate::Navigation::More)
+        );
+        // An image's picture: an attachment field taking only images.
+        let mut image = capa();
+        image["fields"].as_array_mut().unwrap().push(json!({
+            "key": "file", "name": "File", "kind": "attachment",
+            "media_types": ["image/png", "image/svg+xml"]
+        }));
+        image["presentation"] = json!({ "image": "file" });
+        assert_eq!(problems(image.clone()), Vec::<String>::new());
+        image["fields"][3]["media_types"] =
+            json!(["image/png", "application/pdf", "image/png", "Bad"]);
+        image["fields"][0]["media_types"] = json!(["image/png"]);
+        let found = problems(image.clone());
+        for expected in [
+            "presentation.image: the picture must be an attachment field taking only image/png, image/jpeg, image/svg+xml, image/webp, and `file` isn't",
+            "fields[3].media_types[2]: `image/png` is used twice",
+            "fields[3].media_types[3]: `Bad` isn't a media type, such as `image/png`",
+            "fields[0].media_types: only attachment fields have media types",
+        ] {
+            assert!(
+                found.iter().any(|p| p == expected),
+                "{expected} not in {found:?}"
+            );
+        }
+        let mut drawn = capa();
+        drawn["fields"][2]["diagrams"] = json!(true);
+        assert!(
+            problems(drawn)
+                .contains(&"fields[2].diagrams: only markdown fields have diagrams".to_owned())
+        );
+        image["presentation"] = json!({ "image": "title" });
+        assert!(
+            problems(image)
+                .iter()
+                .any(|p| p.starts_with("presentation.image: the picture must be"))
+        );
+        for wrong in [
+            json!({ "tones": { "open": "loud" } }),
+            json!({ "navigation": "hidden" }),
+        ] {
+            document["presentation"] = wrong;
+            assert!(serde_json::from_value::<AktTypeDocument>(document.clone()).is_err());
+        }
     }
 
     // r[verify akt.type.presentation]

@@ -65,9 +65,10 @@ pub(crate) async fn authenticate(
     }
 }
 
-/// Whether `path` is one of the routes a session cookie authenticates.
+/// Whether `path` is one of the routes a session cookie authenticates: an
+/// akt's PDF too (`pdf.route`), which the app links to.
 fn is_api(path: &str) -> bool {
-    ["/graphql", "/attachments", "/auth/"]
+    ["/graphql", "/attachments", "/akter/", "/auth/"]
         .iter()
         .any(|prefix| path == prefix.trim_end_matches('/') || path.starts_with(prefix))
 }

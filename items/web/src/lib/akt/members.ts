@@ -112,14 +112,29 @@ interface Shown {
 	};
 }
 
+/** The media types shown as a picture rather than named (`app.images`). */
+const PICTURES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+
+/** The download of `value`, if it is an attachment shown as a picture. */
+export function pictureOf(value: Value | undefined): string | null {
+	return value?.__typename === 'AttachmentValue' && PICTURES.includes(value.attachment.mediaType)
+		? value.attachment.url
+		: null;
+}
+
 /** The fields a presentation names for cards or lists, by name, with their
- * value as text, or `''` when the akt holds none. */
-export function shownFields(akt: Shown, where: 'card' | 'list'): { name: string; text: string }[] {
+ * value as text, or `''` when the akt holds none, and a picture's download
+ * for an image. */
+// r[impl app.images]
+export function shownFields(
+	akt: Shown,
+	where: 'card' | 'list'
+): { name: string; text: string; picture: string | null }[] {
 	return akt.type.presentation[where].flatMap((key) => {
 		const def = akt.type.fields.find((f) => f.key === key);
 		if (!def) return [];
 		const value = akt.fields.find((v) => 'field' in v && v.field === key);
-		return [{ name: def.name, text: value ? textOf(value) : '' }];
+		return [{ name: def.name, text: value ? textOf(value) : '', picture: pictureOf(value) }];
 	});
 }
 

@@ -25,8 +25,8 @@ use crate::model::{Shape, State, StateName, TypeName, Value};
 use crate::values::file_value;
 
 /// The keys every file has before its fields, which `apply` doesn't edit.
-pub const READ_ONLY: [&str; 8] = [
-    "number", "type", "revision", "state", "outcome", "in", "links", "rank",
+pub const READ_ONLY: [&str; 10] = [
+    "number", "type", "revision", "version", "state", "outcome", "in", "links", "rank", "versions",
 ];
 
 /// An akt with everything its file and `show` say.
@@ -47,6 +47,25 @@ pub struct Akt {
     /// `PASS`, …, if its type has outcomes (`akt.outcome`).
     #[serde(default)]
     pub outcome: Option<String>,
+    /// The version it is read at, if it is (`version.read`).
+    #[serde(default)]
+    pub version: Option<Released>,
+    /// Its versions, latest first (`version.list`).
+    #[serde(default)]
+    pub versions: Vec<Released>,
+}
+
+/// A version of an akt.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Released {
+    pub number: i64,
+    pub revision: i64,
+    pub label: Option<String>,
+    #[serde(default)]
+    pub released_by: Option<crate::model::User>,
+    #[serde(default)]
+    pub released_at: Option<String>,
 }
 
 /// Another akt, as an akt names it.
@@ -71,6 +90,17 @@ pub struct Link {
     pub pinned_revision: Option<i64>,
     pub akt: Other,
     pub pinned: Option<Pinned>,
+    /// Whether a reference in its source's text keeps it.
+    #[serde(default)]
+    pub by_reference: bool,
+}
+
+/// The links an akt file says: all but those references keep, which the
+/// text says and which change without a revision of their target
+/// (`cli.file.kinds`).
+// r[impl cli.file.kinds]
+pub fn filed(links: &[Link]) -> impl Iterator<Item = &Link> {
+    links.iter().filter(|l| !l.by_reference)
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -82,12 +112,14 @@ pub struct Pinned {
 
 /// What to ask for an akt's file: its fields and everything around them.
 pub const AKT: &str = "number title revision createdAt updatedAt outcome
+  version { number revision label }
+  versions { number revision label releasedBy { id name email } releasedAt }
   type { ...Shape document }
   state { key name initial final tone }
   fields { ...Values }
   containers { number title type { key name } state { key name } }
   links {
-    kind name outgoing pinnedRevision
+    kind name outgoing pinnedRevision byReference
     akt { number title type { key name } state { key name } }
     pinned { revision title state { key name } }
   }";
@@ -108,7 +140,7 @@ impl Link {
 fn sectioned(shape: &Shape, value: &Value) -> bool {
     match value {
         Value::TextValue { .. } => shape.field(value.field()).is_some_and(|f| f.multiline),
-        Value::SectionsValue { .. } => true,
+        Value::SectionsValue { .. } | Value::MarkdownValue { .. } => true,
         _ => false,
     }
 }
@@ -118,6 +150,7 @@ fn sectioned(shape: &Shape, value: &Value) -> bool {
 fn section_body(value: &Value) -> Option<String> {
     match value {
         Value::TextValue { text, .. } => Some(text.clone()),
+        Value::MarkdownValue { markdown, .. } => Some(markdown.clone()),
         Value::SectionsValue { .. } => Some(crate::values::sections_yaml(&file_value(value))),
         _ => None,
     }
@@ -157,8 +190,12 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
     front.extend([
         ("type", Json::from(akt.shape.key.clone())),
         ("revision", akt.revision.into()),
-        ("state", akt.state.key.clone().into()),
     ]);
+    // r[impl cli.file.kinds]
+    if let Some(version) = &akt.version {
+        front.push(("version", version.number.into()));
+    }
+    front.push(("state", akt.state.key.clone().into()));
     // r[impl cli.file.kinds]
     if let Some(outcome) = &akt.outcome {
         front.push(("outcome", outcome.to_lowercase().into()));
@@ -169,8 +206,8 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
             akt.containers.iter().map(|c| c.number.clone()).collect(),
         ));
     }
-    if !akt.links.is_empty() {
-        front.push(("links", akt.links.iter().map(Link::said).collect()));
+    if filed(&akt.links).next().is_some() {
+        front.push(("links", filed(&akt.links).map(Link::said).collect()));
     }
     let single = akt
         .fields
@@ -228,7 +265,7 @@ pub fn json(akt: &Akt) -> Json {
         "state": akt.state.key,
         "outcome": akt.outcome.as_ref().map(|o| o.to_lowercase()),
         "in": akt.containers.iter().map(|c| c.number.clone()).collect::<Vec<_>>(),
-        "links": akt.links.iter().map(|l| json!({
+        "links": filed(&akt.links).map(|l| json!({
             "kind": l.kind,
             "name": l.name,
             "outgoing": l.outgoing,
@@ -473,6 +510,34 @@ fn plain(text: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || " ._/+@-".contains(c))
         && !text.ends_with(' ')
         && !words.iter().any(|w| w.eq_ignore_ascii_case(text))
+}
+
+/// An akt as a clone's file (`clone.tree`): its akt file without `revision`,
+/// `in`, `links` and `outcome`, from its number, state and field values in
+/// the file's form, a `sections` field's as its value (not its YAML).
+// r[impl clone.tree]
+#[must_use]
+pub fn clone_text(shape: &Shape, number: &str, state: &str, values: &Map<String, Json>) -> String {
+    let front = [
+        ("number", Json::from(number)),
+        ("type", Json::from(shape.key.clone())),
+        ("state", Json::from(state)),
+    ];
+    let mut single = Vec::new();
+    let mut sections = Vec::new();
+    for field in &shape.fields {
+        let Some(value) = values.get(&field.key).filter(|v| !v.is_null()) else {
+            continue;
+        };
+        if !field.sectioned() {
+            single.push((field.key.clone(), value.clone()));
+        } else if field.kind == "SECTIONS" {
+            sections.push((field.key.clone(), crate::values::sections_yaml(value)));
+        } else if let Some(text) = value.as_str() {
+            sections.push((field.key.clone(), text.to_owned()));
+        }
+    }
+    write_parts(&front, &single, &sections)
 }
 
 #[cfg(test)]
