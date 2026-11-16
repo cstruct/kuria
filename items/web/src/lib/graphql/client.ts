@@ -37,6 +37,26 @@ export function invalidateChange(cache: Cache, akt: string): void {
 	}
 }
 
+/**
+ * Marks every akt type's count stale, so the sidebar and home count again
+ * after an akt is archived or unarchived; they count live akter only.
+ */
+// r[impl app.archive]
+export function invalidateCounts(cache: Cache): void {
+	for (const field of cache.inspectFields('Query')) {
+		if (field.fieldName !== 'aktTypes') continue;
+		const types = cache.resolve('Query', field.fieldName, field.arguments ?? undefined);
+		for (const type of Array.isArray(types) ? types : []) {
+			if (typeof type !== 'string') continue;
+			for (const inner of cache.inspectFields(type)) {
+				if (inner.fieldName === 'akterCount') {
+					cache.invalidate(type, inner.fieldName, inner.arguments ?? undefined);
+				}
+			}
+		}
+	}
+}
+
 /** The app's GraphQL client: queries and mutations over HTTP, the
  * `changes` subscription over a WebSocket, both on this origin. */
 export function createClient(): Client {
@@ -60,6 +80,18 @@ export function createClient(): Client {
 				schema,
 				keys,
 				updates: {
+					Mutation: {
+						archiveAkt(result, _args, cache) {
+							const akt = (result as { archiveAkt?: { id: string } }).archiveAkt;
+							if (akt) invalidateChange(cache, akt.id);
+							invalidateCounts(cache);
+						},
+						unarchiveAkt(result, _args, cache) {
+							const akt = (result as { unarchiveAkt?: { id: string } }).unarchiveAkt;
+							if (akt) invalidateChange(cache, akt.id);
+							invalidateCounts(cache);
+						}
+					},
 					ChangesSubscription: {
 						changes(result, _args, cache) {
 							const event = (result as { changes?: { akt: string } }).changes;

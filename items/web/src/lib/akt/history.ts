@@ -1,6 +1,7 @@
 /** An akt's history as people read it: who did what, when, and what it
  * changed, memberships named. */
 // r[impl app.history]
+import { isKuria } from './archive';
 
 export interface RevisionData {
 	revision: number;
@@ -9,7 +10,7 @@ export interface RevisionData {
 	changes: unknown;
 	membership?: unknown;
 	createdAt: string;
-	by: { name: string };
+	by: { id?: string; name: string };
 	/** The users and contacts its values name, with their names. */
 	named?: readonly Named[];
 }
@@ -117,7 +118,10 @@ export function describe(
 	);
 	const onlyLinks = membership.length > 0 && membership.every(([kind]) => kind in LINKS);
 	let what: string;
-	if (r.transition) what = `performed ${transitionNames[r.transition] ?? r.transition}`;
+	// r[impl app.archive]: archiving is said as such, not as a transition.
+	if (r.transition === 'archive') what = 'archived it';
+	else if (r.transition === 'unarchive') what = 'unarchived it';
+	else if (r.transition) what = `performed ${transitionNames[r.transition] ?? r.transition}`;
 	else if (r.revision === 1) what = 'created it';
 	else if (onlyLinks && changes.length === 0) what = 'changed its links';
 	else if (memberships.length > 0 && changes.length === 0)
@@ -125,7 +129,8 @@ export function describe(
 	else what = 'edited it';
 	return {
 		revision: r.revision,
-		who: r.by.name,
+		// r[impl app.archive]: a rule's archive is by Kuria itself.
+		who: isKuria(r.by.id) ? 'Kuria' : r.by.name,
 		at: r.createdAt,
 		what,
 		reason: r.reason ?? null,

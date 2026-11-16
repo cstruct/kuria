@@ -33,6 +33,8 @@ const MESSAGES: Record<string, string> = {
 	INVALID_CONTACT: 'A contact needs a name, and a real email if any.',
 	DUPLICATE_EMAIL: 'Another contact has that email.',
 	LINKED: 'That contact is linked to a user, so it can’t be edited.',
+	// r[impl app.archive]
+	ARCHIVED: 'It is archived, so it can’t be changed. Unarchive it first.',
 	BROKEN_REFERENCES: 'It can’t be released while a reference is broken.',
 	INTERNAL: 'Something went wrong in Kuria. Try again.'
 };

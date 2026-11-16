@@ -82,6 +82,12 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
   (`labels.ts`), uploads, and the field editor and display components.
+  Archived akter (`archive.ts`, `app.archive`): lists, search, boards and
+  a container's members show live akter, **Show archived** (kept in the
+  address as `?archived=all`) adding archived ones, marked "Archived"; a
+  container says how many members are archived; an archived akt's page
+  says when, by whom or which rule, and why, with **Unarchive** and no
+  edit, and a live one offers **Archive…** in its menu, with a reason.
   An akt whose type has live drafts is edited live (`app.live`):
   `live.svelte.ts` opens its Yjs document over y-websocket, says whether
   the person's edits have reached the server (comparing what it has with
