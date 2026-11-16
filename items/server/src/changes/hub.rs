@@ -25,6 +25,9 @@ const BACKLOG: usize = 1_024;
 const PAGE: i64 = 500;
 /// How long one wait on Valkey blocks.
 const BLOCK_MS: usize = 1_000;
+/// How long past a blocking read's wait its reply may take before the
+/// connection is taken for lost.
+const REPLY_GRACE: Duration = Duration::from_secs(5);
 /// How often every tenant is read from Postgres anyway, in case a wake-up
 /// was lost.
 const SWEEP: Duration = Duration::from_secs(5);
@@ -156,8 +159,18 @@ impl Hub {
                 continue;
             }
             if valkey.is_none() {
-                // A connection of its own: a blocking read holds it.
-                match self.inner.client.get_multiplexed_async_connection().await {
+                // A connection of its own: a blocking read holds it, longer
+                // than the client's default response timeout of half a
+                // second, so the wait isn't taken for a lost reply.
+                let config = redis::AsyncConnectionConfig::new().set_response_timeout(Some(
+                    Duration::from_millis(BLOCK_MS as u64) + REPLY_GRACE,
+                ));
+                match self
+                    .inner
+                    .client
+                    .get_multiplexed_async_connection_with_config(&config)
+                    .await
+                {
                     Ok(conn) => valkey = Some(conn),
                     Err(e) => {
                         tracing::warn!("reaching Valkey for change events: {e}");
