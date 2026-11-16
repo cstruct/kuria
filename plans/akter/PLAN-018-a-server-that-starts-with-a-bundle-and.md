@@ -2,7 +2,7 @@
 number: PLAN-018
 type: plan
 revision: 10
-rank: b4u
+rank: b5B
 state: active
 title: "A server that starts with a bundle, and example data in every example"
 owner: albin@mattsson.io
@@ -50,7 +50,7 @@ Success: `mise run e2e:example -- planning` serves the planning example's akter 
 ---
 type: task
 revision: 5
-rank: b4v
+rank: b5C
 state: done
 in: [PLAN-018]
 title: Spec bootstrapping and example bundles
@@ -67,7 +67,7 @@ assignee: albin@mattsson.io
 ---
 type: task
 revision: 5
-rank: b4w
+rank: b5D
 state: done
 in: [PLAN-018]
 title: Bootstrap a bundle when the server starts
@@ -87,7 +87,7 @@ assignee: albin@mattsson.io
 ---
 type: task
 revision: 5
-rank: b4x
+rank: b5E
 state: done
 in: [PLAN-018]
 title: "Example bundles, made through the API and checked to import"
@@ -110,7 +110,7 @@ assignee: albin@mattsson.io
 ---
 type: task
 revision: 5
-rank: b4y
+rank: b5F
 state: done
 in: [PLAN-018]
 title: "Load the examples: READMEs and mise run e2e:example"
@@ -129,11 +129,12 @@ Each example's README says what its bundle holds and how to load it (`KURIA_BOOT
 <!-- akt: PLAN-018-T05 -->
 ---
 type: task
-revision: 1
-rank: b4z
-state: todo
+revision: 3
+rank: b5G
+state: doing
 in: [PLAN-018]
 title: Verify and open the pull request
+assignee: albin@mattsson.io
 ---
 
 <!-- field: acceptance -->
@@ -143,7 +144,7 @@ title: Verify and open the pull request
 ---
 type: decision
 revision: 2
-rank: b50
+rank: b5H
 state: decided
 in: [PLAN-018]
 title: Bootstrapping is configured by environment variables
@@ -163,7 +164,7 @@ One way to configure the server, which containers and the e2e scripts already us
 ---
 type: decision
 revision: 2
-rank: b51
+rank: b5I
 state: decided
 in: [PLAN-018]
 title: "Fresh is per tenant, and an unfresh one refuses start-up"
@@ -183,7 +184,7 @@ Other tenants are other people's data and don't bear on this one. Refusing a res
 ---
 type: decision
 revision: 2
-rank: b52
+rank: b5J
 state: decided
 in: [PLAN-018]
 title: Example bundles are made through GraphQL by an ignored server test
