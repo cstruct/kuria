@@ -25,6 +25,12 @@ containers; later ones find it running and only make Kuria's database
 again, so they are ready in about five seconds. The first start after the
 server's code changes compiles it first.
 
+Every checkout and worktree shares Konklav's compose project, ports and
+data, but keeps its own `.state/`. A start that finds a Konklav not seeded
+by this checkout (another checkout's, or one this checkout's `.state/`
+doesn't name) throws its data away and seeds it again, which takes about
+ten seconds.
+
 | What | Where |
 |---|---|
 | The app | Vite's dev server on <http://localhost:18290>, passing the API (and Konklav's login surface) to Kuria; Kuria's public URL |
@@ -51,8 +57,9 @@ server's code changes compiles it first.
   Konklav, with the app's origin as its issuer and login page.
 - [`scripts/prepare.ts`](scripts/prepare.ts): Konklav's signing keys and
   secrets, made once into `.state/` (never committed).
-- [`scripts/up.ts`](scripts/up.ts): starts Konklav's containers unless it
-  already answers.
+- [`scripts/up.ts`](scripts/up.ts): starts Konklav's containers unless
+  this checkout's Konklav already answers, and starts it afresh if the one
+  found holds another checkout's data.
 - [`scripts/setup.ts`](scripts/setup.ts): seeds Konklav once and writes
   `.state/kuria.env` (Kuria's configuration) and `.state/seeded.json` (who
   can sign in, and an admin's secret key for the check).
