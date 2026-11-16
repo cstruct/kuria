@@ -1,6 +1,7 @@
 <script lang="ts">
 	// r[impl app.versions]: two versions, or a version and the living
 	// version, compared field by field, text line by line.
+	import { untrack } from 'svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import { getClient } from '#lib/graphql/context.svelte.ts';
 	import { AktFieldsAt } from '#lib/graphql/operations.ts';
@@ -18,7 +19,8 @@
 
 	let { open = $bindable(), number, from, to, fields }: Props = $props();
 	const client = getClient();
-	let compared = $state<{ name: string; lines: DiffLine[] }[] | null>(null);
+	type Read = { before: readonly Value[]; after: readonly Value[] };
+	let read = $state<Read | null>(null);
 	let failed = $state(false);
 
 	function text(value: Value | undefined): string {
@@ -27,24 +29,47 @@
 		return textOf(value);
 	}
 
+	// Read when it opens or the versions change, and only then. Reading the
+	// living version refreshes the page's akt in the cache, so every prop is
+	// handed down again; a string signals only when it changes, so the reads
+	// follow it rather than the props, and the diff is worked out from the
+	// fields without reading again.
+	const asked = $derived(open ? JSON.stringify([number, from, to]) : null);
+
 	$effect(() => {
-		if (!open) return;
-		compared = null;
-		failed = false;
+		if (!asked) return;
+		const [akt, before, after] = JSON.parse(asked) as [string, number, number | null];
+		let current = true;
+		untrack(() => {
+			read = null;
+			failed = false;
+		});
 		const at = (version: number | null) =>
-			client.query(AktFieldsAt, { number, version }, { requestPolicy: 'network-only' }).toPromise();
-		Promise.all([at(from), at(to)]).then(([a, b]) => {
+			client
+				.query(AktFieldsAt, { number: akt, version }, { requestPolicy: 'network-only' })
+				.toPromise();
+		Promise.all([at(before), at(after)]).then(([a, b]) => {
+			if (!current) return;
 			if (!a.data?.akt || !b.data?.akt) {
 				failed = true;
 				return;
 			}
-			const valueOf = (values: readonly Value[], key: string) =>
-				values.find((v) => 'field' in v && v.field === key);
-			compared = fields.flatMap((field) => {
-				const before = text(valueOf(a.data!.akt!.fields, field.key));
-				const after = text(valueOf(b.data!.akt!.fields, field.key));
-				return before === after ? [] : [{ name: field.name, lines: lineDiff(before, after) }];
-			});
+			read = { before: a.data.akt.fields, after: b.data.akt.fields };
+		});
+		return () => {
+			current = false;
+		};
+	});
+
+	const compared = $derived.by(() => {
+		if (!read) return null;
+		const { before, after } = read;
+		const valueOf = (values: readonly Value[], key: string) =>
+			values.find((v) => 'field' in v && v.field === key);
+		return fields.flatMap((field): { name: string; lines: DiffLine[] }[] => {
+			const was = text(valueOf(before, field.key));
+			const is = text(valueOf(after, field.key));
+			return was === is ? [] : [{ name: field.name, lines: lineDiff(was, is) }];
 		});
 	});
 </script>
