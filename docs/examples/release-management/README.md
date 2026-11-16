@@ -54,6 +54,13 @@ others.
   rebuilt still ships; a candidate that must not ship a component removes
   it.
 
+- Old work archives itself ([archiving](../../spec/archive.md)): a
+  release once two newer releases are closed, no longer maintained, its
+  candidates, hotfixes and notes with it, and a backlog item 90 days after it is done.
+  Archived akter are read-only and left out of lists, boards and search
+  until **Show archived**; unarchiving a release brings back what it took,
+  and an akt someone unarchives by hand stays until archived by hand again.
+
 - A document's `presentation` says how its akter are shown: an icon and a
   colour for the type (a rocket for a release, a flask for a candidate,
   a wrench for a hotfix, a package for an artifact), the
@@ -73,7 +80,8 @@ mise run e2e
 walks this example in Kuria's app ([`e2e/`](../../../e2e/README.md)): a
 developer and a release manager sign in, plan a release, work two
 candidates and a hotfix, give the go for a contact, and draft the notes
-and the artifacts that ship.
+and the artifacts that ship; then releases go on until the first archives
+itself with its candidates.
 
 ## Defining it
 
@@ -103,7 +111,8 @@ Two roles cover the usual split:
   `kuria:contacts:manage`, to name approvers who aren't users yet; and at
   `release`,
   `release_candidate`, `hotfix` and `release_notes`: `kuria:akter:create`,
-  `kuria:akter:edit`, `kuria:akter:transition`, and `release:approve`.
+  `kuria:akter:edit`, `kuria:akter:transition`, `kuria:akter:archive`, and
+  `release:approve`.
 
 And one for software:
 

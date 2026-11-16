@@ -305,12 +305,13 @@ title: "Archived in the CLI, local mode and bundles"
 <!-- akt: PLAN-017-T08 -->
 ---
 type: task
-revision: 4
+revision: 6
 rank: b57
-state: todo
+state: doing
 in: [PLAN-017]
 links: [Blocked by PLAN-017-T05, Blocked by PLAN-017-T06, Blocked by PLAN-017-T07]
 title: The examples and the walkthrough
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
