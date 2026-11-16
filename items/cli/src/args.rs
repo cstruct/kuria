@@ -84,6 +84,12 @@ pub enum Command {
         /// Every page.
         #[arg(long, conflicts_with = "after")]
         all: bool,
+        /// Only archived akter.
+        #[arg(long, conflicts_with = "with_archived")]
+        archived: bool,
+        /// Archived akter as well as live ones.
+        #[arg(long)]
+        with_archived: bool,
     },
     /// Akter whose number starts with TEXT, or whose title holds its words.
     Find {
@@ -91,6 +97,12 @@ pub enum Command {
         text: Vec<String>,
         #[arg(long, default_value_t = 50)]
         limit: u32,
+        /// Only archived akter.
+        #[arg(long, conflicts_with = "with_archived")]
+        archived: bool,
+        /// Archived akter as well as live ones.
+        #[arg(long)]
+        with_archived: bool,
     },
     /// Each akt as an akt file: Markdown with YAML front matter.
     Cat {
@@ -115,6 +127,12 @@ pub enum Command {
         /// The akt as it was at this version of it.
         #[arg(long)]
         version: Option<i64>,
+        /// Only its archived members.
+        #[arg(long, conflicts_with = "with_archived")]
+        archived: bool,
+        /// Its archived members as well as its live ones.
+        #[arg(long)]
+        with_archived: bool,
     },
     /// Everything about one akt: fields, containers, members, links and the
     /// transitions its state allows.
@@ -126,6 +144,12 @@ pub enum Command {
         /// The akt as it was at this version of it.
         #[arg(long)]
         version: Option<i64>,
+        /// Only its archived members.
+        #[arg(long, conflicts_with = "with_archived")]
+        archived: bool,
+        /// Its archived members as well as its live ones.
+        #[arg(long)]
+        with_archived: bool,
     },
     /// An akt's versions, latest first.
     Versions { number: String },
@@ -266,6 +290,24 @@ pub enum Command {
         /// The containers to put the copy in; else those of the akt.
         #[arg(long = "in", value_name = "CONTAINER")]
         inside: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Archive each akt, in order, stopping at the first refused: kept,
+    /// read-only, and out of lists unless asked for.
+    Archive {
+        #[arg(required = true, value_name = "NUMBER")]
+        numbers: Vec<String>,
+        /// Why, on one line.
+        #[arg(long)]
+        reason: Option<String>,
+    },
+    /// Make each archived akt live again, in order, stopping at the first
+    /// refused.
+    Unarchive {
+        #[arg(required = true, value_name = "NUMBER")]
+        numbers: Vec<String>,
+        /// Why, on one line.
         #[arg(long)]
         reason: Option<String>,
     },

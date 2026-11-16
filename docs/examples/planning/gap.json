@@ -19,6 +19,7 @@
   "links": [
     { "key": "resolved_by", "name": "Resolved by", "inverse": "Resolves", "to": ["task", "decision"] }
   ],
+  "archive": { "rules": [{ "with_container": "plan" }] },
   "presentation": {
     "icon": "triangle-alert", "colour": "amber",
     "tones": { "open": "warning", "closed": "success" }

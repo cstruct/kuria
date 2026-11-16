@@ -63,6 +63,93 @@ pub struct AktTypeDocument {
     /// only releases make revisions of (`live.declare`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub live_drafts: bool,
+    /// The rules by which this type's akter archive themselves
+    /// (`archive.rules`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive: Option<ArchiveDef>,
+}
+
+/// How an akt type's akter are archived (`archive.rules`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ArchiveDef {
+    #[serde(default)]
+    pub rules: Vec<ArchiveRuleDef>,
+}
+
+/// One archive rule, as written: exactly one of `newer`, `with_container`
+/// and `days_in`, with the members its kind takes.
+///
+/// ```json
+/// { "newer": 2, "in": ["released", "closed"] }
+/// { "with_container": "release" }
+/// { "days_in": 90, "in": ["done"] }
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ArchiveRuleDef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub newer: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub with_container: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub days_in: Option<u32>,
+    #[serde(default, rename = "in", skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<String>,
+    /// For `newer`: only akter sharing a container of this type count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub within: Option<String>,
+}
+
+/// An archive rule, by its kind (`archive.rules`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArchiveRule<'a> {
+    /// Archive once at least `count` other akter of the type reached one
+    /// of `states` after it did, sharing a container of the type `within`
+    /// if given.
+    Newer {
+        count: u32,
+        states: &'a [String],
+        within: Option<&'a str>,
+    },
+    /// Archive with a container of this type that holds it.
+    WithContainer(&'a str),
+    /// Archive after `days` days in one of `states`.
+    DaysIn { days: u32, states: &'a [String] },
+}
+
+impl ArchiveRule<'_> {
+    /// The rule's kind, as an archive by it names it.
+    #[must_use]
+    pub fn kind(self) -> &'static str {
+        match self {
+            Self::Newer { .. } => "newer",
+            Self::WithContainer(_) => "with_container",
+            Self::DaysIn { .. } => "days_in",
+        }
+    }
+}
+
+impl ArchiveRuleDef {
+    /// The rule, if it is exactly one kind with what that kind takes.
+    #[must_use]
+    pub fn rule(&self) -> Option<ArchiveRule<'_>> {
+        match (self.newer, &self.with_container, self.days_in) {
+            (Some(count), None, None) => Some(ArchiveRule::Newer {
+                count,
+                states: &self.states,
+                within: self.within.as_deref(),
+            }),
+            (None, Some(container), None) if self.states.is_empty() && self.within.is_none() => {
+                Some(ArchiveRule::WithContainer(container))
+            }
+            (None, None, Some(days)) if self.within.is_none() => Some(ArchiveRule::DaysIn {
+                days,
+                states: &self.states,
+            }),
+            _ => None,
+        }
+    }
 }
 
 /// That an akt type releases versions (`version.declare`).

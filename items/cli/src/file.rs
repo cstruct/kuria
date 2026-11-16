@@ -25,8 +25,9 @@ use crate::model::{Shape, State, StateName, TypeName, Value};
 use crate::values::file_value;
 
 /// The keys every file has before its fields, which `apply` doesn't edit.
-pub const READ_ONLY: [&str; 10] = [
-    "number", "type", "revision", "version", "state", "outcome", "in", "links", "rank", "versions",
+pub const READ_ONLY: [&str; 11] = [
+    "number", "type", "revision", "version", "state", "outcome", "archived", "in", "links", "rank",
+    "versions",
 ];
 
 /// An akt with everything its file and `show` say.
@@ -53,6 +54,9 @@ pub struct Akt {
     /// Its versions, latest first (`version.list`).
     #[serde(default)]
     pub versions: Vec<Released>,
+    /// How it is archived, if it is (`archive.read`).
+    #[serde(default)]
+    pub archived: Option<crate::model::Archived>,
 }
 
 /// A version of an akt.
@@ -79,6 +83,9 @@ pub struct Other {
     /// Its outcome, where it is asked for.
     #[serde(default)]
     pub outcome: Option<String>,
+    /// How it is archived, where it is asked for.
+    #[serde(default)]
+    pub archived: Option<crate::model::Archived>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -112,15 +119,16 @@ pub struct Pinned {
 
 /// What to ask for an akt's file: its fields and everything around them.
 pub const AKT: &str = "number title revision createdAt updatedAt outcome
+  archived { at by { id name email } rule reason }
   version { number revision label }
   versions { number revision label releasedBy { id name email } releasedAt }
   type { ...Shape document }
   state { key name initial final tone }
   fields { ...Values }
-  containers { number title type { key name } state { key name } }
+  containers { number title type { key name } state { key name } archived { at by { id name email } rule reason } }
   links {
     kind name outgoing pinnedRevision byReference
-    akt { number title type { key name } state { key name } }
+    akt { number title type { key name } state { key name } archived { at by { id name email } rule reason } }
     pinned { revision title state { key name } }
   }";
 
@@ -200,6 +208,16 @@ fn write_numbered(akt: &Akt, numbered: bool) -> String {
     if let Some(outcome) = &akt.outcome {
         front.push(("outcome", outcome.to_lowercase().into()));
     }
+    // r[impl cli.archive]
+    if let Some(archived) = &akt.archived {
+        let mut said = serde_json::Map::new();
+        for (key, value) in archived.json().as_object().into_iter().flatten() {
+            if !value.is_null() {
+                said.insert(key.clone(), value.clone());
+            }
+        }
+        front.push(("archived", Json::Object(said)));
+    }
     if !akt.containers.is_empty() {
         front.push((
             "in",
@@ -264,6 +282,7 @@ pub fn json(akt: &Akt) -> Json {
         "revision": akt.revision,
         "state": akt.state.key,
         "outcome": akt.outcome.as_ref().map(|o| o.to_lowercase()),
+        "archived": akt.archived.as_ref().map(crate::model::Archived::json),
         "in": akt.containers.iter().map(|c| c.number.clone()).collect::<Vec<_>>(),
         "links": filed(&akt.links).map(|l| json!({
             "kind": l.kind,

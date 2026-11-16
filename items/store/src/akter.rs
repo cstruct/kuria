@@ -153,8 +153,77 @@ pub async fn latest_type_versions(
         .await
 }
 
-/// An akt's current state, as stored.
-#[derive(Clone, Debug, Insertable, Queryable, Selectable)]
+/// Which akter a read answers (`archive.read`): live ones, the default,
+/// archived ones, or both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Archived {
+    #[default]
+    Live,
+    Archived,
+    All,
+}
+
+impl Archived {
+    /// The values of `akt.archived` it reads, so that a live read reads
+    /// only the live partitions (`archive.storage.live`).
+    #[must_use]
+    pub fn values(self) -> &'static [bool] {
+        match self {
+            Self::Live => &[false],
+            Self::Archived => &[true],
+            Self::All => &[false, true],
+        }
+    }
+}
+
+/// How an akt is archived: when, by whom (`{"subject": id}` or
+/// `{"rule": kind}`) and why.
+#[derive(Clone, Debug)]
+pub struct Archive {
+    pub at: DateTime<Utc>,
+    pub by: Json,
+    pub reason: Option<String>,
+}
+
+/// Archives the akt `id`, or makes it live again with `None`, moving it
+/// with its history between partitions (`archive.storage`); `kept` marks an
+/// akt a person unarchived after a rule archived it (`archive.rules.kept`).
+// r[impl archive.storage]
+pub async fn set_archived(
+    conn: &mut Connection,
+    tenant: Uuid,
+    id: Uuid,
+    archive: Option<&Archive>,
+    kept: bool,
+) -> QueryResult<bool> {
+    // The append-only triggers let the delete half of a move through only
+    // while archiving.
+    diesel::sql_query("select set_config('kuria.archiving', 'on', true)")
+        .execute(conn)
+        .await?;
+    let updated = diesel::update(
+        akt::table
+            .filter(akt::tenant_id.eq(tenant))
+            .filter(akt::id.eq(id)),
+    )
+    .set((
+        akt::archived.eq(archive.is_some()),
+        akt::archived_at.eq(archive.map(|a| a.at)),
+        akt::archived_by.eq(archive.map(|a| a.by.clone())),
+        akt::archive_reason.eq(archive.and_then(|a| a.reason.clone())),
+        akt::archive_kept.eq(kept),
+    ))
+    .execute(conn)
+    .await?;
+    diesel::sql_query("select set_config('kuria.archiving', '', true)")
+        .execute(conn)
+        .await?;
+    Ok(updated == 1)
+}
+
+/// An akt's current state, as stored. Its default is live, as a new akt
+/// is.
+#[derive(Clone, Debug, Default, Insertable, Queryable, Selectable)]
 #[diesel(table_name = akt)]
 pub struct AktRow {
     pub id: Uuid,
@@ -170,6 +239,17 @@ pub struct AktRow {
     pub rank: String,
     /// The value of its akt type's title field, kept by the write path.
     pub title: Option<String>,
+    /// When it reached its state (`archive.rules.state-since`).
+    pub state_since: DateTime<Utc>,
+    /// Whether it is archived (`archive.flag`), when, by whom and why.
+    pub archived: bool,
+    pub archived_at: Option<DateTime<Utc>>,
+    /// `{"subject": id}` or `{"rule": kind}`.
+    pub archived_by: Option<Json>,
+    pub archive_reason: Option<String>,
+    /// Unarchived by a person after a rule archived it
+    /// (`archive.rules.kept`).
+    pub archive_kept: bool,
 }
 
 /// An akt revision, as stored.
@@ -218,6 +298,7 @@ pub async fn update_akt(
         akt::revision.eq(row.revision),
         akt::updated_at.eq(row.updated_at),
         akt::title.eq(&row.title),
+        akt::state_since.eq(row.state_since),
     ))
     .execute(conn)
     .await?;
@@ -431,6 +512,8 @@ impl ChangedAfter {
 pub struct Listing<'a> {
     /// The akt types listed, by key.
     pub keys: &'a [String],
+    /// Live akter, archived ones, or both (`archive.read`).
+    pub archived: Archived,
     /// Only akter in this state, if given.
     pub state: Option<&'a str>,
     /// Conditions every akt must meet.
@@ -451,6 +534,7 @@ pub async fn list_akter(
 ) -> QueryResult<Vec<AktRow>> {
     let Listing {
         keys,
+        archived,
         state,
         conditions,
         after,
@@ -459,6 +543,7 @@ pub async fn list_akter(
     let mut query = akt::table
         .inner_join(akt_type_version::table)
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(akt_type_version::key.eq_any(keys))
         .select(AktRow::as_select())
         .order((akt::updated_at.desc(), akt::id.desc()))
@@ -480,15 +565,84 @@ pub async fn list_akter(
     query.load(conn).await
 }
 
-/// How many akter of the akt type `key` the tenant has, in any version.
-pub async fn count_akter(conn: &mut Connection, tenant: Uuid, key: &str) -> QueryResult<i64> {
+/// How many akter of the akt type `key` the tenant has, in any version,
+/// live, archived or both.
+pub async fn count_akter(
+    conn: &mut Connection,
+    tenant: Uuid,
+    key: &str,
+    archived: Archived,
+) -> QueryResult<i64> {
     akt::table
         .inner_join(akt_type_version::table)
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(akt_type_version::key.eq(key))
         .count()
         .get_result(conn)
         .await
+}
+
+/// Every akt of the akt type `key`, in any version, in one of `states`
+/// (any state when empty), live, archived or both, the latest to reach
+/// its state first (`archive.rules`).
+pub async fn akter_in_states(
+    conn: &mut Connection,
+    tenant: Uuid,
+    key: &str,
+    states: &[String],
+    archived: Archived,
+) -> QueryResult<Vec<AktRow>> {
+    let mut query = akt::table
+        .inner_join(akt_type_version::table)
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt_type_version::key.eq(key))
+        .filter(akt::archived.eq_any(archived.values()))
+        .select(AktRow::as_select())
+        .order((akt::state_since.desc(), akt::id.desc()))
+        .into_boxed();
+    if !states.is_empty() {
+        query = query.filter(akt::state.eq_any(states));
+    }
+    query.load(conn).await
+}
+
+/// Each tenant and akt type key whose latest version declares archive
+/// rules (`archive.sweep`).
+pub async fn types_with_archive_rules(conn: &mut Connection) -> QueryResult<Vec<(Uuid, String)>> {
+    use diesel::dsl::sql;
+    use diesel::sql_types::Bool;
+    akt_type_version::table
+        .inner_join(
+            akt_type::table.on(akt_type::tenant_id
+                .eq(akt_type_version::tenant_id)
+                .and(akt_type::key.eq(akt_type_version::key))
+                .and(akt_type::latest_version.eq(akt_type_version::version))),
+        )
+        .filter(sql::<Bool>(
+            "jsonb_array_length(coalesce(akt_type_version.definition -> 'archive' -> 'rules', '[]')) > 0",
+        ))
+        .order((akt_type_version::tenant_id, akt_type_version::key))
+        .select((akt_type_version::tenant_id, akt_type_version::key))
+        .load(conn)
+        .await
+}
+
+/// Takes the sweep's lock on `tenant` for the transaction, if no other
+/// instance holds it (`archive.sweep`).
+pub async fn try_lock_sweep(conn: &mut Connection, tenant: Uuid) -> QueryResult<bool> {
+    #[derive(diesel::QueryableByName)]
+    struct Taken {
+        #[diesel(sql_type = diesel::sql_types::Bool)]
+        taken: bool,
+    }
+    let taken: Taken = diesel::sql_query(
+        "select pg_try_advisory_xact_lock(hashtext('kuria.archive_sweep'), hashtext($1::text)) as taken",
+    )
+    .bind::<diesel::sql_types::Uuid, _>(tenant)
+    .get_result(conn)
+    .await?;
+    Ok(taken.taken)
 }
 
 /// Escapes `%`, `_` and `\` for a `like` pattern.
@@ -515,6 +669,7 @@ pub async fn search_akter(
 
     let Listing {
         keys,
+        archived,
         state,
         conditions,
         after,
@@ -534,6 +689,7 @@ pub async fn search_akter(
     }
     let mut matching = akt::table
         .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(number.or(title))
         .filter(
             akt::type_version_id.eq_any(

@@ -52,6 +52,7 @@ const ACTIONS = {
 	'kuria:akter:create': "Create an akt type's akter",
 	'kuria:akter:edit': "Edit an akt type's akter",
 	'kuria:akter:transition': "Perform an akt type's transitions",
+	'kuria:akter:archive': "Archive and unarchive an akt type's akter",
 	'kuria:contacts:read': 'List contacts',
 	'kuria:contacts:manage': 'Add, edit and erase contacts',
 	'kuria:tenant:export': "Export the tenant's akt types and akter as bundles",
@@ -70,7 +71,10 @@ const ROLES: Record<string, ReturnType<typeof allow>> = {
 	reader: allow(['kuria:akter:read']),
 	'contacts-manager': allow(['kuria:contacts:manage']),
 	'developer-work': allow(['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition'], true),
-	'release-work': allow(['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'release:approve'], true),
+	'release-work': allow(
+		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'kuria:akter:archive', 'release:approve'],
+		true
+	),
 	'document-release': allow(
 		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'documents:release'],
 		true

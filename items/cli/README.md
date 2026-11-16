@@ -181,6 +181,18 @@ type.
     neither `--url`, `KURIA_URL` nor the profile names one, and are
     refused against another Kuria.
 
+- **Archiving** (`cli.archive`, [`src/writes/archive.rs`](src/writes/archive.rs)):
+  `archive <number>… [--reason]` and `unarchive <number>… [--reason]`
+  send `archiveAkt` and `unarchiveAkt` for each, in order, stopping at the
+  first refused and saying what was done before it. `ls`, `find`, and the
+  members `cat` and `show` give, ask for live akter (`archived: LIVE`),
+  with `--archived` archived ones only and `--with-archived` both (`ls
+  --all` stays every page); `show` of an archived container lists all its
+  members, as its board does. An archived akt is marked: `(archived)` by
+  its state in lists and beside members and containers, when, by whom or
+  which rule and why in `show`, a read-only `archived: {at, by, rule,
+  reason}` in its file, and an `archived` object (`null` when live) in
+  JSON.
 - **Bundles** ([`src/writes/bundles.rs`](src/writes/bundles.rs)):
   `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` writes the
   bundle Kuria answers into a new directory (`bundle.json`,
@@ -249,6 +261,26 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   are the first and last of them, or when its file was written if its
   revision differs from `HEAD`'s. Outside git, a file's akter share its
   time.
+- **Archiving** ([`src/local/archive.rs`](src/local/archive.rs),
+  `cli.local.archive`, `cli.local.archive.kept`): `archive` takes an akt,
+  and the akter nested in its file (as `with_container` takes them), out
+  of its file and lists each in `akter/archived.md` (YAML front matter:
+  number, type, revision, at, by or rule and container, reason; and
+  `kept`). Git keeps each at that revision; one git doesn't hold as it is
+  (uncommitted, or from `export --to-dir`) is also written to
+  `akter/archived/<NUMBER>.md`. Reads load archived akter from there or
+  git's latest commit at their revision, at the revision past it, so that
+  numbers stay taken, references and `in` resolve, and `--archived` lists
+  them. A write to one is refused as `ARCHIVED`. `unarchive` (refused as
+  `UNCOMMITTED` while `git status` shows changes) puts it back, a revision
+  further, on a free rank, and with it what `with_container` took; a
+  person unarchiving what a rule archived marks it kept. Rules, from each
+  type's document, run as the server's do: `newer` after each `do`,
+  counting archived akter too, by when each reached its state
+  (`Times::state_since`: the first commit of the latest run of commits in
+  that state, else its file's time, now for the transition itself);
+  `with_container` down from each archive and unarchive; and all of them,
+  `days_in` too, in `check --fix`.
 - **Layout** ([`src/local/layout.rs`](src/local/layout.rs)): an akt
   numbered after its parent goes in its parent's file, any other begins a
   file named `<NUMBER>-<slug>.md` from its title. A write moves the akter of
@@ -293,7 +325,9 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   and their akter as a new directory (each type's latest document, links
   ordered as the server lists them, people by email or name, versions with
   the headings they had and whether an image had its picture, each
-  attachment's bytes as `attachments/<number>/<name>`), then checks it.
+  attachment's bytes as `attachments/<number>/<name>`, archived akter
+  listed in `akter/archived.md` and kept in `akter/archived/` at the
+  revision before their archive's, kept ones in its `kept`), then checks it.
   `import --from-dir <path>` sends
   a consistent directory as a `types` bundle: each akt with revisions
   numbered up to its file's `revision`, each as git's latest commit at that
@@ -302,7 +336,9 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   now or at an earlier revision (from git if it was since removed), as an
   attachment with its bytes, under an identifier new to that bundle; each
   person as a subject named by their email, which the import maps to a
-  user who has signed in.
+  user who has signed in; each archived akt with its archive as its last
+  revision and as `archived` (by its subject, or its rule and container),
+  each kept one as `archiveKept` (bundle format 3).
 - **Attachments** ([`src/local/attachments.rs`](src/local/attachments.rs),
   `cli.local.attachments`): files `attachments/<number>/<name>`, an
   `attachment` field's value being that path (`cat` prints it so). A write
@@ -328,8 +364,8 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `whoami` | `{url, tenant, subject, name, email, signedInWith, profile}`; in local mode `{dir, me, signedInWith: "local"}` |
 | `types` | `{types: [{key, name, version, numberPattern, akterCount}]}` |
 | `schema` | `{type: {key, name, version, numberPattern, fields: [{key, name, kind, required, multiline, description, options, format, draft}], states: [{key, name, initial, final, tone}], transitions: [{key, name, from, to, requires, action}], contains, createdIn, links, board, presentation}}` |
-| `ls`, `find` | `{akter: [{number, type, title, state, outcome, updatedAt, fields}], endCursor, hasNextPage}` |
-| `cat` | `{akter: [{number, type, revision, state, outcome, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o` |
+| `ls`, `find` | `{akter: [{number, type, title, state, outcome, archived, updatedAt, fields}], endCursor, hasNextPage}` |
+| `cat` | `{akter: [{number, type, revision, state, outcome, archived, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o`; `archived` is `{at, by, rule, reason}` or `null` |
 | `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns?, akter, more, sections?}, transitions, history?}}` |
 | `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}`; in local mode also `tracked` and `uncommitted` |
 | `users`, `contacts` | `{users: [{id, name, email}]}`, `{contacts: [{id, displayName, name, email, user}]}` |
@@ -339,6 +375,7 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `set`, `do`, `draft` | `{number, revision, changed \| state, transition \| field}` |
 | `verdict` | `{number, revision, verdict, for, outcome}` |
 | `copy` | `{number, from, members: [{from, number}]}` |
+| `archive`, `unarchive` | `{archived: [{number, revision}]}`, `{unarchived: [{number, revision}]}` |
 | `add`, `remove`, `transfer`, `move`, `link`, `unlink` | what was asked, such as `{source, kind, target, pinnedRevision}` |
 | `guide` | `{guide}` |
 | `docs clone` | `{dir, number, files, members}` |
@@ -347,7 +384,8 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `docs push`, `docs pull` | `{pushed, message}`, `{merged, added, removed, kept, conflicted, unstaged}` |
 | `docs fmt` | `{changed}` |
 | `export`, `import` | `{dir, scope, aktTypes, akter, contacts, attachments, files}`; `{scope, aktTypes, akter, aliases}` |
-| `export --to-dir` | `{dir, aktTypes, akter, attachments}` |
+| `export --to-dir` | `{dir, aktTypes, akter, archived, attachments}` |
+| `check` | `{consistent, types, akter, problems}`; with `--fix` also `files: {before, after}` and `archivedByRules` |
 | `types export`, `types define` | `{types: [document]}` or `{written}`; `{defined: [{key, version}]}` or `{valid: [key]}` |
 
 `fields` maps field keys to values in the akt file's form.
@@ -469,10 +507,10 @@ cargo test -p kuria-cli
 
 - Spec: [`docs/spec/cli.md`](../../docs/spec/cli.md) (`cli.profile`,
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
-  `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`, and
-  `local.*` for local mode); [`docs/spec/clones.md`](../../docs/spec/clones.md)
+  `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`,
+  `archive`, and `local.*` for local mode); [`docs/spec/clones.md`](../../docs/spec/clones.md)
   (`clone.*`); `app.history` for the history's wording.
 - Annotations: `r[impl cli.*]` and `r[impl clone.*]` in `src/`,
   `r[verify cli.*]` and `r[verify clone.*]` in the unit tests,
-  `tests/local.rs`, `tests/clones.rs`, `e2e/tests/cli.spec.ts`,
+  `tests/local.rs`, `tests/clones.rs`, `tests/archive.rs`, `e2e/tests/cli.spec.ts`,
   `e2e/tests/clone.spec.ts` and `e2e/tests/parity.spec.ts`.

@@ -1,6 +1,7 @@
 <script lang="ts">
 	// r[impl app.members]
 	import { resolve } from '$app/paths';
+	import Archive from '@lucide/svelte/icons/archive';
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
@@ -29,6 +30,8 @@
 		/** The akt types the container holds, in order. */
 		contained: readonly string[];
 		editable: boolean;
+		/** Whether members may be reordered: not in an archived container. */
+		movable?: boolean;
 		busy: boolean;
 		onMove: (number: string, place: Place) => void;
 		onRemove: (number: string) => void;
@@ -48,6 +51,7 @@
 		document,
 		contained,
 		editable,
+		movable = true,
 		busy,
 		onMove,
 		onRemove,
@@ -80,13 +84,13 @@
 			{
 				label: labels.up,
 				icon: ArrowUp,
-				disabled: busy || i === 0,
+				disabled: busy || !movable || i === 0,
 				onSelect: () => onMove(member.number, { before: group[i - 1].number })
 			},
 			{
 				label: labels.down,
 				icon: ArrowDown,
-				disabled: busy || i === group.length - 1,
+				disabled: busy || !movable || i === group.length - 1,
 				onSelect: () => onMove(member.number, { after: group[i + 1].number })
 			},
 			{
@@ -139,7 +143,7 @@
 							class="card"
 							data-number={member.number}
 							class:dragging={reorder.dragging?.number === member.number}
-							draggable={!busy}
+							draggable={!busy && movable}
 							ondragstart={(e) => reorder.start(e, member.number, column.key)}
 							ondragend={() => reorder.end()}
 							ondragover={(e) => reorder.overMember(e, column.key, i)}
@@ -171,6 +175,10 @@
 							<div class="foot">
 								<span class="grip" aria-hidden="true"><GripVertical size={12} /></span>
 								{#if member.title}<Mono value={member.number} max={22} />{/if}
+								<!-- r[impl app.archive]: an archived member marked, in words. -->
+								{#if member.archived}<span class="archived"
+										><Badge><Archive size={12} aria-hidden={true} /> Archived</Badge></span
+									>{/if}
 								<Badge tone={member.state.tone}>{member.state.name}</Badge>
 								{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}
 							</div>
@@ -218,7 +226,7 @@
 							class:dragging={reorder.dragging?.number === member.number}
 							class:drop-before={marker(group, i)}
 							class:drop-after={i === list.akter.length - 1 && marker(group, i + 1)}
-							draggable={!busy}
+							draggable={!busy && movable}
 							ondragstart={(e) => reorder.start(e, member.number, group)}
 							ondragend={() => reorder.end()}
 							ondragover={(e) => reorder.overMember(e, group, i)}
@@ -228,7 +236,10 @@
 									><Mono value={member.number} max={32} /></a
 								></td
 							>
-							<td>{member.title ?? ''}</td>
+							<td
+								>{member.title ?? ''}{#if member.archived}
+									<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge>{/if}</td
+							>
 							{#each shownFields(member, 'list') as field (field.name)}
 								<td>{field.text}</td>
 							{/each}
@@ -407,6 +418,14 @@
 
 	.foot :global(.badge) {
 		margin-left: auto;
+	}
+
+	.foot .archived {
+		margin-left: auto;
+	}
+
+	.foot .archived + :global(.badge) {
+		margin-left: 0;
 	}
 
 	.grip {

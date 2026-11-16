@@ -14,6 +14,7 @@
 //! tenant's order lock, then akt rows (by id), then number counters, then
 //! the change-event counter.
 
+pub(crate) mod archive;
 mod batch;
 mod copy;
 mod create;
@@ -26,6 +27,7 @@ mod ordering;
 pub mod outcomes;
 mod push;
 mod references;
+pub(crate) mod rules;
 pub mod versions;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
@@ -105,6 +107,8 @@ pub enum AktError {
     },
     #[error("not permitted")]
     Forbidden,
+    #[error("{0} is archived: unarchive it first")]
+    Archived(String),
     #[error("`{container}` can't contain akter of the type `{member}`")]
     NotContainable { container: String, member: String },
     #[error("`{member}` is already a member of `{container}`")]
@@ -552,6 +556,7 @@ async fn change_in(
     if !auth.allows(&permission(&stored.ty)).await? {
         return Err(AktError::Forbidden);
     }
+    archive::writable(&akt)?;
     // r[impl live.edit]
     // An edit of a live draft changes the draft only, which merges, so the
     // revision it was based on isn't checked: revisions don't move with it.
@@ -609,7 +614,9 @@ async fn change_in(
     } else {
         akt.title = title_of(&stored.ty, &outcome.fields);
     }
+    // r[impl archive.rules.state-since]
     akt.state = outcome.state.clone();
+    akt.state_since = now;
     akt.fields = Json::Object(fields_to_json(&outcome.fields));
     akt.revision = expected_revision + 1;
     akt.updated_at = now;
@@ -622,9 +629,13 @@ async fn change_in(
     check_contacts(conn, tenant, &outcome).await?;
     hold_attachments(conn, caller, &stored.ty, &akt, &outcome).await?;
     diagrams::render_written(conn, caller, &stored.ty, &akt, &outcome).await?;
+    let transitioned = transition.is_some();
     let mut recorded = revision(&akt, actor, transition, reason, &outcome, now);
     references::record(conn, &stored.ty, &akt, &outcome.fields, &mut recorded).await?;
     store::append_revision(conn, &recorded).await?;
+    if transitioned {
+        rules::after_transition(conn, tenant, &akt, &stored, now).await?;
+    }
     if live {
         return live::read_as_draft(conn, &stored, akt).await;
     }

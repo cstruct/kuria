@@ -1,4 +1,11 @@
 {
+  "archive": {
+    "rules": [
+      {
+        "with_container": "plan"
+      }
+    ]
+  },
   "created_in": [
     "plan"
   ],

@@ -37,6 +37,8 @@ Specs:
   and SBOMs
 - [live drafts](live-drafts.md): an akt's fields edited together, live,
   with Yjs, and revisions made only by releasing
+- [archiving](archive.md): archived akter, read-only and kept apart,
+  hidden unless asked for, and archived by their types' rules
 - [versions](versions.md): releasing an akt's revision as a version that
   never changes, the release's reference check, and reading versions
 - [PDFs](pdf.md): `markdown` fields as PDFs, of the living version or a

@@ -26,6 +26,7 @@ use serde_json::{Map, Value as Json, json};
 use uuid::Uuid;
 
 use super::answers;
+use super::archive::{Archive, Entry, kept_path};
 use super::attachments;
 use super::check::{check, said};
 use super::dir::{AktDir, LocalAkt, LocalType, init, read_text};
@@ -37,7 +38,7 @@ use crate::file::Parsed;
 use crate::profile::io_error;
 
 /// The bundle format this client writes.
-const BUNDLE_FORMAT: u32 = 2;
+const BUNDLE_FORMAT: u32 = 3;
 
 /// A bundle unpacked: its `bundle.json`, and each attachment's bytes by
 /// their SHA-256 in lower-case hex, as `attachments/<sha256>` holds them.
@@ -177,14 +178,32 @@ pub fn to_dir(unpacked: &Unpacked, root: &Path) -> Result<Json, CliError> {
         written: BTreeMap::new(),
     };
     let mut akter = Vec::new();
+    let mut archive = Archive::default();
+    let mut archived = Vec::new();
     for a in &akter_in {
-        akter.push(akt_of(bundle, a, root, &types, &bundled, &ids, &mut files)?);
+        let mut akt = akt_of(bundle, a, root, &types, &bundled, &ids, &mut files)?;
+        // r[impl cli.local.archive]
+        match archived_of(a, &bundled, &ids) {
+            Some(entry) => {
+                akt.revision = entry.revision;
+                archive.archived.push(entry);
+                archived.push(akt);
+            }
+            None => {
+                if a["archiveKept"] == true {
+                    archive.kept.push(akt.number.clone());
+                }
+                akter.push(akt);
+            }
+        }
     }
     akter.sort_by(|a, b| a.rank.cmp(&b.rank).then_with(|| a.number.cmp(&b.number)));
     let dir = AktDir {
         root: root.to_owned(),
         types,
         akter,
+        archive,
+        archived,
     };
 
     init(root)?;
@@ -205,14 +224,78 @@ pub fn to_dir(unpacked: &Unpacked, root: &Path) -> Result<Json, CliError> {
     for path in layout::relocate(&mut dir, &every) {
         std::fs::write(&path, layout::file_text(&dir, &path)).map_err(|e| io_error(&path, &e))?;
     }
+    write_archived(&dir, root)?;
     // What was written reads back as a consistent directory.
     check(root)?;
     Ok(json!({
         "dir": root,
         "aktTypes": dir.types.len(),
         "akter": dir.akter.len(),
+        "archived": dir.archived.len(),
         "attachments": files.written.len(),
     }))
+}
+
+/// The archived akter of `dir`, which no git history holds yet, each as
+/// its own file in `akter/archived/`, and `akter/archived.md`
+/// (`cli.local.archive`).
+// r[impl cli.local.archive.kept]
+// r[impl cli.local.archive]
+fn write_archived(dir: &AktDir, root: &Path) -> Result<(), CliError> {
+    for akt in &dir.archived {
+        let path = kept_path(root, &akt.number);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| io_error(parent, &e))?;
+        }
+        std::fs::write(&path, super::write::text_of(dir, akt, true))
+            .map_err(|e| io_error(&path, &e))?;
+    }
+    if dir.archive != Archive::default() {
+        let path = Archive::path(root);
+        std::fs::write(&path, dir.archive.text()).map_err(|e| io_error(&path, &e))?;
+    }
+    Ok(())
+}
+
+/// How the bundle's akt `a` is archived, as `akter/archived.md` lists it:
+/// at the revision before the one its archiving appended, which the akt's
+/// file in `akter/archived/` holds it at.
+fn archived_of(a: &Json, bundled: &HashMap<Uuid, Bundled>, ids: &Ids) -> Option<Entry> {
+    let archived = a["archived"].as_object()?;
+    let id = uuid(&a["id"]);
+    let revisions = a["revisions"].as_array().cloned().unwrap_or_default();
+    let last = revisions
+        .last()
+        .and_then(|r| r["revision"].as_i64())
+        .and_then(|r| i32::try_from(r).ok())
+        .unwrap_or(1);
+    let appended = revisions
+        .last()
+        .is_some_and(|r| r["transition"] == "archive");
+    let by = &archived["by"];
+    let rule = by["rule"].as_str().map(str::to_owned);
+    Some(Entry {
+        number: bundled[&id].number.clone(),
+        type_key: bundled[&id].type_key.clone(),
+        revision: if appended && last > 1 { last - 1 } else { last },
+        at: archived["at"].as_str().map_or_else(String::new, |t| {
+            time(t, Utc::now()).to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        }),
+        by: match (&rule, by["subject"].as_str()) {
+            (None, Some(_)) => Some(ids.text(uuid(&by["subject"]))),
+            (None, None) => Some("someone".to_owned()),
+            _ => None,
+        },
+        container: by["container"]
+            .as_str()
+            .and_then(|_| bundled.get(&uuid(&by["container"])))
+            .map(|c| c.number.clone()),
+        rule,
+        reason: archived
+            .get("reason")
+            .and_then(Json::as_str)
+            .map(str::to_owned),
+    })
 }
 
 /// The attachments a directory is written with: a bundle's, and the files
@@ -605,40 +688,27 @@ fn history_of(
 /// it consistent.
 // r[impl cli.local.convert]
 pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Unpacked, CliError> {
-    check(root)?;
-    let dir = AktDir::open(root)?;
-    let times = Times::of(root);
+    let (dir, times) = loaded(root)?;
     let now = Utc::now();
     let mut ids = Ids::new(me);
     let author = ids.changer();
-
-    let akt_types: Vec<Json> = dir
-        .types
-        .iter()
-        .map(|(key, t)| {
-            json!({
-                "key": key,
-                "versions": [{
-                    "id": id_of(&format!("type:{key}")),
-                    "version": 1,
-                    "definition": t.document,
-                    "createdBy": author,
-                    "createdAt": now,
-                }],
-            })
-        })
-        .collect();
+    let akt_types = types_in_bundle(&dir, author, now);
     let mut akter = Vec::new();
     let mut memberships = Vec::new();
     let mut links = Vec::new();
-    for akt in &dir.akter {
+    for akt in dir.akter.iter().chain(&dir.archived) {
         let t = dir.type_of(akt);
-        let (created, updated) = times.of_akt(akt);
+        let (created, mut updated) = times.of_akt(akt);
+        let entry = dir.archive.entry(&akt.number);
+        if let Some(entry) = entry {
+            updated.clone_from(&entry.at);
+        }
         let (created, updated) = (time(&created, now), time(&updated, now));
-        let (fields, revisions) =
+        let (fields, mut revisions) =
             history_of(&dir, &times, akt, &mut ids, (created, updated, author))?;
         let versions = bundled_versions(akt, &mut ids, now);
         let id = id_of(&format!("akt:{}", akt.number));
+        let archived = entry.map(|e| archived_in_bundle(e, &mut revisions, &mut ids, author, now));
         akter.push(json!({
             "id": id,
             "number": akt.number,
@@ -653,6 +723,11 @@ pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Unpacked, CliError> 
             "attachments": held(&fields),
             "versions": versions,
         }));
+        if let Some(archived) = archived {
+            akter.last_mut().expect("pushed")["archived"] = archived;
+        } else if dir.archive.kept(&akt.number) {
+            akter.last_mut().expect("pushed")["archiveKept"] = true.into();
+        }
         for container in &akt.containers {
             memberships.push(json!({
                 "container": id_of(&format!("akt:{container}")),
@@ -707,6 +782,89 @@ pub fn bundle_of(root: &Path, me: Option<String>) -> Result<Unpacked, CliError> 
         bundle,
         attachments: bytes,
     })
+}
+
+/// The directory's akt types as a bundle holds them, each one version.
+fn types_in_bundle(dir: &AktDir, author: Uuid, now: DateTime<Utc>) -> Vec<Json> {
+    dir.types
+        .iter()
+        .map(|(key, t)| {
+            json!({
+                "key": key,
+                "versions": [{
+                    "id": id_of(&format!("type:{key}")),
+                    "version": 1,
+                    "definition": t.document,
+                    "createdBy": author,
+                    "createdAt": now,
+                }],
+            })
+        })
+        .collect()
+}
+
+/// The akt directory at `root`, once `kuria check` finds it consistent,
+/// with its archived akter, each of which git or `akter/archived/` must
+/// have, and what git says of it.
+fn loaded(root: &Path) -> Result<(AktDir, Times), CliError> {
+    check(root)?;
+    let mut dir = AktDir::open(root)?;
+    let times = Times::of(root);
+    dir.load_archived(&times);
+    if let Some(entry) = dir
+        .archive
+        .archived
+        .iter()
+        .find(|e| dir.archived.iter().all(|a| a.number != e.number))
+    {
+        return Err(CliError::refused(
+            "NOT_FOUND",
+            format!(
+                "{} is archived, but neither git nor akter/archived/ has it at revision {}",
+                entry.number, entry.revision
+            ),
+        ));
+    }
+    Ok((dir, times))
+}
+
+/// How the archived akt `e` lists is in a bundle, the last of its
+/// `revisions` made its archive's, by whom or which rule archived it
+/// (`archive.history`).
+// r[impl cli.local.archive]
+fn archived_in_bundle(
+    e: &Entry,
+    revisions: &mut [Json],
+    ids: &mut Ids,
+    author: Uuid,
+    now: DateTime<Utc>,
+) -> Json {
+    if let Some(last) = revisions.last_mut() {
+        last["transition"] = "archive".into();
+        last["reason"] = match (&e.rule, &e.reason) {
+            (Some(rule), Some(reason)) => format!("by the rule `{rule}`: {reason}").into(),
+            (Some(rule), None) => format!("by the rule `{rule}`").into(),
+            (None, reason) => json!(reason),
+        };
+        // A rule archives as Kuria, the nil subject.
+        last["author"] = match (&e.rule, e.by.as_deref()) {
+            (None, Some(by)) => json!(ids.id(by)),
+            (None, None) => json!(author),
+            (Some(_), _) => json!(Uuid::nil()),
+        };
+    }
+    let by = match (&e.rule, &e.by) {
+        (Some(rule), _) => {
+            let mut by = json!({ "rule": rule });
+            if let Some(container) = &e.container {
+                by["container"] = json!(id_of(&format!("akt:{container}")));
+            }
+            by
+        }
+        (None, Some(who)) => json!({ "subject": ids.id(who) }),
+        (None, None) => json!({ "subject": author }),
+    };
+    json!({ "at": time(&e.at, now), "by": by, "reason": e.reason })
 }
 
 /// The attachments `fields` hold, by field, as a bundle's akt lists them.

@@ -14,6 +14,11 @@ type Akt {
 	The akt type version the akt was created with.
 	"""
 	type: AktType!
+	"""
+	When, by whom and why it is archived; `null` while it is live
+	(`archive.read`).
+	"""
+	archived: Archived
 	state: State!
 	"""
 	The latest revision's number.
@@ -51,15 +56,27 @@ type Akt {
 		"""
 		Only members with this outcome, as it is now; `type` must be given, and have outcomes.
 		"""
-		outcome: Outcome
+		outcome: Outcome,
+		"""
+		Live members (the default), archived ones, or both.
+		"""
+		archived: ArchivedFilter
 	): AktConnection!
 	"""
 	The akt as a board: its members that the subject may read, in the
 	columns its akt type configures and then `unmapped`, each in rank
 	order. At most `first` members are shown (500 by default, 1000 at
 	most).
+	How many of its members the subject may read are archived
+	(`app.archive`).
 	"""
-	board(first: Int): Board!
+	archivedMemberCount: Int!
+	board(		first: Int,
+		"""
+		Live members (the default, unless the container is archived, when all are), archived ones, or both.
+		"""
+		archived: ArchivedFilter
+	): Board!
 	"""
 	The containers it is in that the subject may read, in rank order.
 	"""
@@ -184,7 +201,12 @@ type AktType {
 	How many akter of this type the tenant has, to a subject who may
 	read them; `null` to anyone else.
 	"""
-	akterCount: Int
+	akterCount(
+		"""
+		Live akter (the default), archived ones, or both.
+		"""
+		archived: ArchivedFilter
+	): Int
 	createdBy: ID!
 }
 
@@ -238,6 +260,51 @@ Where the app's sidebar lists an akt type.
 enum AktTypeNavigation {
 	MAIN
 	MORE
+}
+
+"""
+What archiving or unarchiving an akt takes.
+"""
+input ArchiveAktInput {
+	number: String!
+	"""
+	Why, one line of at most 200 characters.
+	"""
+	reason: String
+}
+
+"""
+How an akt is archived (`archive.flag`).
+"""
+type Archived {
+	at: DateTime!
+	"""
+	Who archived it; `null` when a rule did.
+	"""
+	by: User
+	"""
+	The kind of rule that archived it, if one did (`archive.rules`).
+	"""
+	rule: String
+	reason: String
+}
+
+"""
+Which akter a read answers (`archive.read`).
+"""
+enum ArchivedFilter {
+	"""
+	Live akter only, the default.
+	"""
+	LIVE
+	"""
+	Archived akter only.
+	"""
+	ARCHIVED
+	"""
+	Both.
+	"""
+	ALL
 }
 
 type Attachment {
@@ -951,6 +1018,14 @@ type Mutation {
 	"""
 	releaseVersions(input: ReleaseVersionsInput!): [Version!]!
 	"""
+	Archives a live akt (`archive.act`).
+	"""
+	archiveAkt(input: ArchiveAktInput!): Akt!
+	"""
+	Makes an archived akt live again (`archive.act`).
+	"""
+	unarchiveAkt(input: ArchiveAktInput!): Akt!
+	"""
 	Moves an akt along one of its akt type's transitions.
 	"""
 	performTransition(input: PerformTransitionInput!): Akt!
@@ -1188,7 +1263,11 @@ type Query {
 		"""
 		Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field.
 		"""
-		outcome: Outcome
+		outcome: Outcome,
+		"""
+		Live akter (the default), archived ones, or both.
+		"""
+		archived: ArchivedFilter
 	): AktConnection!
 	"""
 	The tenant's contacts, by name.

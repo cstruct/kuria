@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
-diesel = { version = "2.3", default-features = false, features = ["postgres_backend", "uuid", "chrono", "serde_json"] }
+diesel = { version = "2.3", default-features = false, features = ["postgres_backend", "uuid", "chrono", "serde_json", "32-column-tables"] }
 diesel-async = { version = "0.9", features = ["postgres", "deadpool", "async-connection-wrapper", "migrations"] }
 diesel_migrations = { version = "2.3", features = ["postgres"] }
 thiserror = "2.0.21"

@@ -72,6 +72,20 @@ diesel::table! {
         updated_at -> Timestamptz,
         rank -> Text,
         title -> Nullable<Text>,
+        state_since -> Timestamptz,
+        archived -> Bool,
+        archived_at -> Nullable<Timestamptz>,
+        archived_by -> Nullable<Jsonb>,
+        archive_reason -> Nullable<Text>,
+        archive_kept -> Bool,
+    }
+}
+
+diesel::table! {
+    akt_number (id) {
+        id -> Uuid,
+        tenant_id -> Uuid,
+        number -> Text,
     }
 }
 
@@ -88,6 +102,7 @@ diesel::table! {
         hash -> Bytea,
         created_at -> Timestamptz,
         membership -> Nullable<Jsonb>,
+        akt_archived -> Bool,
     }
 }
 
@@ -100,6 +115,7 @@ diesel::table! {
         created_at -> Timestamptz,
         published_at -> Nullable<Timestamptz>,
         kind -> Text,
+        akt_archived -> Bool,
     }
 }
 
@@ -157,6 +173,7 @@ diesel::table! {
         akt_id -> Uuid,
         revision -> Int4,
         commit -> Jsonb,
+        akt_archived -> Bool,
     }
 }
 
@@ -170,6 +187,7 @@ diesel::table! {
         released_by -> Uuid,
         released_at -> Timestamptz,
         pins -> Jsonb,
+        akt_archived -> Bool,
     }
 }
 
@@ -213,11 +231,13 @@ diesel::table! {
         at -> Timestamptz,
         fields -> Jsonb,
         message -> Nullable<Text>,
+        akt_archived -> Bool,
     }
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
+    akt_number,
     akt_diagram,
     akt_draft,
     akt_draft_update,

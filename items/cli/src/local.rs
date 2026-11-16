@@ -16,6 +16,7 @@
 //!   field.
 
 pub mod answers;
+pub mod archive;
 pub mod arrange;
 pub mod attachments;
 pub mod check;

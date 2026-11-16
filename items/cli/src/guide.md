@@ -34,6 +34,12 @@ in that shape, rather than editing the directory's files by hand.
   `kuria check --fix` first moves akter into the files they belong in and
   renames files by their titles.
 - Writes lock the directory, so agents may write at once.
+- `kuria archive <number>` takes an akt out of its file, with the akter
+  nested in it, and lists it in `akter/archived.md`; git's history keeps
+  it (else `akter/archived/` does), its number stays taken and references
+  to it read as archived. `kuria unarchive <number>` puts it back once
+  everything is committed (`UNCOMMITTED` otherwise). Akt types' archive
+  rules apply on your changes, and `kuria check --fix` applies them all.
 - An attachment is a file `attachments/<number>/<name>`, and its field's
   value is that path. `kuria set IMG-1 file=@logo.png` copies a file in;
   `kuria check` names one that is missing, of a media type its field
@@ -53,6 +59,7 @@ kuria ls <type> --state <s>    # akter, a page at a time (--all for every page)
 kuria ls <type> --where assignee=@me   # by a field's value
 kuria ls --in <container>      # a container's members
 kuria find <text>              # by number or title words
+kuria ls <type> --archived     # archived akter only; --with-archived: both
 kuria show <number> --history  # everything about one akt
 kuria history <number>         # who changed what, and when
 kuria users                    # whom user fields can name
@@ -190,7 +197,16 @@ kuria versions <number>                # its versions, latest first
 kuria cat <number> --version 2         # as it was at version 2 (read-only)
 kuria diff <number> 1 [2]              # what changed since version 1, or up to 2
 kuria pdf <number> [--version 2] -o doc.pdf   # a markdown field as a PDF
+kuria archive <number>… [--reason "…"]  # kept, read-only, out of lists
+kuria unarchive <number>… [--reason "…"]  # live again
 ```
+
+Archived akter (`kuria archive`, or their types' archive rules) are left
+out of `ls`, `find` and the members `cat` and `show` give, unless asked
+for with `--archived` (only them) or `--with-archived` (both); read by
+number, they say they are archived. Every write to one is refused as
+`ARCHIVED` until it is unarchived. Unarchiving what a rule archived keeps
+it from rules until it is archived by hand.
 
 Values: options by key or name; users and contacts by email, name or
 `@me`; dates as `YYYY-MM-DD`; checkboxes as `true`, `false` or

@@ -174,6 +174,7 @@ async fn lock(
             .ok_or_else(|| AktError::NotFound(number.to_owned()))?;
         let ty = type_of(conn, tenant, &akt).await?;
         require_read(caller.auth, &ty, number).await?;
+        super::archive::writable(&akt)?;
         Ok(Locked { akt, ty })
     };
     let s = take(source).await?;

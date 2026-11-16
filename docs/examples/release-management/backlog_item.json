@@ -27,6 +27,7 @@
     { "key": "rework", "name": "Rework", "from": ["in_review"], "to": "in_progress" },
     { "key": "finish", "name": "Finish", "from": ["in_review"], "to": "done" }
   ],
+  "archive": { "rules": [{ "days_in": 90, "in": ["done"] }] },
   "presentation": {
     "icon": "file-text", "colour": "neutral",
     "card": ["kind", "assignee"], "list": ["kind", "assignee"],

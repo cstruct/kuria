@@ -26,6 +26,7 @@
     { "key": "done", "name": "Done",
       "states": { "backlog_item": ["done"], "epic": ["done"] } }
   ] },
+  "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {
     "icon": "flask-conical", "colour": "teal",
     "card": ["build"], "list": ["build", "test_record"],

@@ -92,9 +92,9 @@ fn blobs(root: &Path, ids: &HashSet<String>) -> HashMap<String, String> {
     found
 }
 
-/// The akter a file's `text` holds, with their revisions; parts that
-/// don't say are left out.
-fn revisions(text: &str) -> Vec<(String, i32)> {
+/// The akter a file's `text` holds, with their revisions and states;
+/// parts that don't say are left out.
+fn revisions(text: &str) -> Vec<(String, i32, String)> {
     let text = text.replace("\r\n", "\n");
     split(&text)
         .into_iter()
@@ -109,7 +109,7 @@ fn revisions(text: &str) -> Vec<(String, i32)> {
             };
             let number = nested.map(str::to_owned).or_else(|| value("number:"))?;
             let revision = value("revision:")?.parse().ok()?;
-            Some((number, revision))
+            Some((number, revision, value("state:").unwrap_or_default()))
         })
         .collect()
 }
@@ -202,6 +202,10 @@ pub struct Times {
     /// Per akt and revision, the text of the file that first held it at
     /// that revision in a commit, and the file's path.
     texts: HashMap<(String, i32), (String, String)>,
+    /// The same, from the latest commit that held it at that revision.
+    latest: HashMap<(String, i32), (String, String)>,
+    /// Per akt and revision, its state then.
+    states: HashMap<(String, i32), String>,
 }
 
 impl Times {
@@ -239,12 +243,20 @@ impl Times {
                 .files
                 .iter()
                 .filter_map(|(path, blob)| Some((path, texts.get(blob.as_ref()?)?)))
-                .flat_map(|(path, t)| revisions(t).into_iter().map(move |(n, r)| (path, t, n, r)))
-                .map(|(path, t, n, r)| {
+                .flat_map(|(path, t)| {
+                    revisions(t)
+                        .into_iter()
+                        .map(move |(n, r, s)| (path, t, n, r, s))
+                })
+                .map(|(path, t, n, r, s)| {
                     times
                         .texts
                         .entry((n.clone(), r))
                         .or_insert_with(|| (path.clone(), t.clone()));
+                    times
+                        .latest
+                        .insert((n.clone(), r), (path.clone(), t.clone()));
+                    times.states.insert((n.clone(), r), s);
                     (n, r)
                 })
                 .collect();
@@ -257,7 +269,7 @@ impl Times {
                 }
             }
         }
-        for (number, revision) in at_head
+        for (number, revision, _) in at_head
             .iter()
             .filter_map(|b| texts.get(b))
             .flat_map(|t| revisions(t))
@@ -275,6 +287,38 @@ impl Times {
         self.texts
             .get(&(number.to_owned(), revision))
             .map(|(path, text)| (path.as_str(), text.as_str()))
+    }
+
+    /// The path and text of the file git's latest commit holding `number`
+    /// at `revision` held it in, if git has it (`cli.local.archive`).
+    #[must_use]
+    pub fn latest_at(&self, number: &str, revision: i32) -> Option<(&str, &str)> {
+        self.latest
+            .get(&(number.to_owned(), revision))
+            .map(|(path, text)| (path.as_str(), text.as_str()))
+    }
+
+    /// When the akt `number` reached `state`, by git's commits: the first
+    /// of the latest run of its commits in that state; `None` if git's
+    /// latest commit of it has it in another state, or none has it
+    /// (`archive.rules.state-since`).
+    #[must_use]
+    pub fn state_since(&self, number: &str, state: &str) -> Option<DateTime<Utc>> {
+        let mut since = None;
+        for (commit, revision) in self.changes.get(number)?.iter().rev() {
+            if self
+                .states
+                .get(&(number.to_owned(), *revision))
+                .map(String::as_str)
+                != Some(state)
+            {
+                break;
+            }
+            since = Some(commit.at.as_str());
+        }
+        DateTime::parse_from_rfc3339(since?)
+            .ok()
+            .map(|t| t.with_timezone(&Utc))
     }
 
     /// Whether `akt` has changes not committed yet.
@@ -345,6 +389,14 @@ pub fn last_bytes(root: &Path, path: &str) -> Option<Vec<u8>> {
     show(&format!("{latest}:{path}")).or_else(|| show(&format!("{latest}^:{path}")))
 }
 
+/// Whether `root` has changes git hasn't committed, untracked files
+/// included; `None` outside a work tree.
+#[must_use]
+pub fn uncommitted(root: &Path) -> Option<bool> {
+    git(root, &["rev-parse", "--is-inside-work-tree"])?;
+    git(root, &["status", "--porcelain", "--", "."]).map(|out| !out.trim().is_empty())
+}
+
 /// The email `git config user.email` gives in `root`, if any.
 #[must_use]
 pub fn email(root: &Path) -> Option<String> {
@@ -362,7 +414,10 @@ mod tests {
         let text = "---\nnumber: PLAN-001\ntype: plan\nrevision: 4\n---\n\n<!-- field: goal -->\n```\n<!-- akt: X-1 -->\nrevision: 9\n```\n\n<!-- akt: PLAN-001-T01 -->\n---\ntype: task\nrevision: 2\n---\n";
         assert_eq!(
             revisions(text),
-            [("PLAN-001".to_owned(), 4), ("PLAN-001-T01".to_owned(), 2)]
+            [
+                ("PLAN-001".to_owned(), 4, String::new()),
+                ("PLAN-001-T01".to_owned(), 2, String::new())
+            ]
         );
     }
 }

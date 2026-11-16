@@ -5,12 +5,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use uuid::Uuid;
 
-/// The bundle format this server writes. Format 1 is the same without
-/// versions and commits, so it reads both.
-pub const FORMAT: u32 = 2;
+/// The bundle format this server writes. Format 2 is the same without
+/// akter's archived state, and format 1 without versions and commits too,
+/// so it reads all three.
+pub const FORMAT: u32 = 3;
 
 /// The formats this server reads.
-pub const READS: [u32; 2] = [1, 2];
+pub const READS: [u32; 3] = [1, 2, 3];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -109,6 +110,25 @@ pub struct BundleAkt {
     /// The diagrams it holds (`akt.field.markdown.diagrams`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diagrams: Vec<BundleDiagram>,
+    /// How it is archived, if it is (`archive.flag`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived: Option<BundleArchived>,
+    /// Whether a person unarchived it after a rule archived it
+    /// (`archive.rules.kept`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub archive_kept: bool,
+}
+
+/// How an akt is archived: when, by whom, as stored (`{"subject": id}`,
+/// or `{"rule": kind}` with the `container` it went with for
+/// `with_container`), and why.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleArchived {
+    pub at: DateTime<Utc>,
+    pub by: Json,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// A diagram an akt holds: its field, the hash of the source rendered, in

@@ -18,6 +18,7 @@ catalog, and for no others except those akt types name:
 | `kuria:akter:create` | at the akt type, to create its akter |
 | `kuria:akter:edit` | at the akt type, to edit its akter |
 | `kuria:akter:transition` | at the akt type, to perform its transitions |
+| `kuria:akter:archive` | at the akt type, to archive and unarchive its akter (`archive.authz`) |
 | `kuria:contacts:read` | tenant-wide, to list contacts with their emails |
 | `kuria:contacts:manage` | tenant-wide, to add, edit, erase and list contacts |
 | `kuria:tenant:export` | tenant-wide, to export a bundle (`bundle.export`) |

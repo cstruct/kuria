@@ -31,5 +31,6 @@
     { "key": "approve", "name": "Approve", "from": ["draft"], "to": "approved",
       "requires": ["text"], "action": "release:approve" }
   ],
+  "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": { "icon": "notebook-pen", "colour": "pink", "tones": { "draft": "warning", "approved": "success" } }
 }

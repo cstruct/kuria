@@ -38,6 +38,12 @@ async fn insert(conn: &mut Connection, tenant: Uuid, ty: Uuid, number: &str, ran
         updated_at: Utc::now(),
         rank: rank.to_owned(),
         title: None,
+        state_since: Utc::now(),
+        archived: false,
+        archived_at: None,
+        archived_by: None,
+        archive_reason: None,
+        archive_kept: false,
     };
     akter::insert_akt(conn, &row).await.unwrap();
     row
@@ -211,9 +217,16 @@ async fn lists_members_in_rank_order_by_readable_type() {
             .await
             .unwrap();
     }
-    let members = containers::members_of(&mut conn, TENANT, &[board.id], &["item".to_owned()], 10)
-        .await
-        .unwrap();
+    let members = containers::members_of(
+        &mut conn,
+        TENANT,
+        &[board.id],
+        &["item".to_owned()],
+        akter::Archived::Live,
+        10,
+    )
+    .await
+    .unwrap();
     let numbers: Vec<_> = members.iter().map(|(_, row)| row.number.as_str()).collect();
     assert_eq!(numbers, ["I-2", "I-1"]);
     let first = containers::members_of(
@@ -221,6 +234,7 @@ async fn lists_members_in_rank_order_by_readable_type() {
         TENANT,
         &[board.id],
         &["item".to_owned(), "bug".to_owned()],
+        akter::Archived::Live,
         2,
     )
     .await

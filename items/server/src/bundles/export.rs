@@ -15,9 +15,9 @@ use uuid::Uuid;
 use super::BundleError;
 use super::archive;
 use super::format::{
-    Bundle, BundleAkt, BundleAktVersion, BundleAttachment, BundleContact, BundleCounter,
-    BundleDiagram, BundleHeld, BundleLink, BundleMembership, BundlePerson, BundleRevision,
-    BundleSignedIn, BundleType, BundleVersion, FORMAT, Scope,
+    Bundle, BundleAkt, BundleAktVersion, BundleArchived, BundleAttachment, BundleContact,
+    BundleCounter, BundleDiagram, BundleHeld, BundleLink, BundleMembership, BundlePerson,
+    BundleRevision, BundleSignedIn, BundleType, BundleVersion, FORMAT, Scope,
 };
 use crate::akter::StoredType;
 use crate::attachments::{Storage, hex};
@@ -248,6 +248,22 @@ async fn history_of(
     Ok((revisions, released))
 }
 
+/// How `akt` is archived, if it is, naming its subject.
+fn archived_of(akt: &kuria_store::akter::AktRow, named: &mut Named) -> Option<BundleArchived> {
+    if !akt.archived {
+        return None;
+    }
+    let by = akt.archived_by.clone().unwrap_or_default();
+    if let Some(subject) = by["subject"].as_str().and_then(|s| s.parse().ok()) {
+        named.subjects.insert(subject);
+    }
+    Some(BundleArchived {
+        at: akt.archived_at.unwrap_or(akt.updated_at),
+        by,
+        reason: akt.archive_reason.clone(),
+    })
+}
+
 /// The akter of `versions`, with their revisions, memberships, links and
 /// attachments held, refusing a selection that leaves out an akt they name;
 /// answers who and what they name.
@@ -314,6 +330,7 @@ async fn gather_akter(
         for r in &revisions {
             named.fields(ty, r.changes.as_object().unwrap_or(&Map::new()));
         }
+        let archived = archived_of(&akt, &mut named);
         bundle.akter.push(BundleAkt {
             id: akt.id,
             number: akt.number,
@@ -329,6 +346,9 @@ async fn gather_akter(
             copied_from: origins.get(&akt.id).copied(),
             versions: released.remove(&akt.id).unwrap_or_default(),
             diagrams: diagrams.remove(&akt.id).unwrap_or_default(),
+            // r[impl bundle.contents]
+            archived,
+            archive_kept: akt.archive_kept,
         });
     }
     for m in memberships {

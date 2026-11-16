@@ -35,6 +35,7 @@
       "states": { "release_candidate": ["accepted"], "hotfix": ["deployed"] } },
     { "key": "rejected", "name": "Rejected", "states": { "release_candidate": ["rejected"] } }
   ] },
+  "archive": { "rules": [{ "newer": 2, "in": ["closed"] }] },
   "presentation": {
     "icon": "rocket", "colour": "green",
     "card": ["version"], "list": ["version", "released_on", "release_manager"],

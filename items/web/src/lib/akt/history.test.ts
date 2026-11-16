@@ -144,4 +144,34 @@ group('history', () => {
 			).memberships
 		).toEqual(['Unlinked: Blocks TASK-2']);
 	});
+
+	// r[verify app.archive]
+	it('says an archive and an unarchive, a rule’s by Kuria', () => {
+		const archived = describe(
+			{
+				revision: 5,
+				transition: 'archive',
+				reason: 'by the rule `newer`',
+				changes: {},
+				createdAt: '2026-04-01T10:00:00Z',
+				by: { id: '00000000-0000-0000-0000-000000000000', name: '00000000' }
+			},
+			{},
+			{}
+		);
+		expect(archived).toMatchObject({ who: 'Kuria', what: 'archived it', changes: [] });
+		expect(
+			describe(
+				{
+					revision: 6,
+					transition: 'unarchive',
+					changes: {},
+					createdAt: '2026-04-01T10:00:00Z',
+					by: { id: 'u1', name: 'Ann' }
+				},
+				{},
+				{}
+			)
+		).toMatchObject({ who: 'Ann', what: 'unarchived it' });
+	});
 });

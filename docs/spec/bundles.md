@@ -15,8 +15,9 @@ attachment, `attachments/`, one file per attachment's bytes named by its
 SHA-256 in hex. `bundle.json` MUST say the bundle's format version, its
 scope (`types` or `tenant`), the akt type keys a `types` bundle selected,
 whether it holds akter, and when it was exported. Kuria MUST write format
-2, and read formats 1 and 2: format 1 is format 2 without versions or the
-commits revisions were pushed in. On the wire, to and from
+3, and read formats 1, 2 and 3: format 2 is format 3 without akter's
+archived state, and format 1 is format 2 without versions or the commits
+revisions were pushed in. On the wire, to and from
 the server, a bundle MUST travel as a tar archive of that directory.
 
 r[bundle.contents]
@@ -30,6 +31,9 @@ A bundle that holds akter MUST hold, for them:
   and hash;
 - every version of each, as stored: its number, the revision it names, its
   label, who released it and when, and its pins (`version.pins`);
+- whether each is archived, and if so when, by whom or which rule (and,
+  for `with_container`, the container it went with) and why, and whether
+  it is kept from rules (`archive.flag`, `archive.rules.kept`);
 - the memberships and links among them, with any pinned revisions;
 - for each copy among them, the akt it was copied from, if the bundle holds
   that one too (`akt.copy.record`);
@@ -114,6 +118,12 @@ revisions or versions to them. An import MUST refuse, as `INVALID_BUNDLE`
 and before writing anything, an akt whose versions aren't numbered from 1
 on, in order, name a revision it lacks or another version names, or hold
 pins that don't read.
+
+r[bundle.import.archived]
+Imported akter MUST be archived and kept as the bundle records them, with
+their history moved as archiving moves it (`archive.storage`), and a
+`with_container` archive MUST name the identifier its container got, so
+that unarchiving the container brings them back (`archive.rules.container`).
 
 r[bundle.import.counters]
 After an import, the tenant's number counters MUST be past every imported

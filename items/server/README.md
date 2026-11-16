@@ -91,7 +91,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   people and who signed in, raises counters past the imported numbers
   (read back through their patterns), records subject aliases (by the
   mapping, else by email to a user who signed in) and the import, and
-  appends a change event per akt. A bundle without akter defines each type
+  appends a change event per akt; last, it archives the akter the bundle
+  holds archived, moving each with its history, a `with_container`
+  archive naming its container's new identifier, and marks the kept ones
+  (format 3 carries `archived` and `archiveKept` per akt). A bundle without akter defines each type
   as `defineAktType` does. Aliased subjects are shown as, and filter as,
   the users they map to.
 - Contacts ([`src/graphql/contacts.rs`](src/graphql/contacts.rs)):
@@ -278,7 +281,7 @@ Not yet: signatures.
 
 Konklav's catalog must declare Kuria's actions, `kuria:akt_types:define`,
 `kuria:akter:read`, `kuria:akter:create`, `kuria:akter:edit`,
-`kuria:akter:transition`, `kuria:contacts:read`,
+`kuria:akter:transition`, `kuria:akter:archive`, `kuria:contacts:read`,
 `kuria:contacts:manage`, `kuria:tenant:export` and `kuria:tenant:import`,
 the scope kind `kuria_akt_type`, and any action an
 akt type's transitions name. Roles grant them tenant-wide or at one akt type
@@ -309,6 +312,7 @@ redirect URI. The end-to-end seed registers it
 | `KURIA_S3_REGION` | The bucket's region, `us-east-1` by default |
 | `KURIA_S3_ACCESS_KEY`, `KURIA_S3_SECRET_KEY` | Credentials for the bucket; without them, the standard AWS environment and instance credentials |
 | `KURIA_ATTACHMENT_LIMIT` | The largest upload in bytes, 100 MiB by default |
+| `KURIA_ARCHIVE_SWEEP_SECONDS` | How often archive rules are applied to every akt, by one instance at a time; 3600 by default |
 | `KURIA_RENDER_SECONDS` | How long rendering a PDF or diagram may take, in a process of its own; 30 by default |
 | `KURIA_RENDER_CPU_SECONDS` | How much CPU time rendering may use; 20 by default |
 | `KURIA_RENDER_MEMORY_MB` | How much memory rendering may use, on Linux (macOS can't limit it); 1024 by default |
@@ -374,8 +378,10 @@ mise run test
   numbering on; an incomplete selection; types moving between tenants,
   after the tenant's own akter, then clashing; types without akter as new
   versions; refused bundles (format, hashes, changes, bytes, not tar)
-  writing nothing; and subjects mapped by email and by `subjects.json`,
-  shown and filtering as the users they map to.
+  writing nothing; subjects mapped by email and by `subjects.json`,
+  shown and filtering as the users they map to; and archived and kept
+  akter moving as they were, a plan's archive bringing back its tasks
+  in the other tenant.
 - [`tests/cli_relay.rs`](tests/cli_relay.rs), against the development
   Valkey: the relay keeping a code or an error until it is collected once,
   the first redirect for a `state` winning, forgetting an uncollected code,

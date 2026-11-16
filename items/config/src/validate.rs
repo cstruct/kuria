@@ -191,6 +191,7 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
     }
+    archive_rules(&mut problems, &document);
     // r[impl akt.number.pattern]
     if number.as_ref().is_some_and(NumberPattern::uses_parent) && document.created_in.is_empty() {
         problems.add(
@@ -355,6 +356,57 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
             "only markdown fields keep references",
         ),
         (_, None) => {}
+    }
+}
+
+/// Checks an akt type's archive rules (`archive.rules`).
+// r[impl archive.rules]
+fn archive_rules(problems: &mut Problems, document: &AktTypeDocument) {
+    use crate::document::ArchiveRule;
+    let Some(archive) = &document.archive else {
+        return;
+    };
+    for (i, def) in archive.rules.iter().enumerate() {
+        let at = format!("archive.rules[{i}]");
+        let Some(rule) = def.rule() else {
+            problems.add(
+                &at,
+                "a rule is one of `newer` (with `in`, and `within` if any), `with_container`, or `days_in` (with `in`)",
+            );
+            continue;
+        };
+        let states = match rule {
+            ArchiveRule::Newer { count, states, .. }
+            | ArchiveRule::DaysIn {
+                days: count,
+                states,
+            } => {
+                if count < 1 {
+                    problems.add(&at, format!("`{}` must be at least 1", rule.kind()));
+                }
+                if states.is_empty() {
+                    problems.add(&at, "`in` must name at least one state");
+                }
+                states
+            }
+            ArchiveRule::WithContainer(_) => &[],
+        };
+        for state in states {
+            match document.states.iter().find(|s| &s.key == state) {
+                None => problems.add(
+                    &format!("{at}.in"),
+                    format!("`{state}` isn't a state of this type"),
+                ),
+                Some(s) if matches!(rule, ArchiveRule::DaysIn { .. }) && !s.is_final => problems
+                    .add(
+                        &format!("{at}.in"),
+                        format!(
+                            "`{state}` isn't final, and `days_in` counts days in a final state"
+                        ),
+                    ),
+                Some(_) => {}
+            }
+        }
     }
 }
 
@@ -910,6 +962,60 @@ mod tests {
                 "transitions[0].to: no state `opened`",
                 "transitions[0].requires[0]: no field `owner`",
                 "transitions[1].from: a transition starts from at least one state",
+            ]
+        );
+    }
+
+    // r[verify archive.rules]
+    #[test]
+    fn checks_archive_rules() {
+        let states = |document: &serde_json::Value| -> Vec<(String, bool)> {
+            document["states"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| (s["key"].as_str().unwrap().to_owned(), s["final"] == true))
+                .collect()
+        };
+        let mut document = capa();
+        let all = states(&document);
+        let open = &all.iter().find(|(_, f)| !f).unwrap().0;
+        let done = &all.iter().find(|(_, f)| *f).unwrap().0;
+        document["archive"] = json!({ "rules": [
+            { "newer": 2, "in": [open, done] },
+            { "newer": 1, "in": [done], "within": "release" },
+            { "with_container": "release" },
+            { "days_in": 90, "in": [done] }
+        ] });
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        let kinds: Vec<&str> = ty
+            .document()
+            .archive
+            .as_ref()
+            .unwrap()
+            .rules
+            .iter()
+            .map(|r| r.rule().unwrap().kind())
+            .collect();
+        assert_eq!(kinds, ["newer", "newer", "with_container", "days_in"]);
+        document["archive"] = json!({ "rules": [
+            { "newer": 0, "in": [done] },
+            { "days_in": 30, "in": [open] },
+            { "newer": 1, "in": ["gone"] },
+            { "newer": 1 },
+            { "newer": 1, "days_in": 2, "in": [done] },
+            { "with_container": "release", "in": [done] }
+        ] });
+        assert_eq!(
+            problems(document),
+            vec![
+                "archive.rules[0]: `newer` must be at least 1".to_owned(),
+                format!("archive.rules[1].in: `{open}` isn't final, and `days_in` counts days in a final state"),
+                "archive.rules[2].in: `gone` isn't a state of this type".to_owned(),
+                "archive.rules[3]: `in` must name at least one state".to_owned(),
+                "archive.rules[4]: a rule is one of `newer` (with `in`, and `within` if any), `with_container`, or `days_in` (with `in`)".to_owned(),
+                "archive.rules[5]: a rule is one of `newer` (with `in`, and `within` if any), `with_container`, or `days_in` (with `in`)".to_owned(),
             ]
         );
     }

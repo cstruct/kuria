@@ -21,6 +21,9 @@ pub async fn lock_order(conn: &mut Connection, tenant: Uuid) -> QueryResult<()> 
 }
 
 /// The highest rank in the tenant, if it has any akter.
+/// Ranks are computed against every akt, live or archived, so an archived
+/// akt's rank is never taken while it is away, and it comes back where it
+/// was (`archive.storage`).
 pub async fn last_rank(conn: &mut Connection, tenant: Uuid) -> QueryResult<Option<String>> {
     akt::table
         .filter(akt::tenant_id.eq(tenant))
@@ -236,12 +239,14 @@ pub async fn members_of(
     tenant: Uuid,
     containers: &[Uuid],
     keys: &[String],
+    archived: crate::akter::Archived,
     limit: i64,
 ) -> QueryResult<Vec<(Uuid, AktRow)>> {
     let rows: Vec<(Uuid, AktRow)> = akt_membership::table
         .inner_join(akt::table.on(akt::id.eq(akt_membership::member_id)))
         .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
         .filter(akt_membership::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(akt_membership::container_id.eq_any(containers))
         .filter(akt_type_version::key.eq_any(keys))
         .order((akt_membership::container_id, akt::rank))
@@ -265,11 +270,16 @@ pub async fn members_of(
 /// every condition, in rank order, after the member ranked `after`. Ranks are unique in a tenant, so
 /// a rank says where a page ends.
 // r[impl akt.page]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each narrows the page, as GraphQL's arguments do"
+)]
 pub async fn member_page(
     conn: &mut Connection,
     tenant: Uuid,
     container: Uuid,
     keys: &[String],
+    archived: crate::akter::Archived,
     conditions: &[crate::akter::Condition],
     after: Option<&str>,
     limit: i64,
@@ -278,6 +288,7 @@ pub async fn member_page(
         .inner_join(akt::table.on(akt::id.eq(akt_membership::member_id)))
         .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
         .filter(akt_membership::tenant_id.eq(tenant))
+        .filter(akt::archived.eq_any(archived.values()))
         .filter(akt_membership::container_id.eq(container))
         .filter(akt_type_version::key.eq_any(keys))
         .order(akt::rank)
@@ -291,6 +302,27 @@ pub async fn member_page(
         query = query.filter(akt::rank.gt(after.to_owned()));
     }
     query.load(conn).await
+}
+
+/// How many members of `container` of the akt types `keys` are live,
+/// archived or either.
+pub async fn count_members(
+    conn: &mut Connection,
+    tenant: Uuid,
+    container: Uuid,
+    keys: &[String],
+    archived: crate::akter::Archived,
+) -> QueryResult<i64> {
+    akt_membership::table
+        .inner_join(akt::table.on(akt::id.eq(akt_membership::member_id)))
+        .inner_join(akt_type_version::table.on(akt_type_version::id.eq(akt::type_version_id)))
+        .filter(akt_membership::tenant_id.eq(tenant))
+        .filter(akt_membership::container_id.eq(container))
+        .filter(akt_type_version::key.eq_any(keys))
+        .filter(akt::archived.eq_any(archived.values()))
+        .count()
+        .get_result(conn)
+        .await
 }
 
 #[derive(QueryableByName)]

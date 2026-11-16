@@ -110,7 +110,16 @@ async fn draft(
             break;
         }
         let members =
-            containers::members_of(conn, tenant, &frontier, &readable, PER_CONTAINER).await?;
+            // What it was made from counts, archived or not.
+            containers::members_of(
+                conn,
+                tenant,
+                &frontier,
+                &readable,
+                kuria_store::akter::Archived::All,
+                PER_CONTAINER,
+            )
+            .await?;
         let keys = type_keys(conn, tenant, &members).await?;
         frontier = Vec::new();
         for (_, member) in members {
