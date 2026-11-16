@@ -6,8 +6,8 @@ mod akter;
 mod catalog;
 mod list;
 
-pub(crate) use akter::akt_data;
 pub use akter::{WithMembers, cat, history, show};
+pub(crate) use akter::{akt_data, members_of};
 pub use catalog::{contacts, schema, types, users};
 pub use list::{Listing, find, ls};
 

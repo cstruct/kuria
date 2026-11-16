@@ -6,12 +6,21 @@
 //! - [`pictures`]: the pictures of the images the files embed
 //!   (`clone.pictures`).
 //! - [`fmt`]: `kuria fmt`, a clone's files put in normal form.
+//! - [`base`]: what a clone keeps in `.kuria/`: its base and what is
+//!   staged (`clone.clone`).
+//! - [`work`]: `kuria status`, `diff` and `add`, offline (`clone.status`,
+//!   `clone.add`).
+//! - [`sync`]: `kuria clone`, `pull` and `push` (`clone.clone`,
+//!   `clone.pull`, `clone.push`).
 //!
 //! [`CloneOf`] reads what a clone holds from Kuria.
 
+pub mod base;
 pub mod fmt;
 pub mod layout;
 pub mod pictures;
+pub mod sync;
+pub mod work;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -22,6 +31,7 @@ use crate::error::CliError;
 use crate::model::{SHAPE, SOMEONE, Shape, VALUES};
 use crate::session::Session;
 
+use base::LiveBase;
 use layout::{AT_REVISION, filed, read_file, title_in, tree_of};
 
 /// Where a clone keeps what it knows of Kuria, beside its files.
@@ -63,7 +73,147 @@ fn too_big(e: &CliError) -> bool {
     message.contains("too complex") || message.contains("nested too deep")
 }
 
+/// What `akt { … }` selects for [`CloneOf::now`], with the `Shape`, `Values`
+/// and `Someone` fragments defined.
+const NOW: &str = "number title revision state { key } type { ...Shape } fields { ...Values } liveState { state base }";
+
+/// An akt as Kuria has it now, as a clone's base records it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AktNow {
+    /// Where its file goes.
+    pub path: String,
+    pub revision: i64,
+    /// Its live draft, if it has one.
+    pub live: Option<LiveBase>,
+}
+
+/// A container and its members as Kuria has them now, as a clone holds
+/// them (`clone.tree`, `clone.pictures`).
+#[derive(Clone, Debug, Default)]
+pub struct Now {
+    /// Each file, by path, its images linked to their pictures.
+    pub files: BTreeMap<String, String>,
+    /// Each picture, by path.
+    pub pictures: BTreeMap<String, Vec<u8>>,
+    /// Each akt, by number.
+    pub akter: BTreeMap<String, AktNow>,
+}
+
 impl CloneOf<'_> {
+    /// The container's title, refused unless it is a container the subject
+    /// may read (`clone.clone`).
+    // r[impl clone.clone]
+    pub async fn container(&self) -> Result<Option<String>, CliError> {
+        let data = self
+            .session
+            .graphql(
+                "query($n: String!) { akt(number: $n) { title type { name document } } }",
+                json!({ "n": self.number }),
+            )
+            .await?;
+        let akt = &data["akt"];
+        if akt.is_null() {
+            return Err(CliError::from_server(
+                "NOT_FOUND",
+                format!(
+                    "No akt `{}`, or none you may read: a clone is of a container you may read",
+                    self.number
+                ),
+                None,
+            ));
+        }
+        let contains = akt["type"]["document"]["contains"]
+            .as_array()
+            .is_some_and(|c| !c.is_empty());
+        if !contains {
+            return Err(CliError::refused(
+                "NOT_A_CONTAINER",
+                format!(
+                    "{} is a {}, which contains no akter: a clone is of a container and its members",
+                    self.number,
+                    akt["type"]["name"].as_str().unwrap_or("akt")
+                ),
+            ));
+        }
+        Ok(akt["title"].as_str().map(str::to_owned))
+    }
+
+    /// The container and its members as Kuria has them now: each file where
+    /// the container's `sections` puts it, its images linked to their
+    /// pictures, each picture, and each akt's revision and live draft
+    /// (`clone.tree`, `clone.pictures`, `live.state`). A member the subject
+    /// may not read is left out.
+    // r[impl clone.tree]
+    pub async fn now(&self) -> Result<Now, CliError> {
+        self.container().await?;
+        let members =
+            crate::reads::members_of(crate::reads::Source::Server(self.session), &self.number)
+                .await?;
+        let mut asked = vec![(self.number.clone(), None)];
+        asked.extend(members.into_iter().map(|(n, _)| (n, None)));
+        let fragments = format!("{SHAPE} {VALUES} {SOMEONE}");
+        let found = self
+            .found(&asked, NOW, &fragments, FILES_PER_REQUEST)
+            .await?;
+        let mut container = None;
+        let mut texts = Vec::new();
+        let mut akter = BTreeMap::new();
+        for ((number, _), akt) in asked.iter().zip(&found) {
+            let Some(akt) = akt else { continue };
+            let file = filed(number, akt)?;
+            let live = akt["liveState"]["state"].as_str().map(|state| LiveBase {
+                state: state.to_owned(),
+                base: akt["liveState"]["base"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+            });
+            akter.insert(
+                number.clone(),
+                AktNow {
+                    path: String::new(),
+                    revision: akt["revision"].as_i64().unwrap_or_default(),
+                    live,
+                },
+            );
+            if *number == self.number {
+                container = Some(file);
+            } else {
+                texts.push((number.clone(), file.text, file.title));
+            }
+        }
+        let Some(container) = container else {
+            return Err(CliError::from_server(
+                "NOT_FOUND",
+                format!("No akt `{}`", self.number),
+                None,
+            ));
+        };
+        let tree = tree_of(
+            &self.number,
+            &container.text,
+            container.title.as_deref(),
+            container.sections.as_ref(),
+            &texts,
+        );
+        let (links, pictures) = self.pictures_now(&tree).await?;
+        let mut files = BTreeMap::new();
+        for (path, text) in tree {
+            if let Some(number) = layout::number_of_file(&text)
+                && let Some(akt) = akter.get_mut(&number)
+            {
+                akt.path.clone_from(&path);
+            }
+            let linked = pictures::linked_relatively(&text, &path, &links);
+            files.insert(path, linked);
+        }
+        Ok(Now {
+            files,
+            pictures,
+            akter,
+        })
+    }
+
     /// Each of `asked`, as [`CloneOf::found`] answers it, refusing one that
     /// isn't there as `NOT_FOUND`.
     async fn akter(

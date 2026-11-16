@@ -21,9 +21,10 @@ export class Cli {
 
 	constructor(private readonly env: Record<string, string> = {}) {}
 
-	/** Starts `kuria args…`. */
-	start(args: string[], env: Record<string, string> = {}): ChildProcess {
+	/** Starts `kuria args…`, in `cwd` if given. */
+	start(args: string[], env: Record<string, string> = {}, cwd?: string): ChildProcess {
 		return spawn(BINARY, args, {
+			cwd,
 			env: {
 				PATH: process.env.PATH ?? '',
 				HOME: this.dir,
@@ -37,9 +38,9 @@ export class Cli {
 		});
 	}
 
-	/** Runs `kuria args…` to the end. */
-	run(args: string[], env: Record<string, string> = {}): Promise<Ran> {
-		return finished(this.start(args, env));
+	/** Runs `kuria args…` to the end, in `cwd` if given. */
+	run(args: string[], env: Record<string, string> = {}, cwd?: string): Promise<Ran> {
+		return finished(this.start(args, env, cwd));
 	}
 }
 
