@@ -3,14 +3,10 @@
 // editing and where their cursor is, and that it is saved, without a Save;
 // a reader sees it live without being able to edit; and a release takes
 // the live draft as it is.
-//
-// The example's `document` doesn't say `"live_drafts": true` yet
-// (PLAN-016-T08 does): this test defines it so, as a new version of the
-// type, before making its document.
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
 import { open } from '../support/app.ts';
-import { defineDocuments, documentsDocument } from '../support/example.ts';
+import { defineDocuments } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
@@ -32,9 +28,6 @@ test('two people edit one document together, and release it as it is', async ({ 
 	const stamp = Date.now();
 	await defineDocuments();
 	const admin = await api(seeded().clients.admin);
-	await admin.graphql('mutation($d: JSON!) { defineAktType(document: $d) { key liveDrafts } }', {
-		d: { ...documentsDocument('document'), live_drafts: true }
-	});
 	const create = async (type: string, fields: Record<string, unknown>, inside: string[] = []) =>
 		(
 			await admin.graphql<{ createAkt: { number: string } }>(

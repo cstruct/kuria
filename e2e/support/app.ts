@@ -64,6 +64,8 @@ export async function transition(page: Page, name: string, fields: Record<string
 /** Performs a transition and waits for the state it leads to. */
 export async function moved(page: Page, name: string, to: string, fields: Record<string, Fill> = {}) {
 	await transition(page, name, fields);
+	// The change feed may show the state before the dialog has its answer.
+	await expect(page.getByRole('dialog', { name })).toBeHidden();
 	await expect(page.getByTestId('state')).toHaveText(to);
 }
 

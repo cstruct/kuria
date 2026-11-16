@@ -20,6 +20,7 @@
     { "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document", "image"] }
   ],
   "versions": { "action": "documents:release" },
+  "live_drafts": true,
   "presentation": {
     "icon": "file-text", "colour": "blue",
     "list": ["owner"],

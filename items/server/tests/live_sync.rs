@@ -235,7 +235,7 @@ fn document() -> Value {
         "key": "document", "name": "Document", "number": "D-{seq}",
         "fields": [
             { "key": "title", "name": "Title", "kind": "text", "required": true },
-            { "key": "body", "name": "Body", "kind": "markdown" }
+            { "key": "body", "name": "Body", "kind": "markdown", "diagrams": true }
         ],
         "states": [{ "key": "draft", "name": "Draft", "initial": true }],
         "versions": {},
@@ -444,6 +444,56 @@ async fn a_refused_update_is_undone_for_every_client() {
     assert_eq!(grace.value("title"), Some(json!("Guide")));
     let (fields, _) = world.read().await;
     assert_eq!(fields[0], json!({ "field": "title", "text": "Guide" }));
+}
+
+// r[verify live.sync]
+// r[verify akt.field.markdown.diagrams]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_diagram_typed_is_drawn_once_it_compiles() {
+    let world = World::new().await;
+    let mut ada = world.first.connect("tenant", &world.number).await.unwrap();
+    let drawn = || async {
+        world
+            .first
+            .ok(
+                "query($n: String!) { akt(number: $n) { fields { ... on MarkdownValue { diagrams { source attachment { id } } } } } }",
+                json!({ "n": world.number }),
+            )
+            .await["akt"]["fields"][1]["diagrams"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| !d["attachment"].is_null())
+            .map(|d| d["source"].as_str().unwrap().to_owned())
+            .collect::<Vec<_>>()
+    };
+    // Half written, it doesn't compile: taken, not drawn.
+    ada.insert(
+        "body",
+        6,
+        "\n\n```diagram\n#diagram(node((0, 0), [A])\n```\n",
+    )
+    .await;
+    ada.until(|c| c.text("body").contains("```diagram")).await;
+    let typed = ada.text("body");
+    let mut tries = 0;
+    while world.read().await.0[1]["markdown"] != json!(typed) {
+        tries += 1;
+        assert!(tries < 50, "never taken");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert!(ada.refusals.is_empty(), "{:?}", ada.refusals);
+    assert_eq!(drawn().await, Vec::<String>::new());
+    // Finished, it is drawn.
+    let at = u32::try_from(typed.find("[A])").unwrap() + 4).unwrap();
+    ada.insert("body", at, ")").await;
+    let mut tries = 0;
+    while drawn().await.is_empty() {
+        tries += 1;
+        assert!(tries < 50, "never drawn");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    assert_eq!(drawn().await, ["#diagram(node((0, 0), [A]))\n"]);
 }
 
 // r[verify live.presence]

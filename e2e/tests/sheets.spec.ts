@@ -61,7 +61,7 @@ test('a document is shown and edited as sheets, and a version’s PDF opens in a
 	await expect(editor.getByRole('separator', { name: 'Page break' })).toBeVisible();
 	await dev.keyboard.type('On page two.');
 	expect(await violations(dev), 'the editor with a page break').toEqual([]);
-	await dev.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+	await dev.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
 	await expect(dev.getByRole('form', { name: 'Edit Body' })).toHaveCount(0);
 	await expect(sheets).toHaveCount(2);
 	await expect(sheets.nth(0)).toContainText('On page one');

@@ -4,10 +4,11 @@ An example configuration: document indexes, each a tree of folders holding
 documents, where a document is a living version anyone allowed can edit and
 versions released by hand that never change. Nothing in Kuria knows these
 names: they are ordinary akt type documents, using `markdown` fields,
-`sections`, versions, references, image akter and diagram blocks, which any
+`sections`, versions, live drafts, references, image akter and diagram blocks, which any
 akt type can use ([spec](../../spec/akter.md),
 [versions](../../spec/versions.md), [PDFs](../../spec/pdf.md),
-[clones](../../spec/clones.md)).
+[clones](../../spec/clones.md),
+[live drafts](../../spec/live-drafts.md)).
 
 | Akt type | Number | Contains | Created in |
 |---|---|---|---|
@@ -54,6 +55,11 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
   was at version 2. Each referenced document is linked as "Refers to", and
   reads "Referred to by" back. A reference to a document or heading that
   isn't there is shown as broken, saying why.
+- **Live drafts:** a document says `"live_drafts": true`, so its fields
+  are one live draft everyone allowed edits at once, seeing each other's
+  text and cursors as they type ([live drafts](../../spec/live-drafts.md)).
+  Edits are kept as they are made, with no Save; its revisions are its
+  releases.
 - **Versions:** releasing a document names its current revision as its next
   version, 1, 2, …, with an optional label such as `2.0`. It needs the
   Konklav action `documents:release`. A release is refused while any
@@ -67,8 +73,10 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
 
 ## In the app
 
-1. Open a document and edit its **Body**. **Reference** finds another
-   document, then one of its headings, and its living version or a version.
+1. Open a document and edit its **Body**, live: whoever else has it open
+   sees your text as you type, and you theirs. **Done** closes the editor.
+   **Reference** finds another document, then one of its headings, and its
+   living version or a version.
    **Image** finds an image, or uploads a file as a new one. **Diagram**
    starts a diagram as code, previewed as you type; **Show diagram** and
    **Show code** switch between its picture and its code.

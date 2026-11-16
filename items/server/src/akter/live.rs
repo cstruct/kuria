@@ -307,7 +307,9 @@ pub(crate) async fn take_in(
         stored::compact(conn, tenant, akt.id, &loaded.draft.state(), seq).await?;
     }
     match checked {
-        Ok(_) => {
+        Ok(outcome) => {
+            // r[impl live.sync]: its diagrams drawn as they come to compile.
+            super::diagrams::render_typed(conn, caller, &ty.ty, &akt, &outcome).await?;
             akt.title = super::title_of(&ty.ty, &fields);
             akt.updated_at = now;
             if !kuria_store::akter::update_akt(conn, &akt, akt.revision).await? {

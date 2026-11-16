@@ -379,6 +379,16 @@ async fn references_are_checked_on_the_draft_at_release() {
     let broken = world.release(&guide).await;
     assert_eq!(code(&broken), "BROKEN_REFERENCES", "{broken}");
     assert_eq!(world.akt(&guide).await["revision"], 1);
+    // The setup's living version is its live draft: a heading written
+    // there, never released, is there.
+    world
+        .edit(
+            &setup,
+            json!({ "body": "# Install {#install}\n\n## Run {#run}\n" }),
+        )
+        .await;
+    let taken = world.release(&guide).await;
+    assert!(taken.get("errors").is_none(), "{taken}");
 
     world
         .edit(

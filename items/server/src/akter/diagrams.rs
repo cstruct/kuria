@@ -54,6 +54,31 @@ pub(super) async fn render_written(
     akt: &AktRow,
     outcome: &Outcome,
 ) -> Result<(), AktError> {
+    render_each(conn, caller, ty, akt, outcome, true).await
+}
+
+/// Renders each diagram block `outcome` writes that compiles, as
+/// [`render_written`] does, passing over those that don't: a live draft's
+/// edit, taken as it is typed, isn't refused for a block half written
+/// (`live.sync`).
+pub(super) async fn render_typed(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &AktType,
+    akt: &AktRow,
+    outcome: &Outcome,
+) -> Result<(), AktError> {
+    render_each(conn, caller, ty, akt, outcome, false).await
+}
+
+async fn render_each(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &AktType,
+    akt: &AktRow,
+    outcome: &Outcome,
+    strict: bool,
+) -> Result<(), AktError> {
     let held = attachments::diagrams_of(conn, &[akt.id]).await?;
     let mut rendered = Vec::new();
     for field in &ty.document().fields {
@@ -72,13 +97,17 @@ pub(super) async fn render_written(
             if held.iter().any(kept) || rendered.iter().any(kept) {
                 continue;
             }
-            let svg = render(caller.renderer, source).await?.map_err(|message| {
-                AktError::InvalidDiagram {
-                    field: field.key.clone(),
-                    block: i + 1,
-                    message,
+            let svg = match render(caller.renderer, source).await? {
+                Ok(svg) => svg,
+                Err(_) if !strict => continue,
+                Err(message) => {
+                    return Err(AktError::InvalidDiagram {
+                        field: field.key.clone(),
+                        block: i + 1,
+                        message,
+                    });
                 }
-            })?;
+            };
             let storage = caller
                 .storage
                 .ok_or_else(|| AktError::Internal("this Kuria keeps no diagrams".to_owned()))?;

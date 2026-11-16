@@ -228,8 +228,8 @@ async fn in_clone(
         (_, command) => {
             let session = Session::open(context).await?;
             let answer = match command {
-                Command::Clone { number, dir } => {
-                    clone::sync::clone(&session, &number, dir.as_deref(), here).await
+                Command::Clone { number, into } => {
+                    clone::sync::clone(&session, &number, into.as_deref(), here).await
                 }
                 Command::Pull => clone::sync::pull(&session, here).await,
                 Command::Push { message } => clone::sync::push(&session, here, &message).await,

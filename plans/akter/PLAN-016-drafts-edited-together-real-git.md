@@ -1,7 +1,7 @@
 ---
 number: PLAN-016
 type: plan
-revision: 29
+revision: 30
 rank: b4O
 state: active
 title: "Drafts edited together, real git repositories, pages, and attachments in akt directories"
@@ -608,12 +608,13 @@ The CLI's clone workflow (`clone.clone`, `.status`, `.add`, `.push`, `.pull`), b
 <!-- akt: PLAN-016-T13 -->
 ---
 type: task
-revision: 2
+revision: 4
 rank: b4o
-state: todo
+state: doing
 in: [PLAN-016]
 links: [Blocked by PLAN-016-T12]
 title: "The walkthrough, the failing browser tests and docs"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -621,3 +622,16 @@ The example (`document` with live drafts; `document_index` without `git`), the w
 
 <!-- field: acceptance -->
 - All of `mise run e2e` passes, with lint and the tests.
+
+<!-- akt: PLAN-016-G06 -->
+---
+type: gap
+revision: 1
+rank: b4p
+state: open
+in: [PLAN-016]
+title: "A release pins a live target's last revision"
+---
+
+<!-- field: description -->
+A release checks a reference to an akt with a live draft against that draft (its living version), but pins the target's latest revision, which is its last release and may not hold the heading the reference names. Should a release of A pin B's live draft as it is, say by releasing B too, recording a snapshot, or refusing until B is released with the heading?

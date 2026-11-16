@@ -76,8 +76,11 @@ y-websocket sync and awareness protocols for the akt's live draft,
 authenticated as `/graphql` is. A subject who may read the akt MUST get
 its live draft and every change to it; only one who may edit it MUST have
 its changes taken, each checked as `live.edit` says, a refused change
-being undone for every client. An akt without a live draft, or one the
-subject may not read, MUST be refused as if it didn't exist.
+being undone for every client. Each diagram block a taken change writes
+MUST be rendered as a write's is (`akt.field.markdown.diagrams`), but a
+block that doesn't compile, being typed, MUST NOT refuse the change. An
+akt without a live draft, or one the subject may not read, MUST be
+refused as if it didn't exist.
 
 r[live.instances]
 Changes and awareness MUST reach every client of a live draft, whichever

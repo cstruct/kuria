@@ -168,6 +168,8 @@ pub async fn target(
     if require_read(auth, &ty, number).await.is_err() {
         return Ok(None);
     }
+    // r[impl live.read]: its living version is its live draft, if it has one.
+    let akt = super::live::read_as_draft(conn, &ty, akt).await?;
     let headings = |ty: &StoredType, fields: &Map<String, Json>| -> Result<Vec<String>, AktError> {
         let values = kuria_engine::fields_from_json(&ty.ty, fields)
             .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?;

@@ -4,11 +4,19 @@
 // code to its picture, its release refused while the link is broken and
 // taken once it isn't,
 // read at its version with the link pinned there, compared with the
-// living version and downloaded as a PDF. Each view is checked by axe.
+// living version and downloaded as a PDF; then the index cloned with the
+// `kuria` binary into a git repository of its own, part of its work pushed
+// and released while the rest waits on a branch, merged back and pushed
+// in turn. Each view is checked by axe.
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
 import { open, pick } from '../support/app.ts';
+import { Cli } from '../support/cli.ts';
 import { defineDocuments } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -31,7 +39,7 @@ async function editBody(page: Page, write: () => Promise<void>) {
 	await page.getByRole('button', { name: 'Edit Body' }).click();
 	await page.getByRole('textbox', { name: 'Body' }).click();
 	await write();
-	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
 	await expect(page.getByRole('form', { name: 'Edit Body' })).toHaveCount(0);
 }
 
@@ -95,6 +103,9 @@ test('a document is written and released at its version', async ({ browser }) =>
 			.getByLabel('Or upload a file')
 			.setInputFiles({ name: `flow-${stamp}.png`, mimeType: 'image/png', buffer: PNG });
 		await image.getByLabel('Alt text').fill('The flow at a glance');
+		// Other tests define image types too: the example's, if asked.
+		const asNew = image.getByLabel('As a new');
+		if ((await asNew.count()) > 0) await asNew.selectOption({ label: 'Image' });
 		await image.getByRole('button', { name: 'Insert' }).click();
 		await expect(image).toBeHidden();
 		await toolbar.getByRole('button', { name: 'Diagram' }).click();
@@ -176,5 +187,73 @@ test('a document is written and released at its version', async ({ browser }) =>
 	expect(await violations(dev), 'the comparison').toEqual([]);
 	await dev.keyboard.press('Escape');
 
-	// The clone workflow is walked through with kuria clone/pull/push (PLAN-016-T13).
+	// The index cloned into a git repository of its own.
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const kuria = async (args: string[], cwd: string) => {
+		const ran = await cli.run(args, {}, cwd);
+		expect(ran.code, `kuria ${args.join(' ')}: ${ran.stderr}`).toBe(0);
+		return ran.stdout;
+	};
+	const here = mkdtempSync(join(tmpdir(), 'kuria-walkthrough-'));
+	await kuria(['clone', index, 'handbook'], here);
+	const root = join(here, 'handbook');
+	const git = (...args: string[]) =>
+		execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
+			cwd: root,
+			env: {
+				PATH: process.env.PATH ?? '',
+				GIT_CONFIG_GLOBAL: '/dev/null',
+				GIT_CONFIG_NOSYSTEM: '1',
+				GIT_AUTHOR_NAME: 'Dev',
+				GIT_AUTHOR_EMAIL: 'dev@example.com',
+				GIT_COMMITTER_NAME: 'Dev',
+				GIT_COMMITTER_EMAIL: 'dev@example.com'
+			}
+		}).toString();
+	const fileOf = (number: string) => readdirSync(root).find((f) => f.startsWith(`${number}-`))!;
+	const append = (number: string, text: string) => {
+		const path = join(root, fileOf(number));
+		writeFileSync(path, `${readFileSync(path, 'utf8')}\n${text}\n`);
+	};
+	// The guide's picture is beside it, linked relatively; .kuria/ isn't committed.
+	expect(readFileSync(join(root, fileOf(guide)), 'utf8')).toMatch(/!\[The flow at a glance\]\(attachments\/IMG-\d+\.png\)/);
+	git('init', '-q', '-b', 'main');
+	git('add', '-A');
+	git('commit', '-q', '-m', 'Clone');
+	expect(git('ls-files')).not.toContain('.kuria');
+
+	// Two commits: one ready, one not.
+	append(setup, 'Ready to release.');
+	git('commit', '-q', '-am', 'Ready');
+	append(guide, 'Not yet.');
+	git('commit', '-q', '-am', 'Unready');
+
+	// The unready commit kept on a branch and out of the working copy; the
+	// ready part pushed and released.
+	git('branch', 'keep');
+	git('reset', '-q', '--hard', 'HEAD~1');
+	await kuria(['add', '.'], root);
+	await kuria(['push', '-m', 'Ready part'], root);
+	await open(rm, setup);
+	await versions.getByRole('button', { name: 'Release a version' }).click();
+	await release.getByRole('button', { name: 'Release' }).click();
+	await expect(versions.getByRole('link', { name: 'Version 1', exact: true })).toBeVisible();
+	await expect(rm.locator('dd[data-field="body"]')).toContainText('Ready to release.');
+
+	// The rest merged back and pushed: the guide has it, the release doesn't.
+	git('merge', '-q', 'keep');
+	await kuria(['add', '.'], root);
+	await kuria(['push', '-m', 'The rest'], root);
+	await open(dev, guide);
+	await expect(body).toContainText('Not yet.');
+	const released = await admin.graphql<{ akt: { fields: ({ markdown?: string } | null)[] } }>(
+		'query($n: String!) { akt(number: $n, version: 1) { fields { ... on MarkdownValue { markdown } } } }',
+		{ n: guide }
+	);
+	expect(released.akt.fields.map((f) => f?.markdown).join('')).not.toContain('Not yet.');
+	expect(JSON.parse(await kuria(['status', '--format', 'json'], root))).toMatchObject({
+		staged: [],
+		unstaged: [],
+		conflicted: []
+	});
 });

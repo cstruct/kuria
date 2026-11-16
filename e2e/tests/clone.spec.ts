@@ -2,10 +2,6 @@
 // binary, its live document edited as a file while someone types in it in
 // the app: the push behind the live edit is refused, a pull merges it, and
 // the push lands in the browser as it is typed in.
-//
-// The example's `document` doesn't say `"live_drafts": true` yet
-// (PLAN-016-T13 does): this test defines it so, as a new version of the
-// type, before making its documents.
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +9,7 @@ import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
 import { open } from '../support/app.ts';
 import { Cli } from '../support/cli.ts';
-import { defineDocuments, documentsDocument } from '../support/example.ts';
+import { defineDocuments } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
 
@@ -27,9 +23,6 @@ test('a clone pushes and pulls while a document is edited live', async ({ browse
 	const stamp = Date.now();
 	await defineDocuments();
 	const admin = await api(seeded().clients.admin);
-	await admin.graphql('mutation($d: JSON!) { defineAktType(document: $d) { key liveDrafts } }', {
-		d: { ...documentsDocument('document'), live_drafts: true }
-	});
 	const create = async (type: string, fields: Record<string, unknown>, inside: string[] = []) =>
 		(
 			await admin.graphql<{ createAkt: { number: string } }>(

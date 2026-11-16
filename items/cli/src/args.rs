@@ -290,8 +290,9 @@ pub enum Command {
     Clone {
         number: String,
         /// Where to write it; a new directory named as its file is, if
-        /// left out.
-        dir: Option<PathBuf>,
+        /// left out. (Not `dir`, which would be the global `--dir`.)
+        #[arg(value_name = "DIR")]
+        into: Option<PathBuf>,
     },
     /// In a clone: the files staged, changed, removed, and holding
     /// conflict markers.
@@ -464,6 +465,16 @@ mod tests {
             Command::Push { message } if message == "Why"
         ));
         assert!(Cli::try_parse_from(["kuria", "push"]).is_err());
+    }
+
+    #[test]
+    fn a_clone_s_directory_is_not_the_global_dir() {
+        let cli = Cli::try_parse_from(["kuria", "clone", "DOCS-1", "handbook"]).unwrap();
+        assert!(cli.dir.is_none());
+        assert!(matches!(
+            cli.command,
+            Command::Clone { number, into: Some(into) } if number == "DOCS-1" && into == std::path::Path::new("handbook")
+        ));
     }
 
     #[test]

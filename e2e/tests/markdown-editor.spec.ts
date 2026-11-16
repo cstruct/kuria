@@ -60,7 +60,7 @@ test('a markdown field is written in the editor, with a reference to a heading',
 		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
 		'the editor'
 	).toEqual([]);
-	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
 
 	// Saved as Markdown, rendered as a link to the heading.
 	const shown = page.locator('dd[data-field="body"]');
@@ -142,6 +142,9 @@ test('an image is uploaded from the editor, embedded and shown', async ({ browse
 		.getByLabel('Or upload a file')
 		.setInputFiles({ name: `chart-${stamp}.png`, mimeType: 'image/png', buffer: PNG });
 	await dialog.getByLabel('Alt text').fill('The chart');
+	// Other tests define image types too: the example's, if asked.
+	const asNew = dialog.getByLabel('As a new');
+	if ((await asNew.count()) > 0) await asNew.selectOption({ label: 'Image' });
 	expect(
 		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
 		'the image dialog'
@@ -149,7 +152,7 @@ test('an image is uploaded from the editor, embedded and shown', async ({ browse
 	await dialog.getByRole('button', { name: 'Insert' }).click();
 	await expect(dialog).toBeHidden();
 	await expect(editor.getByRole('img', { name: 'The chart' })).toBeVisible();
-	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
 
 	// Saved as a reference to a new image akt, shown as a figure.
 	const shown = page.locator('dd[data-field="body"]');
@@ -219,7 +222,7 @@ test('a diagram is written as code, previewed, toggled to its picture and saved'
 	await picture.getByRole('button', { name: 'Show code' }).click();
 	await expect(preview).toBeVisible();
 	await preview.getByRole('button', { name: 'Show diagram' }).click();
-	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Save' }).click();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
 
 	// Saved as a diagram block, shown as its rendering.
 	const shown = page.locator('dd[data-field="body"]');
