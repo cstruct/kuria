@@ -204,6 +204,15 @@ r[app.search]
 The app MUST offer search (`akt.search`) on every page, from the keyboard
 too, and open the akt chosen.
 
+r[app.archive]
+Lists, boards, search and a container's members MUST show live akter
+(`archive.read`), with **Show archived**, kept in the page's URL, adding
+archived ones, each marked archived; a container's members MUST say how
+many are archived. An archived akt's page MUST say it is archived, when,
+by whom or which rule, and why, with **Unarchive** for one who may, and
+offer no edit; a live akt's page MUST offer **Archive** to one who may.
+The sidebar's counts MUST count live akter.
+
 r[app.history]
 An akt's history MUST say, for each revision, who made it and when, its
 transition, the fields it changed with their new values, the users and

@@ -127,6 +127,15 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `bundled package`
   - A typst package vendored in Kuria, unmodified with its license, the only kind a diagram or a PDF can import: fletcher, cetz and cetz-plot.
 
+- `archived`
+  - An akt kept read-only and apart, hidden from lists, boards and search unless asked for, beside its state, not a state. Its opposite is `live`. Archiving by an akt type's rules, or by hand, never deletes it.
+
+- `archive rule`
+  - A rule an akt type declares under `archive.rules` for archiving its akter by themselves: `newer`, `with_container` or `days_in`.
+
+- `kept` (archiving)
+  - An akt someone unarchived after a rule archived it: rules leave it alone until it is archived by hand again.
+
 - `live draft`
   - The fields of an akt whose type says `"live_drafts": true`, edited together, live, with Yjs. Edits change the live draft only; a release records it as a revision. Not to be confused with a `draft`, which a recipe fills a field with.
 

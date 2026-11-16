@@ -229,6 +229,14 @@ key or name, a user or contact by email, name or `@me`, a date as
 reference, Git or Docker value as JSON. A multiline value MAY be given as
 `@<file>` or `@-` for standard input.
 
+r[cli.archive]
+`kuria archive <number>… [--reason]` and `kuria unarchive <number>…
+[--reason]` MUST archive and unarchive each akt (`archive.act`), in order,
+stopping at the first refused. `ls`, `find` and `cat`/`show` of a
+container's members MUST answer live akter, or with `--archived` only
+archived ones, or with `--all` both; an archived akt's answer MUST say it
+is archived.
+
 ## Local mode
 
 In local mode the client reads and writes an akt directory instead of a
@@ -329,6 +337,17 @@ r[cli.local.references]
 In local mode the links references keep (`link.referenced`) MUST NOT be
 stored in akt files: they MUST be worked out from the directory's
 `markdown` fields whenever they are read, as a server keeps them.
+
+r[cli.local.archive]
+In local mode archiving an akt MUST remove its entry from its file, and
+its members' entries nested in it, so that git's history keeps them, and
+MUST add its number to `akter/archived.md`, with when, by whom or which
+rule, why, and the revision. A number there MUST NOT be reused, a
+reference to it MUST resolve as archived, and `kuria unarchive` MUST put
+the akt back as git's latest commit holding that revision had it, refused
+as `UNCOMMITTED` while the directory has changes git hasn't committed.
+Rules MUST apply on the changes the CLI makes (`archive.rules.on-change`),
+and `kuria check --fix` MUST apply them all (`archive.sweep`).
 
 r[cli.local.versions]
 In local mode an akt's versions MUST be kept in the directory's file, as

@@ -1,7 +1,7 @@
 ---
 number: PLAN-017
 type: plan
-revision: 18
+revision: 19
 rank: b4u
 state: active
 title: "Archiving: every akt archivable, partitioned, hidden by default, and archived by rules"
@@ -37,14 +37,17 @@ Success: the release-management example's walkthrough, in `mise run e2e`, releas
 - **`akt` is list-partitioned on `archived`:** `akt_live` (`false`) and `akt_archived` (`true`). Archiving updates the flag; Postgres moves the row.
 - **Keys:** the primary key becomes `(id, archived)`. Every foreign key to an akt becomes `(akt_id, akt_archived)` referencing `akt (id, archived)` `on update cascade`, so a move carries its references along; the referencing tables gain `akt_archived` (and `target_archived`, `container_archived`, … where they name two).
 - **Numbers stay unique** in a table of their own, `akt_number (tenant_id, number) primary key, akt_id unique`, written with the akt; a partitioned table can't hold a unique key without the partition key.
+- **The history tables too** (PLAN-017-G01): `akt_revision`, `akt_draft_update` and `change_event` are list-partitioned on their akt's `akt_archived` the same way, so an archive moves an akt's history with it.
 - **Queries name the partition:** every list, board, member, count and search read says `archived = false` unless asked otherwise, so Postgres prunes to `akt_live`; reads by id or number look in both. Indexes are per partition.
 - **Migration:** one migration builds the partitioned table, copies, swaps and rebuilds the keys, in a transaction; its test checks counts, keys and `EXPLAIN` pruning on a seeded database.
 
 ## Showing archived (PLAN-017-D03)
 
 - **GraphQL:** `archived: ArchivedFilter = LIVE` (`LIVE`, `ARCHIVED`, `ALL`) on `akter`, `members`, `board` and the counts; `Akt.archived` with `at`, `by` and `reason`.
+- **Boards** (PLAN-017-G03): a board shows only live members, unless its container is archived itself, when it shows them all; **Show archived** adds the rest to a live container's board, and WIP limits count live members only.
 - **App:** lists, boards and search show live akter; **Show archived** (kept in the URL) adds archived ones, marked as such; a container's members say "3 archived" with a toggle; the sidebar counts live akter. An archived akt's page says it is archived, by whom and why, with **Unarchive**; **Archive** is in its menu.
-- **CLI:** `kuria archive <number>… [--reason]`, `kuria unarchive <number>…`; `ls`, `find` and `members` take `--archived` (only archived) and `--all`. Local mode keeps `archived:` in an akt file's front matter (PLAN-017-G02). Bundles carry it.
+- **CLI:** `kuria archive <number>… [--reason]`, `kuria unarchive <number>…`; `ls`, `find` and `members` take `--archived` (only archived) and `--all`. Bundles carry it.
+- **Local mode** (PLAN-017-G02): archiving removes the akt's entry from its file, so git's history keeps it; `akter/archived.md` lists each archived number with the commit that last held it, so its number isn't reused, references to it read as archived, and `kuria unarchive` puts it back from that commit. Rules run in local mode as on a server, on the changes the CLI makes; `kuria check --fix` runs the sweep.
 
 ## Rules (PLAN-017-D04, D05)
 
@@ -177,16 +180,17 @@ A person's choice wins over a rule's, and stays until a person changes it.
 <!-- akt: PLAN-017-T01 -->
 ---
 type: task
-revision: 2
+revision: 7
 rank: b50
-state: todo
+state: done
 in: [PLAN-017]
 links: [Blocks PLAN-017-T02]
 title: Spec archiving
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-A new `docs/spec/archive.md` (`archive.flag`, `archive.authz`, `archive.history`, `archive.readonly`, `archive.storage`, `archive.read`, `archive.rules.*`, `archive.sweep`, `archive.kept`), `app.archive` and `cli.archive` in the frontend and CLI specs, and the nomenclature (`archived`, `archive rule`, `kept`).
+Spec written: `docs/spec/archive.md` (`archive.flag`, `.act`, `.authz`, `.history`, `.readonly`, `.storage`, `.storage.live`, `.read`, `.board`, `.rules`, `.rules.state-since`, `.rules.on-change`, `.rules.container`, `.rules.kept`, `.sweep`), `app.archive`, `cli.archive`, `cli.local.archive`, and the nomenclature (`archived`, `archive rule`, `kept`).
 
 <!-- field: acceptance -->
 - Lint (tracey) passes with the new rules and nothing implementing them yet named.
@@ -313,9 +317,9 @@ Release management's rules (releases `newer: 2`, their members `with_container: 
 <!-- akt: PLAN-017-G01 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b58
-state: open
+state: closed
 in: [PLAN-017]
 title: Partitioning the history tables too
 ---
@@ -323,12 +327,15 @@ title: Partitioning the history tables too
 <!-- field: description -->
 Revisions, live-draft updates and change events grow with every akt, archived or not. Should `akt_revision` and the others be partitioned on their akt's `archived` as well, or by time, and when is it worth it?
 
+<!-- field: resolution -->
+Partitioned too: akt_revision, akt_draft_update and change_event on their akt's archived, moved with it (design, Partitioned on archived).
+
 <!-- akt: PLAN-017-G02 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b59
-state: open
+state: closed
 in: [PLAN-017]
 title: Archived in local mode
 ---
@@ -336,15 +343,21 @@ title: Archived in local mode
 <!-- field: description -->
 An akt directory has no partitions: is `archived: true` in the front matter enough, or should archived akter's files move under `archive/`, so plans/ stays readable? And do rules run in `kuria check --fix`, or only on a server?
 
+<!-- field: resolution -->
+Archiving in local mode removes the akt from its file, git's history keeping it; akter/archived.md lists each archived number with the commit that last held it, for references, numbering and kuria unarchive (design, Showing archived).
+
 <!-- akt: PLAN-017-G03 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b5A
-state: open
+state: closed
 in: [PLAN-017]
 title: "An archived akt in a live container's board"
 ---
 
 <!-- field: description -->
 A container's board shows its members by state. Should archived members leave its columns entirely, show folded at the bottom, or count only, and does a WIP limit count them?
+
+<!-- field: resolution -->
+A board shows only live members unless its container is archived, or Show archived is on; WIP limits count live members (design, Showing archived).
