@@ -1,9 +1,11 @@
 //! `kuria docs import <folder>` (`cli.docs-import`): a document kept
 //! elsewhere brought in with its history. `metadata.json` names its field
 //! values, its draft and its old versions, each a PDF; the draft is
-//! converted to Markdown with pandoc. The akt is created, each version
-//! released with its PDF, oldest first, and the draft made its body.
+//! converted to Markdown with pandoc, its pictures made image akter. The
+//! akt is created, each version released with its PDF, oldest first, and
+//! the draft made its body.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -23,12 +25,30 @@ pub struct Version {
     pub file: PathBuf,
 }
 
-/// What a folder holds, checked: its field values as `--set`s, its draft
-/// in Markdown with the file it came from, and its versions, oldest first.
+/// A picture the draft embeds that can be made an image akt: where the
+/// draft points, its alt text, and its file.
 #[derive(Clone, Debug)]
+pub struct Picture {
+    pub destination: String,
+    pub alt: String,
+    pub file: PathBuf,
+}
+
+/// The draft in Markdown, the pictures it embeds that can be made image
+/// akter, and the directory pandoc extracted them to.
+#[derive(Debug)]
+pub struct Draft {
+    pub markdown: String,
+    pub pictures: Vec<Picture>,
+    _extracted: Option<Scratch>,
+}
+
+/// What a folder holds, checked: its field values as `--set`s, its draft,
+/// and its versions, oldest first.
+#[derive(Debug)]
 pub struct Folder {
     pub sets: Vec<String>,
-    pub draft: Option<(String, String)>,
+    pub draft: Option<Draft>,
     pub versions: Vec<Version>,
 }
 
@@ -63,10 +83,7 @@ pub fn read(folder: &Path) -> Result<Folder, CliError> {
     let mut versions = Vec::new();
     for (key, value) in &metadata {
         match key.as_str() {
-            "draft" => {
-                let file = in_folder(value, "the draft")?;
-                draft = Some((file.display().to_string(), markdown_of(&file)?));
-            }
+            "draft" => draft = Some(draft_of(&in_folder(value, "the draft")?, folder)?),
             "versions" => {
                 let listed = value
                     .as_array()
@@ -118,24 +135,46 @@ fn set_of(key: &str, value: &Json) -> Result<String, CliError> {
     Ok(format!("{key}={text}"))
 }
 
-/// The draft at `file` in Markdown: as it is for Markdown, else converted
-/// by pandoc to GitHub-flavoured Markdown.
-fn markdown_of(file: &Path) -> Result<String, CliError> {
+/// A Lua filter that unwraps figures and drops pictures' sizes, so that
+/// pandoc writes pictures as Markdown, not as HTML: Kuria shows a picture
+/// alone in its paragraph as a figure, captioned by its alt text.
+const PLAIN_PICTURES: &str = "function Figure(figure)\n  return figure.content\nend\n\n\
+function Image(image)\n  image.attributes = {}\n  return image\nend\n";
+
+/// The draft at `file`: as it is for Markdown, its pictures read from
+/// `folder`; else converted by pandoc to GitHub-flavoured Markdown, its
+/// pictures extracted.
+fn draft_of(file: &Path, folder: &Path) -> Result<Draft, CliError> {
     let extension = file
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase);
     if matches!(extension.as_deref(), Some("md" | "markdown")) {
-        return std::fs::read_to_string(file).map_err(|e| bad(format!("{}: {e}", file.display())));
+        let markdown =
+            std::fs::read_to_string(file).map_err(|e| bad(format!("{}: {e}", file.display())))?;
+        let pictures = pictures_in(&markdown, folder);
+        return Ok(Draft {
+            markdown,
+            pictures,
+            _extracted: None,
+        });
     }
+    let extracted = Scratch::dir()?;
+    let filter = extracted.0.join("plain-pictures.lua");
+    std::fs::write(&filter, PLAIN_PICTURES).map_err(|e| CliError::unavailable(e.to_string()))?;
     let ran = Command::new("pandoc")
         .arg(file)
         .args(["--to", "gfm", "--wrap", "none"])
+        .arg(format!("--extract-media={}", extracted.0.display()))
+        .arg(format!("--lua-filter={}", filter.display()))
         .output()
         .map_err(|e| {
             CliError::refused(
                 "PANDOC_MISSING",
-                format!("converting {} needs pandoc on the PATH ({e}): install it, or give the draft as Markdown", file.display()),
+                format!(
+                    "converting {} needs pandoc on the PATH ({e}): install it, or give the draft as Markdown",
+                    file.display()
+                ),
             )
         })?;
     if !ran.status.success() {
@@ -148,57 +187,221 @@ fn markdown_of(file: &Path) -> Result<String, CliError> {
             ),
         ));
     }
-    Ok(String::from_utf8_lossy(&ran.stdout).into_owned())
+    let markdown = String::from_utf8_lossy(&ran.stdout).into_owned();
+    let pictures = pictures_in(&markdown, folder);
+    Ok(Draft {
+        markdown,
+        pictures,
+        _extracted: Some(extracted),
+    })
 }
 
-/// How many pictures `markdown` embeds that aren't Kuria's, which an
-/// import leaves as they are (PLAN-021-G01).
-fn pictures_left(markdown: &str) -> usize {
-    markdown
-        .match_indices("![")
-        .filter(|(at, _)| {
-            let rest = &markdown[*at..];
-            rest.find("](")
-                .is_some_and(|i| !rest[i + 2..].starts_with("kuria:"))
+/// Every picture `markdown` embeds, `![alt](destination)`, with its alt
+/// text and where it points, but Kuria's and those on the web.
+fn embedded(markdown: &str) -> Vec<(String, String)> {
+    let mut found = Vec::new();
+    let mut rest = markdown;
+    while let Some(start) = rest.find("![") {
+        rest = &rest[start + 2..];
+        let Some(close) = rest.find("](") else { break };
+        let alt = rest[..close].to_owned();
+        let after = &rest[close + 2..];
+        let Some(end) = after.find(')') else { break };
+        let inside = after[..end].trim();
+        // `<a b.png>` may hold spaces; else a title may follow one.
+        let destination = match inside.strip_prefix('<').and_then(|r| r.split_once('>')) {
+            Some((destination, _)) => destination,
+            None => inside.split_once(' ').map_or(inside, |(d, _)| d),
+        };
+        rest = &after[end..];
+        if ["kuria:", "http:", "https:", "data:"]
+            .iter()
+            .any(|p| destination.starts_with(p))
+        {
+            continue;
+        }
+        found.push((alt, destination.to_owned()));
+    }
+    found
+}
+
+/// A picture's media type by its file's extension, of those image akter
+/// take; `None` for any other.
+fn picture_type(file: &Path) -> Option<&'static str> {
+    match file.extension()?.to_str()?.to_ascii_lowercase().as_str() {
+        "png" => Some("image/png"),
+        "jpg" | "jpeg" => Some("image/jpeg"),
+        "svg" => Some("image/svg+xml"),
+        "webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+/// The pictures `markdown` embeds whose files are there, from `folder` if
+/// relative, in a format an image akt takes.
+fn pictures_in(markdown: &str, folder: &Path) -> Vec<Picture> {
+    embedded(markdown)
+        .into_iter()
+        .filter_map(|(alt, destination)| {
+            let path = Path::new(&destination);
+            let file = if path.is_absolute() {
+                path.to_owned()
+            } else {
+                folder.join(path)
+            };
+            (file.is_file() && picture_type(&file).is_some()).then_some(Picture {
+                destination,
+                alt,
+                file,
+            })
         })
-        .count()
+        .collect()
+}
+
+/// How many pictures `markdown` embeds that aren't Kuria's.
+fn pictures_left(markdown: &str) -> usize {
+    embedded(markdown).len()
+}
+
+/// The akt type pictures are made as, and its title and picture fields.
+#[derive(Clone, Debug)]
+struct ImageType {
+    key: String,
+    title: String,
+    picture: String,
+}
+
+/// The image type of those `documents` names, by key: `asked`, else the
+/// one whose presentation names an `image` field; `None` if none does,
+/// refused if several do and none is asked for (`cli.docs-import`).
+fn image_type(
+    documents: &[(String, Json)],
+    asked: Option<&str>,
+) -> Result<Option<ImageType>, CliError> {
+    let of = |(key, document): &(String, Json)| -> Option<ImageType> {
+        let picture = document["presentation"]["image"].as_str()?.to_owned();
+        let fields = document["fields"].as_array()?;
+        let title = document["presentation"]["title"]
+            .as_str()
+            .map(str::to_owned)
+            .or_else(|| {
+                fields
+                    .iter()
+                    .find(|f| {
+                        f["kind"] == "text" && f["required"] == true && f["multiline"] != true
+                    })
+                    .and_then(|f| f["key"].as_str().map(str::to_owned))
+            })?;
+        Some(ImageType {
+            key: key.clone(),
+            title,
+            picture,
+        })
+    };
+    let images: Vec<ImageType> = documents.iter().filter_map(of).collect();
+    match asked {
+        Some(key) => images.into_iter().find(|t| t.key == key).map(Some).ok_or_else(|| {
+            CliError::refused(
+                "BAD_REQUEST",
+                format!("`{key}` isn't an akt type of pictures: its presentation names no `image` field"),
+            )
+        }),
+        None if images.len() > 1 => Err(CliError::refused(
+            "BAD_REQUEST",
+            format!(
+                "the draft's pictures can be made as {}: choose with --image-type",
+                images.iter().map(|t| format!("`{}`", t.key)).collect::<Vec<_>>().join(" or ")
+            ),
+        )),
+        None => Ok(images.into_iter().next()),
+    }
+}
+
+/// The `--set`s that make an image akt of `ty` from `picture`, its file
+/// given as `file`.
+fn picture_sets(ty: &ImageType, picture: &Picture, file: &str) -> Vec<String> {
+    let title = if picture.alt.trim().is_empty() {
+        picture.file.file_stem().map_or_else(
+            || "Picture".to_owned(),
+            |s| s.to_string_lossy().into_owned(),
+        )
+    } else {
+        picture.alt.trim().to_owned()
+    };
+    vec![
+        format!("{}={title}", ty.title),
+        format!("{}={file}", ty.picture),
+    ]
+}
+
+/// `markdown` with each picture `made` names embedded as its image akt.
+fn embed(markdown: &str, made: &BTreeMap<String, String>) -> String {
+    let mut text = markdown.to_owned();
+    for (destination, number) in made {
+        text = text.replace(&format!("]({destination})"), &format!("](kuria:{number})"));
+    }
+    text
 }
 
 /// The `--set` that makes `draft` the value of `shape`'s one `markdown`
 /// field, written to a file of its own for `@<file>`; refused unless it
 /// has exactly one.
 fn draft_set(shape: &Shape, draft: &str) -> Result<(String, Scratch), CliError> {
-    let mut markdown = shape.fields.iter().filter(|f| f.kind == "MARKDOWN");
-    let (Some(field), None) = (markdown.next(), markdown.next()) else {
-        return Err(bad(format!(
-            "a draft needs `{}` to have exactly one markdown field to hold it",
-            shape.key
-        )));
-    };
+    let field = markdown_field(shape)?;
     let name = getrandom::u64().expect("system randomness");
     let path = std::env::temp_dir().join(format!("kuria-draft-{name:016x}.md"));
     std::fs::write(&path, draft).map_err(|e| CliError::unavailable(e.to_string()))?;
-    Ok((format!("{}=@{}", field.key, path.display()), Scratch(path)))
+    Ok((format!("{field}=@{}", path.display()), Scratch(path)))
 }
 
-/// A file of the import's own, removed once it is done with.
+/// `shape`'s one `markdown` field, which holds the draft.
+fn markdown_field(shape: &Shape) -> Result<String, CliError> {
+    let mut markdown = shape.fields.iter().filter(|f| f.kind == "MARKDOWN");
+    match (markdown.next(), markdown.next()) {
+        (Some(field), None) => Ok(field.key.clone()),
+        _ => Err(bad(format!(
+            "a draft needs `{}` to have exactly one markdown field to hold it",
+            shape.key
+        ))),
+    }
+}
+
+/// A file or directory of the import's own, removed once done with.
+#[derive(Debug)]
 struct Scratch(PathBuf);
+
+impl Scratch {
+    fn dir() -> Result<Self, CliError> {
+        let name = getrandom::u64().expect("system randomness");
+        let path = std::env::temp_dir().join(format!("kuria-import-{name:016x}"));
+        std::fs::create_dir_all(&path).map_err(|e| CliError::unavailable(e.to_string()))?;
+        Ok(Self(path))
+    }
+}
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        let _ = if self.0.is_dir() {
+            std::fs::remove_dir_all(&self.0)
+        } else {
+            std::fs::remove_file(&self.0)
+        };
     }
 }
 
 /// What has been made so far, for a failure part way to say.
+#[derive(Default)]
 struct Made {
     number: Option<String>,
     versions: Vec<i64>,
+    pictures: Vec<String>,
 }
 
 impl Made {
     fn said(&self, e: CliError) -> CliError {
-        let Some(number) = &self.number else { return e };
+        let Some(number) = &self.number else {
+            return e;
+        };
         let versions = match self.versions.as_slice() {
             [] => "no versions".to_owned(),
             [one] => format!("version {one}"),
@@ -210,39 +413,47 @@ impl Made {
                     .join(", ")
             ),
         };
+        let pictures = if self.pictures.is_empty() {
+            String::new()
+        } else {
+            format!(" and the pictures {}", self.pictures.join(", "))
+        };
         CliError {
-            message: format!("{number} was made, with {versions}; then {}", e.message),
+            message: format!(
+                "{number} was made, with {versions}{pictures}; then {}",
+                e.message
+            ),
             ..e
         }
     }
 
-    fn answer(&self, folder: &Folder) -> Answer {
+    fn answer(&self, left: usize) -> Answer {
         let number = self.number.clone().unwrap_or_default();
-        let pictures = folder
-            .draft
-            .as_ref()
-            .map_or(0, |(_, markdown)| pictures_left(markdown));
+        let count = self.versions.len();
         let mut lines = vec![format!(
-            "Imported {number}, with {} version{}{}.",
-            self.versions.len(),
-            if self.versions.len() == 1 { "" } else { "s" },
-            if folder.draft.is_some() {
-                " and its draft as its body"
-            } else {
-                ""
-            }
+            "Imported {number}, with {count} version{}.",
+            if count == 1 { "" } else { "s" }
         )];
-        if pictures > 0 {
+        if !self.pictures.is_empty() {
+            lines.push(format!("Its pictures are {}.", self.pictures.join(", ")));
+        }
+        if left > 0 {
             lines.push(format!(
-                "The draft's {pictures} picture{} {} left out: add {} with Image.",
-                if pictures == 1 { "" } else { "s" },
-                if pictures == 1 { "was" } else { "were" },
-                if pictures == 1 { "it" } else { "them" }
+                "The draft's {left} other picture{} {} left as {}: add {} with Image.",
+                if left == 1 { "" } else { "s" },
+                if left == 1 { "was" } else { "were" },
+                if left == 1 { "it was" } else { "they were" },
+                if left == 1 { "it" } else { "them" }
             ));
         }
         Answer {
             markdown: lines.join("\n"),
-            json: json!({ "number": number, "versions": self.versions, "picturesLeftOut": pictures }),
+            json: json!({
+                "number": number,
+                "versions": self.versions,
+                "pictures": self.pictures,
+                "picturesLeftOut": left,
+            }),
         }
     }
 }
@@ -252,7 +463,18 @@ pub struct Asked<'a> {
     pub folder: &'a Path,
     pub akt_type: &'a str,
     pub inside: &'a [String],
+    pub image_type: Option<&'a str>,
     pub reason: Option<&'a str>,
+}
+
+/// The pictures of `draft`, by destination, each file once.
+fn unique(draft: &Draft) -> Vec<&Picture> {
+    let mut seen = std::collections::BTreeSet::new();
+    draft
+        .pictures
+        .iter()
+        .filter(|p| seen.insert(p.destination.clone()))
+        .collect()
 }
 
 /// `kuria docs import` against a server.
@@ -260,15 +482,33 @@ pub struct Asked<'a> {
 pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, CliError> {
     let folder = read(asked.folder)?;
     let shape = crate::reads::shape(crate::reads::Source::Server(session), asked.akt_type).await?;
-    let draft = folder
+    if folder.draft.is_some() {
+        markdown_field(&shape)?;
+    }
+    let pictured = folder
         .draft
         .as_ref()
-        .map(|(_, markdown)| draft_set(&shape, markdown))
-        .transpose()?;
-    let mut made = Made {
-        number: None,
-        versions: Vec::new(),
+        .is_some_and(|d| !d.pictures.is_empty());
+    let images = if pictured {
+        let types = session
+            .graphql("{ aktTypes { key document } }", json!({}))
+            .await?;
+        let documents: Vec<(String, Json)> = types["aktTypes"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|t| {
+                (
+                    t["key"].as_str().unwrap_or_default().to_owned(),
+                    t["document"].clone(),
+                )
+            })
+            .collect();
+        image_type(&documents, asked.image_type)?
+    } else {
+        None
     };
+    let mut made = Made::default();
     let created = crate::writes::create(
         session,
         &crate::writes::Created {
@@ -293,12 +533,43 @@ pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, C
         made.versions
             .push(released.json["version"].as_i64().unwrap_or_default());
     }
-    if let Some((set, _file)) = &draft {
-        crate::writes::set(session, &number, std::slice::from_ref(set), asked.reason)
+    let mut left = 0;
+    if let Some(draft) = &folder.draft {
+        let mut numbers = BTreeMap::new();
+        if let Some(ty) = &images {
+            for picture in unique(draft) {
+                let media = picture_type(&picture.file).unwrap_or("application/octet-stream");
+                let id = crate::versions::upload(session, &picture.file, media)
+                    .await
+                    .map_err(|e| made.said(e))?;
+                let created = crate::writes::create(
+                    session,
+                    &crate::writes::Created {
+                        akt_type: &ty.key,
+                        inside: &[],
+                        sets: &picture_sets(ty, picture, &id),
+                        file: None,
+                        reason: asked.reason,
+                    },
+                )
+                .await
+                .map_err(|e| made.said(e))?;
+                let image = created.json["number"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned();
+                made.pictures.push(image.clone());
+                numbers.insert(picture.destination.clone(), image);
+            }
+        }
+        let markdown = embed(&draft.markdown, &numbers);
+        left = pictures_left(&markdown);
+        let (set, _file) = draft_set(&shape, &markdown)?;
+        crate::writes::set(session, &number, std::slice::from_ref(&set), asked.reason)
             .await
             .map_err(|e| made.said(e))?;
     }
-    Ok(made.answer(&folder))
+    Ok(made.answer(left))
 }
 
 fn releasing(version: &Version) -> Releasing<'_> {
@@ -314,32 +585,34 @@ fn releasing(version: &Version) -> Releasing<'_> {
 // r[impl cli.docs-import]
 pub fn in_dir(root: &Path, me: Option<String>, asked: &Asked<'_>) -> Result<Answer, CliError> {
     use crate::local::{edits, git, versions, write::Writer};
-    match git::uncommitted(root) {
-        Some(false) => {}
-        Some(true) => {
-            return Err(CliError::refused(
-                "UNCOMMITTED",
-                "the directory has changes git hasn't committed: commit them, then import, which commits each step",
-            ));
-        }
-        None => {
-            return Err(CliError::refused(
-                "BAD_REQUEST",
-                "an import commits each step, so the akt directory must be in a git repository",
-            ));
-        }
-    }
+    committed(root)?;
     let folder = read(asked.folder)?;
     let mut w = Writer::open(root, me.clone())?;
-    let draft = folder
+    let shape = w.shape(asked.akt_type)?;
+    if folder.draft.is_some() {
+        markdown_field(&shape)?;
+    }
+    let images = if folder
         .draft
         .as_ref()
-        .map(|(_, markdown)| draft_set(&w.shape(asked.akt_type)?, markdown))
-        .transpose()?;
-    let mut made = Made {
-        number: None,
-        versions: Vec::new(),
+        .is_some_and(|d| !d.pictures.is_empty())
+    {
+        let documents: Vec<(String, Json)> = w
+            .dir
+            .types
+            .iter()
+            .map(|(key, t)| {
+                (
+                    key.clone(),
+                    serde_json::to_value(t.ty.document()).unwrap_or_default(),
+                )
+            })
+            .collect();
+        image_type(&documents, asked.image_type)?
+    } else {
+        None
     };
+    let mut made = Made::default();
     let created = edits::create(
         &mut w,
         asked.akt_type,
@@ -374,14 +647,75 @@ pub fn in_dir(root: &Path, me: Option<String>, asked: &Asked<'_>) -> Result<Answ
         git::commit(root, &format!("Import {number}: version {n}")).map_err(|e| made.said(e))?;
         made.versions.push(n);
     }
-    if let Some((set, _file)) = &draft {
-        let mut w = Writer::open(root, me).map_err(|e| made.said(e))?;
-        edits::set(&mut w, &number, std::slice::from_ref(set), asked.reason)
+    let left = match &folder.draft {
+        Some(draft) => {
+            let mut w = Writer::open(root, me).map_err(|e| made.said(e))?;
+            let left = draft_in(
+                &mut w,
+                &number,
+                draft,
+                &shape,
+                images.as_ref(),
+                asked,
+                &mut made,
+            )
             .map_err(|e| made.said(e))?;
-        w.save().map_err(|e| made.said(e))?;
-        git::commit(root, &format!("Import {number}: its draft")).map_err(|e| made.said(e))?;
+            w.save().map_err(|e| made.said(e))?;
+            git::commit(root, &format!("Import {number}: its draft")).map_err(|e| made.said(e))?;
+            left
+        }
+        None => 0,
+    };
+    Ok(made.answer(left))
+}
+
+/// Refuses an akt directory with changes git hasn't committed, or none at
+/// all, since an import commits each step.
+fn committed(root: &Path) -> Result<(), CliError> {
+    match crate::local::git::uncommitted(root) {
+        Some(false) => Ok(()),
+        Some(true) => Err(CliError::refused(
+            "UNCOMMITTED",
+            "the directory has changes git hasn't committed: commit them, then import, which commits each step",
+        )),
+        None => Err(CliError::refused(
+            "BAD_REQUEST",
+            "an import commits each step, so the akt directory must be in a git repository",
+        )),
     }
-    Ok(made.answer(&folder))
+}
+
+/// Makes `draft`'s pictures image akter of `images` and the draft, so
+/// embedding them, the body of `number`, in local mode; answers how many
+/// pictures it left as they were.
+fn draft_in(
+    w: &mut crate::local::write::Writer,
+    number: &str,
+    draft: &Draft,
+    shape: &Shape,
+    images: Option<&ImageType>,
+    asked: &Asked<'_>,
+    made: &mut Made,
+) -> Result<usize, CliError> {
+    use crate::local::edits;
+    let mut numbers = BTreeMap::new();
+    if let Some(ty) = images {
+        for picture in unique(draft) {
+            let file = format!("@{}", picture.file.display());
+            let sets = picture_sets(ty, picture, &file);
+            let created = edits::create(w, &ty.key, &[], &sets, None, asked.reason)?;
+            let image = created.json["number"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            made.pictures.push(image.clone());
+            numbers.insert(picture.destination.clone(), image);
+        }
+    }
+    let markdown = embed(&draft.markdown, &numbers);
+    let (set, _file) = draft_set(shape, &markdown)?;
+    edits::set(w, number, std::slice::from_ref(&set), asked.reason)?;
+    Ok(pictures_left(&markdown))
 }
 
 #[cfg(test)]
@@ -390,12 +724,18 @@ mod tests {
 
     // r[verify cli.docs-import]
     #[test]
-    fn counts_the_pictures_an_import_leaves_out() {
+    fn finds_the_pictures_a_draft_embeds() {
+        let markdown = "![a](media/image1.png) and ![b](kuria:IMG-1) ![c](<x y.png> \"T\") ![d](https://e/f.png)";
         assert_eq!(
-            pictures_left("![a](media/image1.png) and ![b](kuria:IMG-1) ![c](x.png)"),
-            2
+            embedded(markdown),
+            [
+                ("a".to_owned(), "media/image1.png".to_owned()),
+                ("c".to_owned(), "x y.png".to_owned())
+            ]
         );
         assert_eq!(pictures_left("no pictures [link](x)"), 0);
+        let made = BTreeMap::from([("media/image1.png".to_owned(), "IMG-4".to_owned())]);
+        assert_eq!(embed("![a](media/image1.png)", &made), "![a](kuria:IMG-4)");
     }
 
     // r[verify cli.docs-import]
@@ -405,5 +745,44 @@ mod tests {
         assert_eq!(set_of("tags", &json!(["a", "b"])).unwrap(), "tags=a,b");
         assert_eq!(set_of("n", &json!(3)).unwrap(), "n=3");
         assert!(set_of("x", &json!({})).is_err());
+    }
+
+    // r[verify cli.docs-import]
+    #[test]
+    fn finds_the_one_image_type_or_asks_which() {
+        let image = |key: &str| {
+            (
+                key.to_owned(),
+                json!({ "presentation": { "image": "file" }, "fields": [
+                    { "key": "title", "kind": "text", "required": true },
+                    { "key": "file", "kind": "attachment" }
+                ] }),
+            )
+        };
+        let plain = (
+            "note".to_owned(),
+            json!({ "presentation": {}, "fields": [] }),
+        );
+        let one = image_type(&[image("image"), plain.clone()], None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            (one.key.as_str(), one.title.as_str(), one.picture.as_str()),
+            ("image", "title", "file")
+        );
+        assert!(
+            image_type(std::slice::from_ref(&plain), None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(image_type(&[image("image"), image("photo")], None).is_err());
+        assert_eq!(
+            image_type(&[image("image"), image("photo")], Some("photo"))
+                .unwrap()
+                .unwrap()
+                .key,
+            "photo"
+        );
+        assert!(image_type(&[plain], Some("note")).is_err());
     }
 }

@@ -74,7 +74,7 @@ pub async fn release(
     } = *released;
     // r[impl version.release-file]: the PDF uploaded first, for one akt.
     let file = match file {
-        Some(path) if numbers.len() == 1 => Some(upload(session, path).await?),
+        Some(path) if numbers.len() == 1 => Some(upload(session, path, "application/pdf").await?),
         Some(_) => {
             return Err(CliError::refused(
                 "BAD_REQUEST",
@@ -162,9 +162,13 @@ pub fn description_of(given: Option<&str>) -> Result<Option<String>, CliError> {
     Ok((!text.is_empty()).then(|| text.to_owned()))
 }
 
-/// Uploads the PDF at `path` as an attachment (`attachment.upload`),
-/// answering its id.
-async fn upload(session: &Session, path: &std::path::Path) -> Result<String, CliError> {
+/// Uploads the file at `path`, of `media_type`, as an attachment
+/// (`attachment.upload`), answering its id.
+pub(crate) async fn upload(
+    session: &Session,
+    path: &std::path::Path,
+    media_type: &str,
+) -> Result<String, CliError> {
     let bytes = std::fs::read(path)
         .map_err(|e| CliError::refused("BAD_FILE", format!("{}: {e}", path.display())))?;
     let name = path.file_name().map_or_else(
@@ -177,7 +181,7 @@ async fn upload(session: &Session, path: &std::path::Path) -> Result<String, Cli
             reqwest::Method::POST,
             &format!("{}/attachments", session.url),
             Some(session.access_token()),
-            &crate::http::Body::File(&bytes, "application/pdf", &name),
+            &crate::http::Body::File(&bytes, media_type, &name),
         )
         .await?;
     if !response.status().is_success() {

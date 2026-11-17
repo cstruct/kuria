@@ -112,6 +112,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
                 folder,
                 akt_type,
                 inside,
+                image_type,
                 reason,
             },
     } = &cli.command
@@ -120,6 +121,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
             folder,
             akt_type,
             inside,
+            image_type: image_type.as_deref(),
             reason: reason.as_deref(),
         };
         return import(&context, root.as_deref(), &asked).await;

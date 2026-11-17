@@ -186,8 +186,11 @@ type.
   --type <key> [--in <container>…]` reads `metadata.json`, converts the
   draft with `pandoc` (Markdown as it is), then creates the akt, releases
   each version with its PDF, label and description (`release --file`), and
-  sets the type's one `markdown` field to the draft. On a server and in
-  local mode, where each step is committed.
+  sets the type's one `markdown` field to the draft, its pictures, which
+  pandoc extracts (a Lua filter keeps them Markdown), first made image
+  akter of `--image-type` or the one type of pictures and embedded as
+  `kuria:<number>`. On a server and in local mode, where each step is
+  committed.
 
 - **Archiving** (`cli.archive`, [`src/writes/archive.rs`](src/writes/archive.rs)):
   `archive <number>… [--reason]` and `unarchive <number>… [--reason]`

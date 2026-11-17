@@ -1,9 +1,9 @@
 ---
 number: PLAN-021
 type: plan
-revision: 6
+revision: 7
 rank: b5W
-state: active
+state: done
 title: "Importing a document from a folder, its old versions as PDFs"
 owner: albin@mattsson.io
 ---
@@ -80,12 +80,15 @@ cli.docs-import specified; metadata.json read; draft converted with pandoc; akt 
 <!-- akt: PLAN-021-G01 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b5Z
-state: open
+state: closed
 in: [PLAN-021]
 title: Pictures in an imported draft
 ---
+
+<!-- field: resolution -->
+Imported: pandoc extracts the draft's pictures (--extract-media, with a Lua filter that unwraps figures and drops sizes, so they stay Markdown); each becomes an image akt of --image-type or the one type whose presentation names an image field, titled by its alt text, and the draft embeds it as kuria:<number>. Pictures it can't make so are left as they are and counted (cli.docs-import).
 
 <!-- akt: PLAN-021-D01 -->
 ---

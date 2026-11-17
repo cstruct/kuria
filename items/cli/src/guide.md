@@ -175,7 +175,9 @@ kuria docs fmt                         # the files as Kuria writes them
   the PATH, unless it is `.md`) and its `versions`, oldest first, each
   `{"label", "description", "file"}` naming a PDF. It creates the akt,
   releases each version as its PDF, then makes the draft its body; the
-  type must declare `versions.file` for the PDFs. In local mode it commits
+  type must declare `versions.file` for the PDFs. The draft's pictures
+  become image akter, of `--image-type` or the one type of pictures,
+  embedded as `kuria:IMG-n`. In local mode it commits
   each step, so commit everything else first.
 - git, if the clone is also a repository, is yours: Kuria sees only the
   files. To push part of your work, `git branch keep`, take the rest out

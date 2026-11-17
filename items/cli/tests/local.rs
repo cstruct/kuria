@@ -15,6 +15,15 @@ const TYPES: [&str; 4] = ["plan", "task", "gap", "decision"];
 
 /// An akt directory with the planning example's types, in a git
 /// repository whose `user.email` is `me@kuria.example`.
+/// A real one-pixel PNG, that pandoc can size and embed.
+const PIXEL: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+    0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+    0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
+    0x44, 0xae, 0x42, 0x60, 0x82,
+];
+
 struct Dir {
     _temp: tempfile::TempDir,
     root: PathBuf,
@@ -949,6 +958,10 @@ fn releases_an_external_document_with_its_pdf() {
 // r[verify cli.docs-import]
 // r[verify version.release-file]
 #[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one folder imported from start to end"
+)]
 fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
     let has_pandoc = Command::new("pandoc").arg("--version").output().is_ok();
     if !has_pandoc {
@@ -964,15 +977,19 @@ fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
     dir.ok(&["new", "document_index", "--set", "title=Manual"]);
     dir.commit("A manual");
 
-    // The folder: a docx draft, made here by pandoc, and two PDFs.
+    // The folder: a docx draft with a picture, made here by pandoc, and
+    // two PDFs.
     let folder = dir.root.join("../my-doc-folder");
     std::fs::create_dir_all(&folder).unwrap();
-    let source = folder.join("draft.md");
-    std::fs::write(&source, "# My doc\n\nHello **world**, from Word.\n").unwrap();
+    std::fs::write(
+        folder.join("draft.md"),
+        "# My doc\n\nHello **world**, from Word.\n\n![The flow](flow.png){width=50%}\n",
+    )
+    .unwrap();
+    std::fs::write(folder.join("flow.png"), PIXEL).unwrap();
     let made = Command::new("pandoc")
-        .arg(&source)
-        .arg("-o")
-        .arg(folder.join("draft.docx"))
+        .current_dir(&folder)
+        .args(["draft.md", "-o", "draft.docx"])
         .output()
         .unwrap();
     assert!(
@@ -980,7 +997,8 @@ fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
         "{}",
         String::from_utf8_lossy(&made.stderr)
     );
-    std::fs::remove_file(&source).unwrap();
+    std::fs::remove_file(folder.join("draft.md")).unwrap();
+    std::fs::remove_file(folder.join("flow.png")).unwrap();
     std::fs::write(folder.join("version1.pdf"), b"%PDF-1.4 one").unwrap();
     std::fs::write(folder.join("version2.pdf"), b"%PDF-1.4 two").unwrap();
     let metadata = json!({
@@ -1010,8 +1028,12 @@ fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
         .json;
     assert_eq!(
         imported,
-        json!({ "number": "DOCS-1-D01", "versions": [1, 2], "picturesLeftOut": 0 })
+        json!({ "number": "DOCS-1-D01", "versions": [1, 2], "pictures": ["IMG-1"], "picturesLeftOut": 0 })
     );
+    // Its picture an image akt, embedded so.
+    let image = file(&dir, "IMG-1");
+    assert!(image.contains("title: The flow"), "{image}");
+    assert!(image.contains("attachments/IMG-1/"), "{image}");
     let listed = dir.ok(&["versions", "DOCS-1-D01", "--format", "json"]).json;
     let said: Vec<(Value, Value)> = listed["versions"]
         .as_array()
@@ -1034,6 +1056,7 @@ fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
     );
     let living = file(&dir, "DOCS-1-D01");
     assert!(living.contains("Hello **world**, from Word."), "{living}");
+    assert!(living.contains("![The flow](kuria:IMG-1)"), "{living}");
     assert!(living.contains("owner: bruce@example.com"), "{living}");
     assert!(living.contains("by: me@kuria.example"), "{living}");
     // Each step committed, and nothing left over.

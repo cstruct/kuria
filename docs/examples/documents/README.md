@@ -172,7 +172,8 @@ A document kept elsewhere, as a Word draft and the PDFs of its past
 issues, comes in with `kuria docs import`: the folder's `metadata.json`
 names its values, its draft and its versions, and each version becomes a
 version whose PDF it shows, the draft, converted by pandoc, its living
-body ([cli](../../spec/cli.md)):
+body, and each picture in the draft an image akt it embeds
+([cli](../../spec/cli.md)):
 
 ```json
 {

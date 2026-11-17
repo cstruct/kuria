@@ -395,6 +395,10 @@ pub enum DocsCommand {
         /// parent.
         #[arg(long = "in", value_name = "CONTAINER")]
         inside: Vec<String>,
+        /// The akt type to make the draft's pictures as; the one whose
+        /// presentation names an `image` field, if left out.
+        #[arg(long, value_name = "TYPE")]
+        image_type: Option<String>,
         /// Why, recorded with each revision it makes.
         #[arg(long)]
         reason: Option<String>,

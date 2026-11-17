@@ -9,7 +9,7 @@
 // and released while the rest waits on a branch, merged back and pushed
 // in turn. Each view is checked by axe.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -348,10 +348,18 @@ test('a document is imported from a folder, its old versions as PDFs', async ({ 
 		)
 	).createAkt.number;
 
+	// Signed in once, the owner is a user the import can name.
+	const rm = await signIn(browser, seeded().people.releaseManager);
+
 	// The folder: a docx draft, made by pandoc, and two PDFs.
 	const folder = mkdtempSync(join(tmpdir(), 'kuria-import-'));
-	writeFileSync(join(folder, 'draft.md'), '# My doc\n\nHello **world**, from Word.\n');
-	execFileSync('pandoc', [join(folder, 'draft.md'), '-o', join(folder, 'draft.docx')]);
+	writeFileSync(
+		join(folder, 'draft.md'),
+		'# My doc\n\nHello **world**, from Word.\n\n![The flow](flow.png){width=50%}\n'
+	);
+	writeFileSync(join(folder, 'flow.png'), PNG);
+	execFileSync('pandoc', ['draft.md', '-o', 'draft.docx'], { cwd: folder });
+	rmSync(join(folder, 'flow.png'));
 	writeFileSync(join(folder, 'version1.pdf'), PDF);
 	writeFileSync(join(folder, 'version2.pdf'), Buffer.from('%PDF-1.4 two'));
 	writeFileSync(
@@ -369,14 +377,23 @@ test('a document is imported from a folder, its old versions as PDFs', async ({ 
 	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
 	const ran = await cli.run(['docs', 'import', folder, '--type', 'document', '--in', index, '--format', 'json']);
 	expect(ran.code, ran.stderr).toBe(0);
-	const imported = JSON.parse(ran.stdout) as { number: string; versions: number[] };
+	const imported = JSON.parse(ran.stdout) as {
+		number: string;
+		versions: number[];
+		pictures: string[];
+		picturesLeftOut: number;
+	};
 	expect(imported.versions).toEqual([1, 2]);
+	// Its picture an image akt, embedded in the body as a figure.
+	expect(imported.pictures).toHaveLength(1);
+	expect(imported.picturesLeftOut).toBe(0);
 	const number = imported.number;
 
 	// The living version is the draft; version 1 is its PDF.
-	const rm = await signIn(browser, seeded().people.releaseManager);
 	await open(rm, number);
 	await expect(rm.locator('dd[data-field="body"]')).toContainText('Hello world, from Word.');
+	await expect(rm.locator('dd[data-field="body"] figure img')).toHaveAttribute('alt', 'The flow');
+	await expect(rm.locator('dd[data-field="body"] figcaption')).toHaveText('The flow');
 	await expect(rm.locator('dd[data-field="released-pdf"]')).toHaveCount(0);
 	const versions = rm.getByRole('region', { name: 'Versions' });
 	await expect(versions.getByRole('listitem').first()).toContainText('bar baz');
