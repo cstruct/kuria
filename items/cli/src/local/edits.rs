@@ -4,7 +4,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use kuria_config::{AktTypeDocument, check_field_references, check_state_references, validate};
+use kuria_config::{
+    AktTypeDocument, check_field_references, check_sequences, check_state_references, validate,
+};
 use kuria_engine::rules::{containment, numbering};
 use kuria_engine::{Refusal, rank_between};
 use serde_json::{Map, Value as Json, json};
@@ -508,6 +510,7 @@ pub fn define(w: &mut Writer, documents: Vec<Json>) -> Result<Answer, CliError> 
             .collect();
         let mut problems = check_state_references(&ty, &others);
         problems.extend(check_field_references(&ty, &others));
+        problems.extend(check_sequences(&ty, &others));
         if !problems.is_empty() {
             return Err(CliError::refused(
                 "INVALID_AKT_TYPE",

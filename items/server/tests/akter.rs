@@ -529,6 +529,69 @@ async fn random_numbers_are_free_until_none_is() {
     assert_eq!(sequence, "01", "{number}");
 }
 
+// r[verify akt.number.shared]
+#[tokio::test(flavor = "multi_thread")]
+async fn akt_types_naming_one_sequence_share_its_numbers() {
+    let world = World::new().await;
+    let named = |key: &str, sequence: Option<&str>| {
+        let mut ty = capa();
+        ty["key"] = json!(key);
+        ty["number"] = json!("QMS-{seq:4}");
+        if let Some(sequence) = sequence {
+            ty["sequence"] = json!(sequence);
+        }
+        ty
+    };
+    world.define(named("capa", Some("qms"))).await;
+    world.define(named("procedure", Some("qms"))).await;
+    let create = |key: &'static str| {
+        let world = &world;
+        async move {
+            world
+                .data(
+                    "mutation($t: String!) { createAkt(input: { type: $t, fields: { title: \"T\" } }) { number } }",
+                    json!({ "t": key }),
+                )
+                .await["createAkt"]["number"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        }
+    };
+    assert_eq!(create("capa").await, "QMS-0001");
+    assert_eq!(create("procedure").await, "QMS-0002");
+    assert_eq!(create("capa").await, "QMS-0003");
+
+    // The same pattern without the sequence is refused, as is the sequence
+    // with another pattern.
+    let refused = world
+        .run(
+            "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+            json!({ "d": named("form", None) }),
+        )
+        .await;
+    assert_eq!(code(&refused), "INVALID_AKT_TYPE", "{refused}");
+    assert_eq!(
+        refused["errors"][0]["extensions"]["problems"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let mut elsewhere = named("form", Some("qms"));
+    elsewhere["number"] = json!("FORM-{seq:4}");
+    let refused = world
+        .run(
+            "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+            json!({ "d": elsewhere }),
+        )
+        .await;
+    assert_eq!(
+        refused["errors"][0]["extensions"]["problems"][0]["path"], "sequence",
+        "{refused}"
+    );
+}
+
 async fn record_person(world: &World, name: Option<&str>, email: Option<&str>) {
     let mut conn = world.db.pool().get().await.unwrap();
     kuria_store::people::record(

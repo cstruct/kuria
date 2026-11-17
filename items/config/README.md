@@ -25,6 +25,9 @@ Akt type documents: their model, their validation, and number patterns.
   for a pattern without `{seq}`, the SQL `LIKE` pattern of every number it
   can give. Drawing the digits is the engine's (`rules/numbering.rs`).
 
+- `check_sequences`: refuses an akt type numbered as another without naming
+  the same `sequence`, or naming its sequence with another pattern
+  (`akt.number.shared`).
 - `check_state_references`: the states one akt type names of another (board
   columns, draft recipes' `states`), checked against the latest versions of
   the tenant's other akt types in both directions.

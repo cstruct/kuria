@@ -162,6 +162,46 @@ fn holds(reference: &FieldReference<'_>, defined: &[&AktType]) -> Result<(), Str
 }
 
 /// The problems with defining `new` next to `others`, the latest versions of
+/// the tenant's other akt types, in what they number from: another with
+/// `new`'s pattern that doesn't name `new`'s sequence, or one naming its
+/// sequence with another pattern.
+// r[impl akt.number.shared]
+#[must_use]
+pub fn check_sequences(new: &AktType, others: &[AktType]) -> Vec<Problem> {
+    let mine = new.document();
+    others
+        .iter()
+        .filter(|other| other.key() != new.key())
+        .filter_map(|other| {
+            let theirs = other.document();
+            let same_pattern = theirs.number == mine.number;
+            let same_sequence = mine.sequence.is_some() && theirs.sequence == mine.sequence;
+            let message = if same_pattern && !same_sequence {
+                format!(
+                    "`{}` is numbered `{}` too: both must name the same `sequence` to share its numbers",
+                    other.key(),
+                    mine.number
+                )
+            } else if same_sequence && !same_pattern {
+                format!(
+                    "`{}` numbers from the sequence `{}` as `{}`: akt types sharing a sequence must be numbered alike",
+                    other.key(),
+                    theirs.sequence.as_deref().unwrap_or_default(),
+                    theirs.number
+                )
+            } else {
+                return None;
+            };
+            let path = if same_pattern { "number" } else { "sequence" };
+            Some(Problem {
+                path: path.to_owned(),
+                message,
+            })
+        })
+        .collect()
+}
+
+/// The problems with defining `new` next to `others`, the latest versions of
 /// the tenant's other akt types: fields and options `new`'s draft recipes
 /// name that none of the akt types they list has, and fields or options
 /// `new` drops that another's recipe still needs of it.
@@ -358,5 +398,50 @@ mod tests {
         let problems = check_state_references(&notes, &[story(&["open"])]);
         assert_eq!(problems.len(), 1);
         assert_eq!(problems[0].path, "fields[0].draft.states.story[0]");
+    }
+
+    fn numbered(key: &str, number: &str, sequence: Option<&str>) -> AktType {
+        let mut document = serde_json::json!({
+            "key": key, "name": key, "number": number,
+            "fields": [], "states": [{ "key": "open", "name": "Open", "initial": true }]
+        });
+        if let Some(sequence) = sequence {
+            document["sequence"] = serde_json::json!(sequence);
+        }
+        crate::validate(serde_json::from_value(document).unwrap()).unwrap()
+    }
+
+    // r[verify akt.number.shared]
+    #[test]
+    fn akt_types_share_numbers_only_by_naming_one_sequence() {
+        let policy = numbered("policy", "QMS-{seq:4}", Some("qms"));
+        let procedure = numbered("procedure", "QMS-{seq:4}", Some("qms"));
+        assert_eq!(
+            check_sequences(&procedure, std::slice::from_ref(&policy)),
+            []
+        );
+        // A new version of the same type is no other.
+        assert_eq!(check_sequences(&policy, std::slice::from_ref(&policy)), []);
+
+        let unnamed = numbered("procedure", "QMS-{seq:4}", None);
+        let problems = check_sequences(&unnamed, std::slice::from_ref(&policy));
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].path, "number");
+        assert!(problems[0].message.contains("`policy`"), "{problems:?}");
+        let neither = numbered("other", "QMS-{seq:4}", None);
+        assert_eq!(check_sequences(&neither, &[unnamed]).len(), 1);
+        assert_eq!(
+            check_sequences(
+                &numbered("p", "QMS-{seq:4}", Some("other")),
+                std::slice::from_ref(&policy)
+            )
+            .len(),
+            1
+        );
+
+        let elsewhere = numbered("form", "FORM-{seq:4}", Some("qms"));
+        let problems = check_sequences(&elsewhere, &[policy]);
+        assert_eq!(problems[0].path, "sequence");
+        assert!(problems[0].message.contains("QMS-{seq:4}"), "{problems:?}");
     }
 }

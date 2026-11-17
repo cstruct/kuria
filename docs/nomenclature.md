@@ -55,6 +55,9 @@ Terms are introduced in dependency order: each definition only uses terms define
   - The part of an akt type that says how its akt numbers read, such as `CAPA-{year}-{seq:4}`.
   - `{seq}` counts akter; `{rand:N}` draws N random digits, free of every number in the tenant, such as `QR-{rand:4}` giving `QR-4821`.
 
+- `sequence` (of akt numbers)
+  - What akter are counted in for `{seq}`. Akt types numbered by the same pattern share one only by naming it, `"sequence": "qms"`, so that a Policy and a Procedure count `QMS-0001`, `QMS-0002`… between them.
+
 - `field`
   - One named value an akt type defines, such as `severity`. Every field has a `field kind`.
 

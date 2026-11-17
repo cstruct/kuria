@@ -262,6 +262,16 @@ the pattern can render is taken, creating the akt MUST be refused as
 `NUMBERS_EXHAUSTED`, naming the pattern. Two akter created at once MUST
 NOT draw the same number.
 
+r[akt.number.shared]
+An akt type document MAY name a `sequence`, a key, that akt types number
+from together: a Policy and a Procedure both numbered `QMS-{seq:4}` and
+naming the sequence `qms` count `QMS-0001`, `QMS-0002`… between them.
+Defining an akt type MUST be refused, with a problem for each other akt
+type, when the latest version of another akt type has the same number
+pattern without naming the same sequence (neither naming one is not the
+same), or names the same sequence with another pattern, so that akt
+types share numbers only by saying so.
+
 r[akt.edit]
 Editing an akt MUST change only the field values given, where a `null`
 clears a value. It MUST refuse an akt in a final state, and an edit that

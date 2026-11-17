@@ -851,6 +851,32 @@ fn draws_random_numbers_free_among_the_directory_s() {
     assert_eq!(refused.code, "NUMBERS_EXHAUSTED", "{}", refused.message);
 }
 
+// r[verify akt.number.shared]
+#[test]
+fn akt_types_naming_one_sequence_share_its_numbers() {
+    let dir = Dir::new();
+    define_numbered(&dir, "policy", "QMS-{seq:4}", Some("qms"));
+    define_numbered(&dir, "procedure", "QMS-{seq:4}", Some("qms"));
+    let new = |key: &str| {
+        dir.ok(&["new", key, "--set", "title=T", "--format", "json"])
+            .json["number"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(new("policy"), "QMS-0001");
+    assert_eq!(new("procedure"), "QMS-0002");
+    // `plan` is numbered `PLAN-{seq:3}`, unnamed: another type can't be.
+    let example =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/planning/plan.json");
+    let mut ty: Value = serde_json::from_str(&std::fs::read_to_string(example).unwrap()).unwrap();
+    ty["key"] = json!("project");
+    let file = dir.root.join("../project.json");
+    std::fs::write(&file, ty.to_string()).unwrap();
+    let refused = dir.refused(&["types", "define", file.to_str().unwrap()]);
+    assert!(refused.message.contains("`plan`"), "{}", refused.message);
+}
+
 // r[verify cli.local.lock]
 #[test]
 fn writes_at_once_lose_nothing() {

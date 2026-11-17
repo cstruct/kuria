@@ -163,6 +163,10 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
 
     let contained = containment(&mut problems, &document);
     links(&mut problems, &document);
+    // r[impl akt.number.shared]
+    if let Some(sequence) = &document.sequence {
+        problems.key("sequence", sequence);
+    }
     // r[impl version.declare]
     if let Some(action) = document.versions.as_ref().and_then(|v| v.action.as_ref())
         && let Err(message) = check_action(action)

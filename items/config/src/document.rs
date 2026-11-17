@@ -35,6 +35,10 @@ pub struct AktTypeDocument {
     pub name: String,
     /// The number pattern, such as `CAPA-{year}-{seq:4}`.
     pub number: String,
+    /// The sequence, by key, that akt types numbered by the same pattern
+    /// share (`akt.number.shared`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<String>,
     #[serde(default)]
     pub fields: Vec<FieldDef>,
     pub states: Vec<StateDef>,

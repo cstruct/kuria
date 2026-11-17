@@ -78,12 +78,19 @@ akt.number.pattern and akt.number.random specified; NumberPattern parses, render
 <!-- akt: PLAN-020-T02 -->
 ---
 type: task
-revision: 1
+revision: 4
 rank: b5Q
-state: todo
+state: done
 in: [PLAN-020]
 title: "Shared number sequences, declared by name"
 ---
+
+<!-- field: description -->
+Done. An akt type document may name a `sequence` (`akt.number.shared`); `check_sequences` (`items/config/src/references.rs`) refuses a type numbered as another without naming the same sequence, or naming its sequence with another pattern, on the server's `define_in` (so bundle import too), local `types define` and `kuria check`. The counter stays `number:<scope>`: types sharing a sequence share a pattern, so they already share it. `types schema` says the sequence.
+
+No example or `plans/` types shared a pattern, so nothing had to be renamed.
+
+Verified: `akt_types_share_numbers_only_by_naming_one_sequence` (config), `akt_types_naming_one_sequence_share_its_numbers` on the server (QMS-0001, QMS-0002, QMS-0003 across two types; both refusals) and in local mode, the whole server suite, `mise run lint`.
 
 <!-- field: acceptance -->
 akt.number.shared specified; a type document's sequence parsed and validated; defining a type with the same pattern as another without the same sequence, or the same sequence with another pattern, refused on the server, in local mode and on import; examples and plans/ pass.
