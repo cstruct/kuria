@@ -90,3 +90,18 @@ test('akt types that say so are listed under Show more, which stays as left', as
 	await page.getByRole('link', { name: 'Home' }).click();
 	await expect(page.getByRole('main').getByText('Image', { exact: true }).first()).toBeVisible();
 });
+
+// r[verify app.icon]
+test("Kuria's mark is the page's icon, before any script runs", async ({ request }) => {
+	const page = await (await request.get('/')).text();
+	for (const [href, type] of [
+		['/favicon.ico', 'image/x-icon'],
+		['/favicon.svg', 'image/svg+xml'],
+		['/apple-touch-icon.png', 'image/png']
+	]) {
+		expect(page, href).toContain(`href="${href}"`);
+		const icon = await request.get(href);
+		expect(icon.status(), href).toBe(200);
+		expect(icon.headers()['content-type'], href).toContain(type);
+	}
+});

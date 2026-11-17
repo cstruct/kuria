@@ -1,5 +1,4 @@
 <script lang="ts">
-	import favicon from '#lib/assets/favicon.svg';
 	import { createClient } from '#lib/graphql/client.ts';
 	import { setClient } from '#lib/graphql/context.svelte.ts';
 	import { Changes } from '#lib/graphql/operations.ts';
@@ -26,9 +25,9 @@
 	});
 </script>
 
+<!-- r[impl app.icon]: the icons are named in src/app.html, from static/,
+     so the page as served has them before any script runs. -->
 <svelte:head>
-	<link rel="icon" href={favicon} type="image/svg+xml" />
-	<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 	<title>Kuria</title>
 </svelte:head>
 

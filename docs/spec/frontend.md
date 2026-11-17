@@ -12,6 +12,11 @@ and MUST answer every other `GET` that no route of its own takes with the
 app's fallback page, so that the app's own paths load it. Hashed assets
 MUST be cacheable for a year; the fallback page MUST NOT be cached.
 
+r[app.icon]
+The app's pages MUST name Kuria's mark as their icon, as SVG, as
+`/favicon.ico` for browsers that ask for it, and as an Apple touch icon,
+in the page as served, before any script runs.
+
 r[app.csp]
 The app MUST be served with a Content Security Policy that allows scripts,
 styles, images and connections from Kuria's own origin only, and forbids
