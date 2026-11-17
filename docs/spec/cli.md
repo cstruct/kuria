@@ -217,7 +217,7 @@ The client MUST offer:
 - `docs clone`, `docs status`, `docs diff`, `docs add`, `docs pull` and
   `docs push`: a container as files synced with Kuria (`clone.*`);
 - `docs fmt`, in a clone: its files in normal form (`clone.normal`);
-- `docs import <folder> --type <key> [--in <container>…] [--image-type <key>] [--references <pattern>]`: a document
+- `docs import <folder> --type <key> [--in <container>…] [--image-type <key>] [--references <pattern>] [--pad-numbers]`: a document
   kept elsewhere, its old versions as PDFs (`cli.docs-import`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
@@ -260,7 +260,12 @@ group `id`, refused as `BAD_REQUEST` otherwise, each match in the draft
 outside code and outside links and pictures MUST become a reference to the
 akt `id` names, `[label](kuria:<id>)`, its text the group `label`
 trimmed, else the number; the target need not exist yet, and the reference
-is shown as broken until it does (`app.references`). It
+is shown as broken until it does (`app.references`). With `--pad-numbers`, a
+number given or captured that the type of `--type` would give, in the
+first container `--in` names, but for its `{seq}` or `{rand:N}` written
+with fewer digits than the pattern's width, such as `FOOID-12` for
+`FOOID-{seq:4}`, MUST be taken as that number zero-padded, `FOOID-0012`;
+the pattern's `id` group must then match the shorter form. It
 is not one transaction: a failure after the akt is made MUST say what was
 made. In local mode, the directory MUST have no uncommitted changes, and
 each step MUST be committed with a message saying it, since a version is

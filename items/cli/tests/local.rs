@@ -1081,6 +1081,7 @@ fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
 // r[verify cli.docs-import]
 // r[verify akt.number.given]
 #[test]
+#[expect(clippy::too_many_lines, reason = "three folders imported in turn")]
 fn imported_documents_keep_their_numbers_and_refer_to_each_other() {
     let dir = Dir::new();
     let documents = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/documents");
@@ -1163,6 +1164,34 @@ fn imported_documents_keep_their_numbers_and_refer_to_each_other() {
         .ok(&["new", "procedure", "--set", "title=T", "--format", "json"])
         .json;
     assert_eq!(next["number"], "FOOID-0003");
+    dir.commit("Another procedure");
+
+    // Numbers written short, padded as the pattern writes them.
+    let short = folder(
+        "short",
+        json!({ "number": "FOOID-12", "title": "Short", "draft": "draft.md" }),
+        "# Short\n\nSee FOOID-1 Quality Manual.\n",
+    );
+    let padded = dir
+        .ok(&[
+            "docs",
+            "import",
+            &short,
+            "--type",
+            "procedure",
+            "--references",
+            r"(?<id>FOOID-\d{1,4})(?<label>(?:\s?\p{Lu}\w+)*)",
+            "--pad-numbers",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(padded["number"], "FOOID-0012");
+    let short = file(&dir, "FOOID-0012");
+    assert!(
+        short.contains("See [Quality Manual](kuria:FOOID-0001)."),
+        "{short}"
+    );
 }
 
 // r[verify cli.local.lock]

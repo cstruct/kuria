@@ -114,6 +114,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
                 inside,
                 image_type,
                 references,
+                pad_numbers,
                 reason,
             },
     } = &cli.command
@@ -124,6 +125,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
             inside,
             image_type: image_type.as_deref(),
             references: references.as_deref(),
+            pad_numbers: *pad_numbers,
             reason: reason.as_deref(),
         };
         return import(&context, root.as_deref(), &asked).await;

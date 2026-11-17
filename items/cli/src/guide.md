@@ -181,7 +181,9 @@ kuria docs fmt                         # the files as Kuria writes them
   type's pattern gives it and it is free (as `kuria new --number`).
   `--references '(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)'`, or
   `"references"` in `metadata.json`, turns each mention outside code and
-  links into `[label](kuria:<id>)`, broken until that akt is imported. In local mode it commits
+  links into `[label](kuria:<id>)`, broken until that akt is imported.
+  `--pad-numbers` writes numbers given or captured short, `FOOID-12`, as
+  the type's pattern pads them, `FOOID-0012`. In local mode it commits
   each step, so commit everything else first.
 - git, if the clone is also a repository, is yours: Kuria sees only the
   files. To push part of your work, `git branch keep`, take the rest out

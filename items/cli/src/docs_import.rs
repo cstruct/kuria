@@ -62,7 +62,11 @@ fn bad(message: impl Into<String>) -> CliError {
 /// references by `metadata.json`'s `references`, else `references`
 /// (`cli.docs-import`).
 // r[impl cli.docs-import]
-pub fn read(folder: &Path, references: Option<&str>) -> Result<Folder, CliError> {
+pub fn read(
+    folder: &Path,
+    references: Option<&str>,
+    padding: Option<&Padding>,
+) -> Result<Folder, CliError> {
     let path = folder.join("metadata.json");
     let text =
         std::fs::read_to_string(&path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
@@ -90,12 +94,10 @@ pub fn read(folder: &Path, references: Option<&str>) -> Result<Folder, CliError>
     for (key, value) in &metadata {
         match key.as_str() {
             "number" => {
-                number = Some(
-                    value
-                        .as_str()
-                        .ok_or_else(|| bad("`number` is the akt's number, as text"))?
-                        .to_owned(),
-                );
+                let given = value
+                    .as_str()
+                    .ok_or_else(|| bad("`number` is the akt's number, as text"))?;
+                number = Some(Padding::apply(padding, given));
             }
             "references" => {
                 pattern = Some(
@@ -130,7 +132,7 @@ pub fn read(folder: &Path, references: Option<&str>) -> Result<Folder, CliError>
         }
     }
     if let (Some(pattern), Some(draft)) = (&pattern, &mut draft) {
-        draft.markdown = capture(&draft.markdown, &references_of(pattern)?);
+        draft.markdown = capture(&draft.markdown, &references_of(pattern)?, padding);
     }
     Ok(Folder {
         sets,
@@ -180,7 +182,7 @@ fn kept(markdown: &str) -> Vec<std::ops::Range<usize>> {
 /// reference to the akt its `id` group names, read as its `label` group,
 /// else its number (`cli.docs-import`).
 // r[impl cli.docs-import]
-fn capture(markdown: &str, references: &regex::Regex) -> String {
+fn capture(markdown: &str, references: &regex::Regex, padding: Option<&Padding>) -> String {
     let kept = kept(markdown);
     let mut out = String::with_capacity(markdown.len());
     let mut last = 0;
@@ -196,18 +198,47 @@ fn capture(markdown: &str, references: &regex::Regex) -> String {
         {
             continue;
         }
+        let id = Padding::apply(padding, id.as_str());
         let label = found
             .name("label")
             .map(|l| l.as_str().trim())
             .filter(|l| !l.is_empty())
-            .unwrap_or(id.as_str());
+            .unwrap_or(&id);
         let label = label.replace('[', "\\[").replace(']', "\\]");
         out.push_str(&markdown[last..range.start]);
-        out.push_str(&format!("[{label}](kuria:{})", id.as_str()));
+        out.push_str(&format!("[{label}](kuria:{id})"));
         last = range.end;
     }
     out.push_str(&markdown[last..]);
     out
+}
+
+/// How `--pad-numbers` writes a number given or captured: as the type's
+/// pattern gives it in `parent`, its digits zero-padded to their widths.
+#[derive(Debug)]
+pub struct Padding {
+    pub pattern: kuria_config::NumberPattern,
+    pub parent: Option<String>,
+}
+
+impl Padding {
+    /// The pattern of `shape`, read in the first of `inside`.
+    pub fn of(shape: &Shape, inside: &[String]) -> Result<Self, CliError> {
+        let pattern = kuria_config::NumberPattern::parse(&shape.number_pattern)
+            .map_err(|e| CliError::unavailable(format!("`{}`'s number pattern: {e}", shape.key)))?;
+        Ok(Self {
+            pattern,
+            parent: inside.first().cloned(),
+        })
+    }
+
+    /// `number` padded, if there is padding and it fits so; else as it is.
+    // r[impl cli.docs-import]
+    fn apply(padding: Option<&Self>, number: &str) -> String {
+        padding
+            .and_then(|p| p.pattern.padded(number, p.parent.as_deref()))
+            .unwrap_or_else(|| number.to_owned())
+    }
 }
 
 /// A field's value from `metadata.json` as `--set` writes it
@@ -563,6 +594,9 @@ pub struct Asked<'a> {
     /// The pattern references are captured by, unless the folder's
     /// `metadata.json` gives its own.
     pub references: Option<&'a str>,
+    /// Whether numbers written short are zero-padded to the pattern's
+    /// widths (`--pad-numbers`).
+    pub pad_numbers: bool,
     pub reason: Option<&'a str>,
 }
 
@@ -579,8 +613,12 @@ fn unique(draft: &Draft) -> Vec<&Picture> {
 /// `kuria docs import` against a server.
 // r[impl cli.docs-import]
 pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, CliError> {
-    let folder = read(asked.folder, asked.references)?;
     let shape = crate::reads::shape(crate::reads::Source::Server(session), asked.akt_type).await?;
+    let padding = asked
+        .pad_numbers
+        .then(|| Padding::of(&shape, asked.inside))
+        .transpose()?;
+    let folder = read(asked.folder, asked.references, padding.as_ref())?;
     if folder.draft.is_some() {
         markdown_field(&shape)?;
     }
@@ -687,9 +725,13 @@ fn releasing(version: &Version) -> Releasing<'_> {
 pub fn in_dir(root: &Path, me: Option<String>, asked: &Asked<'_>) -> Result<Answer, CliError> {
     use crate::local::{edits, git, versions, write::Writer};
     committed(root)?;
-    let folder = read(asked.folder, asked.references)?;
     let mut w = Writer::open(root, me.clone())?;
     let shape = w.shape(asked.akt_type)?;
+    let padding = asked
+        .pad_numbers
+        .then(|| Padding::of(&shape, asked.inside))
+        .transpose()?;
+    let folder = read(asked.folder, asked.references, padding.as_ref())?;
     if folder.draft.is_some() {
         markdown_field(&shape)?;
     }
@@ -908,7 +950,7 @@ mod tests {
                      Not `FOOID-9999` in code, nor [FOOID-1111](kuria:FOOID-1111).\n\
                      ```\nFOOID-8888 Code Block\n```\n";
         assert_eq!(
-            capture(draft, &pattern),
+            capture(draft, &pattern, None),
             "See [Supplier Policy](kuria:FOOID-1234) for details, and [FOOID-0042](kuria:FOOID-0042).\n\
              Not `FOOID-9999` in code, nor [FOOID-1111](kuria:FOOID-1111).\n\
              ```\nFOOID-8888 Code Block\n```\n"

@@ -409,6 +409,11 @@ pub enum DocsCommand {
         /// `metadata.json` may give its own as `references`.
         #[arg(long, value_name = "PATTERN")]
         references: Option<String>,
+        /// Write a number given or captured with fewer digits than the
+        /// type's pattern, such as `FOOID-12` for `FOOID-{seq:4}`, padded:
+        /// `FOOID-0012`.
+        #[arg(long)]
+        pad_numbers: bool,
         /// Why, recorded with each revision it makes.
         #[arg(long)]
         reason: Option<String>,

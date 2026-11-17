@@ -265,6 +265,51 @@ impl NumberPattern {
             .then(|| read.sequence.map(|s| (read.scope, s)))
     }
 
+    /// `number` as this pattern gives it to an akt created in `parent`, its
+    /// `{seq}` and `{rand:N}` zero-padded to their widths where written
+    /// with fewer digits, such as `FOOID-0012` for `FOOID-12` of
+    /// `FOOID-{seq:4}` (`cli.docs-import`); `None` if it doesn't fit even
+    /// so.
+    // r[impl cli.docs-import]
+    #[must_use]
+    pub fn padded(&self, number: &str, parent: Option<&str>) -> Option<String> {
+        self.pad_from(0, number, parent)
+    }
+
+    fn pad_from(&self, index: usize, rest: &str, parent: Option<&str>) -> Option<String> {
+        let Some(part) = self.parts.get(index) else {
+            return rest.is_empty().then(String::new);
+        };
+        let then = |taken: usize, written: &str| {
+            self.pad_from(index + 1, &rest[taken..], parent)
+                .map(|tail| format!("{written}{tail}"))
+        };
+        let digits =
+            |n: usize| rest.len() >= n && rest.as_bytes()[..n].iter().all(u8::is_ascii_digit);
+        let run = rest.bytes().take_while(u8::is_ascii_digit).count();
+        match part {
+            Part::Literal(text) => rest
+                .starts_with(text.as_str())
+                .then(|| then(text.len(), text))
+                .flatten(),
+            Part::Year => digits(4).then(|| then(4, &rest[..4])).flatten(),
+            Part::Month => digits(2).then(|| then(2, &rest[..2])).flatten(),
+            Part::Parent => {
+                let parent = parent?;
+                rest.starts_with(parent)
+                    .then(|| then(parent.len(), parent))
+                    .flatten()
+            }
+            Part::Sequence { width } => (1..=run).rev().find_map(|n| {
+                let value: u64 = rest[..n].parse().ok()?;
+                then(n, &format!("{value:0width$}"))
+            }),
+            Part::Random { width } => (1..=run.min(*width))
+                .rev()
+                .find_map(|n| then(n, &format!("{:0>width$}", &rest[..n]))),
+        }
+    }
+
     /// The parent `number` was numbered after, of those `is_parent` says
     /// could be: `{parent}` matches any text, so a number such as
     /// `PLAN-001-T01-T02` reads back as numbered after `PLAN-001-T01`, not
@@ -530,5 +575,31 @@ mod tests {
         );
         assert_eq!(nested.fits("DOCS-2-D07", Some("DOCS-1")), None);
         assert_eq!(nested.fits("DOCS-1-D07", None), None);
+    }
+
+    // r[verify cli.docs-import]
+    #[test]
+    fn pads_a_number_written_short() {
+        let foo = NumberPattern::parse("FOOID-{seq:4}").unwrap();
+        assert_eq!(foo.padded("FOOID-12", None).as_deref(), Some("FOOID-0012"));
+        assert_eq!(
+            foo.padded("FOOID-0012", None).as_deref(),
+            Some("FOOID-0012")
+        );
+        assert_eq!(
+            foo.padded("FOOID-12345", None).as_deref(),
+            Some("FOOID-12345")
+        );
+        assert_eq!(foo.padded("BAR-12", None), None);
+        assert_eq!(foo.padded("FOOID-", None), None);
+        let drawn = NumberPattern::parse("QR-{rand:4}").unwrap();
+        assert_eq!(drawn.padded("QR-42", None).as_deref(), Some("QR-0042"));
+        assert_eq!(drawn.padded("QR-12345", None), None);
+        let nested = NumberPattern::parse("{parent}-D{seq:2}").unwrap();
+        assert_eq!(
+            nested.padded("DOCS-1-D7", Some("DOCS-1")).as_deref(),
+            Some("DOCS-1-D07")
+        );
+        assert_eq!(nested.padded("DOCS-2-D7", Some("DOCS-1")), None);
     }
 }

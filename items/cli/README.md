@@ -192,7 +192,9 @@ type.
   `kuria:<number>`. `metadata.json`'s `number` keeps the akt's old
   number (`akt.number.given`, as `new --number` does), and
   `--references <regex>` or its `references` turns each match of the
-  groups `id` and `label`, outside code and links, into a reference. On a
+  groups `id` and `label`, outside code and links, into a reference;
+  `--pad-numbers` pads numbers written short to the pattern's widths
+  (`NumberPattern::padded`). On a
   server and in local mode, where each step is committed.
 
 - **Archiving** (`cli.archive`, [`src/writes/archive.rs`](src/writes/archive.rs)):
