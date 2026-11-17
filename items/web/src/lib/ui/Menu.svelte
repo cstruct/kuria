@@ -23,21 +23,43 @@
 		/** What the trigger shows; an ellipsis by default. The label must
 		 * contain it, so that people who name what they see reach it. */
 		text?: string;
+		/** Opens the menu at this element instead of at a trigger of its own,
+		 * as a context menu does; `open` then says when. */
+		anchor?: HTMLElement | null;
+		open?: boolean;
+		/** Where focus goes once it closes; to the trigger by default. */
+		onCloseAutoFocus?: (event: Event) => void;
 	}
 
-	let { label, items, text }: Props = $props();
+	let {
+		label,
+		items,
+		text,
+		anchor = null,
+		open = $bindable(false),
+		onCloseAutoFocus
+	}: Props = $props();
 </script>
 
-<DropdownMenu.Root>
-	<DropdownMenu.Trigger
-		class="menu-trigger {text ? 'text' : 'icon'}"
-		aria-label={label}
-		title={label}
-	>
-		{#if text}{text}{:else}<Ellipsis size={16} aria-hidden={true} />{/if}
-	</DropdownMenu.Trigger>
+<DropdownMenu.Root bind:open>
+	{#if !anchor}
+		<DropdownMenu.Trigger
+			class="menu-trigger {text ? 'text' : 'icon'}"
+			aria-label={label}
+			title={label}
+		>
+			{#if text}{text}{:else}<Ellipsis size={16} aria-hidden={true} />{/if}
+		</DropdownMenu.Trigger>
+	{/if}
 	<DropdownMenu.Portal>
-		<DropdownMenu.Content class="menu-content" sideOffset={4} align="end">
+		<DropdownMenu.Content
+			class="menu-content"
+			sideOffset={4}
+			align={anchor ? 'start' : 'end'}
+			customAnchor={anchor}
+			aria-label={anchor ? label : undefined}
+			{onCloseAutoFocus}
+		>
 			{#each items as item, i (i)}
 				{#if item.separated}<DropdownMenu.Separator class="menu-separator" />{/if}
 				<DropdownMenu.Item

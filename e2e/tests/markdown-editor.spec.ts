@@ -239,3 +239,62 @@ test('a diagram is written as code, previewed, toggled to its picture and saved'
 		'the body with its diagram'
 	).toEqual([]);
 });
+
+// r[verify app.editor]
+test('a link is changed and removed from its context menu', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Links ${stamp}` } }
+		)
+	).createAkt.number;
+	const guide = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON, $in: [String!]!) { createAkt(input: { type: "document", fields: $f, in: $in }) { number } }',
+			{ f: { title: `Linked ${stamp}`, body: 'Read [the docs](https://example.com/old) first.\n' }, in: [index] }
+		)
+	).createAkt.number;
+	const body = async () =>
+		(
+			await admin.graphql<{ akt: { fields: { markdown?: string }[] } }>(
+				'query($n: String!) { akt(number: $n) { fields { ... on MarkdownValue { markdown } } } }',
+				{ n: guide }
+			)
+		).akt.fields.find((f) => f?.markdown)?.markdown;
+
+	const page = await signIn(browser, seeded().people.developer);
+	await open(page, guide);
+	await page.getByRole('button', { name: 'Edit Body' }).click();
+	const editor = page.getByRole('textbox', { name: 'Body' });
+
+	// Right-clicked, the link's menu changes its text and address.
+	await editor.getByRole('link', { name: 'the docs' }).click({ button: 'right' });
+	const menu = page.getByRole('menu', { name: 'Link' });
+	await expect(menu.getByRole('menuitem', { name: 'Open in a new tab' })).toBeVisible();
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the link menu'
+	).toEqual([]);
+	await menu.getByRole('menuitem', { name: 'Edit link…' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Edit link' });
+	await expect(dialog.getByLabel('Text')).toHaveValue('the docs');
+	await dialog.getByLabel('Text').fill('the guide');
+	await dialog.getByLabel('Address').fill('https://example.com/new');
+	await dialog.getByRole('button', { name: 'Save' }).click();
+	await expect(editor.getByRole('link', { name: 'the guide' })).toBeVisible();
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
+	await expect.poll(body).toBe('Read [the guide](https://example.com/new) first.');
+
+	// From the keyboard, at the cursor, it is removed, its text kept.
+	await page.getByRole('button', { name: 'Edit Body' }).click();
+	await editor.getByRole('link', { name: 'the guide' }).click();
+	await page.keyboard.press('Shift+F10');
+	await page.getByRole('menu', { name: 'Link' }).getByRole('menuitem', { name: 'Remove link' }).click();
+	await expect(editor.getByRole('link')).toHaveCount(0);
+	await expect(editor).toContainText('Read the guide first.');
+	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
+	await expect.poll(body).toBe('Read the guide first.');
+});

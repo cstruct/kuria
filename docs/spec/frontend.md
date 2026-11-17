@@ -76,7 +76,9 @@ definition at the end, starting plain, where typing goes on. Saving MUST give th
 opening and saving an unchanged value MUST change nothing, its heading ids
 included. Inserting a reference MUST let a person find an akt
 (`app.pickers`), then choose one of its headings or none, and its living
-version or one of its versions.
+version or one of its versions. A link or reference in the editor MUST
+offer, from its context menu or from the keyboard's, to change its text
+and address, to open it in a new tab, and to remove it, keeping its text.
 
 r[app.references]
 The app MUST render a `markdown` field's headings with their ids as

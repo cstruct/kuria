@@ -46,7 +46,8 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   `theme.test.ts` checks against WCAG 2.2 AA.
 - [`src/lib/ui`](src/lib/ui): the components every page builds on:
   `Button`, `IconButton`, `Badge`, `Card`, `Field`, `EmptyState`, `Mono`,
-  `Toaster` and `toast()`, and, on Bits UI's accessible primitives, `Menu`,
+  `Toaster` and `toast()`, and, on Bits UI's accessible primitives, `Menu`
+  (behind its own trigger, or opened at an element as a context menu),
   `Dialog` and `Combobox`. Icons from `@lucide/svelte`, bundled. `/design`
   shows them all, in either theme.
 - [`src/lib/shell`](src/lib/shell): the app's frame: a sidebar of akt
