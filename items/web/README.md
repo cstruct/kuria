@@ -82,7 +82,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
-  (`labels.ts`), uploads, and the field editor and display components.
+  (`labels.ts`), uploads, and the field editor and display components,
+  a shown reference previewing its akt while pointed at or focused
+  (`ReferencePreview`, its excerpt from `previews.ts`).
   Archived akter (`archive.ts`, `app.archive`): lists, search, boards and
   a container's members show live akter, **Show archived** (kept in the
   address as `?archived=all`) adding archived ones, marked "Archived"; a

@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { renderMarkdown } from './markdown';
 	import { pictureOf } from './members';
+	import ReferencePreview from './ReferencePreview.svelte';
 	import { renderReferenced, type Reference } from './references';
 	import { pagesOf, sheetsOf } from './sheets';
 	import { textOf, type Value } from './values';
@@ -16,6 +17,7 @@
 
 	/** `multiline` text is rendered as Markdown. */
 	let { value, multiline = false }: { value: Value; multiline?: boolean } = $props();
+	let sheetsElement: HTMLDivElement | undefined = $state();
 </script>
 
 {#if value.__typename === 'AttachmentValue'}
@@ -40,13 +42,14 @@
 	{@const sheets = sheetsOf(
 		renderReferenced(value.markdown, value.references, hrefOf, value.images, value.diagrams)
 	)}
-	<div class="sheets">
+	<div class="sheets" bind:this={sheetsElement}>
 		{#each sheets as sheet, i (i)}
 			<!-- Sanitized by renderReferenced. -->
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 			<div class="sheet" use:pagesOf>{@html sheet}</div>
 		{/each}
 	</div>
+	<ReferencePreview root={sheetsElement} />
 {:else if value.__typename === 'TextValue' && multiline}
 	<!-- Sanitized by renderMarkdown. -->
 	<!-- eslint-disable-next-line svelte/no-at-html-tags -->

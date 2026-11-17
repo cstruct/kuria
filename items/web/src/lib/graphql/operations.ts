@@ -842,6 +842,39 @@ export const AktReferable = graphql(`
 	}
 `);
 
+// r[impl app.reference-preview]: what a reference's preview shows.
+export const ReferencePreview = graphql(`
+	query ReferencePreview($number: String!, $version: Int) {
+		akt(number: $number, version: $version) {
+			id
+			number
+			title
+			type {
+				key
+				name
+				presentation {
+					icon
+					colour
+				}
+			}
+			state {
+				name
+				tone
+			}
+			version {
+				number
+				label
+			}
+			fields {
+				... on MarkdownValue {
+					field
+					markdown
+				}
+			}
+		}
+	}
+`);
+
 export const ImageTypes = graphql(`
 	query ImageTypes {
 		aktTypes {

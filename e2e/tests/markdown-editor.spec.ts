@@ -298,3 +298,60 @@ test('a link is changed and removed from its context menu', async ({ browser }) 
 	await page.getByRole('form', { name: 'Edit Body' }).getByRole('button', { name: 'Done' }).click();
 	await expect.poll(body).toBe('Read the guide first.');
 });
+
+// r[verify app.reference-preview]
+// r[verify app.accessible]
+test('a reference in a shown document previews its akt', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Previews ${stamp}` } }
+		)
+	).createAkt.number;
+	const create = async (title: string, body: string) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($f: JSON, $in: [String!]!) { createAkt(input: { type: "document", fields: $f, in: $in }) { number } }',
+				{ f: { title, body }, in: [index] }
+			)
+		).createAkt.number;
+	const setup = await create(
+		`Setup ${stamp}`,
+		'Before.\n\n## Installing {#install}\n\nRun the **installer** twice.\n\n## Using {#use}\n\nElsewhere.\n'
+	);
+	const guide = await create(`Guide ${stamp}`, `See [installing](kuria:${setup}#install) first.\n`);
+
+	const page = await signIn(browser, seeded().people.developer);
+	await open(page, guide);
+	const link = page.locator('dd[data-field="body"]').getByRole('link', { name: 'installing' });
+
+	// Pointed at, it previews the akt and the start of the heading's section.
+	await link.hover();
+	const preview = page.getByRole('tooltip');
+	await expect(preview).toContainText(setup);
+	await expect(preview).toContainText(`Setup ${stamp}`);
+	await expect(preview).toContainText('Document');
+	await expect(preview).toContainText('Run the installer twice.');
+	await expect(preview).not.toContainText('Elsewhere.');
+	await expect(link).toHaveAccessibleDescription(/Run the installer twice/);
+	expect(
+		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,
+		'the preview'
+	).toEqual([]);
+	// It stays while the pointer is over it, and goes when it leaves both.
+	await preview.hover();
+	await page.waitForTimeout(400);
+	await expect(preview).toBeVisible();
+	await page.mouse.move(0, 0);
+	await expect(preview).toBeHidden();
+
+	// Focused, it shows too, and Escape closes it.
+	await link.focus();
+	await expect(preview).toContainText('Run the installer twice.');
+	await page.keyboard.press('Escape');
+	await expect(preview).toBeHidden();
+	await expect(page.getByTestId('number')).toHaveText(guide);
+});

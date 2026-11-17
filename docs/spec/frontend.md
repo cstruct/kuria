@@ -90,6 +90,15 @@ first referred to, linking to the note, and the notes MUST be listed after
 the text, each linking back; a definition nothing refers to MUST NOT be
 shown.
 
+r[app.reference-preview]
+Pointing at or focusing a reference in a shown, not edited, `markdown`
+field MUST, after a short pause and without leaving the page, preview the
+akt it goes to, read at the version the link goes to: its type, number,
+title and state, the version, and the start of the heading's section it
+names, else of its first `markdown` field, as plain text. The preview
+MUST stay open while the pointer is over it, and close when the pointer
+or focus leaves both, and on Escape.
+
 r[app.versions]
 An akt's page MUST list its versions, if its type declares them, and let a
 person release its current revision with an optional label, showing each
