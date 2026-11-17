@@ -812,6 +812,45 @@ fn redefines_types_only_where_their_akter_fit() {
     );
 }
 
+/// Defines `plan` again as a type `key` numbered by `pattern`.
+fn define_numbered(dir: &Dir, key: &str, pattern: &str, sequence: Option<&str>) {
+    let example =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/planning/plan.json");
+    let mut ty: Value = serde_json::from_str(&std::fs::read_to_string(example).unwrap()).unwrap();
+    ty["key"] = json!(key);
+    ty["name"] = json!(key);
+    ty["number"] = json!(pattern);
+    if let Some(sequence) = sequence {
+        ty["sequence"] = json!(sequence);
+    }
+    let file = dir.root.join(format!("../{key}.json"));
+    std::fs::write(&file, ty.to_string()).unwrap();
+    dir.ok(&["types", "define", file.to_str().unwrap()]);
+}
+
+// r[verify cli.local.numbers]
+// r[verify akt.number.random]
+#[test]
+fn draws_random_numbers_free_among_the_directory_s() {
+    let dir = Dir::new();
+    define_numbered(&dir, "ticket", "T-{rand:1}", None);
+    let mut numbers: Vec<String> = (0..10)
+        .map(|i| {
+            let title = format!("title=Ticket {i}");
+            dir.ok(&["new", "ticket", "--set", &title, "--format", "json"])
+                .json["number"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    numbers.sort();
+    let every: Vec<String> = (0..10).map(|n| format!("T-{n}")).collect();
+    assert_eq!(numbers, every);
+    let refused = dir.refused(&["new", "ticket", "--set", "title=One more"]);
+    assert_eq!(refused.code, "NUMBERS_EXHAUSTED", "{}", refused.message);
+}
+
 // r[verify cli.local.lock]
 #[test]
 fn writes_at_once_lose_nothing() {

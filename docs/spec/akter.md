@@ -237,9 +237,11 @@ not define MUST be refused.
 r[akt.number.pattern]
 An akt type's number pattern MUST be literal text with these placeholders:
 `{year}` and `{month}` (of the akt's creation, in UTC, as 4 and 2 digits),
-`{parent}` (the akt number of the container the akt was created in), and
-exactly one `{seq}` or `{seq:N}`, the sequence number zero-padded to at least
-N digits. `{parent}` MUST only be used by an akt type with `created_in`
+`{parent}` (the akt number of the container the akt was created in), at
+most one `{seq}` or `{seq:N}`, the sequence number zero-padded to at least
+N digits, and any number of `{rand:N}`, N random digits
+(`akt.number.random`), N from 1 to 12. It MUST hold a `{seq}`, a `{rand:N}`
+or both. `{parent}` MUST only be used by an akt type with `created_in`
 (`container.created-in`). Literal text MUST NOT contain `{` or `}`.
 
 r[akt.number.sequence]
@@ -249,6 +251,16 @@ without its sequence, so that `CAPA-{year}-{seq:4}` gives `CAPA-2026-0001`,
 `{parent}-RC-{seq:4}` counts separately in each parent:
 `RELEASE-2026-0001-RC-0002` and `RELEASE-2026-0002-RC-0001`. Akt numbers MUST be
 unique in their tenant and MUST never change.
+
+r[akt.number.random]
+Each `{rand:N}` MUST be N digits drawn at random, each digit as likely as
+any other. With a `{seq}`, the digits MUST be drawn before the sequence,
+which then counts per pattern as rendered with them, as with `{year}`.
+Without one, the number MUST be drawn again until no akt of the tenant
+has it, so that `QR-{rand:4}` gives a free `QR-4821`; when every number
+the pattern can render is taken, creating the akt MUST be refused as
+`NUMBERS_EXHAUSTED`, naming the pattern. Two akter created at once MUST
+NOT draw the same number.
 
 r[akt.edit]
 Editing an akt MUST change only the field values given, where a `null`

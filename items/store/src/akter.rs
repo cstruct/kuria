@@ -12,7 +12,8 @@ use uuid::Uuid;
 
 use crate::Connection;
 use crate::schema::{
-    akt, akt_origin, akt_revision, akt_type, akt_type_version, change_event, tenant_counter,
+    akt, akt_number, akt_origin, akt_revision, akt_type, akt_type_version, change_event,
+    tenant_counter,
 };
 
 /// Takes the next value of a tenant's counter `name`, counting from 1. The
@@ -29,6 +30,21 @@ pub async fn next_counter(conn: &mut Connection, tenant: Uuid, name: &str) -> Qu
         .set(tenant_counter::value.eq(tenant_counter::value + 1))
         .returning(tenant_counter::value)
         .get_result(conn)
+        .await
+}
+
+/// The tenant's akt numbers, archived akter's too, that match the SQL
+/// `LIKE` pattern `like`, escaped with `\\`.
+pub async fn numbers_like(
+    conn: &mut Connection,
+    tenant: Uuid,
+    like: &str,
+) -> QueryResult<Vec<String>> {
+    akt_number::table
+        .filter(akt_number::tenant_id.eq(tenant))
+        .filter(akt_number::number.like(like))
+        .select(akt_number::number)
+        .load(conn)
         .await
 }
 

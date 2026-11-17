@@ -98,6 +98,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
+        AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
         AktError::Archived(_) => coded(message, "ARCHIVED"),
         AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
         AktError::AlreadyMember { .. } => coded(message, "ALREADY_MEMBER"),

@@ -466,6 +466,69 @@ async fn concurrent_creates_get_distinct_numbers() {
     assert_eq!(numbers, expected);
 }
 
+// r[verify akt.number.random]
+#[tokio::test(flavor = "multi_thread")]
+async fn random_numbers_are_free_until_none_is() {
+    let world = World::new().await;
+    let mut digit = capa();
+    digit["number"] = json!("QR-{rand:1}");
+    world.define(digit).await;
+    // Created at once, ten akter take the ten numbers `QR-{rand:1}` gives.
+    let mut tasks = Vec::new();
+    for i in 0..10 {
+        let router = world.router.clone();
+        tasks.push(tokio::spawn(async move {
+            send(
+                &router,
+                graphql_with(
+                    "tenant",
+                    "mutation($f: JSON) { createAkt(input: { type: \"capa\", fields: $f }) { number } }",
+                    &json!({ "f": { "title": format!("Akt {i}") } }),
+                ),
+            )
+            .await
+            .json()["data"]["createAkt"]["number"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        }));
+    }
+    let mut numbers = Vec::new();
+    for task in tasks {
+        numbers.push(task.await.unwrap());
+    }
+    numbers.sort();
+    let every: Vec<String> = (0..10).map(|n| format!("QR-{n}")).collect();
+    assert_eq!(numbers, every);
+    let refused = world
+        .run(
+            "mutation { createAkt(input: { type: \"capa\", fields: { title: \"One more\" } }) { number } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(code(&refused), "NUMBERS_EXHAUSTED", "{refused}");
+    assert!(
+        refused["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("QR-{rand:1}"),
+        "{refused}"
+    );
+
+    // Beside a sequence, the drawn digits count on their own.
+    let mut both = capa();
+    both["number"] = json!("LOT-{rand:3}-{seq:2}");
+    world.define(both).await;
+    let number = world.create(json!({ "title": "Lot" })).await["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (digits, sequence) = number["LOT-".len()..].split_once('-').unwrap();
+    assert_eq!(digits.len(), 3, "{number}");
+    assert!(digits.bytes().all(|b| b.is_ascii_digit()), "{number}");
+    assert_eq!(sequence, "01", "{number}");
+}
+
 async fn record_person(world: &World, name: Option<&str>, email: Option<&str>) {
     let mut conn = world.db.pool().get().await.unwrap();
     kuria_store::people::record(

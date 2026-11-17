@@ -17,10 +17,13 @@ Akt type documents: their model, their validation, and number patterns.
   ignored.
 - `validate`: checks a document and returns every problem with its path
   (`fields[2].options`), or an `AktType` the engine can use.
-- `NumberPattern`: parses patterns such as `CAPA-{year}-{seq:4}` or
-  `{parent}-RC-{seq:4}`, renders akt numbers from a `NumberContext` (year,
-  month and parent number), and gives the scope that numbers sharing a
-  sequence have in common, which includes the parent's number.
+- `NumberPattern`: parses patterns such as `CAPA-{year}-{seq:4}`,
+  `{parent}-RC-{seq:4}` or `QR-{rand:4}`, renders akt numbers from a
+  `NumberContext` (year, month, parent number and the digits drawn for each
+  `{rand:N}`), gives the scope that numbers sharing a sequence have in
+  common, which includes the parent's number and the drawn digits, and,
+  for a pattern without `{seq}`, the SQL `LIKE` pattern of every number it
+  can give. Drawing the digits is the engine's (`rules/numbering.rs`).
 
 - `check_state_references`: the states one akt type names of another (board
   columns, draft recipes' `states`), checked against the latest versions of

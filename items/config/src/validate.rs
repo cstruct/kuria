@@ -1191,7 +1191,7 @@ mod tests {
         assert_eq!(
             problems(document),
             vec![
-                "number: the pattern needs exactly one {seq} or {seq:N}, not 0",
+                "number: the pattern needs a {seq}, {seq:N} or {rand:N} to tell akter apart",
                 "fields[0].options: only choice fields have options",
                 "fields[1].options: a choice field needs at least one option",
             ]

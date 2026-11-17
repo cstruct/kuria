@@ -314,7 +314,9 @@ refused as `STALE` (`cli.apply`).
 r[cli.local.numbers]
 A new akt's number MUST be one past the highest sequence of its number's
 scope among the directory's akt files, read through their type's number
-pattern; the directory keeps no counter.
+pattern; the directory keeps no counter. A number without a sequence MUST
+be drawn free of every number in the directory, archived akter's included
+(`akt.number.random`).
 
 r[cli.local.people]
 Users and contacts MUST be written and read as text: an email, else a

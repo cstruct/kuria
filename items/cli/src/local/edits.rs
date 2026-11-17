@@ -95,16 +95,12 @@ pub fn create(
     containers.extend(inside.iter().cloned());
     given.extend(split_sets(&shape, sets)?);
     // The number it will have, for the attachments it is given.
-    let number = numbering::next_from(
-        &w.dir.types[akt_type].ty,
-        w.now,
-        containers.first().map(String::as_str),
-        numbers(&w.dir),
-    );
+    let ty = w.dir.types[akt_type].ty.clone();
+    let number = next_number(w, &ty, containers.first().map(String::as_str))?;
     let mut fields = inputs(w, &shape, &number, &given)?;
     fields.retain(|_, v| !v.is_null());
 
-    let number = create_with(w, akt_type, &fields, &containers)?;
+    let number = create_with(w, akt_type, &fields, &containers, Some(number))?;
     Ok(answer(
         format!("Created {number}."),
         revision(&number, 1),
@@ -112,8 +108,28 @@ pub fn create(
     ))
 }
 
+/// The number a new akt of `ty` created in `parent` takes, from the
+/// directory's numbers (`cli.local.numbers`), drawing its random digits from
+/// the system.
+// r[impl cli.local.numbers]
+// r[impl akt.number.random]
+fn next_number(
+    w: &Writer,
+    ty: &kuria_config::AktType,
+    parent: Option<&str>,
+) -> Result<String, CliError> {
+    let mut random = || getrandom::u64().expect("system randomness");
+    numbering::next_from(ty, w.now, parent, numbers(&w.dir), &mut random).ok_or_else(|| {
+        CliError::refused(
+            "NUMBERS_EXHAUSTED",
+            format!("every number `{}` can give is taken", ty.document().number),
+        )
+    })
+}
+
 /// Creates an akt of `akt_type` with the inputs `fields` in `containers`,
-/// by the rules a server creates one by, and answers its number.
+/// by the rules a server creates one by, and answers its number: `number`
+/// if one was already drawn for it, else the next.
 // r[impl cli.local.rules]
 // r[impl cli.local.numbers]
 pub(crate) fn create_with(
@@ -121,6 +137,7 @@ pub(crate) fn create_with(
     akt_type: &str,
     fields: &Map<String, Json>,
     containers: &[String],
+    number: Option<String>,
 ) -> Result<String, CliError> {
     let refs: Vec<&str> = containers.iter().map(String::as_str).collect();
     containment::check_distinct(&refs)?;
@@ -136,12 +153,10 @@ pub(crate) fn create_with(
     let change = w.change();
     let outcome = kuria_engine::create(&t.ty, fields, change).map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, None, &outcome.changes)?;
-    let number = numbering::next_from(
-        &t.ty,
-        w.now,
-        containers.first().map(String::as_str),
-        numbers(&w.dir),
-    );
+    let number = match number {
+        Some(number) => number,
+        None => next_number(w, &t.ty, containers.first().map(String::as_str))?,
+    };
     let rank = rank_between(w.last_rank(), None)
         .map_err(|e| CliError::refused("INTERNAL", e.to_string()))?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();

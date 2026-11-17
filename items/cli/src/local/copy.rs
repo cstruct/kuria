@@ -98,7 +98,7 @@ pub fn copy(
             None => inside.clone(),
             Some(p) => vec![copies[p].clone()],
         };
-        let made = create_with(w, &akt.type_key, &fields, &into)?;
+        let made = create_with(w, &akt.type_key, &fields, &into, None)?;
         copies.insert(n.clone(), made);
     }
 
