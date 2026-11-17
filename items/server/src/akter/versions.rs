@@ -208,6 +208,9 @@ pub struct Releasing {
     pub number: String,
     pub revision: i32,
     pub label: Option<String>,
+    /// The PDF a type whose versions carry a file is released with
+    /// (`version.release-file`).
+    pub file: Option<Uuid>,
 }
 
 impl Akter {
@@ -219,11 +222,13 @@ impl Akter {
         number: &str,
         revision: i32,
         label: Option<String>,
+        file: Option<Uuid>,
     ) -> Result<VersionRow, AktError> {
         let releasing = [Releasing {
             number: number.to_owned(),
             revision,
             label,
+            file,
         }];
         let mut rows = self.release_together(caller, &releasing).await?;
         rows.pop()
@@ -259,6 +264,8 @@ struct Prepared {
     revision: i32,
     label: Option<String>,
     draft: Option<super::live::Loaded>,
+    /// The field and PDF a release with a file records.
+    file: Option<(String, Uuid)>,
     fields: std::collections::BTreeMap<String, kuria_engine::Value>,
     next: i32,
 }
@@ -299,7 +306,7 @@ async fn release_in(
             let json = kuria_engine::fields_to_json(&one.fields);
             found.versions.push(TargetVersion {
                 number: u32::try_from(one.next).unwrap_or_default(),
-                revision: one.akt.revision + i32::from(one.draft.is_some()),
+                revision: one.akt.revision + i32::from(one.draft.is_some() || one.file.is_some()),
                 headings: markdown::heading_ids(&one.ty.ty, &one.fields),
                 picture: picture_in(&one.ty, &json).is_some(),
             });
@@ -343,9 +350,16 @@ async fn release_in(
     }
     let mut rows = Vec::new();
     for (one, pins) in prepared.into_iter().zip(pins) {
-        let revision = match one.draft {
-            Some(loaded) => record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?,
-            None => one.revision,
+        let revision = match (one.draft, &one.file) {
+            (Some(loaded), _) => {
+                record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?
+            }
+            (None, Some(_)) => {
+                record_fields(conn, caller, &one.ty, one.akt.clone(), &one.fields)
+                    .await?
+                    .revision
+            }
+            (None, None) => one.revision,
         };
         let row = VersionRow {
             tenant_id: tenant,
@@ -410,9 +424,26 @@ async fn prepare(
             "a label is one line of at most 100 characters".to_owned(),
         ));
     }
+    // r[impl version.release-file]
+    let file = match (ty.ty.released_file(), one.file) {
+        (Some(key), Some(id)) => Some((key.to_owned(), id)),
+        (Some(_), None) => {
+            return Err(AktError::BadRequest(format!(
+                "{number} is released with its PDF: upload it and name it as `file`"
+            )));
+        }
+        (None, Some(_)) => {
+            return Err(AktError::BadRequest(format!(
+                "`{}` akter aren't released with a file",
+                ty.ty.key()
+            )));
+        }
+        (None, None) => None,
+    };
     let existing = stored::of(conn, tenant, akt.id).await?;
     let live = super::live::has_live_draft(&ty);
-    if !live && existing.iter().any(|v| v.revision == revision) {
+    // A release with a file, as one of a live draft, makes its revision.
+    if !live && file.is_none() && existing.iter().any(|v| v.revision == revision) {
         return Err(AktError::BadRequest(format!(
             "revision {revision} of {number} is already a version"
         )));
@@ -422,10 +453,13 @@ async fn prepare(
     } else {
         None
     };
-    let fields = match &draft {
+    let mut fields = match &draft {
         Some(loaded) => loaded.fields.clone(),
         None => values_of(&ty, &akt)?,
     };
+    if let Some((key, id)) = &file {
+        fields.insert(key.clone(), kuria_engine::Value::Attachment(*id));
+    }
     // r[impl live.release]
     if draft.is_some()
         && let Some(latest) = existing.first()
@@ -448,6 +482,7 @@ async fn prepare(
         revision,
         label,
         draft,
+        file,
         fields,
     })
 }
@@ -460,9 +495,26 @@ async fn record_draft(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
     ty: &StoredType,
-    mut akt: AktRow,
+    akt: AktRow,
     loaded: super::live::Loaded,
 ) -> Result<i32, AktError> {
+    let akt = record_fields(conn, caller, ty, akt, &loaded.fields).await?;
+    super::live::released(conn, ty, &akt, &loaded, Utc::now()).await?;
+    Ok(akt.revision)
+}
+
+/// Records `fields` as `akt`'s next revision, checked as a write would be,
+/// and answers the akt as it then is: a live draft's (`live.release`), or a
+/// release's file (`version.release-file`), whose attachment is held as an
+/// edit's is.
+// r[impl version.release-file]
+async fn record_fields(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &StoredType,
+    mut akt: AktRow,
+    fields: &std::collections::BTreeMap<String, kuria_engine::Value>,
+) -> Result<AktRow, AktError> {
     let tenant = akt.tenant_id;
     let before = values_of(ty, &akt)?;
     // r[impl akt.field.required]
@@ -471,7 +523,7 @@ async fn record_draft(
         .document()
         .fields
         .iter()
-        .find(|f| f.required && !loaded.fields.contains_key(&f.key))
+        .find(|f| f.required && !fields.contains_key(&f.key))
     {
         return Err(AktError::Refused(kuria_engine::Refusal::Required(
             missing.key.clone(),
@@ -479,9 +531,9 @@ async fn record_draft(
     }
     let outcome = kuria_engine::Outcome {
         state: akt.state.clone(),
-        hash: kuria_engine::state_hash(&akt.state, &loaded.fields),
-        changes: super::live::changes(&before, &loaded.fields),
-        fields: loaded.fields.clone(),
+        hash: kuria_engine::state_hash(&akt.state, fields),
+        changes: super::live::changes(&before, fields),
+        fields: fields.clone(),
     };
     let now = Utc::now();
     let expected = akt.revision;
@@ -502,6 +554,5 @@ async fn record_draft(
     let mut recorded = super::revision(&akt, caller.actor, None, None, &outcome, now);
     super::references::record(conn, &ty.ty, &akt, &outcome.fields, &mut recorded).await?;
     store::append_revision(conn, &recorded).await?;
-    super::live::released(conn, ty, &akt, &loaded, now).await?;
-    Ok(akt.revision)
+    Ok(akt)
 }

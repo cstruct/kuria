@@ -5,6 +5,28 @@ const by = { name: 'rm@shop.example' };
 
 group('history', () => {
 	// r[verify app.history]
+	it('says a file is a file, not someone', () => {
+		const file = '01a1e91d-5c9f-7675-b09e-2fd4f89598e8';
+		const entry = describe(
+			{
+				revision: 2,
+				transition: null,
+				reason: null,
+				changes: { pdf: file, owner: file },
+				createdAt: '2026-04-01T10:00:00Z',
+				by
+			},
+			{ pdf: 'PDF', owner: 'Owner' },
+			{},
+			{ pdf: 'ATTACHMENT', owner: 'USER' }
+		);
+		expect(entry.changes).toEqual([
+			{ field: 'PDF', value: 'a new file' },
+			{ field: 'Owner', value: 'a user' }
+		]);
+	});
+
+	// r[verify app.history]
 	it('says who did what, what it changed and which memberships', () => {
 		const names = { version: 'Version', go: 'Go for release' };
 		const transitions = { release: 'Release' };

@@ -116,11 +116,7 @@ fn copied_fields(ty: &StoredType, fields: &Json) -> Map<String, Json> {
         .as_object()
         .into_iter()
         .flatten()
-        .filter(|(key, _)| {
-            ty.ty
-                .field(key)
-                .is_some_and(|f| kuria_engine::copying::keeps(f.kind))
-        })
+        .filter(|(key, _)| kuria_engine::copying::keeps_field(&ty.ty, key))
         .map(|(key, value)| (key.clone(), value.clone()))
         .collect()
 }

@@ -107,6 +107,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `reference`
   - A link in a `markdown` field's text to an akt, written `kuria:<NUMBER>`, optionally to one of its versions (`@<n>`) and one of its headings (`#<heading id>`), such as `kuria:DOCS-1-D04@2#install`. Recorded as a link of the kind the field names. Not to be confused with the `reference` field kind, a link to something outside Kuria.
 
+- `external document`
+  - A document written elsewhere, such as a supplier's policy, kept as the PDF each of its versions was released with: an akt of a type whose `versions` name a `file` field (`version.file`). Nothing in Kuria knows the name; it is the documents example's.
+
 - `deep link`
   - A reference to a heading of another akt.
 

@@ -106,7 +106,7 @@ type.
     ([`src/writes/copy.rs`](src/writes/copy.rs)): `copyAkt`, then the
     copy's members walked, parents first, to answer each copy with its
     original;
-  - `release <number>… [--label]` (several together:
+  - `release <number>… [--label] [--file <pdf>]` (several together:
     `releaseVersions`), `versions <number>`, `diff <number>
     <from> [<to>]`, `pdf <number> [--field] [--version] -o <file>`, and
     `cat`/`show --version` ([`src/versions.rs`](src/versions.rs));

@@ -208,9 +208,11 @@ The client MUST offer:
   verdict, or one for another assignee (`akt.field.verdict`);
 - `copy <number> [--only <number>…] [--in <container>…]`, answering the
   copy's number and the numbers of the copies of its members (`akt.copy`);
-- `release <number> [--label <label>]`: its current revision as its next
-  version, answering the version's number, or each broken reference
-  (`version.release`, `version.references`);
+- `release <number> [--label <label>] [--file <pdf>]`: its current
+  revision as its next version, answering the version's number, or each
+  broken reference (`version.release`, `version.references`); with
+  `--file`, the PDF an akt type whose versions carry one is released with,
+  uploaded first (`version.release-file`);
 - `docs clone`, `docs status`, `docs diff`, `docs add`, `docs pull` and
   `docs push`: a container as files synced with Kuria (`clone.*`);
 - `docs fmt`, in a clone: its files in normal form (`clone.normal`);
@@ -384,7 +386,9 @@ a front-matter `versions` list of what `version.number` and
 makes no revision, so an akt file can't change with one. A release MUST be refused as `UNCOMMITTED` while
 the akt has changes git hasn't committed, and reading an akt at a version
 MUST read it from the latest commit at which it had the version's
-revision (`cli.local.history`).
+revision (`cli.local.history`). A release of an akt whose type declares `versions.file`
+MUST copy the file in as `cli.local.attachments` says and record it as a
+new revision (`version.release-file`), which the version names.
 
 r[cli.local.attachments]
 In an akt directory, an attachment MUST be a file under

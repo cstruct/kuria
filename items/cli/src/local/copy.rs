@@ -91,7 +91,7 @@ pub fn copy(
         let ty = w.dir.type_of(&akt).ty.clone();
         let fields: Map<String, Json> = current(&ty, &akt, &mut w.ids)?
             .into_iter()
-            .filter(|(key, _)| ty.field(key).is_some_and(|f| copying::keeps(f.kind)))
+            .filter(|(key, _)| copying::keeps_field(&ty, key))
             .map(|(key, value)| (key, value.to_json()))
             .collect();
         let into = match parent {

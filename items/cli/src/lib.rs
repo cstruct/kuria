@@ -389,9 +389,11 @@ fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, 
 /// `verdict` and `copy`, on a server.
 async fn protocol(session: &Session, command: Command) -> Result<Answer, CliError> {
     match command {
-        Command::Release { numbers, label } => {
-            versions::release(session, &numbers, label.as_deref()).await
-        }
+        Command::Release {
+            numbers,
+            label,
+            file,
+        } => versions::release(session, &numbers, label.as_deref(), file.as_deref()).await,
         Command::Pdf {
             number,
             field,
@@ -466,9 +468,13 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
         | Command::Unlink { .. }
         | Command::Verdict { .. }
         | Command::Copy { .. }) => local_more(&mut w, command),
-        Command::Release { numbers, label } => {
+        Command::Release {
+            numbers,
+            label,
+            file,
+        } => {
             let times = local::git::Times::of(&w.dir.root);
-            local::versions::release(&mut w, &times, &numbers, label.as_deref())
+            local::versions::release(&mut w, &times, &numbers, label.as_deref(), file.as_deref())
         }
         // r[impl cli.local.archive]
         Command::Archive { numbers, reason } => {

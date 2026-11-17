@@ -97,13 +97,17 @@ export function valueText(value: unknown, names: Map<string, string> = new Map()
 export function describe(
 	r: RevisionData,
 	fieldNames: Record<string, string>,
-	transitionNames: Record<string, string>
+	transitionNames: Record<string, string>,
+	/** Each field's kind, by key: an attachment's identifier is a file, not
+	 * someone. */
+	fieldKinds: Record<string, string> = {}
 ): Described {
 	const names = namesOf(r.named);
 	const changes = Object.entries((r.changes as Record<string, unknown>) ?? {}).map(
 		([key, value]) => ({
 			field: fieldNames[key] ?? key,
-			value: valueText(value, names)
+			value:
+				fieldKinds[key] === 'ATTACHMENT' && value !== null ? 'a new file' : valueText(value, names)
 		})
 	);
 	const membership = Object.entries(

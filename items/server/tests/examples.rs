@@ -37,7 +37,10 @@ const EXAMPLES: [(&str, &[&str]); 4] = [
             "release_notes",
         ],
     ),
-    ("documents", &["image", "document", "document_index"]),
+    (
+        "documents",
+        &["image", "document", "external_document", "document_index"],
+    ),
     ("planning", &["plan", "task", "gap", "decision"]),
     ("test-protocols", &["test_case", "test_protocol"]),
 ];
@@ -696,13 +699,34 @@ async fn documents(w: &World) {
         "Replaced by the release procedure",
     )
     .await;
+    // A supplier's policy, kept as the PDFs it publishes.
+    let supplier = w
+        .create(
+            &rm,
+            "external_document",
+            &[&manual],
+            json!({ "title": "Hosting supplier: information security policy", "owner": RM, "source": "The hosting supplier" }),
+            "Keep the supplier's policy with ours",
+        )
+        .await;
+    let issue = w
+        .upload(
+            &rm,
+            "supplier-security-policy.pdf",
+            "application/pdf",
+            include_bytes!("examples/supplier-security-policy.pdf").to_vec(),
+        )
+        .await;
+    w.release_file(&rm, &supplier, &issue, Some("Issue 3"))
+        .await;
     w.edit(
         &hedda,
         &manual,
         json!({ "folders": [
             { "title": "Policy", "items": [policy] },
             { "title": "Procedures", "items": [control, procedure, { "title": "Retired", "collapsible": true, "items": [old] }] },
-            { "title": "Engineering", "items": [onboarding] }
+            { "title": "Engineering", "items": [onboarding] },
+            { "title": "External", "items": [supplier] }
         ] }),
         "Sort the manual into folders",
     )

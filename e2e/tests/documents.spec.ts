@@ -267,3 +267,64 @@ test('a document is written and released at its version', async ({ browser }) =>
 		conflicted: []
 	});
 });
+
+/** The supplier's policy the documents example keeps, a one-page PDF. */
+const PDF = readFileSync(
+	join(import.meta.dirname, '..', '..', 'items', 'server', 'tests', 'examples', 'supplier-security-policy.pdf')
+);
+
+// r[verify app.external]
+// r[verify version.release-file]
+test('an external document is released as its PDF, shown and downloaded', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Suppliers ${stamp}` } }
+		)
+	).createAkt.number;
+	const rm = await signIn(browser, seeded().people.releaseManager);
+
+	// Created in the index, with no PDF to give yet.
+	await rm.goto(`/types/external_document/new?in=${index}`);
+	const form = rm.getByRole('form', { name: 'New External document' });
+	await expect(form.getByLabel('PDF')).toHaveCount(0);
+	await form.getByLabel('Title').fill(`Supplier policy ${stamp}`);
+	await form.getByRole('button', { name: 'Create' }).click();
+	await expect(rm.getByTestId('number')).toHaveText(`${index}-X01`);
+	const number = `${index}-X01`;
+	await expect(rm.locator('dd[data-field="released-pdf"]')).toContainText('No version has been released yet');
+	await expect(rm.getByRole('link', { name: 'Download PDF' })).toHaveCount(0);
+
+	// Released with the PDF uploaded.
+	const versions = rm.getByRole('region', { name: 'Versions' });
+	await versions.getByRole('button', { name: 'Release a version' }).click();
+	const release = rm.getByRole('dialog', { name: 'Release a version' });
+	await expect(release).toContainText('the PDF you upload');
+	await release.getByLabel('PDF').setInputFiles({ name: 'policy.pdf', mimeType: 'application/pdf', buffer: PDF });
+	await release.getByLabel('Label').fill('Issue 3');
+	expect(await violations(rm), 'the release dialog').toEqual([]);
+	await release.getByRole('button', { name: 'Release' }).click();
+	await expect(release).toBeHidden();
+
+	// Shown as the document, downloaded, and opened from the versions.
+	const shown = rm.locator('dd[data-field="released-pdf"] iframe');
+	await expect(shown).toHaveAttribute('src', `/akter/${number}/pdf?version=1`);
+	await expect(shown).toHaveAttribute('title', `Supplier policy ${stamp}, version 1`);
+	const served = await rm.request.get(`/akter/${number}/pdf?version=1`);
+	expect(served.headers()['content-type']).toBe('application/pdf');
+	expect(Buffer.from(await served.body()).equals(PDF)).toBe(true);
+	await expect(rm.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
+		'href',
+		`/akter/${number}/pdf?version=1&download`
+	);
+	await expect(versions.getByRole('link', { name: 'Open PDF of version 1' })).toHaveAttribute(
+		'href',
+		`/akter/${number}/pdf?version=1`
+	);
+	expect(await violations(rm), 'the released document').toEqual([]);
+	// Its PDF field is the release's to set.
+	await expect(rm.getByRole('button', { name: 'Edit PDF' })).toHaveCount(0);
+});

@@ -66,11 +66,25 @@ pub async fn release(
     session: &Session,
     numbers: &[String],
     label: Option<&str>,
+    file: Option<&std::path::Path>,
 ) -> Result<Answer, CliError> {
+    // r[impl version.release-file]: the PDF uploaded first, for one akt.
+    let file = match file {
+        Some(path) if numbers.len() == 1 => Some(upload(session, path).await?),
+        Some(_) => {
+            return Err(CliError::refused(
+                "BAD_REQUEST",
+                "a file is released with one akt at a time",
+            ));
+        }
+        None => None,
+    };
     let mut akter = Vec::new();
     for number in numbers {
         let akt = crate::writes::akt(session, number).await?;
-        akter.push(json!({ "number": number, "revision": akt.revision, "label": label }));
+        akter.push(
+            json!({ "number": number, "revision": akt.revision, "label": label, "file": file }),
+        );
     }
     let data = session
         .graphql(
@@ -104,6 +118,38 @@ pub async fn release(
         markdown: lines.join("\n"),
         json,
     })
+}
+
+/// Uploads the PDF at `path` as an attachment (`attachment.upload`),
+/// answering its id.
+async fn upload(session: &Session, path: &std::path::Path) -> Result<String, CliError> {
+    let bytes = std::fs::read(path)
+        .map_err(|e| CliError::refused("BAD_FILE", format!("{}: {e}", path.display())))?;
+    let name = path.file_name().map_or_else(
+        || "version.pdf".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let response = session
+        .http
+        .send(
+            reqwest::Method::POST,
+            &format!("{}/attachments", session.url),
+            Some(session.access_token()),
+            &crate::http::Body::File(&bytes, "application/pdf", &name),
+        )
+        .await?;
+    if !response.status().is_success() {
+        return Err(CliError::unavailable(format!(
+            "Kuria answered {} to uploading {}",
+            response.status(),
+            path.display()
+        )));
+    }
+    let answered: serde_json::Value = response.json().await?;
+    answered["id"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| CliError::unavailable("Kuria answered an upload without its id"))
 }
 
 /// `kuria versions <number>`: its versions, latest first.

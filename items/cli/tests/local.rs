@@ -877,6 +877,67 @@ fn akt_types_naming_one_sequence_share_its_numbers() {
     assert!(refused.message.contains("`plan`"), "{}", refused.message);
 }
 
+// r[verify cli.local.versions]
+// r[verify version.release-file]
+#[test]
+fn releases_an_external_document_with_its_pdf() {
+    let dir = Dir::new();
+    let ty = json!({
+        "key": "external_document", "name": "External document", "number": "EXT-{seq:3}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "pdf", "name": "PDF", "kind": "attachment", "media_types": ["application/pdf"] }
+        ],
+        "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+        "versions": { "file": "pdf" }
+    });
+    let document = dir.root.join("../external.json");
+    std::fs::write(&document, ty.to_string()).unwrap();
+    dir.ok(&["types", "define", document.to_str().unwrap()]);
+    dir.ok(&["new", "external_document", "--set", "title=Supplier policy"]);
+    let pdf = dir.root.join("../policy.pdf");
+    std::fs::write(&pdf, b"%PDF-1.4 first").unwrap();
+    // Only a release sets it.
+    let at = format!("pdf=@{}", pdf.display());
+    assert_eq!(dir.refused(&["set", "EXT-001", &at]).code, "REFUSED");
+    dir.commit("Supplier policy");
+    assert_eq!(dir.refused(&["release", "EXT-001"]).code, "BAD_REQUEST");
+    let released = dir
+        .ok(&[
+            "release",
+            "EXT-001",
+            "--file",
+            pdf.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(released["version"], 1);
+    assert_eq!(released["revision"], 2);
+    assert_eq!(
+        std::fs::read(dir.root.join("attachments/EXT-001/policy.pdf")).unwrap(),
+        b"%PDF-1.4 first"
+    );
+    assert!(file(&dir, "EXT-001").contains("attachments/EXT-001/policy.pdf"));
+    dir.commit("Version 1");
+    // Again, with no other change.
+    std::fs::write(&pdf, b"%PDF-1.4 second").unwrap();
+    let released = dir
+        .ok(&[
+            "release",
+            "EXT-001",
+            "--file",
+            pdf.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(
+        (released["version"].as_i64(), released["revision"].as_i64()),
+        (Some(2), Some(3))
+    );
+}
+
 // r[verify cli.local.lock]
 #[test]
 fn writes_at_once_lose_nothing() {

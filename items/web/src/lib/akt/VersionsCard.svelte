@@ -21,6 +21,9 @@
 		versions: readonly ShownVersion[];
 		/** The akt's `markdown` fields, each version's PDFs. */
 		pdfFields?: readonly { key: string; name: string }[];
+		/** Whether each version is released with a PDF, uploaded here
+		 * (`app.external`). */
+		withFile?: boolean;
 		/** The version being read, if one is. */
 		reading: number | null;
 		/** Whether the living version can be released now. */
@@ -28,8 +31,9 @@
 		busy: boolean;
 		refusal: Refusal | null;
 		/** Releases the living version with `label`, together with the
-		 * akter `together` names (`version.together`). */
-		onRelease: (label: string, together: string[]) => Promise<boolean>;
+		 * akter `together` names (`version.together`), with `file` if it is
+		 * released with one. */
+		onRelease: (label: string, together: string[], file: File | null) => Promise<boolean>;
 		onCompare: (from: number, to: number | null) => void;
 	}
 
@@ -37,6 +41,7 @@
 		number,
 		versions,
 		pdfFields = [],
+		withFile = false,
 		reading,
 		releasable,
 		busy,
@@ -47,22 +52,34 @@
 
 	let releaseOpen = $state(false);
 	let label = $state('');
+	let file = $state<File | null>(null);
 	/** The akter chosen to release together, of those a refusal named. */
 	let together = $derived<string[]>(refusal?.together ?? []);
 	let from = $state('');
 	let to = $state('');
 
 	// r[impl app.pdf]: each version's PDF, opened where it is shown.
-	const pdfOf = (version: number, field: string) =>
-		`/akter/${encodeURIComponent(number)}/pdf?field=${encodeURIComponent(field)}&version=${version}`;
+	const pdfOf = (version: number, field: string | null) =>
+		`/akter/${encodeURIComponent(number)}/pdf?${field ? `field=${encodeURIComponent(field)}&` : ''}version=${version}`;
+	// r[impl app.external]: a version released as a file has that PDF.
+	const pdfLinks = $derived(
+		withFile
+			? [{ key: null, shown: 'Open PDF' }]
+			: pdfFields.map((f) => ({
+					key: f.key,
+					shown: pdfFields.length > 1 ? `Open ${f.name} PDF` : 'Open PDF'
+				}))
+	);
 
 	const page = (version: number | null) =>
 		`${resolve('/akt/[number]', { number })}${version ? `?version=${version}` : ''}`;
 
 	async function release() {
-		if (await onRelease(label, together)) {
+		if (withFile && !file) return;
+		if (await onRelease(label, together, file)) {
 			releaseOpen = false;
 			label = '';
+			file = null;
 			together = [];
 		}
 	}
@@ -89,17 +106,16 @@
 							>{ago(v.releasedAt)}</time
 						></span
 					>
-					{#if pdfFields.length}
+					{#if pdfLinks.length}
 						<span class="pdfs">
-							{#each pdfFields as f (f.key)}
-								{@const shown = pdfFields.length > 1 ? `Open ${f.name} PDF` : 'Open PDF'}
+							{#each pdfLinks as f (f.key)}
 								<!-- The server's PDF route, not a page of the app. -->
 								<!-- eslint-disable svelte/no-navigation-without-resolve -->
 								<a
 									href={pdfOf(v.number, f.key)}
 									target="_blank"
 									rel="noopener"
-									aria-label="{shown} of version {v.number}">{shown}</a
+									aria-label="{f.shown} of version {v.number}">{f.shown}</a
 								>
 								<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							{/each}
@@ -150,7 +166,9 @@
 <Dialog
 	bind:open={releaseOpen}
 	title="Release a version"
-	description="It names this revision, which then never changes."
+	description={withFile
+		? 'It is the PDF you upload, kept as this version, which then never changes.'
+		: 'It names this revision, which then never changes.'}
 >
 	<form
 		id="release-form"
@@ -160,6 +178,17 @@
 			release();
 		}}
 	>
+		{#if withFile}
+			<label>
+				PDF
+				<input
+					type="file"
+					accept="application/pdf"
+					required
+					onchange={(e) => (file = e.currentTarget.files?.[0] ?? null)}
+				/>
+			</label>
+		{/if}
 		<label>
 			Label <span class="optional">(optional)</span>
 			<input bind:value={label} maxlength="100" placeholder="2.0" />

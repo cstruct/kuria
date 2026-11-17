@@ -117,7 +117,7 @@ const GRANTS: Record<string, Grant[]> = {
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes', 'plan', 'task', 'gap', 'decision'] },
 		{ role: 'developer-work', at: ['test_protocol', 'test_case', 'document_index', 'image'] },
-		{ role: 'document-release', at: ['document'] }
+		{ role: 'document-release', at: ['document', 'external_document'] }
 	],
 	'hedda@shop.example': ['reader']
 };

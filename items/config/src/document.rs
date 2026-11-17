@@ -163,6 +163,11 @@ pub struct VersionsDef {
     /// A Konklav action a release requires, besides `kuria:akter:edit`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+    /// The `attachment` field each version is released with a PDF in, for
+    /// akter written elsewhere, such as external documents
+    /// (`version.file`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
 }
 
 /// A kind of link an akt type's akter may have:

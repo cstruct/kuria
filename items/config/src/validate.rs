@@ -108,6 +108,13 @@ impl AktType {
         &self.document.created_in
     }
 
+    /// The field each version is released with a file in, if the type's
+    /// versions carry one (`version.file`).
+    #[must_use]
+    pub fn released_file(&self) -> Option<&str> {
+        self.document.versions.as_ref()?.file.as_deref()
+    }
+
     /// The board's configuration, if it has one.
     #[must_use]
     pub fn board(&self) -> Option<&BoardDef> {
@@ -172,6 +179,33 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
         && let Err(message) = check_action(action)
     {
         problems.add("versions.action", message);
+    }
+    // r[impl version.file]
+    if let Some(key) = document.versions.as_ref().and_then(|v| v.file.as_ref()) {
+        let pdf_only =
+            |f: &FieldDef| f.kind == FieldKind::Attachment && f.media_types == ["application/pdf"];
+        if !document.fields.iter().any(|f| &f.key == key && pdf_only(f)) {
+            problems.add(
+                "versions.file",
+                format!("`{key}` must be an attachment field taking only application/pdf"),
+            );
+        }
+        if document
+            .fields
+            .iter()
+            .any(|f| f.kind == FieldKind::Markdown)
+        {
+            problems.add(
+                "versions.file",
+                "a type released as files has no markdown fields: it is written elsewhere",
+            );
+        }
+        if document.live_drafts {
+            problems.add(
+                "versions.file",
+                "a type released as files has no live drafts: it is written elsewhere",
+            );
+        }
     }
     // r[impl live.declare]
     if document.live_drafts && document.versions.is_none() {

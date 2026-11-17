@@ -1041,7 +1041,13 @@ impl AkterMutation {
             renderer: akter(ctx)?.renderer(),
         };
         let row = akter(ctx)?
-            .release(caller, &input.number, input.revision, input.label)
+            .release(
+                caller,
+                &input.number,
+                input.revision,
+                input.label,
+                file_of(input.file.as_ref())?,
+            )
             .await
             .map_err(error)?;
         Ok(Version::from(&row))
@@ -1062,15 +1068,18 @@ impl AkterMutation {
             storage: akter(ctx)?.storage(),
             renderer: akter(ctx)?.renderer(),
         };
-        let releasing: Vec<_> = input
+        let releasing = input
             .akter
             .into_iter()
-            .map(|a| crate::akter::versions::Releasing {
-                number: a.number,
-                revision: a.revision,
-                label: a.label,
+            .map(|a| {
+                Ok(crate::akter::versions::Releasing {
+                    file: file_of(a.file.as_ref())?,
+                    number: a.number,
+                    revision: a.revision,
+                    label: a.label,
+                })
             })
-            .collect();
+            .collect::<async_graphql::Result<Vec<_>>>()?;
         let rows = akter(ctx)?
             .release_together(caller, &releasing)
             .await
@@ -2736,6 +2745,18 @@ pub struct ReleaseVersionInput {
     revision: i32,
     /// One line, at most 100 characters.
     label: Option<String>,
+    /// The uploaded PDF the version is released with, for a type whose
+    /// versions carry a file (`version.release-file`).
+    file: Option<ID>,
+}
+
+/// The attachment `file` names, if it names one.
+fn file_of(file: Option<&ID>) -> async_graphql::Result<Option<Uuid>> {
+    file.map(|id| {
+        Uuid::parse_str(id)
+            .map_err(|_| coded(format!("`{}` is no attachment", id.as_str()), "BAD_REQUEST"))
+    })
+    .transpose()
 }
 
 /// What archiving or unarchiving an akt takes.

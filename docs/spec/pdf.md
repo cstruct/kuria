@@ -38,7 +38,10 @@ akt's version `n` (`version.read`), to be shown where it opens, or with
 `&download` to be saved. It MUST be authenticated as `/graphql`
 is, and answer 404 for an akt the subject may not read, as if it did not
 exist, and for a field that isn't `markdown` or a version the akt doesn't
-have.
+have. For an akt whose type declares `versions.file`
+(`version.file`), it MUST answer instead the PDF the version asked for was
+released with, else its latest version's, and 404 before its first
+release.
 
 r[pdf.repeatable]
 A version's PDF MUST be the same each time it is rendered by the same

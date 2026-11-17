@@ -31,8 +31,11 @@
 		containedTypes,
 		linkKinds,
 		draftedFields,
+		releasedFile,
 		requiredFields
 	} from '#lib/akt/document.ts';
+	import ReleasedPdf from '#lib/akt/ReleasedPdf.svelte';
+	import { upload } from '#lib/akt/upload.ts';
 	import { oneField, settle } from '#lib/akt/editing.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import {
@@ -201,25 +204,49 @@
 	// r[impl app.pdf]: each markdown field as a PDF, of what is being read,
 	// to download.
 	const markdownFields = $derived((akt?.type.fields ?? []).filter((f) => f.kind === 'MARKDOWN'));
+	// r[impl app.external]: an akt released as files has the PDF of the
+	// version read, else of its latest.
+	const fileField = $derived(akt ? releasedFile(akt.type.document) : null);
+	const shownVersion = $derived(atVersion ?? akt?.versions[0]?.number ?? null);
 	const pdfs = $derived(
-		markdownFields.map((f, _, all) => ({
-			key: f.key,
-			label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
-			href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}&download`
-		}))
+		fileField
+			? shownVersion === null
+				? []
+				: [
+						{
+							key: fileField,
+							label: 'Download PDF',
+							href: `/akter/${encodeURIComponent(number)}/pdf?version=${shownVersion}&download`
+						}
+					]
+			: markdownFields.map((f, _, all) => ({
+					key: f.key,
+					label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
+					href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}&download`
+				}))
 	);
 	let comparing = $state<{ from: number; to: number | null } | null>(null);
 	let compareOpen = $state(false);
 
-	async function releaseVersion(label: string, together: string[] = []) {
+	async function releaseVersion(label: string, together: string[] = [], file: File | null = null) {
 		if (!akt) return false;
+		// r[impl app.external]: the PDF uploaded, then released with.
+		let uploaded: string | null = null;
+		if (file) {
+			try {
+				uploaded = (await upload(file)).id;
+			} catch (e) {
+				toast(e instanceof Error ? e.message : String(e), 'danger');
+				return false;
+			}
+		}
 		// r[impl app.live]: the live draft as it is, with every edit made.
 		if (live && !(await live.settled())) {
 			toast('Your last edits haven’t reached the server yet: try again', 'danger');
 			return false;
 		}
 		const named = label.trim() || null;
-		const input = { number: akt.number, revision: akt.revision, label: named };
+		const input = { number: akt.number, revision: akt.revision, label: named, file: uploaded };
 		if (together.length === 0) {
 			const released = await run(() => mutate(client, ReleaseVersion, { input }));
 			if (released) toast(`${akt.number}: released`, 'success');
@@ -707,31 +734,40 @@
 				<Card title="Details">
 					<dl class="fields">
 						{#each akt.type.fields as field (field.key)}
-							<FieldRow
-								{field}
-								value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
-								bind:draft={drafts[field.key]}
-								bind:reason
-								{people}
-								editing={editingField === field.key}
-								{editable}
-								drafted={drafted.includes(field.key)}
-								{busy}
-								error={editingField === field.key && refusal ? refusal.message : undefined}
-								onEdit={() => {
-									if (editingField) cancelEdit(editingField);
-									editingField = field.key;
-								}}
-								onSave={() => save(field.key)}
-								onCancel={() => cancelEdit(field.key)}
-								onDraft={() => draft(field.key)}
-								members={memberNames}
-								number={akt.number}
-								judged={ownVerdicts}
-								onVerdict={(verdict) => giveVerdict(akt, verdict)}
-								liveDraft={Boolean(live)}
-								live={live && isLiveText(field) ? live : null}
-							/>
+							{#if field.key === fileField}
+								<ReleasedPdf
+									number={akt.number}
+									name={field.name}
+									title={akt.title ?? akt.number}
+									version={shownVersion}
+								/>
+							{:else}
+								<FieldRow
+									{field}
+									value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
+									bind:draft={drafts[field.key]}
+									bind:reason
+									{people}
+									editing={editingField === field.key}
+									{editable}
+									drafted={drafted.includes(field.key)}
+									{busy}
+									error={editingField === field.key && refusal ? refusal.message : undefined}
+									onEdit={() => {
+										if (editingField) cancelEdit(editingField);
+										editingField = field.key;
+									}}
+									onSave={() => save(field.key)}
+									onCancel={() => cancelEdit(field.key)}
+									onDraft={() => draft(field.key)}
+									members={memberNames}
+									number={akt.number}
+									judged={ownVerdicts}
+									onVerdict={(verdict) => giveVerdict(akt, verdict)}
+									liveDraft={Boolean(live)}
+									live={live && isLiveText(field) ? live : null}
+								/>
+							{/if}
 						{/each}
 					</dl>
 				</Card>
@@ -857,6 +893,7 @@
 						number={akt.number}
 						versions={akt.versions}
 						pdfFields={markdownFields}
+						withFile={Boolean(fileField)}
 						reading={atVersion}
 						releasable={!atVersion && !akt.archived}
 						{busy}
@@ -893,6 +930,7 @@
 						revisions={akt.revisions}
 						{fieldNames}
 						{transitionNames}
+						fieldKinds={Object.fromEntries(akt.type.fields.map((f) => [f.key, f.kind]))}
 						versions={akt.versions}
 					/>
 				</Card>

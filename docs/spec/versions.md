@@ -9,11 +9,22 @@ none is special.
 
 r[version.declare]
 An akt type document MAY declare `versions`, an object whose optional
-`action` names the Konklav action a release needs (`authz.release`). The
-action MUST follow `authz.transition-action`, and `versions` MUST NOT hold
-any other member; otherwise the document MUST be refused. Releasing an
+`action` names the Konklav action a release needs (`authz.release`), and
+whose optional `file` names the field each version is released with a
+file in (`version.file`). The action MUST follow
+`authz.transition-action`, and `versions` MUST NOT hold any other member;
+otherwise the document MUST be refused. Releasing an
 akt whose type version doesn't declare `versions` MUST be refused as
 `BAD_REQUEST`.
+
+r[version.file]
+`versions.file` MUST name an `attachment` field of the type that takes
+only `application/pdf` (`media_types`), and the type MUST NOT have
+`markdown` fields or live drafts (`live.declare`): its akter are documents
+written elsewhere, such as an external document, released as a PDF each.
+Otherwise the document MUST be refused. Only a release MUST set the
+field: a write that would change it otherwise MUST be refused as
+`REFUSED`, and a copy (`akt.copy`) MUST NOT keep it.
 
 ## Releasing
 
@@ -71,7 +82,18 @@ prefixed by the number of the akt it is in.
 r[version.history]
 A release MUST be shown in the akt's history, and MUST append a change
 event (`akt.change-event`) naming the akt and the version. It MUST NOT
-make an akt revision.
+make an akt revision, except as `live.release` and `version.release-file`
+say.
+
+r[version.release-file]
+Releasing an akt whose type declares `versions.file` MUST take a file, an
+attachment (`attachment.upload`) the releaser may read, of the media type
+`application/pdf`, and MUST be refused as `BAD_REQUEST` without one or
+with one that isn't, or for any other type. The release MUST record the
+file in the field as a new akt revision, checked as an edit's attachment
+is (`attachment.references`), and name that revision as the version, so
+that the akt's living version holds its latest version's file. An akt in
+a final state MAY be released so too.
 
 ## Reading
 

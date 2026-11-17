@@ -148,6 +148,19 @@ impl World {
         .await;
     }
 
+    /// Releases `number` as its next version with the uploaded PDF `file`
+    /// (`version.release-file`).
+    #[allow(dead_code, reason = "not every test releases files")]
+    pub async fn release_file(&self, token: &str, number: &str, file: &str, label: Option<&str>) {
+        let revision = self.revision(token, number).await;
+        self.ok(
+            token,
+            "mutation($n: String!, $r: Int!, $l: String, $f: ID) { releaseVersion(input: { number: $n, revision: $r, label: $l, file: $f }) { number } }",
+            json!({ "n": number, "r": revision, "l": label, "f": file }),
+        )
+        .await;
+    }
+
     /// Uploads `body` as `name`, answering the attachment's id.
     pub async fn upload(&self, token: &str, name: &str, media_type: &str, body: Vec<u8>) -> String {
         let answer = send(

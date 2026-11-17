@@ -278,6 +278,10 @@ pub enum Command {
         /// A label beside the version's number, such as `2.0`.
         #[arg(long)]
         label: Option<String>,
+        /// The PDF the version is released with, for an akt type whose
+        /// versions carry one, such as an external document.
+        #[arg(long, value_name = "PDF")]
+        file: Option<std::path::PathBuf>,
     },
     /// Copy an akt and its members, or the part `--only` names, as new
     /// akter of the same types.

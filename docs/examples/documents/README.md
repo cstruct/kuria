@@ -14,14 +14,17 @@ akt type can use ([spec](../../spec/akter.md),
 |---|---|---|---|
 | `document_index` | `DOCS-1` | documents | |
 | `document` | `DOCS-1-D01` | | a document index |
+| `external_document` | `DOCS-1-X01` | | a document index |
 | `image` | `IMG-1` | | |
 
 The documents are [`document_index.json`](document_index.json),
-[`document.json`](document.json) and [`image.json`](image.json), images
-first, since a document's references may name them:
+[`document.json`](document.json),
+[`external_document.json`](external_document.json) and
+[`image.json`](image.json), images first, since a document's references may
+name them:
 
 ```sh
-kuria types define docs/examples/documents/{image,document,document_index}.json
+kuria types define docs/examples/documents/{image,document,external_document,document_index}.json
 ```
 
 ## How it fits together
@@ -71,6 +74,13 @@ kuria types define docs/examples/documents/{image,document,document_index}.json
   reference naming no version meant, so its links keep their meaning.
 - **PDFs:** a document's body, of the living version or a version, its
   pictures and diagrams drawn in it.
+- **External documents** are written elsewhere, such as a supplier's
+  policy, and kept here as the PDFs they are published as: the type says
+  `"versions": { "file": "pdf" }`, so each release uploads a PDF into its
+  `pdf` field, which nothing else sets ([versions](../../spec/versions.md)).
+  It has no body to edit; its page shows the PDF of the version read, else
+  the latest, and `Download PDF` gives it. References name one as any
+  other akt, at a version if they like.
 - **Clones:** an index as files, its folders as directories, each document
   a Markdown file, to edit with any editor and sync with `kuria docs pull`
   and `kuria docs push` (below).

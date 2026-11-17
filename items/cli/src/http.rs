@@ -17,6 +17,22 @@ pub enum Body<'a> {
     Form(&'a [(&'a str, &'a str)]),
     /// Bytes of a media type, such as a bundle's tar archive.
     Bytes(&'a [u8], &'a str),
+    /// A file to upload as an attachment: its bytes, media type and name
+    /// (`attachment.upload`).
+    File(&'a [u8], &'a str, &'a str),
+}
+
+/// `name` percent-encoded, as `X-Attachment-Name` takes it.
+fn encoded(name: &str) -> String {
+    name.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                char::from(b).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
 }
 
 /// An HTTP client that proves possession of its DPoP key on every request.
@@ -75,6 +91,10 @@ impl Http {
                 Body::Form(fields) => request.form(fields),
                 Body::Bytes(bytes, media_type) => request
                     .header("content-type", *media_type)
+                    .body(bytes.to_vec()),
+                Body::File(bytes, media_type, name) => request
+                    .header("content-type", *media_type)
+                    .header("x-attachment-name", encoded(name))
                     .body(bytes.to_vec()),
             };
             let response = request.send().await?;

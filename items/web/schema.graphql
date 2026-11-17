@@ -1298,6 +1298,11 @@ input ReleaseVersionInput {
 	One line, at most 100 characters.
 	"""
 	label: String
+	"""
+	The uploaded PDF the version is released with, for a type whose
+	versions carry a file (`version.release-file`).
+	"""
+	file: ID
 }
 
 """

@@ -1,9 +1,9 @@
 ---
 number: PLAN-020
 type: plan
-revision: 7
+revision: 10
 rank: b5O
-state: active
+state: done
 title: "Random and shared akt numbers, and external documents"
 owner: albin@mattsson.io
 ---
@@ -98,12 +98,23 @@ akt.number.shared specified; a type document's sequence parsed and validated; de
 <!-- akt: PLAN-020-T03 -->
 ---
 type: task
-revision: 1
+revision: 4
 rank: b5R
-state: todo
+state: done
 in: [PLAN-020]
 title: "External documents: a PDF per released version"
 ---
+
+<!-- field: description -->
+Done, as PLAN-020-D03 decided: `"versions": { "file": "pdf" }` names an attachment field taking only `application/pdf` (`version.declare`, `version.file`); a type released as files has no markdown fields or live drafts.
+
+- Releasing (`version.release-file`): `ReleaseVersionInput.file`; `prepare`/`record_fields` in `items/server/src/akter/versions.rs` record the PDF as a new revision, held as an edit's attachment is; the version names it. Edits that change the field are refused in the engine's `apply`; copies drop it (`copying::keeps_field`).
+- `/akter/{n}/pdf` (`pdf.route`) streams the version's PDF, else the latest's, inline or to download; 404 before the first release.
+- CLI: `kuria release <n> --file <pdf>` uploads first; local mode copies it under `attachments/<number>/` and bumps the revision.
+- App (`app.external`): `ReleasedPdf` shows the PDF in the Details card, the release dialog asks for it, `Download PDF` and each version's `Open PDF` link to it, the new-akt form leaves the field out. History now says "a new file" for any attachment, not "a user".
+- Example: `docs/examples/documents/external_document.json`, in the index's `contains` and sections; the example bundle has a supplier's policy released as Issue 3; e2e and example grants include it.
+
+Verified: `items/server/tests/external_documents.rs`, `releases_an_external_document_with_its_pdf` (local), e2e `an external document is released as its PDF, shown and downloaded` (with axe), `mise run lint`, `mise run test`. Not checked: the PDF drawn in the iframe in a headed browser (headless Chromium has no PDF viewer; the route serves it inline with no framing restriction).
 
 <!-- field: acceptance -->
 version.file and its app, CLI and bundle rules specified; versions { file: true } validated; releasing takes and records a PDF; the page shows and downloads it; CLI and local mode release with --file; bundles carry it; external_document in the documents example; end-to-end test.
@@ -131,9 +142,9 @@ Sharing should never be an accident (the user's choice), and requiring one patte
 <!-- akt: PLAN-020-D02 -->
 ---
 type: decision
-revision: 2
+revision: 3
 rank: b5T
-state: decided
+state: superseded
 in: [PLAN-020]
 title: An external document is a type whose versions carry a file
 decided_by: albin@mattsson.io
@@ -147,3 +158,43 @@ versions declares file: true; each release takes an uploaded PDF, recorded on th
 
 <!-- field: why -->
 Keeps akt types generic: any type may release files, and the app shows a version's file wherever it would show its rendering.
+
+<!-- akt: PLAN-020-D03 -->
+---
+type: decision
+revision: 2
+rank: b5U
+state: decided
+in: [PLAN-020]
+title: "A release's PDF is a field value, set by the release as a revision"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+PLAN-020-D02 had each version record its file. akt_version can't be updated after insert, attachment download rights come from what akter hold, and bundles, local mode and clones already carry attachment fields.
+
+<!-- field: decision -->
+versions.file names an attachment field taking only application/pdf. A release takes an uploaded PDF and records it in that field as a new revision, which the version names; only releases set the field (edits are refused, copies drop it). A type released as files has no markdown fields and no live drafts. /akter/{n}/pdf serves the version's file, inline, so the app embeds it.
+
+<!-- field: why -->
+No new storage, no migration: download rights, history, bundles, local mode and version reads work as they do for any attachment, and the living version holds the latest PDF.
+
+<!-- akt: PLAN-020-D04 -->
+---
+type: decision
+revision: 2
+rank: b5V
+state: decided
+in: [PLAN-020]
+title: "Types numbered after different parents don't share numbers, so need no sequence"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+The end-to-end tenant holds the planning and documents examples: decision and document are both numbered {parent}-D{seq:2}, the first created only in plans, the second only in document indexes. PLAN-020-D01's check refused the second.
+
+<!-- field: decision -->
+Two types number alike, and must name one sequence, only when they have the same pattern and it has no {parent}, or they share a created_in type. akt.number.shared says so.
+
+<!-- field: why -->
+Numbers after parents of different types can never meet, so refusing them would break examples loaded together for nothing.
