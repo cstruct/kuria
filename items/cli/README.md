@@ -189,8 +189,11 @@ type.
   sets the type's one `markdown` field to the draft, its pictures, which
   pandoc extracts (a Lua filter keeps them Markdown), first made image
   akter of `--image-type` or the one type of pictures and embedded as
-  `kuria:<number>`. On a server and in local mode, where each step is
-  committed.
+  `kuria:<number>`. `metadata.json`'s `number` keeps the akt's old
+  number (`akt.number.given`, as `new --number` does), and
+  `--references <regex>` or its `references` turns each match of the
+  groups `id` and `label`, outside code and links, into a reference. On a
+  server and in local mode, where each step is committed.
 
 - **Archiving** (`cli.archive`, [`src/writes/archive.rs`](src/writes/archive.rs)):
   `archive <number>… [--reason]` and `unarchive <number>… [--reason]`

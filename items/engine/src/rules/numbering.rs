@@ -103,6 +103,25 @@ pub fn render(
     ty.number().render(&context(at, parent, random), sequence)
 }
 
+/// The counter to raise, and to what, for the number `number` given to an
+/// akt of `ty` created in `parent` (`akt.number.given`): `Ok(None)` for a
+/// pattern that doesn't count; refused unless the pattern can give it.
+// r[impl akt.number.given]
+pub fn given(
+    ty: &AktType,
+    number: &str,
+    parent: Option<&str>,
+) -> Result<Option<(String, u64)>, String> {
+    let read = ty.number().fits(number, parent).ok_or_else(|| {
+        format!(
+            "`{number}` isn't a number `{}` gives{}",
+            ty.document().number,
+            parent.map(|p| format!(" in {p}")).unwrap_or_default()
+        )
+    })?;
+    Ok(read.map(|(scope, sequence)| (format!("number:{scope}"), sequence)))
+}
+
 /// Every number `ty`, which has no `{seq}`, can give an akt created at
 /// `at` in `parent`, as a SQL `LIKE` pattern escaped with `\`.
 #[must_use]

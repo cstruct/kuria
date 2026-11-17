@@ -405,3 +405,53 @@ test('a document is imported from a folder, its old versions as PDFs', async ({ 
 	expect(Buffer.from(await served.body()).equals(PDF)).toBe(true);
 	expect(await violations(rm), 'version 1 of the imported document').toEqual([]);
 });
+
+// r[verify cli.docs-import]
+// r[verify akt.number.given]
+// r[verify app.references]
+test('imported documents keep their numbers and refer to each other', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Kept ${stamp}` } }
+		)
+	).createAkt.number;
+	const [manual, policy] = [`${index}-D41`, `${index}-D42`];
+	const folder = (metadata: object, draft: string) => {
+		const at = mkdtempSync(join(tmpdir(), 'kuria-import-'));
+		writeFileSync(join(at, 'draft.md'), draft);
+		writeFileSync(join(at, 'metadata.json'), JSON.stringify({ ...metadata, draft: 'draft.md' }));
+		return at;
+	};
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const pattern = String.raw`(?<id>DOCS-\d+-D\d{2})(?<label>(?:\s?\p{Lu}\w+)*)`;
+	const imported = async (at: string) => {
+		const ran = await cli.run(['docs', 'import', at, '--type', 'document', '--in', index, '--references', pattern, '--format', 'json']);
+		expect(ran.code, ran.stderr).toBe(0);
+		return (JSON.parse(ran.stdout) as { number: string }).number;
+	};
+	// The manual first, referring to the policy that isn't there yet.
+	expect(
+		await imported(folder({ number: manual, title: `Manual ${stamp}` }, `# Manual\n\nSuppliers follow ${policy} Supplier Policy.\n`))
+	).toBe(manual);
+	const rm = await signIn(browser, seeded().people.releaseManager);
+	await open(rm, manual);
+	const body = rm.locator('dd[data-field="body"]');
+	await expect(body).toContainText('broken reference');
+	expect(
+		await imported(folder({ number: policy, title: `Policy ${stamp}` }, `# Policy\n\nPart of ${manual} Quality Manual.\n`))
+	).toBe(policy);
+
+	// Both in, each refers to the other.
+	await rm.reload();
+	await expect(body.getByRole('link', { name: 'Supplier Policy' })).toHaveAttribute('href', `/akt/${policy}`);
+	await body.getByRole('link', { name: 'Supplier Policy' }).click();
+	await expect(rm.getByTestId('number')).toHaveText(policy);
+	await expect(rm.locator('dd[data-field="body"]').getByRole('link', { name: 'Quality Manual' })).toHaveAttribute(
+		'href',
+		`/akt/${manual}`
+	);
+});

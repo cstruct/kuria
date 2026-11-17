@@ -189,6 +189,7 @@ pub(super) async fn copy_in(
             &copied_fields(&node.ty, &read.fields),
             Some(said(&format!("copied from {}", node.row.number))),
             &into,
+            None,
         )
         .await?;
         store::insert_origin(conn, tenant, made.id, node.row.id).await?;

@@ -113,6 +113,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
                 akt_type,
                 inside,
                 image_type,
+                references,
                 reason,
             },
     } = &cli.command
@@ -122,6 +123,7 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
             akt_type,
             inside,
             image_type: image_type.as_deref(),
+            references: references.as_deref(),
             reason: reason.as_deref(),
         };
         return import(&context, root.as_deref(), &asked).await;
@@ -488,14 +490,18 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             inside,
             sets,
             file,
+            number,
             reason,
         } => edits::create(
             &mut w,
-            &akt_type,
-            &inside,
-            &sets,
-            file.as_deref(),
-            reason.as_deref(),
+            &writes::Created {
+                akt_type: &akt_type,
+                inside: &inside,
+                sets: &sets,
+                file: file.as_deref(),
+                number: number.as_deref(),
+                reason: reason.as_deref(),
+            },
         ),
         Command::Apply {
             files,
@@ -657,6 +663,7 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             inside,
             sets,
             file,
+            number,
             reason,
         } => {
             let created = writes::Created {
@@ -664,6 +671,7 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
                 inside: &inside,
                 sets: &sets,
                 file: file.as_deref(),
+                number: number.as_deref(),
                 reason: reason.as_deref(),
             };
             writes::create(session, &created).await

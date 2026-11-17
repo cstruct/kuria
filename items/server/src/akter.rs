@@ -109,6 +109,8 @@ pub enum AktError {
     Forbidden,
     #[error("every number `{0}` can give is taken")]
     NumbersExhausted(String),
+    #[error("`{0}` is taken by another akt")]
+    NumberTaken(String),
     #[error("{0} is archived: unarchive it first")]
     Archived(String),
     #[error("`{container}` can't contain akter of the type `{member}`")]

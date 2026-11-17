@@ -262,6 +262,18 @@ the pattern can render is taken, creating the akt MUST be refused as
 `NUMBERS_EXHAUSTED`, naming the pattern. Two akter created at once MUST
 NOT draw the same number.
 
+r[akt.number.given]
+Creating an akt MAY give its number, such as the number it had in a
+system it is imported from. The number MUST be one the type's pattern
+can give an akt created in the containers named, whatever its year,
+month and drawn digits, its `{parent}` the first container's number;
+otherwise creating it MUST be refused as `BAD_REQUEST`. It MUST be free
+in the tenant, archived akter included, else refused as `NUMBER_TAKEN`.
+With a `{seq}`, the counter of the number's scope MUST be raised to at
+least its sequence, so that the number is never given again
+(`akt.number.sequence`); a `{rand:N}` without one never draws a number
+taken (`akt.number.random`).
+
 r[akt.number.shared]
 An akt type document MAY name a `sequence`, a key, that akt types number
 from together: a Policy and a Procedure both numbered `QMS-{seq:4}` and

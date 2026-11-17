@@ -25,6 +25,8 @@ pub enum Operation {
         fields: Map<String, Json>,
         reason: Option<String>,
         inside: Vec<String>,
+        /// Its number, if it is given one (`akt.number.given`).
+        number: Option<String>,
     },
     Edit {
         number: String,
@@ -305,7 +307,19 @@ async fn run(
             fields,
             reason,
             inside,
-        } => super::create::create_in(conn, caller, &key, &fields, reason, &inside).await,
+            number,
+        } => {
+            super::create::create_in(
+                conn,
+                caller,
+                &key,
+                &fields,
+                reason,
+                &inside,
+                number.as_deref(),
+            )
+            .await
+        }
         Operation::Edit {
             number,
             revision,
@@ -398,6 +412,7 @@ mod tests {
             key: "task".to_owned(),
             fields: Map::new(),
             reason: None,
+            number: None,
             inside: Vec::new(),
         }
     }

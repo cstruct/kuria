@@ -195,6 +195,10 @@ pub enum Command {
         /// Its fields from an akt file, as `kuria cat` writes one.
         #[arg(long)]
         file: Option<PathBuf>,
+        /// Its number, such as the one it had where it comes from, which
+        /// its type's pattern must give and no akt may have; else its next.
+        #[arg(long)]
+        number: Option<String>,
         #[arg(long)]
         reason: Option<String>,
     },
@@ -399,6 +403,12 @@ pub enum DocsCommand {
         /// presentation names an `image` field, if left out.
         #[arg(long, value_name = "TYPE")]
         image_type: Option<String>,
+        /// A pattern whose group `id` names an akt the draft refers to and
+        /// whose group `label`, if any, is the reference's text, such as
+        /// `(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)`; a folder's
+        /// `metadata.json` may give its own as `references`.
+        #[arg(long, value_name = "PATTERN")]
+        references: Option<String>,
         /// Why, recorded with each revision it makes.
         #[arg(long)]
         reason: Option<String>,

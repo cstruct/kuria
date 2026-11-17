@@ -70,14 +70,15 @@ fn field_input(
 /// `kuria new <type>` in local mode.
 // r[impl cli.local.rules]
 // r[impl cli.local.numbers]
-pub fn create(
-    w: &mut Writer,
-    akt_type: &str,
-    inside: &[String],
-    sets: &[String],
-    path: Option<&Path>,
-    reason: Option<&str>,
-) -> Result<Answer, CliError> {
+pub fn create(w: &mut Writer, asked: &crate::writes::Created<'_>) -> Result<Answer, CliError> {
+    let crate::writes::Created {
+        akt_type,
+        inside,
+        sets,
+        file: path,
+        number: asked_number,
+        reason,
+    } = *asked;
     let shape = w.shape(akt_type)?;
     let mut given = Map::new();
     let mut containers: Vec<String> = Vec::new();
@@ -98,7 +99,11 @@ pub fn create(
     given.extend(split_sets(&shape, sets)?);
     // The number it will have, for the attachments it is given.
     let ty = w.dir.types[akt_type].ty.clone();
-    let number = next_number(w, &ty, containers.first().map(String::as_str))?;
+    let parent = containers.first().map(String::as_str);
+    let number = match asked_number {
+        Some(given) => given_number(w, &ty, given, parent)?,
+        None => next_number(w, &ty, parent)?,
+    };
     let mut fields = inputs(w, &shape, &number, &given)?;
     fields.retain(|_, v| !v.is_null());
 
@@ -127,6 +132,26 @@ fn next_number(
             format!("every number `{}` can give is taken", ty.document().number),
         )
     })
+}
+
+/// `number`, given to a new akt of `ty` in `parent`, checked as one its
+/// pattern gives and free among the directory's numbers, archived akter's
+/// too (`akt.number.given`).
+// r[impl akt.number.given]
+fn given_number(
+    w: &Writer,
+    ty: &kuria_config::AktType,
+    number: &str,
+    parent: Option<&str>,
+) -> Result<String, CliError> {
+    numbering::given(ty, number, parent).map_err(|m| CliError::refused("BAD_REQUEST", m))?;
+    if numbers(&w.dir).any(|n| n == number) {
+        return Err(CliError::refused(
+            "NUMBER_TAKEN",
+            format!("`{number}` is taken by another akt"),
+        ));
+    }
+    Ok(number.to_owned())
 }
 
 /// Creates an akt of `akt_type` with the inputs `fields` in `containers`,

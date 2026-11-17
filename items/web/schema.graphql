@@ -526,6 +526,12 @@ input CreateAktInput {
 	The containers to create it in, by number; the first is its parent.
 	"""
 	in: [String!]! = []
+	"""
+	Its number, such as the one it had where it is imported from, which
+	its type's pattern must give and no akt may have
+	(`akt.number.given`); else its next.
+	"""
+	number: String
 }
 
 """

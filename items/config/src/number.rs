@@ -252,6 +252,19 @@ impl NumberPattern {
             .flatten()
     }
 
+    /// Whether this pattern can give `number` to an akt created in
+    /// `parent`, whatever its year, month and drawn digits
+    /// (`akt.number.given`); if so, the counter scope and sequence it reads
+    /// as, if the pattern counts.
+    // r[impl akt.number.given]
+    #[must_use]
+    pub fn fits(&self, number: &str, parent: Option<&str>) -> Option<Option<(String, u64)>> {
+        let mut read = Read::default();
+        let accept = |p: &str| parent == Some(p);
+        self.read_from(0, number, &mut read, &accept)
+            .then(|| read.sequence.map(|s| (read.scope, s)))
+    }
+
     /// The parent `number` was numbered after, of those `is_parent` says
     /// could be: `{parent}` matches any text, so a number such as
     /// `PLAN-001-T01-T02` reads back as numbered after `PLAN-001-T01`, not
@@ -490,5 +503,32 @@ mod tests {
         );
         assert_eq!(both.read("QR_2026-482-03"), None);
         assert_eq!(both.like(&at(2026, 1)), "QR\\_2026-____-%");
+    }
+
+    // r[verify akt.number.given]
+    #[test]
+    fn says_whether_a_given_number_fits() {
+        let capa = NumberPattern::parse("FOOID-{seq:4}").unwrap();
+        assert_eq!(
+            capa.fits("FOOID-1234", None),
+            Some(Some(("FOOID-{seq:4}".to_owned(), 1234)))
+        );
+        assert_eq!(capa.fits("FOOID-12", None), None);
+        assert_eq!(capa.fits("BAR-1234", None), None);
+        let yearly = NumberPattern::parse("CAPA-{year}-{seq:4}").unwrap();
+        assert_eq!(
+            yearly.fits("CAPA-2019-0007", None),
+            Some(Some(("CAPA-2019-{seq:4}".to_owned(), 7)))
+        );
+        let drawn = NumberPattern::parse("QR-{rand:4}").unwrap();
+        assert_eq!(drawn.fits("QR-0042", None), Some(None));
+        assert_eq!(drawn.fits("QR-42", None), None);
+        let nested = NumberPattern::parse("{parent}-D{seq:2}").unwrap();
+        assert_eq!(
+            nested.fits("DOCS-1-D07", Some("DOCS-1")),
+            Some(Some(("DOCS-1-D{seq:2}".to_owned(), 7)))
+        );
+        assert_eq!(nested.fits("DOCS-2-D07", Some("DOCS-1")), None);
+        assert_eq!(nested.fits("DOCS-1-D07", None), None);
     }
 }

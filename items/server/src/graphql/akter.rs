@@ -99,6 +99,7 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
+        AktError::NumberTaken(_) => coded(message, "NUMBER_TAKEN"),
         AktError::Archived(_) => coded(message, "ARCHIVED"),
         AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
         AktError::AlreadyMember { .. } => coded(message, "ALREADY_MEMBER"),
@@ -657,6 +658,10 @@ pub struct CreateAktInput {
     /// The containers to create it in, by number; the first is its parent.
     #[graphql(name = "in", default)]
     inside: Vec<String>,
+    /// Its number, such as the one it had where it is imported from, which
+    /// its type's pattern must give and no akt may have
+    /// (`akt.number.given`); else its next.
+    number: Option<String>,
 }
 
 /// What editing an akt takes.
@@ -728,6 +733,7 @@ fn operation(input: OperationInput) -> async_graphql::Result<Operation> {
             key: i.key,
             reason: i.reason,
             inside: i.inside,
+            number: i.number,
         },
         OperationInput::EditAkt(i) => Operation::Edit {
             fields: field_values(Some(i.fields))?,
@@ -980,7 +986,14 @@ impl AkterMutation {
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
         let row = akter
-            .create(caller, &input.key, &fields, input.reason, &input.inside)
+            .create(
+                caller,
+                &input.key,
+                &fields,
+                input.reason,
+                &input.inside,
+                input.number.as_deref(),
+            )
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await

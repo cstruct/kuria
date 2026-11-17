@@ -1078,6 +1078,93 @@ fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
     );
 }
 
+// r[verify cli.docs-import]
+// r[verify akt.number.given]
+#[test]
+fn imported_documents_keep_their_numbers_and_refer_to_each_other() {
+    let dir = Dir::new();
+    let documents = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/documents");
+    for key in ["image", "document"] {
+        let file = documents.join(format!("{key}.json"));
+        let mut ty: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        if key == "document" {
+            // Numbered as the system they come from numbers them.
+            ty["key"] = json!("procedure");
+            ty["number"] = json!("FOOID-{seq:4}");
+            ty["created_in"] = json!([]);
+            ty["links"][0]["to"] = json!(["procedure", "image"]);
+            ty["fields"][2]["references"] = json!("refers_to");
+        }
+        let written = dir.root.join(format!("../{key}.json"));
+        std::fs::write(&written, ty.to_string()).unwrap();
+        dir.ok(&["types", "define", written.to_str().unwrap()]);
+    }
+    dir.commit("Types");
+    let folder = |name: &str, metadata: Value, draft: &str| {
+        let folder = dir.root.join(format!("../{name}"));
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("draft.md"), draft).unwrap();
+        std::fs::write(folder.join("metadata.json"), metadata.to_string()).unwrap();
+        folder.to_str().unwrap().to_owned()
+    };
+    let manual = folder(
+        "manual",
+        json!({ "number": "FOOID-0001", "title": "Quality manual", "draft": "draft.md" }),
+        "# Quality manual\n\nSuppliers follow FOOID-0002 Supplier Policy.\n",
+    );
+    let policy = folder(
+        "policy",
+        json!({ "number": "FOOID-0002", "title": "Supplier policy", "draft": "draft.md" }),
+        "# Supplier policy\n\nPart of FOOID-0001 Quality Manual, not `FOOID-0001` in code.\n",
+    );
+    let pattern = r"(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)";
+    let import = |folder: &str| {
+        dir.ok(&[
+            "docs",
+            "import",
+            folder,
+            "--type",
+            "procedure",
+            "--references",
+            pattern,
+            "--format",
+            "json",
+        ])
+        .json["number"]
+            .clone()
+    };
+    // The manual first: its reference to the policy is broken until then.
+    assert_eq!(import(&manual), "FOOID-0001");
+    assert_eq!(import(&policy), "FOOID-0002");
+    let manual = file(&dir, "FOOID-0001");
+    assert!(
+        manual.contains("Suppliers follow [Supplier Policy](kuria:FOOID-0002)."),
+        "{manual}"
+    );
+    let policy = file(&dir, "FOOID-0002");
+    assert!(
+        policy.contains("Part of [Quality Manual](kuria:FOOID-0001), not `FOOID-0001` in code."),
+        "{policy}"
+    );
+    // Taken, and not a number the pattern gives.
+    let taken = dir.refused(&[
+        "new",
+        "procedure",
+        "--set",
+        "title=T",
+        "--number",
+        "FOOID-0002",
+    ]);
+    assert_eq!(taken.code, "NUMBER_TAKEN", "{}", taken.message);
+    let wrong = dir.refused(&["new", "procedure", "--set", "title=T", "--number", "BAR-1"]);
+    assert_eq!(wrong.code, "BAD_REQUEST", "{}", wrong.message);
+    // The next goes on past them.
+    let next = dir
+        .ok(&["new", "procedure", "--set", "title=T", "--format", "json"])
+        .json;
+    assert_eq!(next["number"], "FOOID-0003");
+}
+
 // r[verify cli.local.lock]
 #[test]
 fn writes_at_once_lose_nothing() {

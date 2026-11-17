@@ -32,12 +32,13 @@ impl Akter {
         fields: &Map<String, Json>,
         reason: Option<String>,
         inside: &[String],
+        number: Option<&str>,
     ) -> Result<AktRow, AktError> {
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                create_in(conn, caller, key, fields, reason.clone(), inside).await
+                create_in(conn, caller, key, fields, reason.clone(), inside, number).await
             })
             .await;
         self.committed(result)
@@ -52,6 +53,7 @@ pub(super) async fn create_in(
     fields: &Map<String, Json>,
     reason: Option<String>,
     inside: &[String],
+    given: Option<&str>,
 ) -> Result<AktRow, AktError> {
     let Caller { actor, auth, .. } = caller;
     let tenant: Uuid = actor.tenant.into();
@@ -100,7 +102,7 @@ pub(super) async fn create_in(
     )?;
     super::check_sections(conn, tenant, &stored.ty, None, &outcome).await?;
     let parent = parents.first().map(|p| p.number.as_str());
-    let number = next_number(conn, tenant, &stored.ty, parent, now).await?;
+    let number = number_for(conn, tenant, &stored.ty, given, parent, now).await?;
     // r[impl archive.rules.state-since]: created in its initial state now.
     let akt = AktRow {
         id: Uuid::now_v7(),
@@ -197,4 +199,47 @@ fn check_parents(
         .map(|(p, t)| akt_ref(t, p))
         .collect();
     Ok(containment::check_create_inside(&ty.ty, &refs)?)
+}
+
+/// The number of a new akt of `ty` created in `parent` at `now`: the one
+/// `given`, else its next.
+async fn number_for(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    ty: &kuria_config::AktType,
+    given: Option<&str>,
+    parent: Option<&str>,
+    now: chrono::DateTime<Utc>,
+) -> Result<String, AktError> {
+    match given {
+        Some(given) => given_number(conn, tenant, ty, given, parent).await,
+        None => next_number(conn, tenant, ty, parent, now).await,
+    }
+}
+
+/// `number`, given to an akt of `ty` created in `parent`, checked as one
+/// the pattern gives and free, its counter raised past it. The caller holds
+/// the tenant's order lock.
+// r[impl akt.number.given]
+async fn given_number(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    ty: &kuria_config::AktType,
+    number: &str,
+    parent: Option<&str>,
+) -> Result<String, AktError> {
+    let counter =
+        kuria_engine::rules::numbering::given(ty, number, parent).map_err(AktError::BadRequest)?;
+    let like = number
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    if !store::numbers_like(conn, tenant, &like).await?.is_empty() {
+        return Err(AktError::NumberTaken(number.to_owned()));
+    }
+    if let Some((name, sequence)) = counter {
+        let value = i64::try_from(sequence).unwrap_or(i64::MAX);
+        kuria_store::bundles::raise_counter(conn, tenant, &name, value).await?;
+    }
+    Ok(number.to_owned())
 }

@@ -592,6 +592,71 @@ async fn akt_types_naming_one_sequence_share_its_numbers() {
     );
 }
 
+// r[verify akt.number.given]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_akt_may_be_given_a_number_its_pattern_gives() {
+    let world = World::new().await;
+    let mut foo = capa();
+    foo["number"] = json!("FOOID-{seq:4}");
+    world.define(foo).await;
+    let create = |number: Option<&str>| {
+        let world = &world;
+        let number = number.map(str::to_owned);
+        async move {
+            world
+                .run(
+                    "mutation($n: String) { createAkt(input: { type: \"capa\", fields: { title: \"T\" }, number: $n }) { number } }",
+                    json!({ "n": number }),
+                )
+                .await
+        }
+    };
+    let given = create(Some("FOOID-1234")).await;
+    assert_eq!(
+        given["data"]["createAkt"]["number"], "FOOID-1234",
+        "{given}"
+    );
+    // Taken, and not one the pattern gives.
+    assert_eq!(code(&create(Some("FOOID-1234")).await), "NUMBER_TAKEN");
+    assert_eq!(code(&create(Some("FOOID-12")).await), "BAD_REQUEST");
+    assert_eq!(code(&create(Some("BAR-1234")).await), "BAD_REQUEST");
+    // The counter goes on past it, never giving it again.
+    let next = create(None).await;
+    assert_eq!(next["data"]["createAkt"]["number"], "FOOID-1235", "{next}");
+    // An earlier number, free, may still be given.
+    let earlier = create(Some("FOOID-0007")).await;
+    assert_eq!(
+        earlier["data"]["createAkt"]["number"], "FOOID-0007",
+        "{earlier}"
+    );
+    assert_eq!(
+        create(None).await["data"]["createAkt"]["number"],
+        "FOOID-1236"
+    );
+
+    // Drawn digits: any the pattern gives, then never drawn.
+    let mut drawn = capa();
+    drawn["key"] = json!("qr");
+    drawn["number"] = json!("QR-{rand:1}");
+    world.define(drawn).await;
+    let made = world
+        .run(
+            "mutation { createAkt(input: { type: \"qr\", fields: { title: \"T\" }, number: \"QR-7\" }) { number } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(made["data"]["createAkt"]["number"], "QR-7", "{made}");
+    for _ in 0..9 {
+        let drawn = world
+            .run(
+                "mutation { createAkt(input: { type: \"qr\", fields: { title: \"T\" } }) { number } }",
+                json!({}),
+            )
+            .await;
+        assert_ne!(drawn["data"]["createAkt"]["number"], "QR-7", "{drawn}");
+    }
+}
+
 async fn record_person(world: &World, name: Option<&str>, email: Option<&str>) {
     let mut conn = world.db.pool().get().await.unwrap();
     kuria_store::people::record(

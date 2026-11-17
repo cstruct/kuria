@@ -177,7 +177,11 @@ kuria docs fmt                         # the files as Kuria writes them
   releases each version as its PDF, then makes the draft its body; the
   type must declare `versions.file` for the PDFs. The draft's pictures
   become image akter, of `--image-type` or the one type of pictures,
-  embedded as `kuria:IMG-n`. In local mode it commits
+  embedded as `kuria:IMG-n`. `"number"` keeps the number it had, if the
+  type's pattern gives it and it is free (as `kuria new --number`).
+  `--references '(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)'`, or
+  `"references"` in `metadata.json`, turns each mention outside code and
+  links into `[label](kuria:<id>)`, broken until that akt is imported. In local mode it commits
   each step, so commit everything else first.
 - git, if the clone is also a repository, is yours: Kuria sees only the
   files. To push part of your work, `git branch keep`, take the rest out
@@ -190,6 +194,7 @@ kuria docs fmt                         # the files as Kuria writes them
 
 ```sh
 kuria new <type> --in <container> --set title="…" --set description=@notes.md
+kuria new <type> --number FOOID-1234 …  # its number, if its pattern gives it and it is free
 kuria set <number> assignee=@me
 kuria do <number> <transition> --set field=value --reason "…"
 kuria members add <container> <member>…

@@ -43,11 +43,13 @@ pub struct Draft {
     _extracted: Option<Scratch>,
 }
 
-/// What a folder holds, checked: its field values as `--set`s, its draft,
-/// and its versions, oldest first.
+/// What a folder holds, checked: its field values as `--set`s, the number
+/// it keeps, its draft, its references captured, and its versions, oldest
+/// first.
 #[derive(Debug)]
 pub struct Folder {
     pub sets: Vec<String>,
+    pub number: Option<String>,
     pub draft: Option<Draft>,
     pub versions: Vec<Version>,
 }
@@ -56,9 +58,11 @@ fn bad(message: impl Into<String>) -> CliError {
     CliError::refused("BAD_FILE", message)
 }
 
-/// Reads and checks `folder`, converting its draft (`cli.docs-import`).
+/// Reads and checks `folder`, converting its draft and capturing its
+/// references by `metadata.json`'s `references`, else `references`
+/// (`cli.docs-import`).
 // r[impl cli.docs-import]
-pub fn read(folder: &Path) -> Result<Folder, CliError> {
+pub fn read(folder: &Path, references: Option<&str>) -> Result<Folder, CliError> {
     let path = folder.join("metadata.json");
     let text =
         std::fs::read_to_string(&path).map_err(|e| bad(format!("{}: {e}", path.display())))?;
@@ -81,8 +85,26 @@ pub fn read(folder: &Path) -> Result<Folder, CliError> {
     let mut sets = Vec::new();
     let mut draft = None;
     let mut versions = Vec::new();
+    let mut number = None;
+    let mut pattern = references.map(str::to_owned);
     for (key, value) in &metadata {
         match key.as_str() {
+            "number" => {
+                number = Some(
+                    value
+                        .as_str()
+                        .ok_or_else(|| bad("`number` is the akt's number, as text"))?
+                        .to_owned(),
+                );
+            }
+            "references" => {
+                pattern = Some(
+                    value
+                        .as_str()
+                        .ok_or_else(|| bad("`references` is a pattern, as text"))?
+                        .to_owned(),
+                );
+            }
             "draft" => draft = Some(draft_of(&in_folder(value, "the draft")?, folder)?),
             "versions" => {
                 let listed = value
@@ -107,11 +129,85 @@ pub fn read(folder: &Path) -> Result<Folder, CliError> {
             _ => sets.push(set_of(key, value)?),
         }
     }
+    if let (Some(pattern), Some(draft)) = (&pattern, &mut draft) {
+        draft.markdown = capture(&draft.markdown, &references_of(pattern)?);
+    }
     Ok(Folder {
         sets,
+        number,
         draft,
         versions,
     })
+}
+
+/// `pattern`, compiled, refused unless it names an `id` group.
+fn references_of(pattern: &str) -> Result<regex::Regex, CliError> {
+    let compiled = regex::Regex::new(pattern)
+        .map_err(|e| CliError::refused("BAD_REQUEST", format!("the references pattern: {e}")))?;
+    if !compiled.capture_names().any(|n| n == Some("id")) {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "the references pattern needs a group named `id`, the number referred to, such as `(?<id>FOOID-\\d{4})`",
+        ));
+    }
+    Ok(compiled)
+}
+
+/// Where `markdown` is code or already a link or picture, which capturing
+/// references leaves alone.
+fn kept(markdown: &str) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut fenced = false;
+    let mut at = 0;
+    for line in markdown.split_inclusive('\n') {
+        let trimmed = line.trim_start();
+        let fence = trimmed.starts_with("```") || trimmed.starts_with("~~~");
+        if fenced || fence {
+            ranges.push(at..at + line.len());
+            if fence {
+                fenced = !fenced;
+            }
+        }
+        at += line.len();
+    }
+    let spans = regex::Regex::new(r"(`+)[^`]*?(`+)|!?\[[^\]]*\]\([^)]*\)|<[a-z]+:[^>]*>")
+        .expect("a valid pattern");
+    ranges.extend(spans.find_iter(markdown).map(|m| m.range()));
+    ranges
+}
+
+/// `markdown` with each match of `references`, outside code and links, a
+/// reference to the akt its `id` group names, read as its `label` group,
+/// else its number (`cli.docs-import`).
+// r[impl cli.docs-import]
+fn capture(markdown: &str, references: &regex::Regex) -> String {
+    let kept = kept(markdown);
+    let mut out = String::with_capacity(markdown.len());
+    let mut last = 0;
+    for found in references.captures_iter(markdown) {
+        let (Some(whole), Some(id)) = (found.get(0), found.name("id")) else {
+            continue;
+        };
+        let range = whole.range();
+        if range.is_empty()
+            || kept
+                .iter()
+                .any(|k| k.start < range.end && range.start < k.end)
+        {
+            continue;
+        }
+        let label = found
+            .name("label")
+            .map(|l| l.as_str().trim())
+            .filter(|l| !l.is_empty())
+            .unwrap_or(id.as_str());
+        let label = label.replace('[', "\\[").replace(']', "\\]");
+        out.push_str(&markdown[last..range.start]);
+        out.push_str(&format!("[{label}](kuria:{})", id.as_str()));
+        last = range.end;
+    }
+    out.push_str(&markdown[last..]);
+    out
 }
 
 /// A field's value from `metadata.json` as `--set` writes it
@@ -464,6 +560,9 @@ pub struct Asked<'a> {
     pub akt_type: &'a str,
     pub inside: &'a [String],
     pub image_type: Option<&'a str>,
+    /// The pattern references are captured by, unless the folder's
+    /// `metadata.json` gives its own.
+    pub references: Option<&'a str>,
     pub reason: Option<&'a str>,
 }
 
@@ -480,7 +579,7 @@ fn unique(draft: &Draft) -> Vec<&Picture> {
 /// `kuria docs import` against a server.
 // r[impl cli.docs-import]
 pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, CliError> {
-    let folder = read(asked.folder)?;
+    let folder = read(asked.folder, asked.references)?;
     let shape = crate::reads::shape(crate::reads::Source::Server(session), asked.akt_type).await?;
     if folder.draft.is_some() {
         markdown_field(&shape)?;
@@ -516,6 +615,7 @@ pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, C
             inside: asked.inside,
             sets: &folder.sets,
             file: None,
+            number: folder.number.as_deref(),
             reason: asked.reason,
         },
     )
@@ -549,6 +649,7 @@ pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, C
                         inside: &[],
                         sets: &picture_sets(ty, picture, &id),
                         file: None,
+                        number: None,
                         reason: asked.reason,
                     },
                 )
@@ -586,7 +687,7 @@ fn releasing(version: &Version) -> Releasing<'_> {
 pub fn in_dir(root: &Path, me: Option<String>, asked: &Asked<'_>) -> Result<Answer, CliError> {
     use crate::local::{edits, git, versions, write::Writer};
     committed(root)?;
-    let folder = read(asked.folder)?;
+    let folder = read(asked.folder, asked.references)?;
     let mut w = Writer::open(root, me.clone())?;
     let shape = w.shape(asked.akt_type)?;
     if folder.draft.is_some() {
@@ -615,11 +716,14 @@ pub fn in_dir(root: &Path, me: Option<String>, asked: &Asked<'_>) -> Result<Answ
     let mut made = Made::default();
     let created = edits::create(
         &mut w,
-        asked.akt_type,
-        asked.inside,
-        &folder.sets,
-        None,
-        asked.reason,
+        &crate::writes::Created {
+            akt_type: asked.akt_type,
+            inside: asked.inside,
+            sets: &folder.sets,
+            file: None,
+            number: folder.number.as_deref(),
+            reason: asked.reason,
+        },
     )?;
     w.save()?;
     let number = created.json["number"]
@@ -703,7 +807,17 @@ fn draft_in(
         for picture in unique(draft) {
             let file = format!("@{}", picture.file.display());
             let sets = picture_sets(ty, picture, &file);
-            let created = edits::create(w, &ty.key, &[], &sets, None, asked.reason)?;
+            let created = edits::create(
+                w,
+                &crate::writes::Created {
+                    akt_type: &ty.key,
+                    inside: &[],
+                    sets: &sets,
+                    file: None,
+                    number: None,
+                    reason: asked.reason,
+                },
+            )?;
             let image = created.json["number"]
                 .as_str()
                 .unwrap_or_default()
@@ -784,5 +898,22 @@ mod tests {
             "photo"
         );
         assert!(image_type(&[plain], Some("note")).is_err());
+    }
+
+    // r[verify cli.docs-import]
+    #[test]
+    fn captures_references_outside_code_and_links() {
+        let pattern = references_of(r"(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)").unwrap();
+        let draft = "See FOOID-1234 Supplier Policy for details, and FOOID-0042.\n\
+                     Not `FOOID-9999` in code, nor [FOOID-1111](kuria:FOOID-1111).\n\
+                     ```\nFOOID-8888 Code Block\n```\n";
+        assert_eq!(
+            capture(draft, &pattern),
+            "See [Supplier Policy](kuria:FOOID-1234) for details, and [FOOID-0042](kuria:FOOID-0042).\n\
+             Not `FOOID-9999` in code, nor [FOOID-1111](kuria:FOOID-1111).\n\
+             ```\nFOOID-8888 Code Block\n```\n"
+        );
+        assert!(references_of(r"FOOID-\d{4}").is_err());
+        assert!(references_of(r"(?<id>").is_err());
     }
 }
