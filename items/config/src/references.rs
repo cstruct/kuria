@@ -162,9 +162,10 @@ fn holds(reference: &FieldReference<'_>, defined: &[&AktType]) -> Result<(), Str
 }
 
 /// The problems with defining `new` next to `others`, the latest versions of
-/// the tenant's other akt types, in what they number from: another with
-/// `new`'s pattern that doesn't name `new`'s sequence, or one naming its
-/// sequence with another pattern.
+/// the tenant's other akt types, in what they number from: another
+/// numbering alike, with `new`'s pattern and, for one with `{parent}`, a
+/// container type in common, that doesn't name `new`'s sequence; or one
+/// naming its sequence with another pattern.
 // r[impl akt.number.shared]
 #[must_use]
 pub fn check_sequences(new: &AktType, others: &[AktType]) -> Vec<Problem> {
@@ -174,7 +175,10 @@ pub fn check_sequences(new: &AktType, others: &[AktType]) -> Vec<Problem> {
         .filter(|other| other.key() != new.key())
         .filter_map(|other| {
             let theirs = other.document();
-            let same_pattern = theirs.number == mine.number;
+            // Numbered after different parents, they never meet.
+            let same_pattern = theirs.number == mine.number
+                && (!new.number().uses_parent()
+                    || mine.created_in.iter().any(|t| theirs.created_in.contains(t)));
             let same_sequence = mine.sequence.is_some() && theirs.sequence == mine.sequence;
             let message = if same_pattern && !same_sequence {
                 format!(
@@ -436,6 +440,30 @@ mod tests {
                 std::slice::from_ref(&policy)
             )
             .len(),
+            1
+        );
+
+        // After parents of different types, the same pattern never meets.
+        let parented = |key: &str, parent: &str| {
+            crate::validate(
+                serde_json::from_value(serde_json::json!({
+                    "key": key, "name": key, "number": "{parent}-D{seq:2}", "created_in": [parent],
+                    "fields": [], "states": [{ "key": "open", "name": "Open", "initial": true }]
+                }))
+                .unwrap(),
+            )
+            .unwrap()
+        };
+        let decision = parented("decision", "plan");
+        assert_eq!(
+            check_sequences(
+                &parented("document", "index"),
+                std::slice::from_ref(&decision)
+            ),
+            []
+        );
+        assert_eq!(
+            check_sequences(&parented("delivery", "plan"), &[decision]).len(),
             1
         );
 

@@ -267,10 +267,13 @@ An akt type document MAY name a `sequence`, a key, that akt types number
 from together: a Policy and a Procedure both numbered `QMS-{seq:4}` and
 naming the sequence `qms` count `QMS-0001`, `QMS-0002`… between them.
 Defining an akt type MUST be refused, with a problem for each other akt
-type, when the latest version of another akt type has the same number
-pattern without naming the same sequence (neither naming one is not the
-same), or names the same sequence with another pattern, so that akt
-types share numbers only by saying so.
+type, when the latest version of another akt type numbers alike without
+naming the same sequence (neither naming one is not the same), or names
+the same sequence with another pattern, so that akt types share numbers
+only by saying so. Two akt types number alike when they have the same
+pattern and it has no `{parent}`, or they may be created in an akt type in
+common (`container.created-in`): `{parent}-D{seq:2}` created only in plans
+and only in document indexes never gives the same number.
 
 r[akt.edit]
 Editing an akt MUST change only the field values given, where a `null`
