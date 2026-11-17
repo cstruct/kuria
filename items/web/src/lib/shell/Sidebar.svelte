@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Logo from './Logo.svelte';
 	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -52,7 +53,7 @@
 {/snippet}
 
 <nav class="sidebar" aria-label="Kuria">
-	<a class="brand" href={resolve('/')} onclick={onNavigate}>Kuria</a>
+	<a class="brand" href={resolve('/')} onclick={onNavigate}><Logo height={26} /></a>
 
 	<button type="button" class="search" onclick={onSearch}>
 		<SearchIcon size={14} aria-hidden={true} />
@@ -117,10 +118,10 @@
 	}
 
 	.brand {
-		padding: 0 var(--space-2) var(--space-2);
-		font-size: var(--text-lg);
-		font-weight: 700;
-		color: var(--text);
+		display: inline-flex;
+		align-self: flex-start;
+		padding: var(--space-1) var(--space-2) var(--space-2);
+		border-radius: var(--radius-sm);
 	}
 
 	.search {

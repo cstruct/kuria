@@ -50,7 +50,8 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   (behind its own trigger, or opened at an element as a context menu),
   `Dialog` and `Combobox`. Icons from `@lucide/svelte`, bundled. `/design`
   shows them all, in either theme.
-- [`src/lib/shell`](src/lib/shell): the app's frame: a sidebar of akt
+- [`src/lib/shell`](src/lib/shell): the app's frame: its logo (`Logo`,
+  [docs/brand](../../docs/brand/README.md)) atop a sidebar of akt
   types with counts, Home and Contacts (a drawer below 900 pixels), a top
   bar with breadcrumbs (`setCrumbs`), an akt's title under its number,
   which grow as references are followed (`trail.ts`, kept in history
