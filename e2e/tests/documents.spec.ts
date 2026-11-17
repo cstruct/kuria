@@ -274,6 +274,7 @@ const PDF = readFileSync(
 );
 
 // r[verify app.external]
+// r[verify app.versions]
 // r[verify version.release-file]
 test('an external document is released as its PDF, shown and downloaded', async ({ browser }) => {
 	const stamp = Date.now();
@@ -305,6 +306,7 @@ test('an external document is released as its PDF, shown and downloaded', async 
 	await expect(release).toContainText('the PDF you upload');
 	await release.getByLabel('PDF').setInputFiles({ name: 'policy.pdf', mimeType: 'application/pdf', buffer: PDF });
 	await release.getByLabel('Label').fill('Issue 3');
+	await release.getByLabel('Description').fill('As the supplier published it.\nReplaces issue 2.');
 	expect(await violations(rm), 'the release dialog').toEqual([]);
 	await release.getByRole('button', { name: 'Release' }).click();
 	await expect(release).toBeHidden();
@@ -319,6 +321,10 @@ test('an external document is released as its PDF, shown and downloaded', async 
 	await expect(rm.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
 		'href',
 		`/akter/${number}/pdf?version=1&download`
+	);
+	// r[verify app.versions]: the version's description, as written.
+	await expect(versions.getByRole('listitem').first()).toContainText(
+		'As the supplier published it. Replaces issue 2.'
 	);
 	await expect(versions.getByRole('link', { name: 'Open PDF of version 1' })).toHaveAttribute(
 		'href',

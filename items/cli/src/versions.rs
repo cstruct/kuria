@@ -65,9 +65,13 @@ pub async fn pdf(
 pub async fn release(
     session: &Session,
     numbers: &[String],
-    label: Option<&str>,
-    file: Option<&std::path::Path>,
+    released: &Releasing<'_>,
 ) -> Result<Answer, CliError> {
+    let Releasing {
+        label,
+        description,
+        file,
+    } = *released;
     // r[impl version.release-file]: the PDF uploaded first, for one akt.
     let file = match file {
         Some(path) if numbers.len() == 1 => Some(upload(session, path).await?),
@@ -83,7 +87,7 @@ pub async fn release(
     for number in numbers {
         let akt = crate::writes::akt(session, number).await?;
         akter.push(
-            json!({ "number": number, "revision": akt.revision, "label": label, "file": file }),
+            json!({ "number": number, "revision": akt.revision, "label": label, "description": description, "file": file }),
         );
     }
     let data = session
@@ -118,6 +122,44 @@ pub async fn release(
         markdown: lines.join("\n"),
         json,
     })
+}
+
+/// What a release says of its versions: their label and description, and
+/// the PDF a type released as files takes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Releasing<'a> {
+    pub label: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub file: Option<&'a std::path::Path>,
+}
+
+/// `--description`'s text: as given, or read from the file `@<path>`, or
+/// standard input for `@-`; blank is none, and more than 2,000 characters
+/// is refused (`version.release`).
+// r[impl version.release]
+pub fn description_of(given: Option<&str>) -> Result<Option<String>, CliError> {
+    let text = match given {
+        None => return Ok(None),
+        Some("@-") => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                .map_err(|e| CliError::refused("BAD_FILE", format!("standard input: {e}")))?;
+            text
+        }
+        Some(given) => match given.strip_prefix('@') {
+            Some(path) => std::fs::read_to_string(path)
+                .map_err(|e| CliError::refused("BAD_FILE", format!("{path}: {e}")))?,
+            None => given.to_owned(),
+        },
+    };
+    let text = text.trim();
+    if text.chars().count() > 2000 {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "a description is at most 2,000 characters",
+        ));
+    }
+    Ok((!text.is_empty()).then(|| text.to_owned()))
 }
 
 /// Uploads the PDF at `path` as an attachment (`attachment.upload`),
@@ -164,7 +206,14 @@ pub async fn list(source: Source<'_>, number: &str) -> Result<Answer, CliError> 
         format!("{number} has no versions.")
     } else {
         crate::md::table(
-            &["Version", "Revision", "Label", "Released by", "Released"],
+            &[
+                "Version",
+                "Revision",
+                "Label",
+                "Released by",
+                "Released",
+                "Description",
+            ],
             &rows,
         )
     };
@@ -176,6 +225,7 @@ pub async fn list(source: Source<'_>, number: &str) -> Result<Answer, CliError> 
                 "number": v.number,
                 "revision": v.revision,
                 "label": v.label,
+                "description": v.description,
                 "releasedBy": v.released_by.as_ref().map(|u| u.email.clone().unwrap_or_else(|| u.name.clone())),
                 "releasedAt": v.released_at,
             })).collect::<Vec<_>>(),
@@ -195,6 +245,10 @@ fn row(v: &Released) -> Vec<String> {
         v.released_at
             .as_deref()
             .map(crate::history::when)
+            .unwrap_or_default(),
+        v.description
+            .as_deref()
+            .map(|d| d.split_whitespace().collect::<Vec<_>>().join(" "))
             .unwrap_or_default(),
     ]
 }

@@ -208,7 +208,7 @@ The client MUST offer:
   verdict, or one for another assignee (`akt.field.verdict`);
 - `copy <number> [--only <number>…] [--in <container>…]`, answering the
   copy's number and the numbers of the copies of its members (`akt.copy`);
-- `release <number> [--label <label>] [--file <pdf>]`: its current
+- `release <number> [--label <label>] [--description <text>] [--file <pdf>]`: its current
   revision as its next version, answering the version's number, or each
   broken reference (`version.release`, `version.references`); with
   `--file`, the PDF an akt type whose versions carry one is released with,

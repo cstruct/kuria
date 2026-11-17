@@ -202,34 +202,29 @@ pub async fn target(
 }
 
 /// One akt to release: its number, the revision the releaser read, and
-/// an optional label.
+/// an optional label and description.
 #[derive(Clone, Debug)]
 pub struct Releasing {
     pub number: String,
     pub revision: i32,
     pub label: Option<String>,
+    /// What the releaser says of the version, such as what changed.
+    pub description: Option<String>,
     /// The PDF a type whose versions carry a file is released with
     /// (`version.release-file`).
     pub file: Option<Uuid>,
 }
 
 impl Akter {
-    /// Releases the akt `number`'s current revision, which must be
-    /// `revision`, as its next version, and returns the version.
+    /// Releases the akt `releasing` names at its current revision, which
+    /// must be the one it read, as its next version, and returns the
+    /// version.
     pub async fn release(
         &self,
         caller: Caller<'_>,
-        number: &str,
-        revision: i32,
-        label: Option<String>,
-        file: Option<Uuid>,
+        releasing: Releasing,
     ) -> Result<VersionRow, AktError> {
-        let releasing = [Releasing {
-            number: number.to_owned(),
-            revision,
-            label,
-            file,
-        }];
+        let releasing = [releasing];
         let mut rows = self.release_together(caller, &releasing).await?;
         rows.pop()
             .ok_or_else(|| AktError::Internal("a release answered no version".to_owned()))
@@ -263,6 +258,7 @@ struct Prepared {
     ty: StoredType,
     revision: i32,
     label: Option<String>,
+    description: Option<String>,
     draft: Option<super::live::Loaded>,
     /// The field and PDF a release with a file records.
     file: Option<(String, Uuid)>,
@@ -350,31 +346,42 @@ async fn release_in(
     }
     let mut rows = Vec::new();
     for (one, pins) in prepared.into_iter().zip(pins) {
-        let revision = match (one.draft, &one.file) {
-            (Some(loaded), _) => {
-                record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?
-            }
-            (None, Some(_)) => {
-                record_fields(conn, caller, &one.ty, one.akt.clone(), &one.fields)
-                    .await?
-                    .revision
-            }
-            (None, None) => one.revision,
-        };
-        let row = VersionRow {
-            tenant_id: tenant,
-            akt_id: one.akt.id,
-            number: one.next,
-            revision,
-            label: one.label,
-            released_by: caller.actor.subject.into(),
-            released_at: Utc::now(),
-            pins: serde_json::to_value(pins).map_err(|e| AktError::Internal(e.to_string()))?,
-        };
-        stored::insert(conn, &row).await?;
-        rows.push(row);
+        rows.push(record_version(conn, caller, one, pins).await?);
     }
     Ok(rows)
+}
+
+/// Stores `one` as the version it gets, with `pins`, after recording the
+/// revision it names, if the release makes one: its live draft's
+/// (`live.release`) or its file's (`version.release-file`).
+async fn record_version(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    one: Prepared,
+    pins: Vec<versions::Pin>,
+) -> Result<VersionRow, AktError> {
+    let revision = match (one.draft, &one.file) {
+        (Some(loaded), _) => record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?,
+        (None, Some(_)) => {
+            record_fields(conn, caller, &one.ty, one.akt.clone(), &one.fields)
+                .await?
+                .revision
+        }
+        (None, None) => one.revision,
+    };
+    let row = VersionRow {
+        tenant_id: one.akt.tenant_id,
+        akt_id: one.akt.id,
+        number: one.next,
+        revision,
+        label: one.label,
+        released_by: caller.actor.subject.into(),
+        released_at: Utc::now(),
+        pins: serde_json::to_value(pins).map_err(|e| AktError::Internal(e.to_string()))?,
+        description: one.description,
+    };
+    stored::insert(conn, &row).await?;
+    Ok(row)
 }
 
 /// Checks that `caller` may release `akt` at `one.revision` with
@@ -411,35 +418,8 @@ async fn prepare(
             current: akt.revision,
         });
     }
-    let label = one
-        .label
-        .as_ref()
-        .map(|l| l.trim().to_owned())
-        .filter(|l| !l.is_empty());
-    if label
-        .as_ref()
-        .is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r']))
-    {
-        return Err(AktError::BadRequest(
-            "a label is one line of at most 100 characters".to_owned(),
-        ));
-    }
-    // r[impl version.release-file]
-    let file = match (ty.ty.released_file(), one.file) {
-        (Some(key), Some(id)) => Some((key.to_owned(), id)),
-        (Some(_), None) => {
-            return Err(AktError::BadRequest(format!(
-                "{number} is released with its PDF: upload it and name it as `file`"
-            )));
-        }
-        (None, Some(_)) => {
-            return Err(AktError::BadRequest(format!(
-                "`{}` akter aren't released with a file",
-                ty.ty.key()
-            )));
-        }
-        (None, None) => None,
-    };
+    let (label, description) = said(one)?;
+    let file = file_of(&ty, one, &number)?;
     let existing = stored::of(conn, tenant, akt.id).await?;
     let live = super::live::has_live_draft(&ty);
     // A release with a file, as one of a live draft, makes its revision.
@@ -481,10 +461,61 @@ async fn prepare(
         ty,
         revision,
         label,
+        description,
         draft,
         file,
         fields,
     })
+}
+
+/// `one`'s label and description, trimmed, each `None` if blank; refused
+/// unless the label is one line of at most 100 characters and the
+/// description at most 2,000 (`version.release`).
+fn said(one: &Releasing) -> Result<(Option<String>, Option<String>), AktError> {
+    let trimmed = |text: &Option<String>| {
+        text.as_ref()
+            .map(|t| t.trim().to_owned())
+            .filter(|t| !t.is_empty())
+    };
+    let (label, description) = (trimmed(&one.label), trimmed(&one.description));
+    if label
+        .as_ref()
+        .is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r']))
+    {
+        return Err(AktError::BadRequest(
+            "a label is one line of at most 100 characters".to_owned(),
+        ));
+    }
+    if description
+        .as_ref()
+        .is_some_and(|d| d.chars().count() > 2000)
+    {
+        return Err(AktError::BadRequest(
+            "a description is at most 2,000 characters".to_owned(),
+        ));
+    }
+    Ok((label, description))
+}
+
+/// The field and PDF `one` releases `number`, of the type `ty`, with: one
+/// a type released as files needs, and any other refuses.
+// r[impl version.release-file]
+fn file_of(
+    ty: &StoredType,
+    one: &Releasing,
+    number: &str,
+) -> Result<Option<(String, Uuid)>, AktError> {
+    match (ty.ty.released_file(), one.file) {
+        (Some(key), Some(id)) => Ok(Some((key.to_owned(), id))),
+        (Some(_), None) => Err(AktError::BadRequest(format!(
+            "{number} is released with its PDF: upload it and name it as `file`"
+        ))),
+        (None, Some(_)) => Err(AktError::BadRequest(format!(
+            "`{}` akter aren't released with a file",
+            ty.ty.key()
+        ))),
+        (None, None) => Ok(None),
+    }
 }
 
 /// Records `akt`'s live draft `loaded` as its next revision, checked as a

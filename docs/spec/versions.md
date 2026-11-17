@@ -32,15 +32,17 @@ r[version.release]
 `releaseVersion` MUST name the akt's current revision as its next
 version, or for an akt with a live draft record its live draft as a new
 revision and name that (`live.release`), with an optional label, a single line of at most 100
-characters. It MUST take the revision the caller read, and refuse a
+characters, and an optional description, text of at most 2,000
+characters that may run over several lines, such as what changed; either,
+blank once trimmed, is none. It MUST take the revision the caller read, and refuse a
 revision that isn't the akt's current one as `STALE`
 (`akt.revision.concurrency`). It MUST refuse a revision that is already a
 version as `BAD_REQUEST`. An akt in a final state MAY be released.
 
 r[version.number]
 An akt's versions MUST be numbered 1, 2, … in the order they were
-released, with no gaps. A version MUST record its number, its label, the
-revision it names, who released it and when.
+released, with no gaps. A version MUST record its number, its label, its
+description, the revision it names, who released it and when.
 
 r[version.immutable]
 A version MUST never change and never be removed, nor anything it records,

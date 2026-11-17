@@ -12,6 +12,7 @@
 		number: number;
 		revision: number;
 		label?: string | null;
+		description?: string | null;
 		releasedAt: string;
 		releasedBy: { name: string };
 	}
@@ -33,7 +34,12 @@
 		/** Releases the living version with `label`, together with the
 		 * akter `together` names (`version.together`), with `file` if it is
 		 * released with one. */
-		onRelease: (label: string, together: string[], file: File | null) => Promise<boolean>;
+		onRelease: (
+			label: string,
+			together: string[],
+			file: File | null,
+			description: string
+		) => Promise<boolean>;
 		onCompare: (from: number, to: number | null) => void;
 	}
 
@@ -52,6 +58,7 @@
 
 	let releaseOpen = $state(false);
 	let label = $state('');
+	let description = $state('');
 	let file = $state<File | null>(null);
 	/** The akter chosen to release together, of those a refusal named. */
 	let together = $derived<string[]>(refusal?.together ?? []);
@@ -76,9 +83,10 @@
 
 	async function release() {
 		if (withFile && !file) return;
-		if (await onRelease(label, together, file)) {
+		if (await onRelease(label, together, file, description)) {
 			releaseOpen = false;
 			label = '';
+			description = '';
 			file = null;
 			together = [];
 		}
@@ -106,6 +114,9 @@
 							>{ago(v.releasedAt)}</time
 						></span
 					>
+					{#if v.description}
+						<p class="description">{v.description}</p>
+					{/if}
 					{#if pdfLinks.length}
 						<span class="pdfs">
 							{#each pdfLinks as f (f.key)}
@@ -190,8 +201,16 @@
 			</label>
 		{/if}
 		<label>
-			Label <span class="optional">(optional)</span>
+			<span>Label <span class="optional">(optional)</span></span>
 			<input bind:value={label} maxlength="100" placeholder="2.0" />
+		</label>
+		<label>
+			<span>Description <span class="optional">(optional)</span></span>
+			<textarea
+				bind:value={description}
+				maxlength="2000"
+				rows="4"
+				placeholder="What changed, and why"></textarea>
 		</label>
 		{#if refusal}
 			<div role="alert">
@@ -224,6 +243,14 @@
 </Dialog>
 
 <style>
+	/* What its releaser said, as they wrote it, line breaks kept. */
+	.description {
+		margin: var(--space-1) 0 0;
+		white-space: pre-line;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
 	.together {
 		display: flex;
 		flex-direction: column;
@@ -280,6 +307,13 @@
 		align-items: end;
 		gap: var(--space-2);
 		margin-bottom: var(--space-3);
+	}
+
+	/* Each field under the one before, its name and hint on one line. */
+	#release-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
 	}
 
 	.compare label,

@@ -392,8 +392,17 @@ async fn protocol(session: &Session, command: Command) -> Result<Answer, CliErro
         Command::Release {
             numbers,
             label,
+            description,
             file,
-        } => versions::release(session, &numbers, label.as_deref(), file.as_deref()).await,
+        } => {
+            let description = versions::description_of(description.as_deref())?;
+            let released = versions::Releasing {
+                label: label.as_deref(),
+                description: description.as_deref(),
+                file: file.as_deref(),
+            };
+            versions::release(session, &numbers, &released).await
+        }
         Command::Pdf {
             number,
             field,
@@ -471,10 +480,17 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
         Command::Release {
             numbers,
             label,
+            description,
             file,
         } => {
             let times = local::git::Times::of(&w.dir.root);
-            local::versions::release(&mut w, &times, &numbers, label.as_deref(), file.as_deref())
+            let description = versions::description_of(description.as_deref())?;
+            let released = versions::Releasing {
+                label: label.as_deref(),
+                description: description.as_deref(),
+                file: file.as_deref(),
+            };
+            local::versions::release(&mut w, &times, &numbers, &released)
         }
         // r[impl cli.local.archive]
         Command::Archive { numbers, reason } => {

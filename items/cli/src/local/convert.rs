@@ -38,7 +38,7 @@ use crate::file::Parsed;
 use crate::profile::io_error;
 
 /// The bundle format this client writes.
-const BUNDLE_FORMAT: u32 = 3;
+const BUNDLE_FORMAT: u32 = 4;
 
 /// A bundle unpacked: its `bundle.json`, and each attachment's bytes by
 /// their SHA-256 in lower-case hex, as `attachments/<sha256>` holds them.
@@ -515,6 +515,9 @@ fn versions_in(a: &Json, ty: &AktType, ids: &Ids) -> Vec<Json> {
             if pictures.contains(&revision) {
                 version["picture"] = true.into();
             }
+            if let Some(description) = v["description"].as_str() {
+                version["description"] = description.into();
+            }
             version
         })
         .collect()
@@ -647,6 +650,9 @@ fn bundled_versions(akt: &LocalAkt, ids: &mut Ids, now: DateTime<Utc>) -> Vec<Js
             });
             if let Some(label) = v["label"].as_str() {
                 version["label"] = json!(label);
+            }
+            if let Some(description) = v["description"].as_str() {
+                version["description"] = json!(description);
             }
             version
         })

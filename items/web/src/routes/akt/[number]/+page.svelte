@@ -228,7 +228,12 @@
 	let comparing = $state<{ from: number; to: number | null } | null>(null);
 	let compareOpen = $state(false);
 
-	async function releaseVersion(label: string, together: string[] = [], file: File | null = null) {
+	async function releaseVersion(
+		label: string,
+		together: string[] = [],
+		file: File | null = null,
+		description = ''
+	) {
 		if (!akt) return false;
 		// r[impl app.external]: the PDF uploaded, then released with.
 		let uploaded: string | null = null;
@@ -246,14 +251,26 @@
 			return false;
 		}
 		const named = label.trim() || null;
-		const input = { number: akt.number, revision: akt.revision, label: named, file: uploaded };
+		const said = description.trim() || null;
+		const input = {
+			number: akt.number,
+			revision: akt.revision,
+			label: named,
+			description: said,
+			file: uploaded
+		};
 		if (together.length === 0) {
 			const released = await run(() => mutate(client, ReleaseVersion, { input }));
 			if (released) toast(`${akt.number}: released`, 'success');
 			return released;
 		}
 		// r[impl app.versions]: released together, each at the revision read now.
-		const others: { number: string; revision: number; label: string | null }[] = [];
+		const others: {
+			number: string;
+			revision: number;
+			label: string | null;
+			description: string | null;
+		}[] = [];
 		for (const number of together) {
 			const read = await client
 				.query(AktRevision, { number }, { requestPolicy: 'network-only' })
@@ -263,7 +280,7 @@
 				toast(`${number} can’t be read`, 'danger');
 				return false;
 			}
-			others.push({ number, revision: other.revision, label: named });
+			others.push({ number, revision: other.revision, label: named, description: said });
 		}
 		const released = await run(() =>
 			mutate(client, ReleaseVersions, { input: { akter: [input, ...others] } })

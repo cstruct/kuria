@@ -1043,10 +1043,13 @@ impl AkterMutation {
         let row = akter(ctx)?
             .release(
                 caller,
-                &input.number,
-                input.revision,
-                input.label,
-                file_of(input.file.as_ref())?,
+                crate::akter::versions::Releasing {
+                    file: file_of(input.file.as_ref())?,
+                    number: input.number,
+                    revision: input.revision,
+                    label: input.label,
+                    description: input.description,
+                },
             )
             .await
             .map_err(error)?;
@@ -1077,6 +1080,7 @@ impl AkterMutation {
                     number: a.number,
                     revision: a.revision,
                     label: a.label,
+                    description: a.description,
                 })
             })
             .collect::<async_graphql::Result<Vec<_>>>()?;
@@ -2690,6 +2694,8 @@ pub struct Version {
     /// The revision it names.
     revision: i32,
     label: Option<String>,
+    /// What its releaser said of it, such as what changed.
+    description: Option<String>,
     released_by: User,
     released_at: DateTime<Utc>,
     /// What its references naming no version meant (`version.pins`).
@@ -2712,6 +2718,7 @@ impl From<&VersionRow> for Version {
             number: row.number,
             revision: row.revision,
             label: row.label.clone(),
+            description: row.description.clone(),
             released_by: User(row.released_by),
             released_at: row.released_at,
             pins: pins
@@ -2745,6 +2752,8 @@ pub struct ReleaseVersionInput {
     revision: i32,
     /// One line, at most 100 characters.
     label: Option<String>,
+    /// At most 2,000 characters, over several lines if need be.
+    description: Option<String>,
     /// The uploaded PDF the version is released with, for a type whose
     /// versions carry a file (`version.release-file`).
     file: Option<ID>,

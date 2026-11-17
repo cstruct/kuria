@@ -188,6 +188,7 @@ diesel::table! {
         released_at -> Timestamptz,
         pins -> Jsonb,
         akt_archived -> Bool,
+        description -> Nullable<Text>,
     }
 }
 

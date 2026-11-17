@@ -67,6 +67,8 @@ pub struct Released {
     pub revision: i64,
     pub label: Option<String>,
     #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
     pub released_by: Option<crate::model::User>,
     #[serde(default)]
     pub released_at: Option<String>,
@@ -121,7 +123,7 @@ pub struct Pinned {
 pub const AKT: &str = "number title revision createdAt updatedAt outcome
   archived { at by { id name email } rule reason }
   version { number revision label }
-  versions { number revision label releasedBy { id name email } releasedAt }
+  versions { number revision label description releasedBy { id name email } releasedAt }
   type { ...Shape document }
   state { key name initial final tone }
   fields { ...Values }

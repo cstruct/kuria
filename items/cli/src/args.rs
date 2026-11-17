@@ -278,6 +278,10 @@ pub enum Command {
         /// A label beside the version's number, such as `2.0`.
         #[arg(long)]
         label: Option<String>,
+        /// What the version is, such as what changed: text of at most
+        /// 2,000 characters, `@<file>` or `@-` to read it.
+        #[arg(long)]
+        description: Option<String>,
         /// The PDF the version is released with, for an akt type whose
         /// versions carry one, such as an external document.
         #[arg(long, value_name = "PDF")]

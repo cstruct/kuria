@@ -91,10 +91,10 @@ pub fn release(
     w: &mut Writer,
     times: &Times,
     numbers: &[String],
-    label: Option<&str>,
-    file: Option<&std::path::Path>,
+    released: &crate::versions::Releasing<'_>,
 ) -> Result<Answer, CliError> {
-    let label = label_of(label)?;
+    let (file, description) = (released.file, released.description);
+    let label = label_of(released.label)?;
     if file.is_some() && numbers.len() > 1 {
         return Err(CliError::refused(
             "BAD_REQUEST",
@@ -174,6 +174,10 @@ pub fn release(
         // naming the version.
         if has_picture(&w.dir, &akt) {
             version["picture"] = true.into();
+        }
+        // r[impl version.number]: its description, kept only if it has one.
+        if let Some(description) = description {
+            version["description"] = description.into();
         }
         // A release makes no revision but its file's (`version.history`).
         w.akt_mut(&number).versions.push(version);
@@ -357,6 +361,7 @@ pub fn shown(version: &Json) -> Json {
         "number": version["number"],
         "revision": version["revision"],
         "label": version["label"],
+        "description": version["description"],
         "releasedBy": { "id": by, "name": by, "email": by.contains('@').then_some(by) },
         "releasedAt": version["at"],
         "pins": version["pins"],

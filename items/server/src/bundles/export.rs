@@ -240,6 +240,7 @@ async fn history_of(
                 number: v.number,
                 revision: v.revision,
                 label: v.label,
+                description: v.description,
                 released_by: v.released_by,
                 released_at: v.released_at,
                 pins: v.pins,

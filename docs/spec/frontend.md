@@ -110,10 +110,11 @@ or focus leaves both, and on Escape.
 
 r[app.versions]
 An akt's page MUST list its versions, if its type declares them, and let a
-person release its current revision with an optional label, showing each
-broken reference a refusal names, and offering to release it together
-with each akt the refusal names under `together` (`version.together`),
-chosen by default. It MUST let a person read the akt at a
+person release its current revision with an optional label and
+description, showing each broken reference a refusal names, and offering
+to release it together with each akt the refusal names under `together`
+(`version.together`), chosen by default. The list MUST show each
+version's description. It MUST let a person read the akt at a
 version, saying which and that it is not the living version, and compare
 two versions, or a version and the living version (`version.diff`).
 

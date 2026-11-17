@@ -765,6 +765,7 @@ export const VersionShown = graphql(`
 		number
 		revision
 		label
+		description
 		releasedAt
 		releasedBy {
 			id

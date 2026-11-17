@@ -908,12 +908,20 @@ fn releases_an_external_document_with_its_pdf() {
             "EXT-001",
             "--file",
             pdf.to_str().unwrap(),
+            "--description",
+            "As the supplier published it.",
             "--format",
             "json",
         ])
         .json;
     assert_eq!(released["version"], 1);
     assert_eq!(released["revision"], 2);
+    // r[verify version.number]: its description, listed.
+    let listed = dir.ok(&["versions", "EXT-001", "--format", "json"]).json;
+    assert_eq!(
+        listed["versions"][0]["description"],
+        "As the supplier published it."
+    );
     assert_eq!(
         std::fs::read(dir.root.join("attachments/EXT-001/policy.pdf")).unwrap(),
         b"%PDF-1.4 first"
@@ -2440,7 +2448,7 @@ fn versions_go_to_a_bundle_and_back() {
         kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
             .unwrap();
     let bundle = &unpacked.bundle;
-    assert_eq!(bundle["format"], 3);
+    assert_eq!(bundle["format"], 4);
     let akt = |number: &str| {
         bundle["akter"]
             .as_array()

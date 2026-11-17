@@ -156,7 +156,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - An akt as it is now, which edits change; as opposed to its versions.
 
 - `version`
-  - One revision of an akt, named by releasing it: numbered 1, 2, … per akt, with an optional label, recording who released it and when and what each of its references meant then. It never changes. Not to be confused with an `akt type version`.
+  - One revision of an akt, named by releasing it: numbered 1, 2, … per akt, with an optional label and an optional description of what changed, recording who released it and when and what each of its references meant then. It never changes. Not to be confused with an `akt type version`.
 
 - `release` (verb)
   - To name the current revision of an akt as its next version. Prefer `version` for the result: `release` is also an akt type in the release-management example.

@@ -22,6 +22,8 @@ pub struct VersionRow {
     pub released_by: Uuid,
     pub released_at: DateTime<Utc>,
     pub pins: Json,
+    /// What the releaser said of it, such as what changed.
+    pub description: Option<String>,
 }
 
 /// Stores `row`, and its change event with the tenant's next change

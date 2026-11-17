@@ -344,6 +344,55 @@ impl World {
     }
 }
 
+// r[verify version.release]
+// r[verify version.number]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_release_may_say_what_changed() {
+    let world = World::new().await;
+    let guide = world.create("Guide", "# Guide\n").await;
+    let release = |description: Value| {
+        let world = &world;
+        let guide = guide.clone();
+        async move {
+            let revision = world.akt(&guide).await["revision"].clone();
+            send(
+                &world.router,
+                graphql_with(
+                    "tenant",
+                    "mutation($n: String!, $v: Int!, $d: String) { releaseVersion(input: { number: $n, revision: $v, label: \"2.0\", description: $d }) { number label description } }",
+                    &json!({ "n": guide, "v": revision, "d": description }),
+                ),
+            )
+            .await
+            .json()
+        }
+    };
+    let long = release(json!("x".repeat(2001))).await;
+    assert_eq!(code(&long), "BAD_REQUEST", "{long}");
+    let released = release(json!("  Rewrote the setup.\n\nAnd the checks.  ")).await;
+    assert_eq!(
+        released["data"]["releaseVersion"],
+        json!({ "number": 1, "label": "2.0", "description": "Rewrote the setup.\n\nAnd the checks." }),
+        "{released}"
+    );
+    let listed = world.akt(&guide).await;
+    let versions = send(
+        &world.router,
+        graphql_with(
+            "tenant",
+            "query($n: String!) { akt(number: $n) { versions { description } } }",
+            &json!({ "n": guide }),
+        ),
+    )
+    .await
+    .json();
+    assert_eq!(
+        versions["data"]["akt"]["versions"][0]["description"],
+        "Rewrote the setup.\n\nAnd the checks.",
+        "{listed}"
+    );
+}
+
 // r[verify version.together]
 // r[verify version.references]
 // r[verify version.pins]
