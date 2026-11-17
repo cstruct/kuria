@@ -20,6 +20,7 @@
   ],
   "versions": { "action": "documents:release", "file": "pdf" },
   "presentation": {
+    "numbered_references": true,
     "icon": "archive", "colour": "purple",
     "list": ["owner", "source"],
     "tones": { "current": "active", "retired": "neutral" }

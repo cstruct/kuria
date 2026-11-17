@@ -8,8 +8,9 @@ A PDF of a `markdown` field MUST hold its value rendered: headings,
 paragraphs, emphasis, lists, task lists, quotes, code, tables,
 horizontal rules and footnotes, in the field's order, each footnote at
 the foot of the page that first refers to it, numbered in that order. Each heading MUST be a bookmark,
-nested by level. A reference MUST be shown by its text, as a link to the
-akt in the app (`app.references`). An embedded image MUST be drawn as its
+nested by level. A reference MUST be shown by its text, after the akt's number if
+the akt's type says `numbered_references` and the PDF's reader may read
+it, as a link to the akt in the app (`app.references`). An embedded image MUST be drawn as its
 picture, as the PDF's version reads it, and a broken one as its alt text.
 A diagram block MUST be drawn from its source, as a vector drawing. A page
 break MUST start a new page. The PDF of an akt with a live draft MUST be of

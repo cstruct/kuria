@@ -24,6 +24,7 @@
   "versions": { "action": "documents:release", "file": "pdf" },
   "live_drafts": true,
   "presentation": {
+    "numbered_references": true,
     "icon": "file-text", "colour": "blue",
     "list": ["owner"],
     "tones": { "draft": "active", "retired": "neutral" }

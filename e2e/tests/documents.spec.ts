@@ -375,7 +375,20 @@ test('a document is imported from a folder, its old versions as PDFs', async ({ 
 		})
 	);
 	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
-	const ran = await cli.run(['docs', 'import', folder, '--type', 'document', '--in', index, '--format', 'json']);
+	// The tenant may hold other types of pictures: this names the one.
+	const ran = await cli.run([
+		'docs',
+		'import',
+		folder,
+		'--type',
+		'document',
+		'--in',
+		index,
+		'--image-type',
+		'image',
+		'--format',
+		'json'
+	]);
 	expect(ran.code, ran.stderr).toBe(0);
 	const imported = JSON.parse(ran.stdout) as {
 		number: string;

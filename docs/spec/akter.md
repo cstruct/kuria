@@ -79,6 +79,7 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
 | `navigation` | Where the app's sidebar lists the type: `main`, the default, or `more`, under "Show more" (`app.navigation`). |
 | `image` | The key of an `attachment` field whose `media_types` are all images: an akt of the type is an image, and that field's value is its picture (`akt.field.markdown.images`). |
+| `numbered_references` | `true` to show each reference to its akter with the akt's number first, as `DOCS-1-D04 Installing` for `[Installing](kuria:DOCS-1-D04)`, unless its text already starts with it (`app.references`, `pdf.render`); `false`, the default, to show the text alone. |
 
 Every key MUST name a field or state the type defines, each at most once
 in its list, and the title a single-line `text` field; otherwise the

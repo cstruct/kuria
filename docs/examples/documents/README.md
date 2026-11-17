@@ -57,7 +57,10 @@ kuria types define docs/examples/documents/{image,document,external_document,doc
   and one of its headings; `kuria:DOCS-1-D04@2#install`, that document as it
   was at version 2. Each referenced document is linked as "Refers to", and
   reads "Referred to by" back. A reference to a document or heading that
-  isn't there is shown as broken, saying why.
+  isn't there is shown as broken, saying why. Documents and external documents say
+  `"numbered_references": true`, so a reference to one is shown with its
+  number first, `[Installing](kuria:DOCS-1-D04#install)` as "DOCS-1-D04
+  Installing", in the app and in PDFs.
 - **Live drafts:** a document says `"live_drafts": true`, so its fields
   are one live draft everyone allowed edits at once, seeing each other's
   text and cursors as they type ([live drafts](../../spec/live-drafts.md)).

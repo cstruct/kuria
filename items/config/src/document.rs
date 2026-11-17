@@ -221,6 +221,10 @@ pub struct PresentationDef {
     /// its akter images (`akt.field.markdown.images`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Whether references to its akter are shown with the akt's number
+    /// first (`app.references`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub numbered_references: bool,
 }
 
 /// The media types an image's picture may have.

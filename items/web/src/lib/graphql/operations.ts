@@ -182,6 +182,16 @@ export const FieldValues = graphql(`
 				destination
 				broken
 				pinnedVersion
+				akt {
+					id
+					type {
+						key
+						version
+						presentation {
+							numberedReferences
+						}
+					}
+				}
 			}
 			images {
 				destination

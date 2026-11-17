@@ -322,7 +322,41 @@ async fn wanted(
         _ => String::new(),
     };
     let pictures = pictures_of(state, &mut conn, authorizer, tenant, &text, &pins).await?;
+    let numbered = numbered(&mut conn, authorizer, tenant, &text).await?;
+    let text = kuria_engine::markdown::number_references(&text, &|n| numbered.contains(n));
     Ok(Some(Found::Rendered(text, pins, pictures, field.diagrams)))
+}
+
+/// The akter `text` refers to whose type shows references to them with
+/// their number first, of those the reader may read (`pdf.render`).
+// r[impl pdf.render]
+async fn numbered(
+    conn: &mut kuria_store::Connection,
+    authorizer: &crate::authorize::Authorizer,
+    tenant: Uuid,
+    text: &str,
+) -> Result<std::collections::HashSet<String>, AktError> {
+    let mut found = std::collections::HashSet::new();
+    let numbers: std::collections::BTreeSet<String> = kuria_engine::markdown::references(text)
+        .into_iter()
+        .map(|r| r.number)
+        .collect();
+    for number in numbers {
+        let Some(akt) = store::akt_by_number(conn, tenant, &number).await? else {
+            continue;
+        };
+        let ty = crate::akter::versions::type_of_akt(conn, tenant, &akt).await?;
+        if ty.ty.document().presentation.numbered_references
+            && authorizer
+                .allows(&Permission::Read {
+                    key: ty.ty.key().to_owned(),
+                })
+                .await?
+        {
+            found.insert(number);
+        }
+    }
+    Ok(found)
 }
 
 /// The pictures of the images `text` embeds, as read with `pins`: each one

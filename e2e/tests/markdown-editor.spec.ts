@@ -12,6 +12,7 @@ import { seeded } from '../support/stack.ts';
 
 // r[verify app.editor]
 // r[verify app.references]
+// r[verify akt.type.presentation]
 // r[verify app.accessible]
 test('a markdown field is written in the editor, with a reference to a heading', async ({ browser }) => {
 	const stamp = Date.now();
@@ -66,6 +67,8 @@ test('a markdown field is written in the editor, with a reference to a heading',
 	const shown = page.locator('dd[data-field="body"]');
 	const link = shown.getByRole('link', { name: 'Installing' });
 	await expect(link).toHaveAttribute('href', `/akt/${setup}#installing`);
+	// A document's type numbers references to it: its number first.
+	await expect(link).toHaveText(`${setup} Installing`);
 	await expect(shown.locator('strong')).toHaveText('Now.');
 	const saved = await admin.graphql<{ akt: { fields: { markdown?: string }[] } }>(
 		'query($n: String!) { akt(number: $n) { fields { ... on MarkdownValue { markdown } } } }',

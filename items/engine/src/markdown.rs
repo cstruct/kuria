@@ -155,6 +155,36 @@ pub fn references(text: &str) -> Vec<Reference> {
     found
 }
 
+/// `text` with each link to an akt that `numbered` says is shown so given
+/// the akt's number before its text, unless the text starts with it
+/// (`akt.type.presentation`'s `numbered_references`). Pictures, and links
+/// written other than `[text](…)`, are left as they are.
+// r[impl pdf.render]
+#[must_use]
+pub fn number_references(text: &str, numbered: &dyn Fn(&str) -> bool) -> String {
+    let mut at = Vec::new();
+    for (event, range) in Parser::new_ext(text, options()).into_offset_iter() {
+        let Event::Start(Tag::Link { dest_url, .. }) = event else {
+            continue;
+        };
+        let Some(reference) = Reference::parse(&dest_url) else {
+            continue;
+        };
+        let written = &text[range.clone()];
+        if written.starts_with('[')
+            && numbered(&reference.number)
+            && !written[1..].starts_with(&reference.number)
+        {
+            at.push((range.start + 1, reference.number));
+        }
+    }
+    let mut out = text.to_owned();
+    for (index, number) in at.into_iter().rev() {
+        out.insert_str(index, &format!("{number} "));
+    }
+    out
+}
+
 /// Every inline image's destination in `text`, as written, with where it
 /// is in `text`, in order: so that a clone can write it otherwise
 /// (`clone.pictures`).
@@ -442,6 +472,19 @@ pub fn is_empty(text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    // r[verify pdf.render]
+    #[test]
+    fn numbers_references_to_akter_shown_so() {
+        let text = "See [Installing](kuria:D-4#install), [D-5 Setup](kuria:D-5), \
+                    [Other](kuria:N-1), ![A picture](kuria:D-6) and `[x](kuria:D-4)`.";
+        let numbered = |n: &str| n.starts_with("D-");
+        assert_eq!(
+            number_references(text, &numbered),
+            "See [D-4 Installing](kuria:D-4#install), [D-5 Setup](kuria:D-5), \
+             [Other](kuria:N-1), ![A picture](kuria:D-6) and `[x](kuria:D-4)`."
+        );
+    }
+
     use super::*;
 
     fn given(texts: &[&str]) -> Result<Vec<String>, String> {

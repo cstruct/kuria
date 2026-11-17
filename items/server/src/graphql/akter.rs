@@ -1456,6 +1456,7 @@ impl AktType {
             colour: presentation.colour.unwrap_or_default().into(),
             navigation: presentation.navigation.unwrap_or_default().into(),
             image: presentation.image.clone(),
+            numbered_references: presentation.numbered_references,
         }
     }
 
@@ -1759,6 +1760,9 @@ pub struct Presentation {
     /// The `attachment` field holding each akt's picture, if its akter are
     /// images (`akt.field.markdown.images`).
     image: Option<String>,
+    /// Whether references to its akter are shown with the akt's number
+    /// first (`app.references`).
+    numbered_references: bool,
 }
 
 #[derive(SimpleObject)]

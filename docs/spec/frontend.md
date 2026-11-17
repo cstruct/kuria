@@ -98,8 +98,9 @@ r[app.references]
 The app MUST render a `markdown` field's headings with their ids as
 anchors, and each reference as a link to the akt's page, at its version if
 it names one or a version read pins it (`version.read`), and to its
-heading if it names one. A broken reference MUST be shown as broken,
-saying why. Each reference to a footnote MUST be its number, in the order
+heading if it names one, its text after the akt's number if the akt's
+type says `numbered_references` (`akt.type.presentation`). A broken
+reference MUST be shown as broken, saying why. Each reference to a footnote MUST be its number, in the order
 first referred to, linking to the note, and the notes MUST be listed after
 the text, each linking back; a definition nothing refers to MUST NOT be
 shown.

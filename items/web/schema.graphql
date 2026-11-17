@@ -1184,6 +1184,11 @@ type Presentation {
 	images (`akt.field.markdown.images`).
 	"""
 	image: String
+	"""
+	Whether references to its akter are shown with the akt's number
+	first (`app.references`).
+	"""
+	numberedReferences: Boolean!
 }
 
 """
