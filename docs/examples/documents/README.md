@@ -168,6 +168,28 @@ state. It ignores itself in git.
   kuria docs add . && kuria docs push -m "The rest"
   ```
 
+A document kept elsewhere, as a Word draft and the PDFs of its past
+issues, comes in with `kuria docs import`: the folder's `metadata.json`
+names its values, its draft and its versions, and each version becomes a
+version whose PDF it shows, the draft, converted by pandoc, its living
+body ([cli](../../spec/cli.md)):
+
+```json
+{
+  "title": "My doc",
+  "owner": "bruce@example.com",
+  "draft": "draft.docx",
+  "versions": [
+    { "label": "version 1", "description": "foo bar", "file": "version1.pdf" },
+    { "label": "version 2", "description": "bar baz", "file": "version2.pdf" }
+  ]
+}
+```
+
+```sh
+kuria docs import my-doc-folder/ --type document --in DOCS-1
+```
+
 `kuria docs fmt`, run in a clone, puts its files as Kuria writes them, as a
 push needs them: it gives headings their ids, puts each file where its index's
 folders say, and fetches the pictures of images newly embedded, putting

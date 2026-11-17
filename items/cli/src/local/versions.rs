@@ -158,7 +158,9 @@ pub fn release(
         // r[impl version.release-file]: the PDF copied in and recorded as a
         // revision, which the version names.
         let revision = match (ty.released_file(), file) {
-            (Some(key), Some(path)) => record_file(w, &ty, &number, key, path)?,
+            (Some(key), Some(path)) => record_file(w, &ty, &number, key, Some(path))?,
+            // Released without one, a version written here has none.
+            (Some(key), None) if holds(&akt, key) => record_file(w, &ty, &number, key, None)?,
             _ => akt.revision,
         };
         let mut version = json!({
@@ -216,23 +218,32 @@ fn broken_references(broken: &[String], together: &[String]) -> CliError {
     )
 }
 
+/// Whether `akt` holds a value in its field `key`.
+fn holds(akt: &LocalAkt, key: &str) -> bool {
+    akt.values.get(key).is_some_and(|v| !v.is_null())
+}
+
 /// Copies the PDF at `path` in as `number`'s field `key`, checked as an
-/// attachment is (`cli.local.attachments`), as its next revision; answers
-/// the revision.
+/// attachment is (`cli.local.attachments`), or clears the field without
+/// one, as its next revision; answers the revision.
 fn record_file(
     w: &mut Writer,
     ty: &kuria_config::AktType,
     number: &str,
     key: &str,
-    path: &std::path::Path,
+    path: Option<&std::path::Path>,
 ) -> Result<i32, CliError> {
-    let raw = json!(format!("@{}", path.display()));
-    let Json::String(copied) = w.attachment(ty, key, number, &raw)? else {
-        return Err(CliError::refused("BAD_FILE", "the file wasn't copied in"));
-    };
     let mut fields = w.current(number)?.fields;
-    let id = w.ids.attachment(&copied);
-    fields.insert(key.to_owned(), kuria_engine::Value::Attachment(id));
+    if let Some(path) = path {
+        let raw = json!(format!("@{}", path.display()));
+        let Json::String(copied) = w.attachment(ty, key, number, &raw)? else {
+            return Err(CliError::refused("BAD_FILE", "the file wasn't copied in"));
+        };
+        let id = w.ids.attachment(&copied);
+        fields.insert(key.to_owned(), kuria_engine::Value::Attachment(id));
+    } else {
+        fields.remove(key);
+    }
     let values = super::values::after(w.dir.akt(number), &fields, &[key.to_owned()], &w.ids);
     w.akt_mut(number).values = values;
     Ok(w.bump(number))
@@ -284,7 +295,7 @@ fn releasable(
     }
     // r[impl version.release-file]
     match (ty.released_file(), with_file) {
-        (Some(_), false) => {
+        (Some(_), false) if !ty.written_here() => {
             return Err(CliError::refused(
                 "BAD_REQUEST",
                 format!("{number} is released with its PDF: name it with --file"),
@@ -298,8 +309,9 @@ fn releasable(
         }
         _ => {}
     }
-    // A release with a file makes its own revision.
-    if !with_file && akt.versions.iter().any(|v| v["revision"] == akt.revision) {
+    // A release that sets or clears its file makes its own revision.
+    let clears = !with_file && ty.released_file().is_some_and(|key| holds(&akt, key));
+    if !with_file && !clears && akt.versions.iter().any(|v| v["revision"] == akt.revision) {
         return Err(CliError::refused(
             "BAD_REQUEST",
             format!("revision {} of {number} is already a version", akt.revision),

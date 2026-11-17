@@ -30,6 +30,7 @@
 pub mod account;
 pub mod args;
 pub mod clone;
+pub mod docs_import;
 pub mod dpop;
 pub mod error;
 pub mod file;
@@ -105,6 +106,24 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         .dir
         .clone()
         .or_else(|| env("KURIA_DIR").map(PathBuf::from));
+    if let Command::Docs {
+        action:
+            DocsCommand::Import {
+                folder,
+                akt_type,
+                inside,
+                reason,
+            },
+    } = &cli.command
+    {
+        let asked = docs_import::Asked {
+            folder,
+            akt_type,
+            inside,
+            reason: reason.as_deref(),
+        };
+        return import(&context, root.as_deref(), &asked).await;
+    }
     if let Command::Docs { action } = cli.command {
         if root.is_some() {
             return Err(local::unsupported(
@@ -150,6 +169,29 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         ) => writes::define(None, &files, true).await,
         (command, Some(root)) => local(&root, command).await,
         (command, None) => server(&context, command).await,
+    }
+}
+
+/// `kuria docs import`, against a server or in the akt directory `root`
+/// (`cli.docs-import`).
+async fn import(
+    context: &Context,
+    root: Option<&Path>,
+    asked: &docs_import::Asked<'_>,
+) -> Result<Answer, CliError> {
+    match root {
+        Some(root) => {
+            // r[impl cli.local.people]: `@me`, else git's email.
+            let me = std::env::var("KURIA_ME").ok().filter(|v| !v.is_empty());
+            let me = reads::Local::open(root, me)?.me;
+            docs_import::in_dir(root, me, asked)
+        }
+        None => {
+            let session = Session::open(context).await?;
+            let answer = docs_import::on_server(&session, asked).await;
+            session.close().await;
+            answer
+        }
     }
 }
 

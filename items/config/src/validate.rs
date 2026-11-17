@@ -115,6 +115,16 @@ impl AktType {
         self.document.versions.as_ref()?.file.as_deref()
     }
 
+    /// Whether its akter are written here, in `markdown` fields, rather
+    /// than only released as files (`version.file`).
+    #[must_use]
+    pub fn written_here(&self) -> bool {
+        self.document
+            .fields
+            .iter()
+            .any(|f| f.kind == FieldKind::Markdown)
+    }
+
     /// The board's configuration, if it has one.
     #[must_use]
     pub fn board(&self) -> Option<&BoardDef> {
@@ -188,22 +198,6 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
             problems.add(
                 "versions.file",
                 format!("`{key}` must be an attachment field taking only application/pdf"),
-            );
-        }
-        if document
-            .fields
-            .iter()
-            .any(|f| f.kind == FieldKind::Markdown)
-        {
-            problems.add(
-                "versions.file",
-                "a type released as files has no markdown fields: it is written elsewhere",
-            );
-        }
-        if document.live_drafts {
-            problems.add(
-                "versions.file",
-                "a type released as files has no live drafts: it is written elsewhere",
             );
         }
     }

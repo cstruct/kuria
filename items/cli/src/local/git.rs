@@ -397,6 +397,29 @@ pub fn uncommitted(root: &Path) -> Option<bool> {
     git(root, &["status", "--porcelain", "--", "."]).map(|out| !out.trim().is_empty())
 }
 
+/// Commits every change in `root`, with `message`, as `docs import` does
+/// with each step (`cli.docs-import`).
+pub fn commit(root: &Path, message: &str) -> Result<(), crate::error::CliError> {
+    let ran = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .map_err(|e| crate::error::CliError::unavailable(format!("git: {e}")))
+    };
+    ran(&["add", "-A", "--", "."])?;
+    let committed = ran(&["commit", "-q", "-m", message, "--", "."])?;
+    if committed.status.success() {
+        Ok(())
+    } else {
+        Err(crate::error::CliError::unavailable(format!(
+            "git couldn't commit: {}",
+            String::from_utf8_lossy(&committed.stderr).trim()
+        )))
+    }
+}
+
 /// The email `git config user.email` gives in `root`, if any.
 #[must_use]
 pub fn email(root: &Path) -> Option<String> {

@@ -216,6 +216,8 @@ The client MUST offer:
 - `docs clone`, `docs status`, `docs diff`, `docs add`, `docs pull` and
   `docs push`: a container as files synced with Kuria (`clone.*`);
 - `docs fmt`, in a clone: its files in normal form (`clone.normal`);
+- `docs import <folder> --type <key> [--in <container>…]`: a document
+  kept elsewhere, its old versions as PDFs (`cli.docs-import`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
@@ -225,6 +227,28 @@ The client MUST offer:
 
 Every command that edits, transitions, links or arranges MUST take
 `--reason`, recorded with the revisions it makes.
+
+r[cli.docs-import]
+`docs import <folder>` MUST read `<folder>/metadata.json`, an object
+whose `draft` names a file in the folder, whose `versions` lists, oldest
+first, objects naming a PDF in the folder as `file` with an optional
+`label` and `description`, and whose every other member is a field's
+value by key, written as `--set` reads it (`cli.values`). It MUST check
+all of it, refusing as `BAD_FILE` a missing or unreadable file, a version
+that isn't a PDF, or a draft without the type's one `markdown` field to
+hold it, before it changes anything. A draft in Markdown (`.md`,
+`.markdown`) MUST be taken as it is; any other MUST be converted to
+GitHub-flavoured Markdown by `pandoc` on the `PATH`, refused as
+`PANDOC_MISSING` without one and as `PANDOC_FAILED` naming what it said
+if it fails. It MUST then create the akt of `--type` in the containers
+`--in` names with those values, release each version with its PDF, label
+and description, oldest first (`version.release-file`), and set the
+`markdown` field to the draft, each with `--reason`, and answer the akt's
+number, its versions and how many of the draft's pictures it left out. It
+is not one transaction: a failure after the akt is made MUST say what was
+made. In local mode, the directory MUST have no uncommitted changes, and
+each step MUST be committed with a message saying it, since a version is
+read from git (`cli.local.versions`).
 
 r[cli.values]
 `--set` and `--where` values MUST be read by the field's kind: an option by

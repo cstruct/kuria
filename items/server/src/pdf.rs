@@ -238,37 +238,50 @@ async fn wanted(
     {
         return Ok(None);
     }
-    // r[impl version.file]: the PDF of the version asked for, else of the
-    // latest; none before the first release.
+    // r[impl version.file]: the PDF a version was released with; of a type
+    // written elsewhere, the latest's when none is asked for, and none
+    // before its first release.
     if let Some(key) = ty.ty.released_file() {
-        if asked.field.as_ref().is_some_and(|f| f != key) {
+        let written_here = ty.ty.written_here();
+        if asked.field.as_ref().is_some_and(|f| f != key) && !written_here {
             return Ok(None);
         }
         let version = match asked.version {
-            Some(n) => n,
+            Some(n) => Some(n),
+            None if written_here => None,
             None => match kuria_store::versions::of(&mut conn, tenant, akt.id)
                 .await?
                 .first()
             {
-                Some(latest) => latest.number,
+                Some(latest) => Some(latest.number),
                 None => return Ok(None),
             },
         };
-        let Some((row, _)) =
-            crate::akter::versions::at_version(&mut conn, &ty, &akt, version).await?
-        else {
-            return Ok(None);
-        };
-        let id = row
-            .fields
-            .get(key)
-            .and_then(serde_json::Value::as_str)
-            .and_then(|id| Uuid::parse_str(id).ok());
-        let Some(id) = id else { return Ok(None) };
-        return Ok(kuria_store::attachments::find(&mut conn, tenant, &[id])
-            .await?
-            .pop()
-            .map(|file| Found::File(file, version)));
+        if let Some(version) = version
+            && asked.field.as_ref().is_none_or(|f| f == key)
+        {
+            let Some((row, _)) =
+                crate::akter::versions::at_version(&mut conn, &ty, &akt, version).await?
+            else {
+                return Ok(None);
+            };
+            let id = row
+                .fields
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .and_then(|id| Uuid::parse_str(id).ok());
+            match id {
+                Some(id) => {
+                    return Ok(kuria_store::attachments::find(&mut conn, tenant, &[id])
+                        .await?
+                        .pop()
+                        .map(|file| Found::File(file, version)));
+                }
+                // A version of a type written here without a PDF is rendered.
+                None if written_here && asked.field.is_none() => {}
+                None => return Ok(None),
+            }
+        }
     }
     let field = match &asked.field {
         Some(key) => ty.ty.field(key).cloned(),

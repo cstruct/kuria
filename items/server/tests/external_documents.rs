@@ -77,7 +77,7 @@ async fn pdf(world: &World, path: &str) -> support::Answer {
 // r[verify version.declare]
 // r[verify version.file]
 #[tokio::test(flavor = "multi_thread")]
-async fn a_type_released_as_files_names_a_pdf_field_and_nothing_written_here() {
+async fn a_type_released_as_files_names_a_pdf_field() {
     let world = World::new(FakeDecider::allowing_tenant()).await;
     let problems = |answer: &Value| -> Vec<String> {
         answer["errors"][0]["extensions"]["problems"]
@@ -102,16 +102,111 @@ async fn a_type_released_as_files_names_a_pdf_field_and_nothing_written_here() {
     // Not a PDF field.
     let refused = define(external(&json!({ "file": "title" }))).await;
     assert_eq!(problems(&refused), ["versions.file"], "{refused}");
-    // A type with text written here.
-    let mut written = external(&json!({ "file": "pdf" }));
-    written["fields"]
+    let answer = define(external(&json!({ "file": "pdf" }))).await;
+    assert!(answer.get("errors").is_none(), "{answer}");
+    // A type with text written here, live, may too.
+    let answer = define(written(true)).await;
+    assert!(answer.get("errors").is_none(), "{answer}");
+}
+
+/// A document written here whose versions may carry a PDF, with live
+/// drafts or not.
+fn written(live: bool) -> Value {
+    let mut ty = external(&json!({ "file": "pdf" }));
+    ty["key"] = json!("document");
+    ty["number"] = json!("DOC-{seq:3}");
+    ty["fields"]
         .as_array_mut()
         .unwrap()
         .push(json!({ "key": "body", "name": "Body", "kind": "markdown" }));
-    let refused = define(written).await;
-    assert_eq!(problems(&refused), ["versions.file"], "{refused}");
-    let answer = define(external(&json!({ "file": "pdf" }))).await;
-    assert!(answer.get("errors").is_none(), "{answer}");
+    ty["live_drafts"] = json!(live);
+    ty
+}
+
+async fn edit(world: &World, number: &str, fields: Value) {
+    let revision = revision(world, number).await;
+    world
+        .ok(
+            TOKEN,
+            "mutation($n: String!, $r: Int!, $f: JSON!) { editAkt(input: { number: $n, revision: $r, fields: $f }) { number } }",
+            json!({ "n": number, "r": revision, "f": fields }),
+        )
+        .await;
+}
+
+// r[verify version.file]
+// r[verify version.release-file]
+// r[verify pdf.route]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_document_written_here_keeps_its_old_versions_as_pdfs() {
+    for live in [false, true] {
+        let world = World::new(FakeDecider::allowing_tenant()).await;
+        world.define(TOKEN, &written(live)).await;
+        let number = world
+            .create(
+                TOKEN,
+                "document",
+                &[],
+                json!({ "title": "Policy" }),
+                "Import",
+            )
+            .await;
+        let old = b"%PDF-1.4 old".to_vec();
+        let file = world
+            .upload(TOKEN, "v1.pdf", "application/pdf", old.clone())
+            .await;
+        let released = release(&world, &number, Some(&file)).await;
+        assert_eq!(
+            released["data"]["releaseVersion"]["number"], 1,
+            "{released}"
+        );
+
+        // Its body written here, then released without a PDF: rendered.
+        edit(
+            &world,
+            &number,
+            json!({ "body": "# Policy\n\nWritten here.\n" }),
+        )
+        .await;
+        let released = release(&world, &number, None).await;
+        assert_eq!(
+            released["data"]["releaseVersion"]["number"], 2,
+            "{released}"
+        );
+        let at = |version: i64| {
+            let world = &world;
+            let number = number.clone();
+            async move {
+                world
+                    .ok(
+                        TOKEN,
+                        "query($n: String!, $v: Int) { akt(number: $n, version: $v) { fields { ... on AttachmentValue { field } ... on MarkdownValue { field } } } }",
+                        json!({ "n": number, "v": version }),
+                    )
+                    .await["akt"]["fields"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|f| f["field"].as_str().map(str::to_owned))
+                    .collect::<Vec<_>>()
+            }
+        };
+        assert!(at(1).await.contains(&"pdf".to_owned()), "live: {live}");
+        assert!(!at(2).await.contains(&"pdf".to_owned()), "live: {live}");
+
+        // Version 1 is its PDF; version 2 and the living version are rendered.
+        let first = pdf(&world, &format!("/akter/{number}/pdf?version=1")).await;
+        assert_eq!(first.bytes, old, "live: {live}");
+        for path in [
+            format!("/akter/{number}/pdf?version=2"),
+            format!("/akter/{number}/pdf"),
+        ] {
+            let rendered = pdf(&world, &path).await;
+            assert_eq!(rendered.status, 200, "{path}");
+            assert_ne!(rendered.bytes, old, "{path}");
+            assert!(rendered.bytes.starts_with(b"%PDF"), "{path}");
+        }
+    }
 }
 
 // r[verify version.file]

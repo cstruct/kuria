@@ -129,12 +129,15 @@ of the version being read (`pdf.route`), to download, and each version's
 PDF opening in a new tab from the versions list.
 
 r[app.external]
-An akt whose type declares `versions.file` (`version.file`) MUST show,
-in place of its field's value, the PDF of the version being read, else of
-its latest version, as a page of the document; with no version yet, it
-MUST say that none has been released. Releasing it MUST ask for the PDF,
-uploading it. The app MUST offer the PDF to download, and each version's
-PDF opening in a new tab from the versions list, as `app.pdf` does.
+An akt whose type declares `versions.file` (`version.file`) MUST show a
+version that was released with a PDF as that PDF, as a page of the
+document, in place of its `markdown` fields' sheets. One whose type has no
+`markdown` fields MUST show so the version being read, else its latest;
+with no version yet, it MUST say that none has been released. Releasing
+it MUST ask for the PDF, uploading it, as optional where the type has
+`markdown` fields. The app MUST offer a version's PDF to download, and
+each version's PDF opening in a new tab from the versions list, as
+`app.pdf` does.
 
 r[app.sheets]
 The app MUST show and edit a `markdown` field as A4 sheets, white with

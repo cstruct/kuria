@@ -205,11 +205,21 @@
 	// to download.
 	const markdownFields = $derived((akt?.type.fields ?? []).filter((f) => f.kind === 'MARKDOWN'));
 	// r[impl app.external]: an akt released as files has the PDF of the
-	// version read, else of its latest.
+	// version read, else of its latest; one written here, the PDF of a
+	// version released with one, and its body's sheets otherwise.
 	const fileField = $derived(akt ? releasedFile(akt.type.document) : null);
-	const shownVersion = $derived(atVersion ?? akt?.versions[0]?.number ?? null);
+	const writtenHere = $derived(markdownFields.length > 0);
+	const readsFile = $derived(
+		Boolean(
+			fileField && atVersion && akt?.fields.some((v) => 'field' in v && v.field === fileField)
+		)
+	);
+	const showsFile = $derived(Boolean(fileField) && (!writtenHere || readsFile));
+	const shownVersion = $derived(
+		writtenHere ? atVersion : (atVersion ?? akt?.versions[0]?.number ?? null)
+	);
 	const pdfs = $derived(
-		fileField
+		showsFile
 			? shownVersion === null
 				? []
 				: [
@@ -752,12 +762,16 @@
 					<dl class="fields">
 						{#each akt.type.fields as field (field.key)}
 							{#if field.key === fileField}
-								<ReleasedPdf
-									number={akt.number}
-									name={field.name}
-									title={akt.title ?? akt.number}
-									version={shownVersion}
-								/>
+								{#if showsFile}
+									<ReleasedPdf
+										number={akt.number}
+										name={field.name}
+										title={akt.title ?? akt.number}
+										version={shownVersion}
+									/>
+								{/if}
+							{:else if showsFile && field.kind === 'MARKDOWN'}
+								<!-- The version is its PDF, not its text. -->
 							{:else}
 								<FieldRow
 									{field}
@@ -911,6 +925,7 @@
 						versions={akt.versions}
 						pdfFields={markdownFields}
 						withFile={Boolean(fileField)}
+						fileRequired={!writtenHere}
 						reading={atVersion}
 						releasable={!atVersion && !akt.archived}
 						{busy}

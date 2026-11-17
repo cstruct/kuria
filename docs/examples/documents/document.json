@@ -7,7 +7,9 @@
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "owner", "name": "Owner", "kind": "user" },
     { "key": "body", "name": "Body", "kind": "markdown", "references": "refers_to", "diagrams": true,
-      "description": "The document. Link to another document, or a heading in it, with Reference; add a picture with Image, and a fletcher diagram or a cetz plot with Diagram." }
+      "description": "The document. Link to another document, or a heading in it, with Reference; add a picture with Image, and a fletcher diagram or a cetz plot with Diagram." },
+    { "key": "pdf", "name": "PDF", "kind": "attachment", "media_types": ["application/pdf"],
+      "description": "The PDF a version was kept as before the document was written here, such as one imported with `kuria docs import`; set only by releasing." }
   ],
   "states": [
     { "key": "draft", "name": "Draft", "initial": true },
@@ -19,7 +21,7 @@
   "links": [
     { "key": "refers_to", "name": "Refers to", "inverse": "Referred to by", "to": ["document", "image"] }
   ],
-  "versions": { "action": "documents:release" },
+  "versions": { "action": "documents:release", "file": "pdf" },
   "live_drafts": true,
   "presentation": {
     "icon": "file-text", "colour": "blue",

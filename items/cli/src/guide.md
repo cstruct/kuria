@@ -169,6 +169,14 @@ kuria docs fmt                         # the files as Kuria writes them
   text writes `<<<<<<< ours`, `=======`, `>>>>>>> kuria` around both and
   names the file. Resolve, then `kuria docs add`: a file holding markers
   can't be staged.
+- `kuria docs import <folder> --type <key> --in <container>` brings in a
+  document kept elsewhere: `<folder>/metadata.json` gives its field values
+  by key, its `draft` (converted to Markdown with pandoc, which must be on
+  the PATH, unless it is `.md`) and its `versions`, oldest first, each
+  `{"label", "description", "file"}` naming a PDF. It creates the akt,
+  releases each version as its PDF, then makes the draft its body; the
+  type must declare `versions.file` for the PDFs. In local mode it commits
+  each step, so commit everything else first.
 - git, if the clone is also a repository, is yours: Kuria sees only the
   files. To push part of your work, `git branch keep`, take the rest out
   of the working files (`git reset --hard <commit>`, or `git revert`),

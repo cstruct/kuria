@@ -25,6 +25,8 @@
 		/** Whether each version is released with a PDF, uploaded here
 		 * (`app.external`). */
 		withFile?: boolean;
+		/** Whether a release needs its PDF; else it may have one. */
+		fileRequired?: boolean;
 		/** The version being read, if one is. */
 		reading: number | null;
 		/** Whether the living version can be released now. */
@@ -48,6 +50,7 @@
 		versions,
 		pdfFields = [],
 		withFile = false,
+		fileRequired = true,
 		reading,
 		releasable,
 		busy,
@@ -82,7 +85,7 @@
 		`${resolve('/akt/[number]', { number })}${version ? `?version=${version}` : ''}`;
 
 	async function release() {
-		if (withFile && !file) return;
+		if (withFile && fileRequired && !file) return;
 		if (await onRelease(label, together, file, description)) {
 			releaseOpen = false;
 			label = '';
@@ -177,9 +180,11 @@
 <Dialog
 	bind:open={releaseOpen}
 	title="Release a version"
-	description={withFile
+	description={withFile && fileRequired
 		? 'It is the PDF you upload, kept as this version, which then never changes.'
-		: 'It names this revision, which then never changes.'}
+		: withFile
+			? 'It names this revision, or the PDF you upload, which then never changes.'
+			: 'It names this revision, which then never changes.'}
 >
 	<form
 		id="release-form"
@@ -191,11 +196,11 @@
 	>
 		{#if withFile}
 			<label>
-				PDF
+				{#if fileRequired}PDF{:else}<span>PDF <span class="optional">(optional)</span></span>{/if}
 				<input
 					type="file"
 					accept="application/pdf"
-					required
+					required={fileRequired}
 					onchange={(e) => (file = e.currentTarget.files?.[0] ?? null)}
 				/>
 			</label>

@@ -334,3 +334,57 @@ test('an external document is released as its PDF, shown and downloaded', async 
 	// Its PDF field is the release's to set.
 	await expect(rm.getByRole('button', { name: 'Edit PDF' })).toHaveCount(0);
 });
+
+// r[verify cli.docs-import]
+// r[verify app.external]
+test('a document is imported from a folder, its old versions as PDFs', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Imported ${stamp}` } }
+		)
+	).createAkt.number;
+
+	// The folder: a docx draft, made by pandoc, and two PDFs.
+	const folder = mkdtempSync(join(tmpdir(), 'kuria-import-'));
+	writeFileSync(join(folder, 'draft.md'), '# My doc\n\nHello **world**, from Word.\n');
+	execFileSync('pandoc', [join(folder, 'draft.md'), '-o', join(folder, 'draft.docx')]);
+	writeFileSync(join(folder, 'version1.pdf'), PDF);
+	writeFileSync(join(folder, 'version2.pdf'), Buffer.from('%PDF-1.4 two'));
+	writeFileSync(
+		join(folder, 'metadata.json'),
+		JSON.stringify({
+			title: `My doc ${stamp}`,
+			owner: 'rm@shop.example',
+			draft: 'draft.docx',
+			versions: [
+				{ label: 'version 1', description: 'foo bar', file: 'version1.pdf' },
+				{ label: 'version 2', description: 'bar baz', file: 'version2.pdf' }
+			]
+		})
+	);
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const ran = await cli.run(['docs', 'import', folder, '--type', 'document', '--in', index, '--format', 'json']);
+	expect(ran.code, ran.stderr).toBe(0);
+	const imported = JSON.parse(ran.stdout) as { number: string; versions: number[] };
+	expect(imported.versions).toEqual([1, 2]);
+	const number = imported.number;
+
+	// The living version is the draft; version 1 is its PDF.
+	const rm = await signIn(browser, seeded().people.releaseManager);
+	await open(rm, number);
+	await expect(rm.locator('dd[data-field="body"]')).toContainText('Hello world, from Word.');
+	await expect(rm.locator('dd[data-field="released-pdf"]')).toHaveCount(0);
+	const versions = rm.getByRole('region', { name: 'Versions' });
+	await expect(versions.getByRole('listitem').first()).toContainText('bar baz');
+	await versions.getByRole('link', { name: 'Version 1 (version 1)' }).click();
+	const shown = rm.locator('dd[data-field="released-pdf"] iframe');
+	await expect(shown).toHaveAttribute('src', `/akter/${number}/pdf?version=1`);
+	await expect(rm.locator('dd[data-field="body"]')).toHaveCount(0);
+	const served = await rm.request.get(`/akter/${number}/pdf?version=1`);
+	expect(Buffer.from(await served.body()).equals(PDF)).toBe(true);
+	expect(await violations(rm), 'version 1 of the imported document').toEqual([]);
+});

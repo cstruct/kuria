@@ -40,7 +40,8 @@ is, and answer 404 for an akt the subject may not read, as if it did not
 exist, and for a field that isn't `markdown` or a version the akt doesn't
 have. For an akt whose type declares `versions.file`
 (`version.file`), it MUST answer instead the PDF the version asked for was
-released with, else its latest version's, and 404 before its first
+released with, if it was; and for one whose type has no `markdown` fields,
+the latest version's PDF when none is asked for, and 404 before its first
 release.
 
 r[pdf.repeatable]

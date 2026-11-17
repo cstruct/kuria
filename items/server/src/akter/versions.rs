@@ -260,8 +260,9 @@ struct Prepared {
     label: Option<String>,
     description: Option<String>,
     draft: Option<super::live::Loaded>,
-    /// The field and PDF a release with a file records.
-    file: Option<(String, Uuid)>,
+    /// Whether the release records a revision: its live draft's, or one
+    /// setting or clearing its file (`version.release-file`).
+    records: bool,
     fields: std::collections::BTreeMap<String, kuria_engine::Value>,
     next: i32,
 }
@@ -302,7 +303,7 @@ async fn release_in(
             let json = kuria_engine::fields_to_json(&one.fields);
             found.versions.push(TargetVersion {
                 number: u32::try_from(one.next).unwrap_or_default(),
-                revision: one.akt.revision + i32::from(one.draft.is_some() || one.file.is_some()),
+                revision: one.akt.revision + i32::from(one.records),
                 headings: markdown::heading_ids(&one.ty.ty, &one.fields),
                 picture: picture_in(&one.ty, &json).is_some(),
             });
@@ -360,14 +361,16 @@ async fn record_version(
     one: Prepared,
     pins: Vec<versions::Pin>,
 ) -> Result<VersionRow, AktError> {
-    let revision = match (one.draft, &one.file) {
-        (Some(loaded), _) => record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?,
-        (None, Some(_)) => {
+    let revision = match one.draft {
+        Some(loaded) => {
+            record_draft(conn, caller, &one.ty, one.akt.clone(), loaded, &one.fields).await?
+        }
+        None if one.records => {
             record_fields(conn, caller, &one.ty, one.akt.clone(), &one.fields)
                 .await?
                 .revision
         }
-        (None, None) => one.revision,
+        None => one.revision,
     };
     let row = VersionRow {
         tenant_id: one.akt.tenant_id,
@@ -420,10 +423,16 @@ async fn prepare(
     }
     let (label, description) = said(one)?;
     let file = file_of(&ty, one, &number)?;
+    let current = values_of(&ty, &akt)?;
+    // A file set or cleared, as a live draft, makes the version's revision.
+    let changes_file = match &file {
+        Some((_, Some(_))) => true,
+        Some((key, None)) => current.contains_key(key),
+        None => false,
+    };
     let existing = stored::of(conn, tenant, akt.id).await?;
     let live = super::live::has_live_draft(&ty);
-    // A release with a file, as one of a live draft, makes its revision.
-    if !live && file.is_none() && existing.iter().any(|v| v.revision == revision) {
+    if !live && !changes_file && existing.iter().any(|v| v.revision == revision) {
         return Err(AktError::BadRequest(format!(
             "revision {revision} of {number} is already a version"
         )));
@@ -435,10 +444,16 @@ async fn prepare(
     };
     let mut fields = match &draft {
         Some(loaded) => loaded.fields.clone(),
-        None => values_of(&ty, &akt)?,
+        None => current,
     };
-    if let Some((key, id)) = &file {
-        fields.insert(key.clone(), kuria_engine::Value::Attachment(*id));
+    match file {
+        Some((key, Some(id))) => {
+            fields.insert(key, kuria_engine::Value::Attachment(id));
+        }
+        Some((key, None)) => {
+            fields.remove(&key);
+        }
+        None => {}
     }
     // r[impl live.release]
     if draft.is_some()
@@ -462,8 +477,8 @@ async fn prepare(
         revision,
         label,
         description,
+        records: draft.is_some() || changes_file,
         draft,
-        file,
         fields,
     })
 }
@@ -497,16 +512,19 @@ fn said(one: &Releasing) -> Result<(Option<String>, Option<String>), AktError> {
     Ok((label, description))
 }
 
-/// The field and PDF `one` releases `number`, of the type `ty`, with: one
-/// a type released as files needs, and any other refuses.
+/// The field `one` releases `number`, of the type `ty`, with a file in,
+/// and the PDF it is released with, if any: one that a type released only
+/// as files needs, one that a type written here may have, and that any
+/// other type refuses.
 // r[impl version.release-file]
 fn file_of(
     ty: &StoredType,
     one: &Releasing,
     number: &str,
-) -> Result<Option<(String, Uuid)>, AktError> {
+) -> Result<Option<(String, Option<Uuid>)>, AktError> {
     match (ty.ty.released_file(), one.file) {
-        (Some(key), Some(id)) => Ok(Some((key.to_owned(), id))),
+        (Some(key), Some(id)) => Ok(Some((key.to_owned(), Some(id)))),
+        (Some(key), None) if ty.ty.written_here() => Ok(Some((key.to_owned(), None))),
         (Some(_), None) => Err(AktError::BadRequest(format!(
             "{number} is released with its PDF: upload it and name it as `file`"
         ))),
@@ -528,8 +546,10 @@ async fn record_draft(
     ty: &StoredType,
     akt: AktRow,
     loaded: super::live::Loaded,
+    fields: &std::collections::BTreeMap<String, kuria_engine::Value>,
 ) -> Result<i32, AktError> {
-    let akt = record_fields(conn, caller, ty, akt, &loaded.fields).await?;
+    // The live draft's fields, and the release's file (`version.release-file`).
+    let akt = record_fields(conn, caller, ty, akt, fields).await?;
     super::live::released(conn, ty, &akt, &loaded, Utc::now()).await?;
     Ok(akt.revision)
 }

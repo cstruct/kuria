@@ -946,6 +946,115 @@ fn releases_an_external_document_with_its_pdf() {
     );
 }
 
+// r[verify cli.docs-import]
+// r[verify version.release-file]
+#[test]
+fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
+    let has_pandoc = Command::new("pandoc").arg("--version").output().is_ok();
+    if !has_pandoc {
+        eprintln!("skipped: pandoc isn't on the PATH");
+        return;
+    }
+    let dir = Dir::new();
+    let documents = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/documents");
+    for key in ["image", "document", "document_index"] {
+        let file = documents.join(format!("{key}.json"));
+        dir.ok(&["types", "define", file.to_str().unwrap()]);
+    }
+    dir.ok(&["new", "document_index", "--set", "title=Manual"]);
+    dir.commit("A manual");
+
+    // The folder: a docx draft, made here by pandoc, and two PDFs.
+    let folder = dir.root.join("../my-doc-folder");
+    std::fs::create_dir_all(&folder).unwrap();
+    let source = folder.join("draft.md");
+    std::fs::write(&source, "# My doc\n\nHello **world**, from Word.\n").unwrap();
+    let made = Command::new("pandoc")
+        .arg(&source)
+        .arg("-o")
+        .arg(folder.join("draft.docx"))
+        .output()
+        .unwrap();
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stderr)
+    );
+    std::fs::remove_file(&source).unwrap();
+    std::fs::write(folder.join("version1.pdf"), b"%PDF-1.4 one").unwrap();
+    std::fs::write(folder.join("version2.pdf"), b"%PDF-1.4 two").unwrap();
+    let metadata = json!({
+        "title": "My doc",
+        "owner": "bruce@example.com",
+        "draft": "draft.docx",
+        "versions": [
+            { "label": "version 1", "description": "foo bar", "file": "version1.pdf" },
+            { "label": "version 2", "description": "bar baz", "file": "version2.pdf" }
+        ]
+    });
+    std::fs::write(folder.join("metadata.json"), metadata.to_string()).unwrap();
+    let folder = folder.to_str().unwrap();
+
+    // Refused while anything is uncommitted, and before anything changes.
+    std::fs::write(dir.root.join("notes.txt"), "wip").unwrap();
+    let refused = dir.refused(&[
+        "docs", "import", folder, "--type", "document", "--in", "DOCS-1",
+    ]);
+    assert_eq!(refused.code, "UNCOMMITTED", "{}", refused.message);
+    std::fs::remove_file(dir.root.join("notes.txt")).unwrap();
+
+    let imported = dir
+        .ok(&[
+            "docs", "import", folder, "--type", "document", "--in", "DOCS-1", "--format", "json",
+        ])
+        .json;
+    assert_eq!(
+        imported,
+        json!({ "number": "DOCS-1-D01", "versions": [1, 2], "picturesLeftOut": 0 })
+    );
+    let listed = dir.ok(&["versions", "DOCS-1-D01", "--format", "json"]).json;
+    let said: Vec<(Value, Value)> = listed["versions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| (v["label"].clone(), v["description"].clone()))
+        .collect();
+    assert_eq!(
+        said,
+        [
+            (json!("version 2"), json!("bar baz")),
+            (json!("version 1"), json!("foo bar"))
+        ]
+    );
+    // Version 1 is its PDF; the living version is the draft, with no PDF.
+    let first = dir.ok(&["cat", "DOCS-1-D01", "--version", "1"]).markdown;
+    assert!(
+        first.contains("attachments/DOCS-1-D01/version1.pdf"),
+        "{first}"
+    );
+    let living = file(&dir, "DOCS-1-D01");
+    assert!(living.contains("Hello **world**, from Word."), "{living}");
+    assert!(living.contains("owner: bruce@example.com"), "{living}");
+    assert!(living.contains("by: me@kuria.example"), "{living}");
+    // Each step committed, and nothing left over.
+    assert!(
+        dir.ok(&["history", "DOCS-1-D01"])
+            .markdown
+            .contains("version 2")
+    );
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(&dir.root)
+        .args(["status", "--porcelain"])
+        .output()
+        .unwrap();
+    assert!(
+        status.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&status.stdout)
+    );
+}
+
 // r[verify cli.local.lock]
 #[test]
 fn writes_at_once_lose_nothing() {

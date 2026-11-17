@@ -19,10 +19,11 @@ akt whose type version doesn't declare `versions` MUST be refused as
 
 r[version.file]
 `versions.file` MUST name an `attachment` field of the type that takes
-only `application/pdf` (`media_types`), and the type MUST NOT have
-`markdown` fields or live drafts (`live.declare`): its akter are documents
-written elsewhere, such as an external document, released as a PDF each.
-Otherwise the document MUST be refused. Only a release MUST set the
+only `application/pdf` (`media_types`); otherwise the document MUST be
+refused. A type without `markdown` fields is one whose akter are written
+elsewhere, such as an external document, released as a PDF each; a type
+with them, such as a document whose earlier versions were kept as PDFs,
+renders a version from its text unless it was released with a PDF. Only a release MUST set the
 field: a write that would change it otherwise MUST be refused as
 `REFUSED`, and a copy (`akt.copy`) MUST NOT keep it.
 
@@ -88,14 +89,19 @@ make an akt revision, except as `live.release` and `version.release-file`
 say.
 
 r[version.release-file]
-Releasing an akt whose type declares `versions.file` MUST take a file, an
+Releasing an akt whose type declares `versions.file` MAY take a file, an
 attachment (`attachment.upload`) the releaser may read, of the media type
-`application/pdf`, and MUST be refused as `BAD_REQUEST` without one or
-with one that isn't, or for any other type. The release MUST record the
-file in the field as a new akt revision, checked as an edit's attachment
-is (`attachment.references`), and name that revision as the version, so
-that the akt's living version holds its latest version's file. An akt in
-a final state MAY be released so too.
+`application/pdf`, and MUST take one if the type has no `markdown`
+fields; it MUST be refused as `BAD_REQUEST` without one where one is
+needed, or with one for a type that doesn't declare `versions.file`, and
+as an edit's attachment is (`attachment.media-types`) with one that isn't
+a PDF. A release with a file MUST record it in the field as a new akt
+revision, checked as an edit's attachment is (`attachment.references`),
+and name that revision as the version; a release without one, of an akt
+whose field holds a file, MUST clear it so, so that each version either is
+the PDF it was released with or has none. With a live draft
+(`live.release`), the file is recorded with the live draft, in the same
+revision. An akt in a final state MAY be released so too.
 
 ## Reading
 

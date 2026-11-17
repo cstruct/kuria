@@ -382,6 +382,23 @@ pub enum Command {
 /// `kuria docs`: a clone's commands (`clone.*`).
 #[derive(Debug, Subcommand)]
 pub enum DocsCommand {
+    /// Import a document kept elsewhere from a folder: `metadata.json`
+    /// names its field values, its draft (converted to Markdown with
+    /// pandoc) and its old versions, each a PDF, released oldest first.
+    Import {
+        /// The folder holding `metadata.json` and the files it names.
+        folder: std::path::PathBuf,
+        /// The akt type to make it as, such as `document`.
+        #[arg(long = "type", value_name = "TYPE")]
+        akt_type: String,
+        /// The containers to make it in, by number; the first is its
+        /// parent.
+        #[arg(long = "in", value_name = "CONTAINER")]
+        inside: Vec<String>,
+        /// Why, recorded with each revision it makes.
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Clone a container and its members as files, recording the base
     /// they were cloned from in `<dir>/.kuria/`.
     Clone {
