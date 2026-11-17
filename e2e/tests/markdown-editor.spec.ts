@@ -355,3 +355,74 @@ test('a reference in a shown document previews its akt', async ({ browser }) => 
 	await expect(preview).toBeHidden();
 	await expect(page.getByTestId('number')).toHaveText(guide);
 });
+
+// r[verify app.trail]
+test('following references adds each akt to the trail', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Trail ${stamp}` } }
+		)
+	).createAkt.number;
+	const create = async (title: string, body: string) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($f: JSON, $in: [String!]!) { createAkt(input: { type: "document", fields: $f, in: $in }) { number } }',
+				{ f: { title, body }, in: [index] }
+			)
+		).createAkt.number;
+	const update = async (number: string, body: string) => {
+		const { revision } = (
+			await admin.graphql<{ akt: { revision: number } }>('query($n: String!) { akt(number: $n) { revision } }', {
+				n: number
+			})
+		).akt;
+		await admin.graphql('mutation($i: EditAktInput!) { editAkt(input: $i) { revision } }', {
+			i: { number, revision, fields: { body } }
+		});
+	};
+	const policy = await create(`Policy ${stamp}`, 'Start.\n');
+	const process = await create(`Process ${stamp}`, 'Middle.\n');
+	const form = await create(`Form ${stamp}`, 'End.\n');
+	await update(policy, `See [the process](kuria:${process}).\n`);
+	await update(process, `Fill in [the form](kuria:${form}), under [the policy](kuria:${policy}).\n`);
+
+	const page = await signIn(browser, seeded().people.developer);
+	const trail = page.getByRole('navigation', { name: 'You are here' }).getByRole('listitem');
+	const body = page.locator('dd[data-field="body"]');
+	await open(page, policy);
+	// The akt's title under its number.
+	await expect(trail).toHaveText(['Document', `${policy}Policy ${stamp}`]);
+
+	// Each reference followed goes on along the trail.
+	await body.getByRole('link', { name: 'the process' }).click();
+	await expect(page.getByTestId('number')).toHaveText(process);
+	await expect(trail).toHaveText(['Document', `${policy}Policy ${stamp}`, `${process}Process ${stamp}`]);
+	await body.getByRole('link', { name: 'the form' }).click();
+	await expect(page.getByTestId('number')).toHaveText(form);
+	await expect(trail).toHaveText([
+		'Document',
+		`${policy}Policy ${stamp}`,
+		`${process}Process ${stamp}`,
+		`${form}Form ${stamp}`
+	]);
+
+	// An earlier akt goes back to it, with the trail it had.
+	await trail.getByRole('link', { name: process }).click();
+	await expect(page.getByTestId('number')).toHaveText(process);
+	await expect(trail).toHaveText(['Document', `${policy}Policy ${stamp}`, `${process}Process ${stamp}`]);
+	// The browser's back shows the page with the trail it had.
+	await page.goBack();
+	await expect(page.getByTestId('number')).toHaveText(form);
+	await expect(trail).toHaveCount(4);
+	await page.goForward();
+	await expect(trail).toHaveCount(3);
+
+	// Reaching an akt already on the trail cuts it back.
+	await body.getByRole('link', { name: 'the policy' }).click();
+	await expect(page.getByTestId('number')).toHaveText(policy);
+	await expect(trail).toHaveText(['Document', `${policy}Policy ${stamp}`]);
+});

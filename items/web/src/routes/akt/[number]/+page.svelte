@@ -13,6 +13,8 @@
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
+	import { before, crumbsOf } from '#lib/shell/trail.ts';
+	import { setFollowing } from '#lib/akt/following.ts';
 	import FieldRow from '#lib/akt/FieldRow.svelte';
 	import HistoryList from '#lib/akt/HistoryList.svelte';
 	import CopyDialog from '#lib/akt/CopyDialog.svelte';
@@ -109,13 +111,35 @@
 		}
 		return shown && shown.number === number && shown.version === atVersion ? shown.akt : undefined;
 	});
+	// r[impl app.trail]: the type, then the akter followed here, and this
+	// one, each with its title.
+	const trail = $derived(page.state.trail ?? []);
 	setCrumbs(() =>
 		akt
-			? [
-					{ label: akt.type.name, href: resolve('/types/[key]', { key: akt.type.key }) },
-					{ label: akt.number }
-				]
+			? crumbsOf(
+					trail,
+					{
+						number: akt.number,
+						title: akt.title ?? null,
+						type: { key: akt.type.key, name: akt.type.name }
+					},
+					(key) => resolve('/types/[key]', { key })
+				)
 			: [{ label: number }]
+	);
+	// Following a reference in a shown field goes on from here.
+	setFollowing(() =>
+		akt
+			? [
+					...before(trail, akt.number),
+					{
+						number: akt.number,
+						title: akt.title ?? null,
+						type: { key: akt.type.key, name: akt.type.name },
+						href: `${page.url.pathname}${page.url.search}`
+					}
+				]
+			: null
 	);
 	const fieldNames = $derived(
 		Object.fromEntries((akt?.type.fields ?? []).map((f) => [f.key, f.name]))

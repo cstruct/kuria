@@ -3,6 +3,8 @@
 	import { renderMarkdown } from './markdown';
 	import { pictureOf } from './members';
 	import ReferencePreview from './ReferencePreview.svelte';
+	import { following } from './following';
+	import { referenceOfHref } from './previews';
 	import { renderReferenced, type Reference } from './references';
 	import { pagesOf, sheetsOf } from './sheets';
 	import { textOf, type Value } from './values';
@@ -18,6 +20,15 @@
 	/** `multiline` text is rendered as Markdown. */
 	let { value, multiline = false }: { value: Value; multiline?: boolean } = $props();
 	let sheetsElement: HTMLDivElement | undefined = $state();
+
+	// r[impl app.trail]: a reference followed goes on along the trail.
+	const follow = following();
+	const akter = `${resolve('/')}akt/`;
+	function followReference(event: MouseEvent) {
+		const link = event.target instanceof Element ? event.target.closest('a') : null;
+		const href = link?.getAttribute('href');
+		if (href && referenceOfHref(href, akter)) follow(event, href);
+	}
 </script>
 
 {#if value.__typename === 'AttachmentValue'}
@@ -42,7 +53,9 @@
 	{@const sheets = sheetsOf(
 		renderReferenced(value.markdown, value.references, hrefOf, value.images, value.diagrams)
 	)}
-	<div class="sheets" bind:this={sheetsElement}>
+	<!-- Clicks on the links in it, which are its keyboard's too. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="sheets" bind:this={sheetsElement} onclick={followReference}>
 		{#each sheets as sheet, i (i)}
 			<!-- Sanitized by renderReferenced. -->
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->

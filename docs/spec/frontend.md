@@ -41,6 +41,15 @@ An akt's page MUST show first its akt type, number, title and state, the
 state in its tone (`akt.type.presentation`), and the transitions its state
 allows as actions there.
 
+r[app.trail]
+The top bar MUST show where the page is as a trail: on an akt's page, its
+akt type, then its number with its title under it in smaller text.
+Following a reference in a shown `markdown` field MUST add the akt it
+goes to after the trail it was followed from, each earlier akt a link back
+to it, at the version it was read at, with the trail it had; reaching an
+akt already in the trail MUST cut the trail back to it. Going back and
+forward in the browser MUST show each page with the trail it had.
+
 r[app.fields]
 The app MUST show and edit each field by its kind: text in a single-line or
 multiline box, a choice or choices from the field's options, a date, a user

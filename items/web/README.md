@@ -52,7 +52,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   shows them all, in either theme.
 - [`src/lib/shell`](src/lib/shell): the app's frame: a sidebar of akt
   types with counts, Home and Contacts (a drawer below 900 pixels), a top
-  bar with breadcrumbs (`setCrumbs`), the viewer and Sign out, and search
+  bar with breadcrumbs (`setCrumbs`), an akt's title under its number,
+  which grow as references are followed (`trail.ts`, kept in history
+  state, and `akt/following.ts`), the viewer and Sign out, and search
   (`/` or Cmd-K) over akter by number or title.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
   the akt page's parts (`FieldRow`, editing one field in place;
