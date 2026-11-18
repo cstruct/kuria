@@ -1,7 +1,8 @@
 // Serves one example (`mise run example <example>`): the database
 // `kuria_example` on the development Postgres made again, the Kuria server
 // on 127.0.0.1:18291 with the example's bundle bootstrapped into the seeded
-// tenant (`bundle.bootstrap.*`), and the app from Vite's dev server on
+// tenant (`bundle.bootstrap.*`), or, for an example without one, its akt
+// type documents defined there, and the app from Vite's dev server on
 // http://localhost:18290, hot-reloading, passing the API to the server.
 // Checks the tenant holds just the example's akt types, then prints who
 // can sign in. Runs until Ctrl-C, which stops the server and Vite.
@@ -14,9 +15,13 @@ const started = Date.now();
 const elapsed = () => `${((Date.now() - started) / 1000).toFixed(1)}s`;
 
 const example = process.argv[2];
-const bundle = example ? join(EXAMPLES, example, 'bundle') : '';
-if (!example || !existsSync(join(bundle, 'bundle.json'))) {
-	const names = readdirSync(EXAMPLES).filter((name) => existsSync(join(EXAMPLES, name, 'bundle', 'bundle.json')));
+const dir = example ? join(EXAMPLES, example) : '';
+/** The example's akt type documents, by key, from its own files. */
+const documents = example ? typeDocuments(dir) : new Map<string, unknown>();
+const bundle = join(dir, 'bundle');
+const bundled = Boolean(example) && existsSync(join(bundle, 'bundle.json'));
+if (!example || (!bundled && documents.size === 0)) {
+	const names = readdirSync(EXAMPLES).filter((name) => typeDocuments(join(EXAMPLES, name)).size > 0);
 	throw new Error(`name an example to serve: ${names.join(', ')}`);
 }
 const stack = seeded();
@@ -93,7 +98,7 @@ run(server, [], {
 		...process.env,
 		...envFile('kuria.env'),
 		DATABASE_URL: `postgres://kuria:kuria@localhost:${port}/${database}`,
-		KURIA_BOOTSTRAP_BUNDLE: bundle,
+		...(bundled ? { KURIA_BOOTSTRAP_BUNDLE: bundle } : {}),
 		RUST_LOG: process.env.RUST_LOG ?? 'info'
 	}
 });
@@ -108,13 +113,18 @@ for (const url of [`${KURIA}/healthz`, `${APP}/healthz`]) {
 	}
 }
 
-// Only this example: its bundle's types, and nothing else.
-const expected: string[] = JSON.parse(readFileSync(join(bundle, 'bundle.json'), 'utf8')).types;
+// Without a bundle, its akt types defined, each once those it names are.
+if (!bundled) await define(await token, documents);
+
+// Only this example: its types, and nothing else.
+const expected: string[] = bundled
+	? JSON.parse(readFileSync(join(bundle, 'bundle.json'), 'utf8')).types
+	: [...documents.keys()];
 const { aktTypes } = await graphql<{ aktTypes: { key: string }[] }>(await token, '{ aktTypes { key } }');
 const held = aktTypes.map((t) => t.key).sort();
 if (JSON.stringify(held) !== JSON.stringify([...expected].sort())) {
 	stop();
-	throw new Error(`the tenant holds the akt types ${held.join(', ')}, not just the ${example} bundle's ${expected.join(', ')}`);
+	throw new Error(`the tenant holds the akt types ${held.join(', ')}, not just the ${example} example's ${expected.join(', ')}`);
 }
 
 const rows = stack.people.map((p) => `  ${p.name.padEnd(13)} ${p.email.padEnd(20)} ${p.password}`);
@@ -156,12 +166,50 @@ async function tenantToken(): Promise<string> {
 	return ((await moved.json()) as { access_token: string }).access_token;
 }
 
+/** The akt type documents in `dir`, by key: each JSON file that is one. */
+function typeDocuments(dir: string): Map<string, unknown> {
+	const found = new Map<string, unknown>();
+	if (!existsSync(dir) || !statSync(dir).isDirectory()) return found;
+	for (const name of readdirSync(dir).filter((n) => n.endsWith('.json')).sort()) {
+		try {
+			const document = JSON.parse(readFileSync(join(dir, name), 'utf8')) as { key?: unknown; states?: unknown };
+			if (typeof document.key === 'string' && Array.isArray(document.states)) found.set(document.key, document);
+		} catch {
+			// Not JSON, or not a type document: not one of its types.
+		}
+	}
+	return found;
+}
+
+/** Defines `documents` with `token`, again and again while one that names
+ * a type not yet defined is refused and another goes in. */
+async function define(token: string, documents: Map<string, unknown>) {
+	let left = [...documents.entries()];
+	while (left.length > 0) {
+		const refused: [string, unknown][] = [];
+		let last = '';
+		for (const [key, document] of left) {
+			try {
+				await graphql(token, 'mutation($d: JSON!) { defineAktType(document: $d) { key } }', { d: document });
+			} catch (e) {
+				refused.push([key, document]);
+				last = `${key}: ${e instanceof Error ? e.message : String(e)}`;
+			}
+		}
+		if (refused.length === left.length) {
+			stop();
+			throw new Error(`the ${example} example's akt types can't be defined: ${last}`);
+		}
+		left = refused;
+	}
+}
+
 /** GraphQL against the server with `token`. */
-async function graphql<T>(token: string, query: string): Promise<T> {
+async function graphql<T>(token: string, query: string, variables: Record<string, unknown> = {}): Promise<T> {
 	const response = await fetch(`${KURIA}/graphql`, {
 		method: 'POST',
 		headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-		body: JSON.stringify({ query })
+		body: JSON.stringify({ query, variables })
 	});
 	const body = (await response.json()) as { data?: T; errors?: unknown[] };
 	if (!response.ok || body.errors) throw new Error(`${response.status}: ${JSON.stringify(body.errors ?? body)}`);

@@ -1,8 +1,8 @@
 # Examples
 
 Configurations of Kuria for kinds of work, each a set of akt type
-documents to define with `defineAktType`, and a bundle of akter made with
-them:
+documents to define with `defineAktType`, and, optionally, a bundle of
+akter made with them:
 
 - [Release management](release-management/README.md): releases, their
   backlogs, candidates, hotfixes, notes and the artifacts they ship.
@@ -15,7 +15,7 @@ them:
 
 ## Example data
 
-Each example's `bundle/` is an example bundle (`bundle.examples` in
+An example may hold a `bundle/`, an example bundle (`bundle.examples` in
 [the bundles spec](../spec/bundles.md)): a bundle of its akt types with
 realistic akter and their history, as `kuria export --types … --akter`
 would write it. Load one into a server as it starts, into a tenant that

@@ -192,7 +192,9 @@ akter defines are defined by the nil subject too.
 ## The examples' bundles
 
 r[bundle.examples]
-Each example under `docs/examples` MUST hold `bundle/`: a `types` bundle of
+An example under `docs/examples` MAY hold `bundle/`: a `types` bundle of
 all its akt types with akter, made through Kuria's API, whose akt types'
 latest versions are the example's documents as its files hold them. Each
-MUST import into a fresh tenant (`bundle.bootstrap.fresh`).
+such bundle MUST import into a fresh tenant (`bundle.bootstrap.fresh`).
+An example without one is its akt type documents alone, defined into the
+tenant when it is served.

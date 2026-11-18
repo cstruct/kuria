@@ -1,5 +1,5 @@
-//! The examples' bundles (`bundle.examples`): each example in
-//! `docs/examples` holds `bundle/`, its akt types with akter made here
+//! The examples' bundles (`bundle.examples`): each example listed in
+//! `EXAMPLES` holds `bundle/`, its akt types with akter made here
 //! through GraphQL, as the people of the end-to-end seed would make them in
 //! the app.
 //!
