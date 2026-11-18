@@ -5,6 +5,7 @@
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import GripVertical from '@lucide/svelte/icons/grip-vertical';
+	import Plus from '@lucide/svelte/icons/plus';
 	import X from '@lucide/svelte/icons/x';
 	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
 	import Badge from '#lib/ui/Badge.svelte';
@@ -42,6 +43,9 @@
 		me?: string;
 		/** Gives the viewer's verdict on a member, or takes it back. */
 		onVerdict?: (member: Member, verdict: Verdict | null) => void;
+		/** The akter a column offers to create, each with its type's name
+		 * and the new-akt page that creates it (`app.board-create`). */
+		creatable?: (column: string) => { name: string; href: string }[];
 	}
 
 	type Transition = Member['type']['transitions'][number];
@@ -57,7 +61,8 @@
 		onRemove,
 		onInto,
 		me,
-		onVerdict = () => {}
+		onVerdict = () => {},
+		creatable = () => []
 	}: Props = $props();
 
 	const grouped = $derived(groupMembers(columns, mappedTypes(document), contained));
@@ -124,6 +129,7 @@
 	<div class="board" role="region" aria-label="Board" tabindex="0">
 		{#each grouped.columns as column (column.key)}
 			{@const numbers = column.akter.map((m) => m.number)}
+			{@const offered = column.key === 'unmapped' ? [] : creatable(column.key)}
 			<section
 				class="column"
 				class:refuses={reorder.refuses(column.key)}
@@ -132,7 +138,31 @@
 				aria-label={column.name}
 				title={reorder.refuses(column.key) ? 'No transition leads here from its state' : undefined}
 			>
-				<h3>{column.name} <span class="count">{column.akter.length}</span></h3>
+				<header class="column-head">
+					<h3>{column.name} <span class="count">{column.akter.length}</span></h3>
+					<!-- r[impl app.board-create] -->
+					{#if offered.length === 1}
+						<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved, with a query -->
+						<a
+							class="create"
+							href={offered[0].href}
+							aria-label="New {offered[0].name} in {column.name}"
+							title="New {offered[0].name} in {column.name}"
+							><Plus size={14} aria-hidden={true} /></a
+						>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					{:else if offered.length > 1}
+						<Menu
+							label="New in {column.name}"
+							icon={Plus}
+							items={offered.map((o) => ({
+								label: `New ${o.name}`,
+								icon: Plus,
+								onSelect: () => location.assign(o.href)
+							}))}
+						/>
+					{/if}
+				</header>
 				<ol
 					ondragover={(e) => reorder.overGroup(e, column.key, numbers.length)}
 					ondrop={(e) => reorder.drop(e, column.key, numbers)}
@@ -319,6 +349,34 @@
 		gap: var(--space-2);
 		margin: 0 0 var(--space-3);
 		font-size: var(--text-sm);
+	}
+
+	.column-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		min-height: 2rem;
+		margin-bottom: var(--space-3);
+	}
+
+	.column-head h3 {
+		margin: 0;
+	}
+
+	.create {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+		color: var(--text-muted);
+	}
+
+	.create:hover {
+		background: var(--bg-muted);
+		color: var(--text);
 	}
 
 	.count {

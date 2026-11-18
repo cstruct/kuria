@@ -132,7 +132,7 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
 - [`tests/contacts.spec.ts`](tests/contacts.spec.ts): a contact linked
   by hand to a user who signed in with a password, and an akt's history
   naming the user a value names.
-- [`tests/links.spec.ts`](tests/links.spec.ts): a backlog item linked to
+- [`tests/links.spec.ts`](tests/links.spec.ts): a task linked to
   the one it blocks from its page, read both ways, in the history, and
   unlinked.
 - [`tests/members.spec.ts`](tests/members.spec.ts): a container's
@@ -140,7 +140,9 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   from the menu, and dropped on another column to take the transition
   that leads there (or refused where none does); an akt type's list
   filtered by state and by field values in the address, sorted, and
-  loading more a page at a time.
+  loading more a page at a time; and a task created from a release
+  candidate's "To do" column, landing in the candidate and in the backlog
+  that is its parent board.
 - [`tests/documents.spec.ts`](tests/documents.spec.ts): the
   [documents example](../docs/examples/documents/README.md):
   - the developer writes a document in the rich-text editor, with a reference to another document's heading;

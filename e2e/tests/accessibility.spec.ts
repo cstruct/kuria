@@ -60,9 +60,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
 			await expect(p.getByRole('heading', { name: 'Recently changed' })).toBeVisible();
 		});
 		await check('akter by type', '/types/backlog_item', async (p) => {
-			await expect(p.getByRole('table', { name: 'Backlog item' })).toBeVisible();
+			await expect(p.getByRole('table', { name: 'Task' })).toBeVisible();
 		});
-		await check('a new akt', '/types/backlog_item/new', heading(/Backlog item/));
+		await check('a new akt', '/types/backlog_item/new', heading(/New Task/));
 		await check('contacts', '/contacts', heading('Contacts'));
 		const contact = `Checked contact ${colorScheme} ${Date.now()}`;
 		await page.getByRole('form', { name: 'Add a contact' }).getByLabel('Name').fill(contact);

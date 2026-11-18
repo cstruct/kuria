@@ -190,6 +190,14 @@ from the member's state to a state that column names for its akt type,
 and perform the one chosen as `app.transitions` does, asking for the fields
 it requires. A column no such transition leads to MUST refuse the drop.
 
+r[app.board-create]
+Each column of a container's board MUST offer, to one who may edit the
+container, creating an akt of each akt type the container contains whose
+initial state the column names for it, inside the container. Creating an
+akt from a container's page, from a column or as a new member, MUST also
+create it in each of the container's parent boards (`board.parent`) whose
+akt type contains the akt's type, the container first.
+
 r[app.navigation]
 The sidebar MUST list the akt types whose `navigation` is `more`
 (`akt.type.presentation`) after the others, under a "Show more"

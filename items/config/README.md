@@ -7,7 +7,7 @@ Akt type documents: their model, their validation, and number patterns.
 - `AktTypeDocument`: the document a tenant submits to define an akt type,
   with its fields, states, transitions and number pattern, and for a
   container what it `contains`, what it must be `created_in` and its
-  `board` columns, per multiline text field a `draft` recipe, and per
+  `board` columns and the link kind naming its parent boards, per multiline text field a `draft` recipe, and per
   `attachment` field its `format` (`any` or `sbom`), and its `presentation`:
   the title field, the fields on cards and in lists, and a tone per state.
 - `AktType::title_field` and `AktType::tone`: the presentation's title
@@ -56,5 +56,5 @@ cargo test -p kuria-config
 - Specs: [`docs/spec/akter.md`](../../docs/spec/akter.md) (`akt.type.*`,
   `akt.number.*`), [`containers.md`](../../docs/spec/containers.md)
   (`container.contains`, `container.created-in`) and
-  [`boards.md`](../../docs/spec/boards.md) (`board.columns`) and
+  [`boards.md`](../../docs/spec/boards.md) (`board.columns`, `board.parent`) and
   [`drafts.md`](../../docs/spec/drafts.md) (`draft.recipe`, `draft.line`).

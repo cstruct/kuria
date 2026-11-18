@@ -1,7 +1,7 @@
 {
   "key": "backlog_item",
-  "name": "Backlog item",
-  "number": "ITEM-{seq:4}",
+  "name": "Task",
+  "number": "TASK-{seq:4}",
   "fields": [
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "kind", "name": "Kind", "kind": "choice",
@@ -29,7 +29,7 @@
   ],
   "archive": { "rules": [{ "days_in": 90, "in": ["done"] }] },
   "presentation": {
-    "icon": "file-text", "colour": "neutral",
+    "icon": "file-text", "colour": "neutral", "navigation": "more",
     "card": ["kind", "assignee"], "list": ["kind", "assignee"],
     "tones": { "in_progress": "active", "in_review": "warning", "done": "success" }
   }

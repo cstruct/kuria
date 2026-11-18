@@ -7,21 +7,27 @@ others.
 
 | Akt type | Number | Contains | Created in |
 |---|---|---|---|
-| [`backlog_item`](backlog_item.json) | `ITEM-0001` | | |
-| [`epic`](epic.json) | `EPIC-001` | backlog items, each in one epic | |
-| [`backlog`](backlog.json) | `BACKLOG-001` | backlog items, each in one backlog, and epics | |
+| [`backlog_item`](backlog_item.json), named Task | `TASK-0001` | | |
+| [`epic`](epic.json) | `EPIC-001` | tasks, each in one epic | |
+| [`backlog`](backlog.json) | `BACKLOG-001` | tasks, each in one backlog, and epics | |
 | [`release`](release.json) | `RELEASE-2026-0001` | backlogs, release candidates, hotfixes, one set of release notes | |
-| [`release_candidate`](release_candidate.json) | `RELEASE-2026-0001-RC-0001` | epics, backlog items and artifacts | a release |
-| [`hotfix`](hotfix.json) | `RELEASE-2026-0001-HOTFIX-0001` | backlog items and artifacts | a release |
+| [`release_candidate`](release_candidate.json) | `RELEASE-2026-0001-RC-0001` | epics, tasks and artifacts | a release |
+| [`hotfix`](hotfix.json) | `RELEASE-2026-0001-HOTFIX-0001` | tasks and artifacts | a release |
 | [`artifact`](artifact.json) | `ARTIFACT-00001` | | |
 | [`release_notes`](release_notes.json) | `RELEASE-2026-0001-NOTES-1` | | a release |
 
 ## How it fits together
 
-- A backlog item lives in one backlog and at most one epic, and in as many
-  release candidates and hotfixes as ship it. Every board it is on shows it
+- A task lives in one backlog and at most one epic, and in as many
+  release candidates and hotfixes as ship it. (Its key stays
+  `backlog_item`, since the [planning example](../planning/README.md)
+  keys its own tasks `task`.) Every board it is on shows it
   in the same relative order, because they all order by rank: moving it in
   the backlog moves it in its epic too.
+- A release candidate's parent board is a backlog: link the candidate to
+  it as *Parent board*, and a task or epic created from the candidate's
+  board, with the "+" on its *To do* column, is created in the backlog
+  too ([parent boards](../../spec/boards.md)).
 - A release is planned, tested, released, and finally closed when it is no
   longer maintained. Its release candidates and hotfixes are created inside
   it and numbered after it. It takes candidates only while planning or
@@ -56,7 +62,7 @@ others.
 
 - Old work archives itself ([archiving](../../spec/archive.md)): a
   release once two newer releases are closed, no longer maintained, its
-  candidates, hotfixes and notes with it, and a backlog item 90 days after it is done.
+  candidates, hotfixes and notes with it, and a task 90 days after it is done.
   Archived akter are read-only and left out of lists, boards and search
   until **Show archived**; unarchiving a release brings back what it took,
   and an akt someone unarchives by hand stays until archived by hand again.
@@ -64,12 +70,15 @@ others.
 - A document's `presentation` says how its akter are shown: an icon and a
   colour for the type (a rocket for a release, a flask for a candidate,
   a wrench for a hotfix, a package for an artifact), the
-  fields on board cards (a backlog item's kind and assignee, a candidate's
+  fields on board cards (a task's kind and assignee, a candidate's
   build) and in lists (an artifact's change, version and image), and the
   tone of each state (in progress is active, in review a warning, done,
   accepted, deployed and approved a success, rejected a danger). Titles
   come from each type's first required single-line text field; a
   candidate, a hotfix and release notes have none, and show their number.
+  Tasks, release candidates and release notes are reached from inside
+  backlogs and releases, so the sidebar lists them under **Show more**
+  (`navigation`).
 
 ## Trying it in a browser
 
@@ -141,7 +150,8 @@ Two roles cover the usual split:
   `release`,
   `release_candidate`, `hotfix` and `release_notes`: `kuria:akter:create`,
   `kuria:akter:edit`, `kuria:akter:transition`, `kuria:akter:archive`, and
-  `release:approve`.
+  `release:approve`; and the developer's at `backlog`, `epic` and
+  `backlog_item`, to plan candidates from their backlogs.
 
 And one for software:
 
@@ -150,6 +160,8 @@ And one for software:
   them; only it can attach its uploads until an artifact holds them, and
   then whoever reads artifacts can download them.
 
-A release manager can put items into release candidates and hotfixes,
-since that needs `edit` at the container and `read` at the item. A
-developer can't create a release candidate.
+A release manager can put tasks into release candidates and hotfixes,
+since that needs `edit` at the container and `read` at the task, and
+create them from a candidate's board, which needs `create` at the task
+and `edit` at the candidate and its backlog. A developer can't create a
+release candidate.

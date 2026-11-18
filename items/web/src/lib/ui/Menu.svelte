@@ -23,6 +23,8 @@
 		/** What the trigger shows; an ellipsis by default. The label must
 		 * contain it, so that people who name what they see reach it. */
 		text?: string;
+		/** An icon the trigger shows in place of the ellipsis. */
+		icon?: Component<{ size?: number; 'aria-hidden'?: boolean }>;
 		/** Opens the menu at this element instead of at a trigger of its own,
 		 * as a context menu does; `open` then says when. */
 		anchor?: HTMLElement | null;
@@ -35,6 +37,7 @@
 		label,
 		items,
 		text,
+		icon: Icon = Ellipsis,
 		anchor = null,
 		open = $bindable(false),
 		onCloseAutoFocus
@@ -48,7 +51,7 @@
 			aria-label={label}
 			title={label}
 		>
-			{#if text}{text}{:else}<Ellipsis size={16} aria-hidden={true} />{/if}
+			{#if text}{text}{:else}<Icon size={16} aria-hidden={true} />{/if}
 		</DropdownMenu.Trigger>
 	{/if}
 	<DropdownMenu.Portal>

@@ -280,6 +280,10 @@ fn document_markdown(document: &Json) -> String {
                 states.join("; ")
             ));
         }
+        // r[impl board.parent]
+        if let Some(parent) = document["board"]["parent"].as_str() {
+            text.push_str(&format!("\nParent boards: its `{parent}` links\n"));
+        }
     }
     text
 }

@@ -160,7 +160,7 @@ const people = {
 		'reader',
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] },
-		{ role: 'developer-work', at: ['test_protocol', 'test_case', 'document_index'] },
+		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index'] },
 		{ role: 'document-release', at: ['document', 'external_document'] }
 	]),
 	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])

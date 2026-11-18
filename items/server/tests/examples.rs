@@ -354,6 +354,14 @@ async fn release_management(w: &World) {
             "First candidate",
         )
         .await;
+    w.link(
+        &rm,
+        &rc1,
+        "parent_board",
+        &backlog,
+        "Planned from the spring backlog",
+    )
+    .await;
     for member in [&checkout, &crash, &experiment] {
         w.add_to(&rm, &rc1, member, "In the first candidate").await;
     }
@@ -415,6 +423,14 @@ async fn release_management(w: &World) {
             "Second candidate, without search",
         )
         .await;
+    w.link(
+        &rm,
+        &rc2,
+        "parent_board",
+        &backlog,
+        "Planned from the spring backlog",
+    )
+    .await;
     for member in [&checkout, &sign_in, &crash, &deps] {
         w.add_to(&rm, &rc2, member, "In the second candidate").await;
     }

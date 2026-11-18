@@ -105,7 +105,7 @@ test('an akt type’s akter are listed, filtered by state and sorted', async ({ 
 
 	const page = await signIn(browser, seeded().people.developer);
 	await page.goto('/types/backlog_item');
-	const table = page.getByRole('table', { name: 'Backlog item' });
+	const table = page.getByRole('table', { name: 'Task' });
 	const numbers = () =>
 		table.locator('tbody tr').evaluateAll((rows) => rows.map((r) => r.querySelector('a')?.textContent?.trim() ?? ''));
 	const mine = async () => (await numbers()).filter((n) => n === older || n === newer);
@@ -154,4 +154,45 @@ test('an akt type’s list loads more a page at a time', async ({ browser }) => 
 	// Each akt once, across pages.
 	const numbers = await rows.evaluateAll((all) => all.map((r) => r.querySelector('a')?.textContent?.trim()));
 	expect(new Set(numbers).size).toBe(numbers.length);
+});
+
+// r[verify app.board-create]
+// r[verify board.parent]
+test('a column creates its types, in the board and its parent boards', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	const create = async (type: string, fields: Record<string, unknown>, inside: string[] = []) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($t: String!, $f: JSON, $in: [String!]!) { createAkt(input: { type: $t, fields: $f, in: $in }) { number } }',
+				{ t: type, f: fields, in: inside }
+			)
+		).createAkt.number;
+	const release = await create('release', { title: 'Winter' });
+	const backlog = await create('backlog', { title: 'Winter work' }, [release]);
+	const candidate = await create('release_candidate', {}, [release]);
+	await admin.graphql(
+		'mutation($s: String!, $t: String!) { addLink(input: { source: $s, kind: "parent_board", target: $t }) { number } }',
+		{ s: candidate, t: backlog }
+	);
+
+	const page = await signIn(browser, seeded().people.releaseManager);
+	await open(page, candidate);
+	const members = page.getByRole('region', { name: 'Members', exact: true });
+	// Only the column holding the initial states offers to create.
+	await expect(members.getByRole('button', { name: 'New in In progress' })).toHaveCount(0);
+	await members.getByRole('button', { name: 'New in To do' }).click();
+	await expect(page.getByRole('menuitem', { name: 'New Epic' })).toBeVisible();
+	await page.getByRole('menuitem', { name: 'New Task' }).click();
+	await expect(page.getByText(`In ${candidate}, ${backlog}`)).toBeVisible();
+	await page.getByRole('group', { name: /^Title/ }).getByLabel('Title', { exact: true }).fill('Winter tyres');
+	await page.getByRole('button', { name: 'Create', exact: true }).click();
+	await expect(page).toHaveURL(/\/akt\//);
+	const task = (await page.getByTestId('number').textContent())!.trim();
+	expect(task).toMatch(/^TASK-\d{4}$/);
+
+	await open(page, candidate);
+	expect(await column(page, 'To do')).toEqual([task]);
+	await open(page, backlog);
+	expect(await column(page, 'To do')).toEqual([task]);
 });

@@ -63,7 +63,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   `Members`, the board for the akt types its columns name and a list per
   other akt type, from `members.ts`, reordered by dragging within a
   column or list (`reorder.svelte.ts`) or from each member's menu, and
-  dropped on another column to take a transition that leads there;
+  dropped on another column to take a transition that leads there, each
+  column offering "+" for the types whose initial state it names, created
+  in the container and its parent boards (`creating.ts`);
   `TypeMark`, a type's icon and colour from `identity.ts`; `LinksCard`, an
   akt's links both ways, added by a kind its type declares and removed;
   `Sections`, members in a `sections` field's nested sections, a

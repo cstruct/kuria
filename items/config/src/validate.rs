@@ -222,6 +222,15 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     }
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
+        // r[impl board.parent]
+        if let Some(parent) = &board.parent
+            && !document.links.iter().any(|l| &l.key == parent)
+        {
+            problems.add(
+                "board.parent",
+                format!("`{parent}` must be a kind of link the akt type declares in `links`"),
+            );
+        }
     }
     archive_rules(&mut problems, &document);
     // r[impl akt.number.pattern]
@@ -1352,6 +1361,24 @@ mod tests {
                 "board.columns[1].states.epic[1]: `epic.open` is already in the column `todo`",
                 "board.columns[2].states.epic[0]: `epic.open` is already in the column `todo`",
             ]
+        );
+    }
+
+    // r[verify board.parent]
+    #[test]
+    fn checks_a_boards_parent() {
+        let mut document = release_candidate();
+        document["links"] = json!([
+            { "key": "parent_board", "name": "Parent board", "inverse": "Parent board of",
+              "to": ["backlog"] }
+        ]);
+        document["board"]["parent"] = json!("parent_board");
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert_eq!(ty.board().unwrap().parent.as_deref(), Some("parent_board"));
+        document["board"]["parent"] = json!("backlog");
+        assert_eq!(
+            problems(document),
+            vec!["board.parent: `backlog` must be a kind of link the akt type declares in `links`"]
         );
     }
 

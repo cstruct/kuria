@@ -198,7 +198,7 @@ test('a release from planning to closed', async ({ browser }) => {
 		.toEqual([
 			'Epic',
 			`${epic} Sign-in ()`,
-			'Backlog item',
+			'Task',
 			`${reset} Password reset (Feature)`,
 			`${passkeys} Passkeys (Feature)`,
 			`${crash} Crash on save (Fix)`,

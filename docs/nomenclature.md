@@ -215,6 +215,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `board`
   - A container shown as columns. The container's akt type configures the columns, naming which states of which member akt types fall in each.
 
+- `parent board`
+  - An akt a container links to by the link kind its akt type names as `board.parent`, such as the backlog a release candidate is planned from. An akt created from the container's board is created in its parent boards too. It is a link, not a membership: the container is not in its parent board.
+
 - `presentation`
   - The part of an akt type that says how its akter are shown: which field is the title, which fields go on board cards and list columns, the tone of each state, and the type's icon and colour. It changes how akter look, never what they hold.
 

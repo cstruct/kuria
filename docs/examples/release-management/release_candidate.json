@@ -18,7 +18,9 @@
     { "key": "reject", "name": "Reject", "from": ["testing"], "to": "rejected" }
   ],
   "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" }],
-  "board": { "columns": [
+  "links": [{ "key": "parent_board", "name": "Parent board", "inverse": "Parent board of",
+              "to": ["backlog"] }],
+  "board": { "parent": "parent_board", "columns": [
     { "key": "todo", "name": "To do",
       "states": { "backlog_item": ["open"], "epic": ["open"] } },
     { "key": "doing", "name": "In progress",
@@ -28,7 +30,7 @@
   ] },
   "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {
-    "icon": "flask-conical", "colour": "teal",
+    "icon": "flask-conical", "colour": "teal", "navigation": "more",
     "card": ["build"], "list": ["build", "test_record"],
     "tones": { "testing": "active", "accepted": "success", "rejected": "danger" }
   }

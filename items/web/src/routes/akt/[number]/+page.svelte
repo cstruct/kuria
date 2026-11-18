@@ -48,6 +48,7 @@
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
+	import { creatableIn, insideQuery, parentBoards } from '#lib/akt/creating.ts';
 	import { changes, draftOf, inputOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { LiveDraft } from '#lib/akt/live.svelte.ts';
 	import LivePresence from '#lib/akt/LivePresence.svelte';
@@ -157,6 +158,23 @@
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
+	/** The new-akt page that creates an akt of the type `key` in this
+	 * container and in its parent boards that take it (`app.board-create`). */
+	// r[impl app.board-create]
+	const newMemberHref = (key: string) =>
+		akt
+			? `${resolve('/types/[key]/new', { key })}?${insideQuery(
+					akt.number,
+					parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? [])
+				)}`
+			: resolve('/types/[key]/new', { key });
+	const creatable = (column: string) =>
+		akt && editable
+			? creatableIn(akt.type.document, column, view.data?.aktTypes ?? []).map((t) => ({
+					name: t.name,
+					href: newMemberHref(t.key)
+				}))
+			: [];
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
 	// A version never changes: read at one, nothing is offered to change.
 	const actions = $derived(
@@ -834,9 +852,7 @@
 											label: `New ${typeNames[key] ?? key}`,
 											icon: Plus,
 											onSelect: () => {
-												location.assign(
-													`${resolve('/types/[key]/new', { key })}?in=${encodeURIComponent(akt.number)}`
-												);
+												location.assign(newMemberHref(key));
 											}
 										})),
 										{
@@ -873,6 +889,7 @@
 								onInto={into}
 								{me}
 								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
+								{creatable}
 							/>
 						{/if}
 					</section>

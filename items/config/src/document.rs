@@ -339,6 +339,9 @@ impl ContainsDef {
 #[serde(deny_unknown_fields)]
 pub struct BoardDef {
     pub columns: Vec<ColumnDef>,
+    /// The link kind whose targets are this board's parent boards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
 }
 
 /// One column of a board.

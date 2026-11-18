@@ -337,6 +337,11 @@ export const AktPage = graphql(`
 			key
 			version
 			name
+			states {
+				key
+				initial
+			}
+			document
 		}
 		akt(number: $number, version: $version) {
 			id
