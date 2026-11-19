@@ -233,3 +233,52 @@ test('a column adds tasks by their titles, staying on the board', async ({ brows
 	await expect(page.getByRole('heading', { name: 'New Task' })).toBeVisible();
 	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Six, with more');
 });
+
+// r[verify app.pull]
+test('a candidate takes several tasks from its backlog at once', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	const create = async (type: string, fields: Record<string, unknown>, inside: string[] = []) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($t: String!, $f: JSON, $in: [String!]!) { createAkt(input: { type: $t, fields: $f, in: $in }) { number } }',
+				{ t: type, f: fields, in: inside }
+			)
+		).createAkt.number;
+	const release = await create('release', { title: 'Pulling' });
+	const backlog = await create('backlog', { title: 'Pulling backlog' }, [release]);
+	const tasks = [];
+	for (const title of ['Pull one', 'Pull two', 'Pull three', 'Pull four']) {
+		tasks.push(await create('backlog_item', { title }, [backlog]));
+	}
+	const other = await create('release_candidate', {}, [release]);
+	await admin.graphql('mutation($i: MembershipInput!) { addToContainer(input: $i) { number } }', {
+		i: { container: other, member: tasks[3] }
+	});
+
+	// A candidate made in the release asks what it ships from, offering the
+	// release's backlog.
+	const rm = await signIn(browser, seeded().people.releaseManager);
+	await rm.goto(`/types/release_candidate/new?in=${release}`);
+	await expect(rm.getByLabel('Ships from')).toHaveValue(backlog);
+	await rm.getByRole('button', { name: 'Create', exact: true }).click();
+	await expect(rm).toHaveURL(/\/akt\//);
+	const candidate = (await rm.getByTestId('number').textContent())!.trim();
+
+	await rm.getByRole('button', { name: 'Add from Pulling backlog' }).click();
+	const dialog = rm.getByRole('dialog', { name: 'Add from Pulling backlog' });
+	await expect(dialog.getByRole('checkbox', { name: /Pull four/ })).toBeVisible();
+	await expect(dialog.getByText(`In ${other}`)).toBeVisible();
+	for (const title of ['Pull one', 'Pull two', 'Pull three']) {
+		await dialog.getByRole('checkbox', { name: new RegExp(title) }).check();
+	}
+	await dialog.getByRole('button', { name: 'Add 3' }).click();
+	await expect(dialog).toBeHidden();
+	await expect(rm.getByText('Added 3 from Pulling backlog').first()).toBeVisible();
+	await expect.poll(() => column(rm, 'To do')).toEqual(tasks.slice(0, 3));
+
+	// Those now here are shown, and not offered again.
+	await rm.getByRole('button', { name: 'Add from Pulling backlog' }).click();
+	await expect(dialog.getByRole('checkbox', { name: /Pull one/ })).toBeDisabled();
+	expect(candidate).toMatch(/-RC-\d{4}$/);
+});

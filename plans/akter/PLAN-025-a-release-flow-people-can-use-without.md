@@ -576,9 +576,9 @@ Verified:
 <!-- akt: PLAN-025-T11 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b60
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T17]
 title: Pull many members from a parent board at once
@@ -594,6 +594,26 @@ Covers findings 3.8, 4.3, 4.7, 5.1 and 5.8.
 - A release shows its linked backlog in a "Planned from" area.
 - "Remove TASK-0012" becomes "Remove from candidate", and is no longer shown in red.
 - Rules: `board.parent`, `app.members`, `app.links`, `app.board-create`.
+
+## Done
+
+Changes:
+
+- A container linked to a parent board offers "Add from <parent>". It opens a dialog of the parent's board, by column, holding the types the container holds. Members already here are shown and not offered; members in another container of its type are marked "In RC-…". The ones chosen are added in one batch, all or none, with "Added 3 from <parent>" (`app.pull`; `offeredFrom`, `parentOf`, `PullDialog`).
+- The page creating such a type in a container asks for its parent board, offering that container's members of the types the link leads to, the first chosen. For a candidate made in a release, that is the release's backlog. The link is made once the akt is.
+- "Remove from here" is no longer red.
+- The example's link reads "Ships from" (inverse "Shipped in"), and its README describes the flow.
+
+Not done:
+
+- The global "Existing…" search still lists akter from every container, closed ones too.
+- A "Planned from" area on the release. The release's backlog already shows in its list by type.
+
+Verified:
+
+- `pulling.test.ts`;
+- e2e "a candidate takes several tasks from its backlog at once": Ships from defaults to the backlog, three are added, one elsewhere is marked, and those added aren't offered again;
+- `mise run test`.
 
 <!-- field: acceptance -->
 - An end-to-end test pulls three tasks into a candidate in one go.

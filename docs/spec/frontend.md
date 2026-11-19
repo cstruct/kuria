@@ -235,6 +235,16 @@ and keep the input ready for the next. Asking for more, by Shift+Enter,
 MUST open the page creating it with the title typed. A column offering
 several such types MUST let the person choose which.
 
+r[app.pull]
+A container that links to a parent board (`board.parent`) MUST offer, to
+one who may edit it, adding several of that board's members at once:
+the members of the akt types it holds, by the parent's columns, those
+already in it shown and not offered again, and those in another container
+of its type marked as such; the ones chosen added together, all or none.
+The page creating an akt of such a type in a container MUST ask for its
+parent board, offering what that container holds that the link may lead
+to, the first of them chosen.
+
 r[app.board-drop]
 Dropping a card on another column of a board MUST, when one transition
 from the member's state leads to a state that column names for its akt

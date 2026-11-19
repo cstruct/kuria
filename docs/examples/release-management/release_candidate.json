@@ -19,7 +19,7 @@
   ],
   "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" },
                { "type": "test_protocol" }],
-  "links": [{ "key": "parent_board", "name": "Parent board", "inverse": "Parent board of",
+  "links": [{ "key": "parent_board", "name": "Ships from", "inverse": "Shipped in",
               "to": ["backlog"] }],
   "board": { "parent": "parent_board", "columns": [
     { "key": "todo", "name": "To do",

@@ -27,10 +27,12 @@ others.
   keys its own tasks `task`.) Every board it is on shows it
   in the same relative order, because they all order by rank: moving it in
   the backlog moves it in its epic too.
-- A release candidate's parent board is a backlog: link the candidate to
-  it as *Parent board*, and a task or epic created from the candidate's
-  board, with the "+" on its *To do* column, is created in the backlog
-  too ([parent boards](../../spec/boards.md)).
+- A release candidate's parent board is a backlog. The candidate links to
+  it as *Ships from*, which the form creating a candidate in a release
+  asks for, offering the release's backlog. A task or epic created from
+  the candidate's board, by its *To do* column, is created in the backlog
+  too ([parent boards](../../spec/boards.md)). *Add from* the backlog adds
+  several of its tasks to the candidate at once.
 - A release is planned, tested, released, and finally closed when it is no
   longer maintained. Its release candidates and hotfixes are created inside
   it and numbered after it. It takes candidates only while planning or

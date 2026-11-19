@@ -50,6 +50,8 @@
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
 	import { undoOf } from '#lib/akt/members.ts';
+	import { parentOf } from '#lib/akt/pulling.ts';
+	import PullDialog from '#lib/akt/PullDialog.svelte';
 	import {
 		creatableIn,
 		insideQuery,
@@ -69,6 +71,7 @@
 		UnarchiveAkt,
 		RemoveLink,
 		AktPage,
+		Batch,
 		Contacts,
 		CopyAkt,
 		CreateAkt,
@@ -185,6 +188,9 @@
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
+	/** The parent board it pulls members from, if it links to one. */
+	const parent = $derived(akt ? parentOf(akt.type.document, akt.links) : null);
+	let pullOpen = $state(false);
 	/** The types the viewer may create, by key. */
 	const creatableKeys = $derived(
 		new Set((view.data?.aktTypes ?? []).filter((t) => t.viewerMay.create).map((t) => t.key))
@@ -703,6 +709,20 @@
 		}
 	}
 
+	/** Adds members of the parent board here, all or none (`app.pull`). */
+	// r[impl app.pull]
+	async function pull(numbers: string[]) {
+		if (!parent || numbers.length === 0) return;
+		const from = parent.title;
+		const operations = numbers.map((member) => ({
+			addToContainer: { container: number, member }
+		}));
+		if (await run(() => mutate(client, Batch, { input: { operations } }))) {
+			pullOpen = false;
+			toast(`Added ${numbers.length} from ${from}`, 'success');
+		}
+	}
+
 	async function addMember(member: string) {
 		addOpen = false;
 		await run(() => mutate(client, AddToContainer, { input: { container: number, member } }));
@@ -980,6 +1000,10 @@
 									{/if}
 								</div>
 							{/if}
+							{#if editable && parent}
+								<!-- r[impl app.pull]: several at once, from its parent board. -->
+								<Button size="sm" onclick={() => (pullOpen = true)}>Add from {parent.title}</Button>
+							{/if}
 							{#if editable}
 								<Menu
 									label="Add items"
@@ -1254,6 +1278,18 @@
 					{/each}
 				</div>
 			</Dialog>
+		{/if}
+
+		{#if parent && editable}
+			<PullDialog
+				bind:open={pullOpen}
+				{parent}
+				here={akt.number}
+				type={akt.type.key}
+				{contained}
+				{busy}
+				onPull={pull}
+			/>
 		{/if}
 
 		<Dialog

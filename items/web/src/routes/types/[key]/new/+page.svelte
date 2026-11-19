@@ -14,7 +14,14 @@
 	import { creatorDefaults, peopleOf, type Person } from '#lib/akt/people.ts';
 	import { draftOf, inputOf, isEmpty, type Draft } from '#lib/akt/values.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
-	import { Contacts, CreateAkt, NewAkt, Users } from '#lib/graphql/operations.ts';
+	import {
+		AddLink,
+		Contacts,
+		CreateAkt,
+		NewAkt,
+		ParentBoard,
+		Users
+	} from '#lib/graphql/operations.ts';
 
 	const client = getClient();
 	const key = $derived(page.params.key ?? '');
@@ -58,6 +65,30 @@
 				f.key !== releasedFile(type?.document)
 		)
 	);
+	/** The link kind the type names as its board's parent, if any
+	 * (`board.parent`): asked for here, as `app.pull` needs it. */
+	const parentKind = $derived.by(() => {
+		const document = type?.document as {
+			board?: { parent?: string };
+			links?: { key: string; name: string; to: string[] }[];
+		} | null;
+		const kind = document?.board?.parent;
+		return kind ? (document?.links?.find((l) => l.key === kind) ?? null) : null;
+	});
+	/** What the container it is made in holds that it could ship from. */
+	const container = query(ParentBoard, () => ({ number: inside[0] ?? '' }));
+	const parentChoices = $derived(
+		parentKind
+			? (container.data?.akt?.board.columns ?? [])
+					.flatMap((c) => c.akter)
+					.filter((m) => !m.state.final && parentKind.to.includes(m.type.key))
+			: []
+	);
+	let parentChosen = $state<string | null>(null);
+	$effect(() => {
+		if (parentChosen === null && parentChoices.length > 0) parentChosen = parentChoices[0].number;
+	});
+
 	/** Where Cancel goes: the container it was opened from, else its type. */
 	const back = $derived(
 		inside[0] ? resolve('/akt/[number]', { number: inside[0] }) : resolve('/types/[key]', { key })
@@ -112,6 +143,12 @@
 				: null;
 			return;
 		}
+		// r[impl app.pull]: linked to the parent board chosen with it.
+		if (parentKind && parentChosen) {
+			await mutate(client, AddLink, {
+				input: { source: data.createAkt.number, kind: parentKind.key, target: parentChosen }
+			});
+		}
 		if (returning) {
 			// r[impl app.create]: back to the board it was made from.
 			toast(`Added ${data.createAkt.title ?? data.createAkt.number}`, 'success');
@@ -149,6 +186,17 @@
 							/>
 						</div>
 					{/each}
+					{#if parentKind && parentChoices.length > 0}
+						<label class="parent">
+							{parentKind.name}
+							<select bind:value={parentChosen}>
+								{#each parentChoices as choice (choice.number)}
+									<option value={choice.number}>{choice.title ?? choice.number}</option>
+								{/each}
+								<option value={null}>None</option>
+							</select>
+						</label>
+					{/if}
 					<details class="note">
 						<summary>Add a note for the history</summary>
 						<label>
@@ -199,6 +247,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-4);
+	}
+
+	.parent {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+		font-weight: 500;
 	}
 
 	.note summary {

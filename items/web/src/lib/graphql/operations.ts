@@ -969,3 +969,50 @@ export const RenderDiagram = graphql(`
 		}
 	}
 `);
+
+/** A parent board's members, to pull from (`app.pull`). */
+export const ParentBoard = graphql(`
+	query ParentBoard($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			board(first: 500) {
+				columns {
+					key
+					name
+					akter {
+						id
+						number
+						title
+						state {
+							key
+							name
+							final
+						}
+						type {
+							key
+						}
+						containers {
+							id
+							number
+							type {
+								key
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+`);
+
+/** Several akt writes, all or none. */
+export const Batch = graphql(`
+	mutation Batch($input: BatchInput!) {
+		batch(input: $input) {
+			id
+			number
+		}
+	}
+`);

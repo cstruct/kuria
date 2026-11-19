@@ -158,7 +158,6 @@
 			{
 				label: labels.remove,
 				icon: X,
-				danger: true,
 				separated: true,
 				disabled: busy || !editable,
 				onSelect: () => onRemove(member.number)
