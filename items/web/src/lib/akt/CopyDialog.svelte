@@ -87,7 +87,7 @@
 <Dialog
 	bind:open
 	title="Copy {number}"
-	description="A new akt of the same type, in its first state, with copies of the members chosen, in the same containers."
+	description="A new one, starting over, with copies of what you keep, in the same places."
 >
 	{#if members.length > 0}
 		<fieldset class="keep">

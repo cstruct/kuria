@@ -148,7 +148,7 @@
 			</div>
 		</form>
 	{:else if view.data}
-		<Alert>There is no akt type {key}, or you can’t see it.</Alert>
+		<Alert>There is nothing called {key} here, or you can’t see it.</Alert>
 	{:else}
 		<p role="status">Loading…</p>
 	{/if}

@@ -36,7 +36,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - The one generic object in Kuria. A bug report, an epic, a test record, a release record, and a CAPA are each an akt.
   - From the Swedish *akt*, a case file: an akt is something that is opened, worked on, and kept as a record.
   - Kuria's core knows only akter. What distinguishes one akt from another is its `akt type`.
-  - Prefer this term over `issue`, `ticket`, `item`, or `object` when speaking of the generic thing. Those words may name an akt type, never the generic concept.
+  - Prefer this term over `issue`, `ticket`, `item`, or `object` when speaking of the generic thing. Those words may name an akt type, never the generic concept. The app's own text is the exception: see The app's words.
   - Identifiers stay singular: tables `akt` and `akt_type`, paths `/akt` and `/akt/{id}`. The plural `akter` appears only in prose.
 
 - `akt type`
@@ -260,6 +260,25 @@ Terms are introduced in dependency order: each definition only uses terms define
 
 - `subject alias`
   - A record, made by an import, that a subject a bundle names is shown as, and filters as, a user of the importing tenant. Revisions keep naming the subject they recorded.
+
+## The app's words
+
+What the app says to the people using a tenant is in that tenant's words: an akt type's `name` and plural, its states', transitions' and fields' names. Where the app must name something generically, it uses the everyday word below, never the term it stands for (PLAN-025-D01). Specs, code, the API, the CLI and admin screens keep the terms.
+
+- `item`, `items`
+  - An akt, or akter, where no akt type's name fits, such as "Nothing here yet" or "Existing task or epic…".
+
+- `kind of item`
+  - An akt type, where its name can't be given, such as in "This kind of item must be created inside another."
+
+- `part of`, `in`
+  - Being a member of a container: "Part of Autumn release", "Add to…", "Move to another release…".
+
+- `contents`
+  - A container's members, as its page heads them.
+
+- `move`, `status`
+  - Performing a transition, and the state it changes: a card is moved to a column, and an akt's status is its state.
 
 ## Command-line client
 

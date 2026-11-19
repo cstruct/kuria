@@ -43,7 +43,7 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	// The release's board maps candidates and hotfixes; its backlog is
 	// listed by type, not in an "Unmapped" column.
 	await open(page, release);
-	const members = page.getByRole('region', { name: 'Members', exact: true });
+	const members = page.getByRole('region', { name: 'Contents', exact: true });
 	await expect(members.getByRole('region', { name: 'Testing', exact: true })).toBeVisible();
 	await expect(members.getByRole('region', { name: 'Unmapped' })).toHaveCount(0);
 	expect(await column(page, 'Backlog')).toEqual([backlog]);
@@ -178,7 +178,7 @@ test('a column creates its types, in the board and its parent boards', async ({ 
 
 	const page = await signIn(browser, seeded().people.releaseManager);
 	await open(page, candidate);
-	const members = page.getByRole('region', { name: 'Members', exact: true });
+	const members = page.getByRole('region', { name: 'Contents', exact: true });
 	// Only the column holding the initial states offers to create.
 	await expect(members.getByRole('button', { name: 'New in In progress' })).toHaveCount(0);
 	await members.getByRole('button', { name: 'New in To do' }).click();

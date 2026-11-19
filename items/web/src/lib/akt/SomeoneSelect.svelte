@@ -39,7 +39,7 @@
 		{#each people as person (keyOf(person.who))}
 			<option value={keyOf(person.who)}>{person.name}</option>
 		{/each}
-		<option value={OTHER}>Someone else, by subject id…</option>
+		<option value={OTHER}>Someone not listed…</option>
 	</select>
 </label>
 {#if choice === OTHER}

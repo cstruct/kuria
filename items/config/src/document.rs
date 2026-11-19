@@ -221,6 +221,10 @@ pub struct PresentationDef {
     /// its akter images (`akt.field.markdown.images`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// The type's name in the plural, as the app counts its akter; the
+    /// name and an `s` if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plural: Option<String>,
     /// Per state key, the action an akt's page offers first in that
     /// state: a transition from it, by key, or [`PRIMARY_COPY`]
     /// (`app.header`).

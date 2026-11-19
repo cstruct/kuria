@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { orList } from '#lib/ui/text.ts';
 	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -163,6 +164,18 @@
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
+	/** The types the viewer may create, by key. */
+	const creatableKeys = $derived(
+		new Set((view.data?.aktTypes ?? []).filter((t) => t.viewerMay.create).map((t) => t.key))
+	);
+	/** The contained types, as people name them: "task or epic". */
+	const containedWords = $derived(
+		orList(contained.map((key) => (typeNames[key] ?? key).toLowerCase()))
+	);
+	/** What moving it elsewhere is called: "Move to another release". */
+	const moveWords = $derived(
+		`Move to another ${akt?.containers[0]?.type.name.toLowerCase() ?? 'place'}`
+	);
 	/** The new-akt page that creates an akt of the type `key` in this
 	 * container and in its parent boards that take it (`app.board-create`). */
 	// r[impl app.board-create]
@@ -767,7 +780,7 @@
 							...(akt.type.viewerMay.edit
 								? [
 										{
-											label: 'Attach to…',
+											label: 'Add to…',
 											icon: Link2,
 											disabled: busy,
 											onSelect: () => (attachOpen = true)
@@ -867,7 +880,7 @@
 				{#if contained.length > 0}
 					<section class="members" aria-labelledby="members-title">
 						<header>
-							<h2 id="members-title">Members</h2>
+							<h2 id="members-title">Contents</h2>
 							<!-- r[impl app.archive]: how many members are archived, and showing them. -->
 							{#if akt.archivedMemberCount > 0 || showArchived}
 								<div class="archived-members">
@@ -888,18 +901,21 @@
 							{/if}
 							{#if editable}
 								<Menu
-									label="Add a member"
+									label="Add items"
 									text="Add"
 									items={[
-										...contained.map((key) => ({
-											label: `New ${typeNames[key] ?? key}`,
-											icon: Plus,
-											onSelect: () => {
-												location.assign(newMemberHref(key));
-											}
-										})),
+										// r[impl app.permitted]: new only of the types the viewer may create.
+										...contained
+											.filter((key) => creatableKeys.has(key))
+											.map((key) => ({
+												label: `New ${typeNames[key] ?? key}`,
+												icon: Plus,
+												onSelect: () => {
+													location.assign(newMemberHref(key));
+												}
+											})),
 										{
-											label: 'An existing akt…',
+											label: `Existing ${containedWords}…`,
 											icon: Search,
 											separated: true,
 											onSelect: () => (addOpen = true)
@@ -940,11 +956,9 @@
 			</div>
 
 			<aside class="side">
-				<Card title="In">
-					{#if akt.containers.length === 0}
-						<p class="none">Not in any container.</p>
-					{:else}
-						<ul class="containers" aria-label="Containers">
+				<!-- r[impl app.members]: where it is, only when it is somewhere. -->
+				{#if akt.containers.length > 0}<Card title="Part of">
+						<ul class="containers" aria-label="Part of">
 							{#each akt.containers as container (container.id)}
 								<li>
 									<span>
@@ -966,21 +980,21 @@
 								</li>
 							{/each}
 						</ul>
-					{/if}
-					{#if !akt.archived && akt.containers.some((c) => c.type.viewerMay.edit)}<div
-							class="container-tools"
-						>
-							<Button
-								size="sm"
-								onclick={() => {
-									transferFrom = akt.containers[0].number;
-									transferOpen = true;
-								}}
+						{#if !akt.archived && akt.containers.some((c) => c.type.viewerMay.edit)}<div
+								class="container-tools"
 							>
-								<ArrowRightLeft size={14} aria-hidden={true} /> Move to another container
-							</Button>
-						</div>{/if}
-				</Card>
+								<Button
+									size="sm"
+									onclick={() => {
+										transferFrom = akt.containers[0].number;
+										transferOpen = true;
+									}}
+								>
+									<ArrowRightLeft size={14} aria-hidden={true} />
+									{moveWords}
+								</Button>
+							</div>{/if}
+					</Card>{/if}
 
 				{#if versioned}
 					<VersionsCard
@@ -1101,11 +1115,11 @@
 
 		<Dialog
 			bind:open={attachOpen}
-			title="Attach to a container"
-			description="Makes it a member of a container, such as a backlog, an epic or a release."
+			title="Add to…"
+			description="Find what to add it to, by number or title."
 		>
 			<Combobox
-				label="Container"
+				label="Add to"
 				placeholder="Number or title…"
 				search={(text) =>
 					pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
@@ -1115,8 +1129,8 @@
 
 		<Dialog
 			bind:open={transferOpen}
-			title="Move to another container"
-			description="One change, recorded on this akt and on both containers."
+			title={moveWords}
+			description="Moves it in one change, recorded here and on both."
 		>
 			<label class="from">
 				From
@@ -1128,7 +1142,7 @@
 			</label>
 			<Combobox
 				label="To"
-				placeholder="The container to move it to…"
+				placeholder="Where to move it…"
 				search={(text) =>
 					pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
 				onPick={(option) => transfer(option.value)}
@@ -1140,7 +1154,6 @@
 			<Dialog
 				bind:open={movingOpen}
 				title="Move {target.member.title ?? target.member.number} to {target.column}"
-				description="Its state changes by a transition. One that needs fields opens on its page."
 			>
 				<div class="choices">
 					{#each target.transitions as transition (transition.key)}
@@ -1158,11 +1171,11 @@
 
 		<Dialog
 			bind:open={addOpen}
-			title="Add a member"
-			description="An akt of a type this {akt.type.name} holds, found by number or title."
+			title="Add existing {containedWords}"
+			description="Find it by number or title."
 		>
 			<Combobox
-				label="Member to add"
+				label="Item to add"
 				placeholder="Number or title…"
 				search={(text) =>
 					pickable(
@@ -1175,7 +1188,7 @@
 			/>
 		</Dialog>
 	{:else if view.data && !view.fetching}
-		<p role="alert">There is no akt {number}, or you can’t see it.</p>
+		<p role="alert">There is no {number}, or you can’t see it.</p>
 	{:else}
 		<p>Loading…</p>
 	{/if}
@@ -1393,12 +1406,6 @@
 	.hint {
 		font-size: var(--text-xs);
 		color: var(--text-muted);
-	}
-
-	.none {
-		margin-bottom: var(--space-3);
-		color: var(--text-muted);
-		font-size: var(--text-sm);
 	}
 
 	.container-tools {

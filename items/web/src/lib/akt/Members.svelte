@@ -118,7 +118,7 @@
 {/snippet}
 
 {#if grouped.columns.length === 0 && grouped.lists.length === 0}
-	<EmptyState title="No members yet" description="Add an existing akt, or create one here." />
+	<EmptyState title="Nothing here yet" description="Add an existing item, or create one here." />
 {/if}
 
 {#if grouped.columns.length > 0}
@@ -135,7 +135,7 @@
 				class:takes={reorder.takes(column.key)}
 				class:over={reorder.into === column.key}
 				aria-label={column.name}
-				title={reorder.refuses(column.key) ? 'No transition leads here from its state' : undefined}
+				title={reorder.refuses(column.key) ? 'It can’t move here from its status' : undefined}
 			>
 				<header class="column-head">
 					<h3>{column.name} <span class="count">{column.akter.length}</span></h3>

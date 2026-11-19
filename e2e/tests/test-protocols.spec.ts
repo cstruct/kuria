@@ -58,7 +58,7 @@ async function give(page: Page, number: string, verdict: 'Pass' | 'Fail' | 'Skip
 
 /** The outcome shown for the member `number`, wherever it is listed. */
 const outcomeOf = (page: Page, number: string) =>
-	page.getByRole('region', { name: 'Members' }).locator(`[data-number="${number}"] [data-outcome]`).first();
+	page.getByRole('region', { name: 'Contents' }).locator(`[data-number="${number}"] [data-outcome]`).first();
 
 /** The outcome shown on a section's heading or summary. */
 const sectionOutcome = (page: Page, title: string) =>
@@ -252,5 +252,5 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	await open(dev, template);
 	await expect(dev.getByTestId('state')).toHaveText('Template');
 	await expect(dev.getByTestId('outcome')).toHaveText('Pending');
-	await expect(dev.locator('dd[data-field="layout"]')).toHaveText(/5 members placed/);
+	await expect(dev.locator('dd[data-field="layout"]')).toHaveText(/5 items placed/);
 });

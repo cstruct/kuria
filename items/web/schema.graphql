@@ -1198,6 +1198,10 @@ type Presentation {
 	first (`app.references`).
 	"""
 	numberedReferences: Boolean!
+	"""
+	The type's name in the plural, if it gives one.
+	"""
+	plural: String
 }
 
 """

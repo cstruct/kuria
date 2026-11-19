@@ -70,7 +70,7 @@ group('history', () => {
 			{},
 			{}
 		);
-		expect(moved.what).toBe('changed its containers or members');
+		expect(moved.what).toBe('changed what it holds or where it is');
 		expect(moved.memberships).toEqual(['Added to RC-2', 'Removed from RC-1']);
 		expect(
 			describe(

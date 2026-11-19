@@ -614,6 +614,13 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             );
         }
     }
+    if presentation
+        .plural
+        .as_ref()
+        .is_some_and(|p| p.trim().is_empty() || p.contains('\n'))
+    {
+        problems.add("presentation.plural", "the plural is one line, not empty");
+    }
     for (state, action) in &presentation.primary {
         let path = format!("presentation.primary.{state}");
         if !document.states.iter().any(|s| &s.key == state) {
@@ -1459,6 +1466,11 @@ mod tests {
                 "{expected} not in {found:?}"
             );
         }
+        document["presentation"] = json!({ "plural": " " });
+        assert_eq!(
+            problems(document.clone()),
+            ["presentation.plural: the plural is one line, not empty"]
+        );
         // The primary action: a transition leaving the state, or a copy.
         document["presentation"] = json!({ "primary": { "open": "close", "closed": "copy" } });
         validate(serde_json::from_value(document.clone()).unwrap()).unwrap();

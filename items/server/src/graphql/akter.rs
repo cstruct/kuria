@@ -1466,6 +1466,7 @@ impl AktType {
             navigation: presentation.navigation.unwrap_or_default().into(),
             image: presentation.image.clone(),
             numbered_references: presentation.numbered_references,
+            plural: presentation.plural.clone(),
         }
     }
 
@@ -1772,6 +1773,8 @@ pub struct Presentation {
     /// Whether references to its akter are shown with the akt's number
     /// first (`app.references`).
     numbered_references: bool,
+    /// The type's name in the plural, if it gives one.
+    plural: Option<String>,
 }
 
 #[derive(SimpleObject)]

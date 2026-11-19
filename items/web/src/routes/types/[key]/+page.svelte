@@ -259,7 +259,7 @@
 			{/if}
 		{/if}
 	{:else if list.data}
-		<p role="alert">There is no akt type {key}.</p>
+		<p role="alert">There is nothing called {key} here, or you can’t see it.</p>
 	{:else}
 		<p>Loading…</p>
 	{/if}

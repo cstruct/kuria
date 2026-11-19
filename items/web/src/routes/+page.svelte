@@ -79,10 +79,7 @@
 	{:else if home.data}
 		<Card title="Recently changed" padded={false}>
 			{#if home.data.akter.nodes.length === 0}
-				<EmptyState
-					title="Nothing yet"
-					description="Akter you can read show here as they change."
-				/>
+				<EmptyState title="Nothing yet" description="What you can see shows here as it changes." />
 			{:else}
 				<ul class="recent" aria-label="Recently changed">
 					{#each home.data.akter.nodes as akt (akt.id)}
@@ -97,10 +94,7 @@
 				{#if work === null}
 					<p class="loading">Loading…</p>
 				{:else if work.length === 0}
-					<EmptyState
-						title="Nothing names you"
-						description="Akter whose people fields or checkboxes name you show here."
-					/>
+					<EmptyState title="Nothing names you" description="Items that name you show here." />
 				{:else}
 					{#each work as group (group.type)}
 						{@const type = group.akter[0].type}
@@ -115,10 +109,10 @@
 		{/if}
 
 		<section aria-labelledby="types-title">
-			<h2 id="types-title">Akt types</h2>
+			<h2 id="types-title">Work</h2>
 			{#if home.data.aktTypes.length === 0}
 				<EmptyState
-					title="No akt types"
+					title="Nothing to work on yet"
 					description="An administrator defines them through the API."
 				/>
 			{:else}
@@ -128,7 +122,7 @@
 							<a class="name" href={resolve('/types/[key]', { key: type.key })}
 								><TypeMark {type} size="md" named /></a
 							>
-							<span class="count">{counted(type.akterCount)}</span>
+							<span class="count">{counted(type.akterCount, type)}</span>
 							<!-- r[impl app.permitted] -->
 							{#if type.viewerMay.create}
 								<Button

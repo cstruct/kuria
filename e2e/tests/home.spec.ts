@@ -22,7 +22,7 @@ test('home shows what changed recently and every akt type', async ({ browser }) 
 	await expect(recent.getByRole('listitem').first()).toContainText('Home-page backlog');
 	await expect(recent.getByRole('listitem').first()).toContainText('Open');
 
-	const types = page.getByRole('region', { name: 'Akt types' });
+	const types = page.getByRole('region', { name: 'Work' });
 	// By its address: the planning example's tasks are named Task too.
 	await expect(types.locator('a[href="/types/backlog_item"]')).toBeVisible();
 	// Each type with the icon its presentation gives it.
@@ -30,7 +30,8 @@ test('home shows what changed recently and every akt type', async ({ browser }) 
 	const backlogs = types
 		.getByRole('listitem')
 		.filter({ has: page.getByRole('link', { name: 'Backlog', exact: true }) });
-	await expect(backlogs).toContainText(/\d+ akt(er)?/);
+	// r[verify app.words]: counted in the type's own words.
+	await expect(backlogs).toContainText(/\d+ backlogs?\b/);
 
 	// My work: what names the viewer.
 	await admin.graphql(
@@ -60,7 +61,7 @@ test('a reader is offered nothing to create, edit or move', async ({ browser }) 
 
 	const page = await signIn(browser, seeded().people.headOfProduct);
 	await page.goto('/');
-	const types = page.getByRole('region', { name: 'Akt types' });
+	const types = page.getByRole('region', { name: 'Work' });
 	await expect(types.locator('a[href="/types/backlog"]')).toBeVisible();
 	await expect(types.getByRole('link', { name: /^New / })).toHaveCount(0);
 

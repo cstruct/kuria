@@ -87,6 +87,13 @@ they may not edit, performing a transition of a type whose transitions
 they may not perform, or archiving one they may not archive. A refusal
 the server answers all the same MUST still be shown (`app.errors`).
 
+r[app.words]
+The app's text MUST name things in the tenant's words: an akt type's name
+and plural (`akt.type.presentation`), and its states', transitions' and
+fields' names. Where it must name them generically, it MUST use the
+everyday words docs/nomenclature.md gives the app, never "akt", "akter",
+"member", "container" or "transition".
+
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
 saving only that field.

@@ -293,9 +293,9 @@ Verified:
 <!-- akt: PLAN-025-T05 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5u
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T15]
 title: "Write the app's copy in the type's words, not the model's"
@@ -315,6 +315,31 @@ Replace each sentence that describes the implementation:
 - "Someone else, by subject id…" is kept only for admins.
 
 Plurals need the type to name them, unless the type's name pluralises simply (G04). Record the user-facing words in docs/nomenclature.md (D01).
+
+## Done
+
+The app's words are in docs/nomenclature.md ("The app's words"), and `app.words` requires them.
+
+Rewritten:
+
+- Home and sidebar: "Work", counts in the type's words ("6 tasks"), and plainer empty states.
+- An akt's page: "Contents" instead of "Members". "Add items" offers "New <type>", only for the types the viewer may create, and "Existing task or epic…".
+- "Part of" instead of "In", hidden when the akt is in nothing.
+- "Add to…" and "Move to another <type>…" instead of the container wording.
+- Moving a card no longer explains transitions.
+- The copy dialog no longer describes the implementation.
+- Refusals use everyday words (errors.ts).
+- The picker's escape hatch reads "Someone not listed…".
+
+G04's first half is built: `presentation.plural`. The example's release notes say theirs. Sidebar groups are left for T15, and G04 stays open until then.
+
+Not done: "Layout · 5 members placed" now reads "5 items placed", but it is still shown in Details. Hiding it, with reordering from the sections' header, goes with T15.
+
+Verified:
+
+- unit tests (`home.test.ts`, `text.test.ts`, `history.test.ts`);
+- the config test for `plural`;
+- the affected e2e specs (home, members, archive, release-flow, test-protocols, links), with their selectors moved to the new words.
 
 <!-- field: acceptance -->
 - A grep of `items/web/src` finds no user-facing string containing "akt", "akter", "member", "container" or "transition", except in admin-only screens.

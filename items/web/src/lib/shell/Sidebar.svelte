@@ -73,7 +73,7 @@
 		</li>
 	</ul>
 
-	<h2 id="types-heading">Akt types</h2>
+	<h2 id="types-heading">Work</h2>
 	<ul aria-labelledby="types-heading">
 		{@render typeLinks(split.main)}
 	</ul>
@@ -89,7 +89,7 @@
 			<span>Show more</span>
 			<span class="count">{split.more.length}</span>
 		</button>
-		<ul id="more-types" aria-label="More akt types" hidden={!moreOpen}>
+		<ul id="more-types" aria-label="More work" hidden={!moreOpen}>
 			{@render typeLinks(split.more)}
 		</ul>
 	{/if}

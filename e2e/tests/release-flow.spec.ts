@@ -75,10 +75,9 @@ test('a release from planning to closed', async ({ browser }) => {
 	}
 
 	// Planning.
-	const release = await create(rm, 'release', {
-		Title: 'Spring',
-		'Release manager': { choose: 'Me' }
-	});
+	// The release manager is its creator unless they say otherwise
+	// (akt.field.default).
+	const release = await create(rm, 'release', { Title: 'Spring' });
 	expect(release).toMatch(/^RELEASE-\d{4}-\d{4}$/);
 	const backlog = await create(dev, 'backlog', { Title: 'Spring backlog' });
 	await open(rm, backlog);
@@ -245,5 +244,5 @@ test('a release from planning to closed', async ({ browser }) => {
 	await rm.goto(`/types/hotfix/new?in=${release}`);
 	await rm.getByLabel("Why it can't wait", { exact: true }).fill('Too late');
 	await rm.getByRole('button', { name: 'Create', exact: true }).click();
-	await expect(rm.getByRole('alert')).toContainText('final state');
+	await expect(rm.getByRole('alert')).toContainText('is finished, so what it holds can’t change');
 });

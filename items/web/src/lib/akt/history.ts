@@ -129,7 +129,7 @@ export function describe(
 	else if (r.revision === 1) what = 'created it';
 	else if (onlyLinks && changes.length === 0) what = 'changed its links';
 	else if (memberships.length > 0 && changes.length === 0)
-		what = 'changed its containers or members';
+		what = 'changed what it holds or where it is';
 	else what = 'edited it';
 	return {
 		revision: r.revision,

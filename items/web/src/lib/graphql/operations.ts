@@ -266,6 +266,7 @@ export const TypeMark = graphql(`
 		presentation {
 			icon
 			colour
+			plural
 		}
 	}
 `);

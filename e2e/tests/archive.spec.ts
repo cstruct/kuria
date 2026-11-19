@@ -63,7 +63,7 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 
 	// Its release's board shows the live candidate only, and says one is archived.
 	await open(rm, release);
-	const members = rm.getByRole('region', { name: 'Members', exact: true });
+	const members = rm.getByRole('region', { name: 'Contents', exact: true });
 	await expect(members.getByTestId('archived-members')).toHaveText('1 archived');
 	expect(await column(rm, 'Testing')).toEqual([kept]);
 	// Show archived adds it, marked, and is kept in the address.
@@ -96,14 +96,11 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(row).toContainText('Archived');
 	expect(await violations(rm), 'a list showing archived akter').toEqual([]);
 
-	// A developer, who may read it but not archive, is told so.
+	// A developer, who may read it but not archive or edit it, is offered
+	// neither (app.permitted).
 	const dev = await signIn(browser, seeded().people.developer);
 	await open(dev, kept);
-	await dev.getByRole('button', { name: `More actions for ${kept}` }).click();
-	await dev.getByRole('menuitem', { name: 'Archive…' }).click();
-	const refused = dev.getByRole('dialog', { name: `Archive ${kept}` });
-	await refused.getByRole('button', { name: 'Archive', exact: true }).click();
-	await expect(refused.getByRole('alert')).toContainText('aren’t allowed');
+	await expect(dev.getByRole('button', { name: `More actions for ${kept}` })).toHaveCount(0);
 
 	// Unarchived, it is live again: editable, in the list and on the board.
 	await open(rm, gone);

@@ -260,7 +260,7 @@ export function textOf(value: Value): string {
 			return value.users.map(nameOf).join(', ');
 		case 'SectionsValue': {
 			const placed = numbersIn(readSections(value.value)).length;
-			return placed === 1 ? '1 member placed' : `${placed} members placed`;
+			return placed === 1 ? '1 item placed' : `${placed} items placed`;
 		}
 		case 'MarkdownValue':
 			return value.markdown;
