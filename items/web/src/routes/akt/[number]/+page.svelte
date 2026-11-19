@@ -23,7 +23,7 @@
 	import OutcomeBadge from '#lib/akt/OutcomeBadge.svelte';
 	import Sections from '#lib/akt/Sections.svelte';
 	import { numbersIn, readSections } from '#lib/akt/sections.ts';
-	import { judgedOf, verdictInput, type Report } from '#lib/akt/verdicts.ts';
+	import { judgedOf, judgingOpen, verdictInput, type Report } from '#lib/akt/verdicts.ts';
 	import LinksCard, { type ShownLink } from '#lib/akt/LinksCard.svelte';
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
@@ -75,6 +75,7 @@
 		AktPage,
 		Batch,
 		Contacts,
+		CopyPlaces,
 		CopyAkt,
 		CreateAkt,
 		Users,
@@ -270,6 +271,17 @@
 			}
 		)
 	);
+	// r[impl app.verdicts]: verdicts only while their run takes them: its
+	// members' while it is in such a state, its own while its container is.
+	const judgingHere = $derived(akt ? judgingOpen(akt.type, akt.state.key) : true);
+	const judgingOwn = $derived.by(() => {
+		const container = akt?.containers[0];
+		if (!container) return true;
+		const document = view.data?.aktTypes.find((t) => t.key === container.type.key)?.document as {
+			transitions?: { from: string[]; outcomes?: string[] }[];
+		} | null;
+		return judgingOpen({ transitions: document?.transitions ?? [] }, container.state.key);
+	});
 	/** Of its members with outcomes, how many passed (`app.header`). */
 	const ready = $derived(akt ? readiness(akt.board.columns.flatMap((c) => c.akter)) : null);
 	const primaryTransition = $derived(
@@ -429,6 +441,26 @@
 	);
 	const ownVerdicts = $derived(akt ? judgedOf(akt, me) : null);
 	let copyOpen = $state(false);
+	/** Where a copy may go: the open akter of the types that hold this
+	 * one's, the most recently changed first (`app.copy`). */
+	let copyPlaces = $state<{ number: string; title: string }[]>([]);
+	$effect(() => {
+		if (!copyOpen || !akt) return;
+		const key = akt.type.key;
+		// r[impl app.permitted]: only into what the viewer may add to.
+		const holders = (view.data?.aktTypes ?? []).filter(
+			(t) => t.viewerMay.edit && containedTypes(t.document).includes(key)
+		);
+		void Promise.all(
+			holders.map((t) => client.query(CopyPlaces, { type: t.key }).toPromise())
+		).then((answers) => {
+			copyPlaces = answers
+				.flatMap((a) => a.data?.akter.nodes ?? [])
+				.filter((n) => !n.state.final)
+				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+				.map((n) => ({ number: n.number, title: n.title ?? n.number }));
+		});
+	});
 	// The collapsible sections opened, kept while the akt reloads.
 	const opened = new SvelteSet<string>();
 
@@ -663,15 +695,31 @@
 
 	/** Copies the akt, keeping `only` of its members, and opens the copy. */
 	// r[impl app.copy]
-	async function copy(only: string[] | null) {
+	async function copy(only: string[] | null, into: string | null) {
 		busy = true;
 		refusal = null;
-		const { data, error } = await mutate(client, CopyAkt, { input: { number, only } });
-		busy = false;
+		const { data, error } = await mutate(client, CopyAkt, {
+			input: { number, only, ...(into ? { in: [into] } : {}) }
+		});
 		if (error || !data) {
+			busy = false;
 			refusal = refusalOf(error!, fieldNames);
 			return;
 		}
+		// r[impl app.copy]: a copy made for a container is named after it.
+		const place = copyPlaces.find((p) => p.number === into);
+		const titled = akt ? titleFieldOf(akt.type.document) : null;
+		if (place && titled && akt?.title) {
+			await mutate(client, EditAkt, {
+				input: {
+					number: data.copyAkt.number,
+					revision: data.copyAkt.revision,
+					fields: { [titled]: `${akt.title}: ${place.title}` },
+					reason: `Run for ${place.title}`
+				}
+			});
+		}
+		busy = false;
 		copyOpen = false;
 		toast(`Copied to ${data.copyAkt.title ?? data.copyAkt.number}`, 'success');
 		await goto(resolve('/akt/[number]', { number: data.copyAkt.number }));
@@ -978,6 +1026,7 @@
 									members={memberNames}
 									number={akt.number}
 									judged={ownVerdicts}
+									judging={judgingOwn}
 									onVerdict={(verdict) => giveVerdict(akt, verdict)}
 									liveDraft={Boolean(live)}
 									live={live && isLiveText(field) ? live : null}
@@ -1045,6 +1094,7 @@
 								{me}
 								{busy}
 								{opened}
+								judging={judgingHere}
 								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
 							/>
 						{/if}
@@ -1052,6 +1102,7 @@
 							{#if sectionItems.length > 0}<h3 class="others">Not in a section</h3>{/if}
 							<Members
 								columns={unplacedColumns}
+								judging={judgingHere}
 								document={akt.type.document}
 								{contained}
 								{editable}
@@ -1199,6 +1250,7 @@
 			members={memberNames}
 			{busy}
 			error={copyOpen && refusal ? refusal.message : undefined}
+			places={copyPlaces}
 			onCopy={copy}
 		/>
 

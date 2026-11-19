@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { judgedType } from './members';
 	// r[impl app.sections]
 	// r[impl app.verdicts]
@@ -8,7 +9,7 @@
 	import Mono from '#lib/ui/Mono.svelte';
 	import { renderMarkdown } from './markdown';
 	import OutcomeBadge from './OutcomeBadge.svelte';
-	import { sectionOutcome, type Item, type Section } from './sections';
+	import { numbersIn, sectionOutcome, type Item, type Section } from './sections';
 	import VerdictButtons from './VerdictButtons.svelte';
 	import { judgedOf, type Report } from './verdicts';
 
@@ -16,6 +17,8 @@
 
 	interface Props {
 		items: Item[];
+		/** Whether verdicts may be given now (`app.verdicts`). */
+		judging?: boolean;
 		/** The akt's members the viewer may read. */
 		members: readonly Member[];
 		/** The viewer's subject. */
@@ -27,7 +30,7 @@
 		opened: Set<string>;
 	}
 
-	let { items, members, me, busy, onVerdict, opened }: Props = $props();
+	let { items, members, me, busy, onVerdict, opened, judging = true }: Props = $props();
 
 	const byNumber = $derived(new Map(members.map((m) => [m.number, m])));
 	const outcomeOf = (number: string) => byNumber.get(number)?.outcome;
@@ -46,7 +49,13 @@
 				{#if m.outcome}<OutcomeBadge outcome={m.outcome} />{/if}
 			</div>
 			{#if judged}
-				<VerdictButtons {number} {judged} {busy} onGive={(verdict) => onVerdict(m, verdict)} />
+				<VerdictButtons
+					{number}
+					{judged}
+					{busy}
+					open={judging}
+					onGive={(verdict) => onVerdict(m, verdict)}
+				/>
 			{/if}
 		{:else}
 			<!-- A member the viewer can't read, or no longer a member. -->
@@ -85,7 +94,10 @@
 							}}
 						>
 							<summary>
+								<!-- r[impl app.sections]: closed, it says it holds something. -->
+								<ChevronRight class="chevron" size={14} aria-hidden={true} />
 								<span class="title">{title}</span>
+								<span class="count">{numbersIn(section.items).length}</span>
 								<OutcomeBadge outcome={sectionOutcome(section, outcomeOf)} />
 							</summary>
 							{@render body(section, path)}
@@ -174,5 +186,32 @@
 
 	.markdown :global(p) {
 		margin: 0 0 var(--space-2);
+	}
+
+	summary {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		cursor: pointer;
+		list-style: none;
+	}
+
+	summary::-webkit-details-marker {
+		display: none;
+	}
+
+	summary :global(.chevron) {
+		flex-shrink: 0;
+		color: var(--text-muted);
+		transition: transform 0.1s;
+	}
+
+	details[open] > summary :global(.chevron) {
+		transform: rotate(90deg);
+	}
+
+	.count {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
 	}
 </style>

@@ -210,23 +210,28 @@ r[app.sections]
 An akt with a `sections` field MUST show its members in those sections,
 nested as the field nests them: each section with its title, if any, its
 text as Markdown, and its outcome, and one that is `collapsible` closed
-until opened. Members no section names MUST follow, as `app.members`
+until opened, saying how many members it holds. Members no section names MUST follow, as `app.members`
 shows them.
 
 r[app.verdicts]
 Each member with a `verdict` field MUST show, where its sections or its
-container list it, its assignees, each one's verdict, and its outcome, and
-their descriptions, and MUST let an assignee report their own verdict
-there, in a dialog taking its status, `pass`, `fail` or `skip`, and its
-description, which it MUST require for `fail` and `skip`
-(`akt.field.verdict.description`). Once reported, the dialog MUST let them
-change either, or delete the verdict.
+container list it, its assignees, each one by name with their verdict and
+its description, and its outcome, and MUST let an assignee give their own
+verdict there, in place: `pass` at once, `fail` or `skip` with a
+description, which it MUST require before saving
+(`akt.field.verdict.description`). Once given, it MUST let them change it,
+or clear it. Verdicts MUST be offered only while the container is in a
+state that a transition naming the outcomes it allows
+(`akt.transition.outcomes`) leaves, if its type has such a transition, so
+that none is given on a template or a run not yet started.
 An akt's page MUST show its outcome, if it has outcomes (`akt.outcome`).
 
 r[app.copy]
 The app MUST let a person copy an akt (`akt.copy`), choosing the sections
-and members to keep, all of them at first, and showing the copy once it is
-made.
+and members to keep, all of them at first, and where it goes: into an open
+akt of a type that holds its type, the most recently changed first chosen,
+or where it is. A copy made into one MUST be titled after it, as "Shop
+acceptance test: 4.2.0-rc.1". The app MUST show the copy once it is made.
 
 r[app.quick-add]
 Each column of a board that offers creating an akt type

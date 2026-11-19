@@ -362,6 +362,7 @@ export const AktPage = graphql(`
 			document
 			viewerMay {
 				create
+				edit
 			}
 		}
 		akt(number: $number, version: $version) {
@@ -413,6 +414,9 @@ export const AktPage = graphql(`
 					id
 					number
 					title
+				}
+				state {
+					key
 				}
 			}
 			board(first: 500, archived: $boardArchived) {
@@ -623,6 +627,7 @@ export const CopyAkt = graphql(`
 			id
 			number
 			title
+			revision
 		}
 	}
 `);
@@ -1013,6 +1018,25 @@ export const Batch = graphql(`
 		batch(input: $input) {
 			id
 			number
+		}
+	}
+`);
+
+/** An akt type's akter, the most recently changed first: where a copy may
+ * go (`app.copy`). */
+export const CopyPlaces = graphql(`
+	query CopyPlaces($type: String!) {
+		akter(type: $type, first: 20) {
+			nodes {
+				id
+				number
+				title
+				updatedAt
+				state {
+					key
+					final
+				}
+			}
 		}
 	}
 `);

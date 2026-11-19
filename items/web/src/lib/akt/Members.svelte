@@ -55,6 +55,8 @@
 		 * and name, the new-akt page that creates it (`app.board-create`),
 		 * and whether a title alone makes one (`app.quick-add`). */
 		creatable?: (column: string) => { key?: string; name: string; href: string; quick?: boolean }[];
+		/** Whether verdicts on members may be given now (`app.verdicts`). */
+		judging?: boolean;
 		/** Creates an akt of a type, by key, from its title, on the board;
 		 * answers whether it was made. */
 		onQuickAdd?: (type: string, title: string) => Promise<boolean>;
@@ -75,7 +77,8 @@
 		me,
 		onVerdict = () => {},
 		creatable = () => [],
-		onQuickAdd
+		onQuickAdd,
+		judging = true
 	}: Props = $props();
 
 	/** What each column's quick-add has typed, and the type it adds. */
@@ -328,7 +331,7 @@
 	{@const numbers = list.akter.map((m) => m.number)}
 	{@const listFields = list.akter[0].type.presentation.list.length}
 	{@const outcomes = list.akter.some((m) => m.outcome)}
-	{@const judging = list.akter.some((m) => judgedOf(m, me))}
+	{@const withVerdicts = list.akter.some((m) => judgedOf(m, me))}
 	<!-- r[impl app.members]: a judged member's state says nothing its outcome doesn't. -->
 	{@const judgedList = judgedType(list.akter[0].type)}
 	<section class="list" aria-label={list.name}>
@@ -346,7 +349,7 @@
 						{/if}
 						{#if !judgedList}<th scope="col">Status</th>{/if}
 						{#if outcomes}<th scope="col">Outcome</th>{/if}
-						{#if judging}<th scope="col">Verdicts</th>{/if}
+						{#if withVerdicts}<th scope="col">Verdicts</th>{/if}
 						<th scope="col"><span class="visually-hidden">Actions</span></th>
 					</tr>
 				</thead>
@@ -389,12 +392,13 @@
 									>{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}</td
 								>
 							{/if}
-							{#if judging}
+							{#if withVerdicts}
 								{@const judged = judgedOf(member, me)}
 								<td
 									>{#if judged}<VerdictButtons
 											number={member.number}
 											{judged}
+											open={judging}
 											busy={busy || member.state.final === true}
 											onGive={(verdict) => onVerdict(member, verdict)}
 										/>{/if}</td

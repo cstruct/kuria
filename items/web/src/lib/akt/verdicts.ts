@@ -94,3 +94,18 @@ export const VERDICTS: readonly { verdict: Verdict; label: string }[] = [
 	{ verdict: 'FAIL', label: 'Fail' },
 	{ verdict: 'SKIP', label: 'Skip' }
 ];
+
+/** Whether verdicts on the members of a container of the type `type` may
+ * be given while it is in `state`: while a transition that names the
+ * outcomes it allows may leave it, such as a run's Finish, or always if
+ * none names any (`app.verdicts`). A template or a run not yet started
+ * takes none. */
+export function judgingOpen(
+	type: {
+		transitions: readonly { from: readonly string[]; outcomes?: readonly string[] | null }[];
+	},
+	state: string
+): boolean {
+	const judging = type.transitions.filter((t) => (t.outcomes ?? []).length > 0);
+	return judging.length === 0 || judging.some((t) => t.from.includes(state));
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Value } from './values';
-import { judgedOf, reportError, verdictInput } from './verdicts';
+import { judgedOf, judgingOpen, reportError, verdictInput } from './verdicts';
 
 const ALICE = { __typename: 'User' as const, id: 'alice', name: 'Alice' };
 const BOB = { __typename: 'Contact' as const, id: 'c-bob', displayName: 'Bob' };
@@ -52,5 +52,22 @@ describe('verdicts', () => {
 		expect(reportError({ verdict: 'FAIL', description: '  ' })).toBe('Say why it failed.');
 		expect(reportError({ verdict: 'SKIP', description: '' })).toBe('Say why it was skipped.');
 		expect(reportError({ verdict: 'SKIP', description: 'No device' })).toBeNull();
+	});
+});
+
+// r[verify app.verdicts]
+describe('judgingOpen', () => {
+	const protocol = {
+		transitions: [
+			{ from: ['draft'], outcomes: null },
+			{ from: ['running'], outcomes: ['PASS', 'FAIL', 'SKIP'] }
+		]
+	};
+
+	it('takes verdicts while a transition judging them may leave', () => {
+		expect(judgingOpen(protocol, 'running')).toBe(true);
+		expect(judgingOpen(protocol, 'draft')).toBe(false);
+		expect(judgingOpen(protocol, 'template')).toBe(false);
+		expect(judgingOpen({ transitions: [{ from: ['open'] }] }, 'open')).toBe(true);
 	});
 });

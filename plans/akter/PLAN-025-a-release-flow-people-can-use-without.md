@@ -1,7 +1,7 @@
 ---
 number: PLAN-025
 type: plan
-revision: 28
+revision: 29
 rank: b5p
 state: active
 title: "A release flow people can use without knowing Kuria's model"
@@ -715,9 +715,9 @@ Verified:
 <!-- akt: PLAN-025-T14 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b63
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T17]
 title: "Run a protocol for a candidate, with verdicts inline"
@@ -734,6 +734,28 @@ Covers findings 7.1, 7.5, 7.8, 7.9, 7.11, 7.12, 7.13, 7.16 and 7.19.
 - "All" and "None" in the copy dialog look like buttons.
 - This reverses PLAN-024's dialog for reporting a verdict (G07).
 - Rules: `app.copy`, `akt.copy`, `app.verdicts`, `app.sections`.
+
+## Done
+
+Changes:
+
+- Verdicts are given in place (D02, superseding PLAN-024's dialog, now removed). Each assignee has a row with avatar, name, a status chip and description. Your own row holds Pass, Fail and Skip. Pass is saved at once; Fail and Skip open a required description, with Save and Cancel; Clear takes a verdict back.
+- Verdicts are offered only while the container is in a state that a transition naming outcomes leaves, such as a run's Running (`judgingOpen`). A template or a draft says "Results are given once the run has started." A case's own page goes by its container's state.
+- Copying asks where the copy goes: the open containers of the types holding it that the viewer may add to, most recently changed first, else where it is now. A copy made into one is titled after it: "Checkout regression: <candidate>".
+- The copy dialog's All and None are buttons: "Keep all", "Keep none".
+- A collapsible section has a chevron and says how many it holds.
+
+Not done:
+
+- Server enforcement of verdicts only while the run is running. It is the app's rule, written in `app.verdicts`, since a test case's own state never changes.
+- The case's steps and expected result beside its verdict. They show on its page.
+- Progress on Finish. "x of y passed" (T13) and Finish's reason cover it.
+
+Verified:
+
+- `verdicts.test.ts`;
+- e2e test-protocols, rewritten: the template takes no verdicts; the release manager copies the run into a candidate, named after it; inline pass, fail with a required description, skip, change and clear; finish;
+- e2e release-flow: the run started, then a one-click pass.
 
 <!-- field: acceptance -->
 - An end-to-end test copies the protocol for a candidate, starts it, reports pass, fail with a description and skip inline, finishes it, and sees the candidate's outcome change.
@@ -957,9 +979,9 @@ Verdicts on test cases are left to T14. A test case's own state never changes; w
 <!-- akt: PLAN-025-G07 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6D
-state: open
+state: closed
 in: [PLAN-025]
 title: "Inline verdicts against PLAN-024's dialog"
 ---
@@ -970,6 +992,9 @@ PLAN-024 just made reporting a verdict a dialog, so that the description is said
 Decide whether inline controls supersede the dialog, keeping Edit and Delete in a menu, or whether the dialog stays and gains keyboard shortcuts.
 
 A decision that supersedes PLAN-024's design goes in this plan. Resolve before T14.
+
+<!-- field: resolution -->
+Decided in PLAN-025-D02, and built in T14: verdicts are given in place, Pass at once, Fail and Skip with a required description inline. PLAN-024's dialog is gone.
 
 <!-- akt: PLAN-025-D01 -->
 ---
@@ -1007,3 +1032,29 @@ title: "A side sheet for creating with more fields, over the board"
 T09 built quick-add, with Shift+Enter opening the whole create page and that page coming back to the board. The review asked for more: a side sheet over the board, holding the type's other fields, so that the board stays in view while they are filled in.
 
 Building it means turning the create page's form into a component that both the route and a sheet can hold. Kept apart from T09 so that quick-add could land first.
+
+<!-- akt: PLAN-025-D02 -->
+---
+type: decision
+revision: 2
+rank: b6G
+state: decided
+in: [PLAN-025]
+title: "Verdicts are given in place, not in a dialog"
+---
+
+<!-- field: context -->
+PLAN-024 made reporting a verdict a dialog, so that a fail or a skip is said deliberately, with a description. The design review counted about 240 clicks for a 30-case protocol run by two testers, and asked for the verdict in place.
+
+<!-- field: decision -->
+Verdicts are given in place, superseding PLAN-024's dialog:
+
+- Pass, Fail and Skip are buttons on each case.
+- Pass is saved at once.
+- Fail and Skip open the description in place, and it is required before Save, as `akt.field.verdict.description` says.
+- A verdict given is changed the same way, or cleared.
+
+Verdicts are offered only while the run takes them (`app.verdicts`).
+
+<!-- field: why -->
+It keeps what PLAN-024 was for: a fail or a skip can't be saved without saying why. It drops the dialog round trip for the common case, a pass, which is most of a run. Keyboard shortcuts on the dialog would have kept the round trip.

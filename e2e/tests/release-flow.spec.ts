@@ -155,16 +155,22 @@ test('a release from planning to closed', async ({ browser }) => {
 		).createAkt.number;
 	const run = await made('test_protocol', { title: 'Acceptance' }, rc2);
 	const check = await made('test_case', { title: 'Checkout', testers: [people.releaseManager.subject] }, run);
+	const { akt } = await admin.graphql<{ akt: { revision: number } }>(
+		'query($n: String!) { akt(number: $n) { revision } }',
+		{ n: run }
+	);
+	await admin.graphql(
+		'mutation($n: String!, $r: Int!) { performTransition(input: { number: $n, revision: $r, transition: "start" }) { revision } }',
+		{ n: run, r: akt.revision }
+	);
 	await open(rm, rc2);
 	const accept = rm.getByRole('main').getByRole('button', { name: 'Accept', exact: true });
 	await expect(accept).toBeDisabled();
 	await expect(rm.getByText('Accept: needs the result to be passed; it is pending')).toBeVisible();
 	await open(rm, check);
-	await rm.getByRole('group', { name: `Your verdict on ${check}` }).getByRole('button', { name: 'Report' }).click();
-	const report = rm.getByRole('dialog', { name: `Report on ${check}` });
-	await report.getByRole('radio', { name: 'Pass' }).check();
-	await report.getByRole('button', { name: 'Save' }).click();
-	await expect(report).toBeHidden();
+	const verdict = rm.getByRole('group', { name: `Your verdict on ${check}` });
+	await verdict.getByRole('button', { name: 'Pass', exact: true }).click();
+	await expect(verdict.getByRole('button', { name: 'Pass', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await open(rm, rc2);
 	await expect(rm.getByTestId('outcome')).toHaveText('Passed');
 	await transition(rm, 'Accept');

@@ -26,33 +26,32 @@ async function violations(page: Page): Promise<string[]> {
 /** The open akt's sections. */
 const sectionsOf = (page: Page) => page.getByRole('region', { name: 'Sections' });
 
-/** The viewer's own verdict on `number`: Report, or Edit once reported. */
+/** The viewer's own verdict on `number`: Pass, Fail and Skip, in place. */
 const mine = (page: Page, number: string) => page.getByRole('group', { name: `Your verdict on ${number}` }).first();
 
 /** Everyone's verdicts on `number`, with their descriptions. */
 const verdictsOn = (page: Page, number: string) => page.getByRole('list', { name: `Verdicts on ${number}` }).first();
 
-/** The dialog that reports the viewer's verdict on `number`, opened. */
-async function reporting(page: Page, number: string) {
-	await mine(page, number).getByRole('button', { name: 'Report' }).click();
-	return page.getByRole('dialog', { name: `Report on ${number}` });
+/** Chooses the viewer's verdict on `number`; a fail or a skip opens its
+ * description, answered with the form it is asked in. */
+async function choosing(page: Page, number: string, verdict: 'Pass' | 'Fail' | 'Skip') {
+	await mine(page, number).getByRole('button', { name: verdict, exact: true }).click();
+	return mine(page, number).getByRole('form');
 }
 
-/** The dialog that edits the viewer's verdict on `number`, opened. */
-async function editing(page: Page, number: string) {
-	await mine(page, number).getByRole('button', { name: 'Edit' }).click();
-	return page.getByRole('dialog', { name: `Edit your verdict on ${number}` });
-}
-
-/** Reports the viewer's verdict on `number`, with its description if
- * given, and waits for it to show. */
+/** Gives the viewer's verdict on `number`, with its description if given,
+ * in place, and waits for it to show (`app.verdicts`). */
 async function give(page: Page, number: string, verdict: 'Pass' | 'Fail' | 'Skip', description?: string) {
-	const dialog = await reporting(page, number);
-	await dialog.getByRole('radio', { name: verdict }).check();
-	if (description) await dialog.getByLabel('Description').fill(description);
-	await dialog.getByRole('button', { name: 'Save' }).click();
-	await expect(dialog).toBeHidden();
-	await expect(mine(page, number).getByRole('button', { name: 'Edit' })).toBeVisible();
+	const form = await choosing(page, number, verdict);
+	if (verdict !== 'Pass') {
+		await form.getByRole('textbox').fill(description ?? '');
+		await form.getByRole('button', { name: 'Save' }).click();
+		await expect(form).toBeHidden();
+	}
+	await expect(mine(page, number).getByRole('button', { name: verdict, exact: true })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
 	if (description) await expect(verdictsOn(page, number)).toContainText(description);
 }
 
@@ -137,23 +136,39 @@ test('a test protocol is copied from its template, run by two testers, and finis
 		{ n: template }
 	);
 
-	// A run: the template copied without its accessibility section.
-	const dev = await signIn(browser, developer);
-	await open(dev, template);
-	await expect(dev.getByTestId('state')).toHaveText('Template');
-	await dev.getByRole('button', { name: 'Make a copy' }).click();
-	const dialog = dev.getByRole('dialog', { name: `Copy ${template}` });
+	// The candidate it is run for.
+	const release = await create('release', { title: `Protocols ${Date.now()}` });
+	const candidate = await create('release_candidate', { label: `${release} rc` }, [release]);
+
+	// A run: the template copied without its accessibility section, for the
+	// candidate, by the release manager, who may add to it. The template
+	// itself takes no verdicts.
+	const rm = await signIn(browser, releaseManager);
+	await open(rm, template);
+	await expect(rm.getByTestId('state')).toHaveText('Template');
+	await expect(mine(rm, cases[0])).toContainText('Results are given once the run has started.');
+	await expect(mine(rm, cases[0]).getByRole('button', { name: 'Pass' })).toHaveCount(0);
+	await rm.getByRole('button', { name: 'Make a copy' }).click();
+	const dialog = rm.getByRole('dialog', { name: `Copy ${template}` });
+	// r[verify app.copy]: into the candidate, and named after it.
+	await dialog.getByLabel('Copy into').selectOption({ label: `${release} rc` });
 	await expect(dialog.getByRole('checkbox', { name: 'Screen reader reads the basket' })).toBeChecked();
 	await dialog.getByRole('checkbox', { name: 'Accessibility' }).uncheck();
 	await expect(dialog.getByRole('checkbox', { name: 'Screen reader reads the basket' })).not.toBeChecked();
-	expect(await violations(dev), 'the copy dialog').toEqual([]);
+	expect(await violations(rm), 'the copy dialog').toEqual([]);
 	await dialog.getByRole('button', { name: 'Copy', exact: true }).click();
-	await expect(dev.getByTestId('number')).not.toHaveText(template);
-	const run = (await dev.getByTestId('number').textContent())!.trim();
+	await expect(rm.getByTestId('number')).not.toHaveText(template);
+	const run = (await rm.getByTestId('number').textContent())!.trim();
 	const [password, passkey, card, invoice] = [1, 2, 3, 4].map((n) => `${run}-C0${n}`);
-	await expect(dev.getByText('Copied from Checkout regression')).toBeVisible();
-	await expect(dev.getByTestId('state')).toHaveText('Draft');
-	await expect(sectionsOf(dev).getByText('Accessibility')).toHaveCount(0);
+	await expect(rm.getByText('Copied from Checkout regression')).toBeVisible();
+	await expect(rm.getByRole('heading', { level: 1 })).toHaveText(`Checkout regression: ${release} rc`);
+	await expect(rm.getByRole('list', { name: 'Part of' })).toContainText(candidate);
+	await expect(rm.getByTestId('state')).toHaveText('Draft');
+	await expect(mine(rm, `${run}-C01`)).toContainText('Results are given once the run has started.');
+	await expect(sectionsOf(rm).getByText('Accessibility')).toHaveCount(0);
+	// The developer runs it.
+	const dev = await signIn(browser, developer);
+	await open(dev, run);
 	await moved(dev, 'Start', 'Running');
 
 	// The first tester's verdicts; the collapsible section opened first.
@@ -162,12 +177,11 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	await give(dev, password, 'Pass');
 	await give(dev, passkey, 'Pass');
 	// A failure says why: without a description it isn't saved.
-	const failing = await reporting(dev, card);
-	await failing.getByRole('radio', { name: 'Fail' }).check();
+	const failing = await choosing(dev, card, 'Fail');
 	await failing.getByRole('button', { name: 'Save' }).click();
-	await expect(failing.getByRole('alert')).toHaveText('Say why it failed.');
-	expect(await violations(dev), 'the report dialog').toEqual([]);
-	await failing.getByLabel('Description').fill('The card form rejects the test card.');
+	await expect(failing).toContainText('Say why it failed.');
+	expect(await violations(dev), 'a verdict being given').toEqual([]);
+	await failing.getByLabel('What failed').fill('The card form rejects the test card.');
 	await failing.getByRole('button', { name: 'Save' }).click();
 	await expect(failing).toBeHidden();
 	await expect(verdictsOn(dev, card)).toContainText('The card form rejects the test card.');
@@ -188,11 +202,10 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	await expect(outline.getByRole('button', { name: `Place ${passkey}` })).toBeVisible();
 	await outline.getByRole('button', { name: 'Save' }).click();
 	await expect(dev.getByRole('heading', { name: 'Not in a section' })).toBeVisible();
-	await expect(mine(dev, passkey).getByRole('button', { name: 'Edit' })).toBeVisible();
+	await expect(mine(dev, passkey).getByRole('button', { name: 'Pass' })).toHaveAttribute('aria-pressed', 'true');
 	await expect(verdictsOn(dev, passkey)).toContainText('Pass');
 
 	// The second tester finds the run's test cases in their work.
-	const rm = await signIn(browser, releaseManager);
 	await rm.goto('/');
 	const work = rm.getByRole('list', { name: 'My work: Test case' });
 	for (const number of [password, passkey, card, invoice]) await expect(work).toContainText(number);
@@ -213,15 +226,14 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	// The first tester runs the card case again: it passes, and so does all.
 	await dev.reload();
 	await sectionsOf(dev).getByText('Paying').click();
-	// Its description edited, then the verdict deleted.
-	const edited = await editing(dev, card);
-	await expect(edited.getByRole('radio', { name: 'Fail' })).toBeChecked();
-	await expect(edited.getByLabel('Description')).toHaveValue('The card form rejects the test card.');
-	await edited.getByLabel('Description').fill('Fixed in build 813; running it again.');
+	// Its description edited, then the verdict cleared.
+	const edited = await choosing(dev, card, 'Fail');
+	await expect(edited.getByLabel('What failed')).toHaveValue('The card form rejects the test card.');
+	await edited.getByLabel('What failed').fill('Fixed in build 813; running it again.');
 	await edited.getByRole('button', { name: 'Save' }).click();
 	await expect(verdictsOn(dev, card)).toContainText('Fixed in build 813; running it again.');
-	await (await editing(dev, card)).getByRole('button', { name: 'Delete' }).click();
-	await expect(mine(dev, card).getByRole('button', { name: 'Report' })).toBeVisible();
+	await mine(dev, card).getByRole('button', { name: 'Clear' }).click();
+	await expect(mine(dev, card).getByRole('button', { name: 'Clear' })).toHaveCount(0);
 	await expect(outcomeOf(dev, card)).toHaveText('Pending');
 	await expect(dev.getByTestId('outcome')).toHaveText('Pending');
 	// Pending, the run can't be finished.
