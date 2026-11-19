@@ -18,6 +18,7 @@
     { "key": "registered", "name": "Registered", "initial": true }
   ],
   "presentation": {
+    "group": "Releasing",
     "icon": "package", "colour": "amber",
     "card": ["change", "version"], "list": ["change", "version", "image"]
   }

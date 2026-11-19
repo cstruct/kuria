@@ -221,6 +221,10 @@ pub struct PresentationDef {
     /// its akter images (`akt.field.markdown.images`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// The heading the app's sidebar lists the type under, beside the
+    /// others it names (`app.navigation`); none if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
     /// The type's name in the plural, as the app counts its akter; the
     /// name and an `s` if not given.
     #[serde(default, skip_serializing_if = "Option::is_none")]

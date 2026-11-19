@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isSearchShortcut, moreWasOpen, rememberMore, shortcutLabel, splitTypes } from './shell';
+import {
+	groupTypes,
+	isSearchShortcut,
+	moreWasOpen,
+	rememberMore,
+	shortcutLabel,
+	splitTypes
+} from './shell';
 
 function key(init: Partial<KeyboardEvent> & { key: string }, tagName = 'BODY') {
 	return {
@@ -65,5 +72,27 @@ describe('the sidebar', () => {
 		rememberMore(refusing, true);
 		expect(moreWasOpen(refusing)).toBe(false);
 		expect(moreWasOpen(undefined)).toBe(false);
+	});
+});
+
+// r[verify app.navigation]
+describe('groupTypes', () => {
+	const type = (key: string, group?: string) => ({
+		key,
+		presentation: { navigation: 'MAIN' as const, group: group ?? null }
+	});
+
+	it('lists types under their groups, those without first', () => {
+		const grouped = groupTypes([
+			type('backlog', 'Planning'),
+			type('artifact'),
+			type('release', 'Releasing'),
+			type('task', 'Planning')
+		]);
+		expect(grouped.map((g) => [g.group, g.types.map((t) => t.key)])).toEqual([
+			[null, ['artifact']],
+			['Planning', ['backlog', 'task']],
+			['Releasing', ['release']]
+		]);
 	});
 });

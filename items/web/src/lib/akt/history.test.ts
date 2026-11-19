@@ -1,5 +1,5 @@
 import { describe as group, expect, it } from 'vitest';
-import { ago, describe, namesOf, valueText } from './history';
+import { ago, describe, merged, namesOf, valueText } from './history';
 
 const by = { name: 'rm@shop.example' };
 
@@ -195,5 +195,54 @@ group('history', () => {
 				{}
 			)
 		).toMatchObject({ who: 'Ann', what: 'unarchived it' });
+	});
+});
+
+// r[verify app.history]
+group('a readable history', () => {
+	const by = { id: 'u1', name: 'Devi' };
+	const added = (revision: number, member: string, at: string) =>
+		describe(
+			{
+				revision,
+				changes: {},
+				membership: { added_member: [{ number: member }] },
+				createdAt: at,
+				by
+			},
+			{},
+			{}
+		);
+
+	it('says choices by their names, in the order the fields are shown', () => {
+		const entry = describe(
+			{
+				revision: 2,
+				changes: { kind: 'feature', title: 'T' },
+				createdAt: '2026-11-19T10:00:00Z',
+				by
+			},
+			{ title: 'Title', kind: 'Kind' },
+			{},
+			{},
+			{ kind: { feature: 'Feature' } }
+		);
+		expect(entry.changes).toEqual([
+			{ field: 'Title', value: 'T' },
+			{ field: 'Kind', value: 'Feature' }
+		]);
+	});
+
+	it('says one person adding several within a minute once', () => {
+		const entries = merged([
+			added(4, 'T-3', '2026-11-19T10:00:40Z'),
+			added(3, 'T-2', '2026-11-19T10:00:20Z'),
+			added(2, 'T-1', '2026-11-19T10:00:00Z'),
+			added(1, 'T-0', '2026-11-19T09:00:00Z')
+		]);
+		expect(entries.map((e) => [e.what, e.memberships.length])).toEqual([
+			['added 3 items', 3],
+			['created it', 1]
+		]);
 	});
 });

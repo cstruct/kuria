@@ -30,6 +30,7 @@
   "contains": [{ "type": "test_case" }],
   "archive": { "rules": [{ "with_container": "release_candidate" }] },
   "presentation": {
+    "group": "Testing",
     "icon": "clipboard-check", "colour": "purple",
     "list": ["owner"],
     "tones": { "template": "neutral", "running": "active", "done": "success", "withdrawn": "neutral" },

@@ -103,7 +103,9 @@ everyday words docs/nomenclature.md gives the app, never "akt", "akter",
 
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
-saving only that field.
+saving only that field. When its details would show nothing but its
+title, they MUST NOT be shown, and the title MUST be edited in its
+heading.
 
 r[app.markdown]
 The app MUST render multiline text as Markdown, as sanitized HTML: no
@@ -273,10 +275,11 @@ create it in each of the container's parent boards (`board.parent`) whose
 akt type contains the akt's type, the container first.
 
 r[app.navigation]
-The sidebar MUST list the akt types whose `navigation` is `more`
-(`akt.type.presentation`) after the others, under a "Show more"
-disclosure saying how many there are, closed until opened, remembering in
-the browser whether it was. Every other place that lists akt types MUST
+The sidebar MUST list the akt types under the headings their presentations
+name as their `group`, those naming none first, under none, and those
+whose `navigation` is `more` (`akt.type.presentation`) after the others,
+under a "Show more" disclosure saying how many there are, closed until
+opened, remembering in the browser whether it was. Every other place that lists akt types MUST
 list them as before.
 
 r[app.images]
@@ -338,8 +341,12 @@ The sidebar's counts MUST count live akter.
 r[app.history]
 An akt's history MUST say, for each revision, who made it and when, its
 transition, the fields it changed with their new values, the users and
-contacts those values name by their names (`contact.show`), and the
-containers or members it added or removed, by number.
+contacts those values name by their names (`contact.show`), a choice by
+its option's name, the fields in the order the page shows them, and the
+containers or members it added or removed, by number. Consecutive
+revisions of one person only adding members, within a minute, MUST be
+said once, by how many were added. The latest five MUST be shown, and the
+others when asked for.
 
 r[app.stale]
 When an edit, transition or draft is refused as `STALE`, the app MUST show

@@ -33,6 +33,7 @@
   ] },
   "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {
+    "group": "Releasing",
     "icon": "flask-conical", "colour": "teal", "navigation": "more",
     "title": "label", "card": ["build"], "list": ["build"],
     "tones": { "testing": "active", "accepted": "success", "rejected": "danger" }

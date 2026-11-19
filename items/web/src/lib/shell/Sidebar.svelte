@@ -7,7 +7,7 @@
 	import Home from '@lucide/svelte/icons/house';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
-	import { moreWasOpen, rememberMore, splitTypes } from './shell';
+	import { groupTypes, moreWasOpen, rememberMore, splitTypes } from './shell';
 	import type { ShellQuery } from '#lib/graphql/generated/graphql.ts';
 
 	interface Props {
@@ -74,9 +74,18 @@
 	</ul>
 
 	<h2 id="types-heading">Work</h2>
-	<ul aria-labelledby="types-heading">
-		{@render typeLinks(split.main)}
-	</ul>
+	{#each groupTypes(split.main) as group (group.group)}
+		{#if group.group}
+			<h3 class="group" id="group-{group.group}">{group.group}</h3>
+			<ul aria-labelledby="group-{group.group}">
+				{@render typeLinks(group.types)}
+			</ul>
+		{:else}
+			<ul aria-labelledby="types-heading">
+				{@render typeLinks(group.types)}
+			</ul>
+		{/if}
+	{/each}
 	{#if split.more.length > 0}
 		<button
 			type="button"
@@ -242,5 +251,13 @@
 
 	li a[aria-current='page'] .count {
 		color: inherit;
+	}
+
+	.group {
+		margin: var(--space-3) 0 var(--space-1);
+		padding: 0 var(--space-3);
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		font-weight: 500;
 	}
 </style>

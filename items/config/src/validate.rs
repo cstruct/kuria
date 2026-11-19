@@ -623,12 +623,19 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             );
         }
     }
-    if presentation
-        .plural
-        .as_ref()
-        .is_some_and(|p| p.trim().is_empty() || p.contains('\n'))
-    {
-        problems.add("presentation.plural", "the plural is one line, not empty");
+    for (key, text) in [
+        ("plural", &presentation.plural),
+        ("group", &presentation.group),
+    ] {
+        if text
+            .as_ref()
+            .is_some_and(|p| p.trim().is_empty() || p.contains('\n'))
+        {
+            problems.add(
+                &format!("presentation.{key}"),
+                format!("the {key} is one line, not empty"),
+            );
+        }
     }
     for (state, action) in &presentation.primary {
         let path = format!("presentation.primary.{state}");

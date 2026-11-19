@@ -1467,6 +1467,7 @@ impl AktType {
             image: presentation.image.clone(),
             numbered_references: presentation.numbered_references,
             plural: presentation.plural.clone(),
+            group: presentation.group.clone(),
         }
     }
 
@@ -1775,6 +1776,9 @@ pub struct Presentation {
     numbered_references: bool,
     /// The type's name in the plural, if it gives one.
     plural: Option<String>,
+    /// The sidebar's heading the type is listed under, if any
+    /// (`app.navigation`).
+    group: Option<String>,
 }
 
 #[derive(SimpleObject)]

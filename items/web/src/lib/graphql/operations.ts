@@ -746,6 +746,7 @@ export const Shell = graphql(`
 			akterCount
 			presentation {
 				navigation
+				group
 			}
 		}
 	}

@@ -23,6 +23,7 @@
     { "key": "done", "name": "Done", "states": { "backlog_item": ["done"] } }
   ] },
   "presentation": {
+    "group": "Planning",
     "icon": "flag", "colour": "purple", "tones": { "in_progress": "active", "done": "success" },
     "primary": { "open": "start", "in_progress": "finish" }
   }

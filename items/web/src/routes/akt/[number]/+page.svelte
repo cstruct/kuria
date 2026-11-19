@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Pencil from '@lucide/svelte/icons/pencil';
 	import { orList } from '#lib/ui/text.ts';
 	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
@@ -282,6 +283,21 @@
 		} | null;
 		return judgingOpen({ transitions: document?.transitions ?? [] }, container.state.key);
 	});
+	/** The field its title is, and whether its details would show nothing
+	 * else: then the heading is edited, and the details aren't shown. */
+	const titleKey = $derived(akt ? titleFieldOf(akt.type.document) : null);
+	const titleOnly = $derived(
+		Boolean(
+			akt &&
+			titleKey &&
+			akt.type.fields.every(
+				(f) =>
+					f.key === titleKey ||
+					(!givenIn(akt.type.document, f.key, akt.state.key) &&
+						!akt.fields.some((v) => 'field' in v && v.field === f.key))
+			)
+		)
+	);
 	/** Of its members with outcomes, how many passed (`app.header`). */
 	const ready = $derived(akt ? readiness(akt.board.columns.flatMap((c) => c.akter)) : null);
 	const primaryTransition = $derived(
@@ -852,7 +868,54 @@
 					>
 					<span data-testid="number"><Mono value={akt.number} max={40} copy /></span>
 				</p>
-				<h1>{headingOf(akt)}</h1>
+				<!-- r[impl app.inline-edit]: the title edited in its heading, when
+				     the details would only repeat it. -->
+				{#if titleOnly && titleKey && editingField === titleKey && drafts[titleKey]?.kind === 'TEXT'}
+					{@const draft = drafts[titleKey]}
+					<form
+						class="title-edit"
+						aria-label="Edit {akt.type.fields.find((f) => f.key === titleKey)?.name ?? 'title'}"
+						onsubmit={(e) => {
+							e.preventDefault();
+							if (titleKey) void save(titleKey);
+						}}
+					>
+						{#if draft.kind === 'TEXT'}
+							<input
+								class="title-input"
+								aria-label={akt.type.fields.find((f) => f.key === titleKey)?.name ?? 'Title'}
+								bind:value={draft.text}
+							/>
+						{/if}
+						{#if !live}
+							<input
+								class="title-reason"
+								aria-label="Reason (optional)"
+								placeholder="Reason (optional)"
+								bind:value={reason}
+							/>
+						{/if}
+						<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
+						<Button variant="ghost" size="sm" onclick={() => titleKey && cancelEdit(titleKey)}
+							>Cancel</Button
+						>
+					</form>
+				{:else}
+					<div class="heading">
+						<h1>{headingOf(akt)}</h1>
+						{#if titleOnly && titleKey && editable}
+							<IconButton
+								label="Edit {akt.type.fields.find((f) => f.key === titleKey)?.name ?? 'title'}"
+								icon={Pencil}
+								size="sm"
+								onclick={() => {
+									if (editingField) cancelEdit(editingField);
+									editingField = titleKey;
+								}}
+							/>
+						{/if}
+					</div>
+				{/if}
 				<!-- r[impl app.header]: its status and its result, each labelled. -->
 				<dl class="badges">
 					<div>
@@ -988,53 +1051,53 @@
 
 		<div class="columns">
 			<div class="main">
-				<Card title="Details">
-					<dl class="fields">
-						{#each akt.type.fields as field (field.key)}
-							{#if field.key === fileField}
-								{#if showsFile}
-									<ReleasedPdf
+				{#if !titleOnly}<Card title="Details">
+						<dl class="fields">
+							{#each akt.type.fields as field (field.key)}
+								{#if field.key === fileField}
+									{#if showsFile}
+										<ReleasedPdf
+											number={akt.number}
+											name={field.name}
+											title={akt.title ?? akt.number}
+											version={shownVersion}
+										/>
+									{/if}
+								{:else if showsFile && field.kind === 'MARKDOWN'}
+									<!-- The version is its PDF, not its text. -->
+								{:else if !givenIn(akt.type.document, field.key, akt.state.key) && !akt.fields.some((v) => 'field' in v && v.field === field.key)}
+									<!-- r[impl akt.field.states]: not yet given, and not in its states. -->
+								{:else}
+									<FieldRow
+										{field}
+										value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
+										bind:draft={drafts[field.key]}
+										bind:reason
+										{people}
+										editing={editingField === field.key}
+										editable={editable && givenIn(akt.type.document, field.key, akt.state.key)}
+										drafted={drafted.includes(field.key)}
+										{busy}
+										error={editingField === field.key && refusal ? refusal.message : undefined}
+										onEdit={() => {
+											if (editingField) cancelEdit(editingField);
+											editingField = field.key;
+										}}
+										onSave={() => save(field.key)}
+										onCancel={() => cancelEdit(field.key)}
+										onDraft={() => draft(field.key)}
+										members={memberNames}
 										number={akt.number}
-										name={field.name}
-										title={akt.title ?? akt.number}
-										version={shownVersion}
+										judged={ownVerdicts}
+										judging={judgingOwn}
+										onVerdict={(verdict) => giveVerdict(akt, verdict)}
+										liveDraft={Boolean(live)}
+										live={live && isLiveText(field) ? live : null}
 									/>
 								{/if}
-							{:else if showsFile && field.kind === 'MARKDOWN'}
-								<!-- The version is its PDF, not its text. -->
-							{:else if !givenIn(akt.type.document, field.key, akt.state.key) && !akt.fields.some((v) => 'field' in v && v.field === field.key)}
-								<!-- r[impl akt.field.states]: not yet given, and not in its states. -->
-							{:else}
-								<FieldRow
-									{field}
-									value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
-									bind:draft={drafts[field.key]}
-									bind:reason
-									{people}
-									editing={editingField === field.key}
-									editable={editable && givenIn(akt.type.document, field.key, akt.state.key)}
-									drafted={drafted.includes(field.key)}
-									{busy}
-									error={editingField === field.key && refusal ? refusal.message : undefined}
-									onEdit={() => {
-										if (editingField) cancelEdit(editingField);
-										editingField = field.key;
-									}}
-									onSave={() => save(field.key)}
-									onCancel={() => cancelEdit(field.key)}
-									onDraft={() => draft(field.key)}
-									members={memberNames}
-									number={akt.number}
-									judged={ownVerdicts}
-									judging={judgingOwn}
-									onVerdict={(verdict) => giveVerdict(akt, verdict)}
-									liveDraft={Boolean(live)}
-									live={live && isLiveText(field) ? live : null}
-								/>
-							{/if}
-						{/each}
-					</dl>
-				</Card>
+							{/each}
+						</dl>
+					</Card>{/if}
 
 				{#if contained.length > 0}
 					<section class="members" aria-labelledby="members-title">
@@ -1210,6 +1273,12 @@
 						{fieldNames}
 						{transitionNames}
 						fieldKinds={Object.fromEntries(akt.type.fields.map((f) => [f.key, f.kind]))}
+						optionNames={Object.fromEntries(
+							akt.type.fields.map((f) => [
+								f.key,
+								Object.fromEntries((f.options ?? []).map((o) => [o.key, o.name]))
+							])
+						)}
 						versions={akt.versions}
 					/>
 				</Card>
@@ -1632,5 +1701,31 @@
 		gap: var(--space-1);
 		font-size: var(--text-sm);
 		font-weight: 500;
+	}
+
+	.heading {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.title-edit {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.title-edit {
+		flex-wrap: wrap;
+	}
+
+	.title-input {
+		flex: 1 1 16rem;
+		font-size: var(--text-xl);
+		font-weight: 600;
+	}
+
+	.title-reason {
+		flex: 0 1 14rem;
 	}
 </style>

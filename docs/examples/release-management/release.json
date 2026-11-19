@@ -37,6 +37,7 @@
   ] },
   "archive": { "rules": [{ "newer": 2, "in": ["closed"] }] },
   "presentation": {
+    "group": "Releasing",
     "icon": "rocket", "colour": "green",
     "card": ["version"], "list": ["version", "released_on", "release_manager"],
     "tones": { "testing": "active", "released": "success" }

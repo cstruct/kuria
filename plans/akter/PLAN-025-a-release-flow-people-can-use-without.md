@@ -764,9 +764,9 @@ Verified:
 <!-- akt: PLAN-025-T15 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b64
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocked by PLAN-025-T05, Blocks PLAN-025-T17]
 title: "Navigation by job, a readable home and a readable history"
@@ -780,6 +780,27 @@ Covers home findings 1 to 3, and findings 1.6, 2.7 and 2.11.
 - History renders values through the fields' display labels and order. It groups entries by person and minute ("Devi added 3 tasks") and collapses all but the latest five.
 - The Details card hides when it would only repeat the title, and the heading becomes editable in place.
 - Rules: `app.navigation`, `app.home`, `app.history`, `app.inline-edit`, `akt.type.presentation`.
+
+## Done
+
+Changes:
+
+- The sidebar lists types under the headings their presentation's `group` names, ungrouped ones first (`groupTypes`). The example groups them under Planning, Releasing and Testing, and Tasks leave Show more (G04).
+- Home tiles let a long type name wrap (`TypeMark`'s `wrap`).
+- History says a choice by its option's name, and the fields in the page's order. Consecutive adds by one person within a minute read "added 3 items" (`merged`). Only the latest five are shown until "Show all".
+- An akt whose details would only repeat its title, such as a backlog, shows no Details card. Its heading has an edit button, editing the title in place with an optional reason.
+
+Not done:
+
+- The Layout field (a protocol's sections) still shows in Details as "5 items placed", with its editor there. Moving it to the Sections' header was left, since the sections editor is where the e2e test edits the layout.
+- History entries are grouped, but not yet written as sentences beyond "added 3 items".
+
+Verified:
+
+- `shell.test.ts` (`groupTypes`) and `history.test.ts`;
+- the config test;
+- e2e akt-page, which edits the title from the heading;
+- the full e2e suite, 52 of 53 passing, the one failure being the heading's missing reason, since fixed and rerun.
 
 <!-- field: acceptance -->
 - In the example, Tasks are reachable from the sidebar without "Show more".
@@ -907,9 +928,9 @@ Found and fixed. Konklav keeps no profile data, so its userinfo gives no name, a
 <!-- akt: PLAN-025-G04 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6A
-state: open
+state: closed
 in: [PLAN-025]
 title: Plurals and job groups for akt types
 ---
@@ -923,6 +944,9 @@ Decide whether `presentation` gains:
 - a `group`, the name of a sidebar group, beside or instead of `navigation`.
 
 Resolve before T05 and T15.
+
+<!-- field: resolution -->
+Built both halves. `presentation.plural` (T05) counts akter in the type's words, and `presentation.group` (T15) names the sidebar heading a type is listed under. Both are validated in items/config as one line, not empty, and served on `AktType.presentation`. The release-management example groups its types under Planning, Releasing and Testing, and names release notes' plural.
 
 <!-- akt: PLAN-025-G05 -->
 ---

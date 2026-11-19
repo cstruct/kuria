@@ -100,16 +100,31 @@ export function describe(
 	transitionNames: Record<string, string>,
 	/** Each field's kind, by key: an attachment's identifier is a file, not
 	 * someone. */
-	fieldKinds: Record<string, string> = {}
+	fieldKinds: Record<string, string> = {},
+	/** Each choice field's options' names, by field and option key, so a
+	 * choice reads as the page shows it. */
+	optionNames: Record<string, Record<string, string>> = {}
 ): Described {
 	const names = namesOf(r.named);
-	const changes = Object.entries((r.changes as Record<string, unknown>) ?? {}).map(
-		([key, value]) => ({
+	// r[impl app.history]: in the order the fields are shown, as they're named.
+	const order = Object.keys(fieldNames);
+	const named = (key: string, value: unknown): unknown => {
+		const options = optionNames[key];
+		if (!options) return value;
+		if (typeof value === 'string') return options[value] ?? value;
+		return Array.isArray(value)
+			? value.map((v) => (typeof v === 'string' ? (options[v] ?? v) : v))
+			: value;
+	};
+	const changes = Object.entries((r.changes as Record<string, unknown>) ?? {})
+		.sort(([a], [b]) => (order.indexOf(a) >>> 0) - (order.indexOf(b) >>> 0))
+		.map(([key, value]) => ({
 			field: fieldNames[key] ?? key,
 			value:
-				fieldKinds[key] === 'ATTACHMENT' && value !== null ? 'a new file' : valueText(value, names)
-		})
-	);
+				fieldKinds[key] === 'ATTACHMENT' && value !== null
+					? 'a new file'
+					: valueText(named(key, value), names)
+		}));
 	const membership = Object.entries(
 		(r.membership as Record<string, { number: string; name?: string }[]>) ?? {}
 	);
@@ -162,4 +177,33 @@ export function ago(at: string, now: Date = new Date()): string {
 		value = Math.round(value / size);
 	}
 	return format.format(-value, 'year');
+}
+
+/** The history as one reads it, newest first: consecutive revisions of one
+ * person only adding members to it, within a minute, said once, as "added
+ * 3 items" (`app.history`). */
+// r[impl app.history]
+export function merged(entries: readonly Described[]): Described[] {
+	const out: Described[] = [];
+	const adding = (e: Described) =>
+		e.changes.length === 0 &&
+		!e.reason &&
+		e.memberships.length > 0 &&
+		e.memberships.every((m) => m.startsWith(`${MEMBERSHIP.added_member} `));
+	for (const entry of entries) {
+		const last = out.at(-1);
+		if (
+			last &&
+			adding(entry) &&
+			adding(last) &&
+			last.who === entry.who &&
+			Math.abs(Date.parse(last.at) - Date.parse(entry.at)) < 60_000
+		) {
+			last.memberships = [...last.memberships, ...entry.memberships];
+			last.what = `added ${last.memberships.length} items`;
+			continue;
+		}
+		out.push({ ...entry, memberships: [...entry.memberships] });
+	}
+	return out;
 }

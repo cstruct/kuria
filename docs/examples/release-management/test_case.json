@@ -18,6 +18,7 @@
   "transitions": [],
   "archive": { "rules": [{ "with_container": "test_protocol" }] },
   "presentation": {
+    "group": "Testing",
     "icon": "flask-conical", "colour": "blue",
     "card": ["testers"], "list": ["testers"]
   }

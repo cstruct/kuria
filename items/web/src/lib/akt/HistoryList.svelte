@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ago, describe, type RevisionData } from './history';
+	import Button from '#lib/ui/Button.svelte';
+	import { ago, describe, merged, type RevisionData } from './history';
 
 	interface Props {
 		revisions: RevisionData[];
@@ -9,24 +10,39 @@
 		fieldKinds?: Record<string, string>;
 		/** The versions, to say which revisions were released. */
 		versions?: readonly { number: number; revision: number; label?: string | null }[];
+		/** Each choice field's options' names, by field and option key. */
+		optionNames?: Record<string, Record<string, string>>;
 	}
 
-	let { revisions, fieldNames, transitionNames, fieldKinds = {}, versions = [] }: Props = $props();
+	let {
+		revisions,
+		fieldNames,
+		transitionNames,
+		fieldKinds = {},
+		versions = [],
+		optionNames = {}
+	}: Props = $props();
+	/** How many are shown until all are asked for (`app.history`). */
+	const LATEST = 5;
+	let all = $state(false);
 	// r[impl version.history]: a release, said with the revision it names.
 	const described = $derived(
-		[...revisions].reverse().map((r) => {
-			const entry = describe(r, fieldNames, transitionNames, fieldKinds);
-			const released = versions.filter((v) => v.revision === r.revision);
-			for (const v of released) {
-				entry.what += `, released as version ${v.number}${v.label ? ` (${v.label})` : ''}`;
-			}
-			return entry;
-		})
+		merged(
+			[...revisions].reverse().map((r) => {
+				const entry = describe(r, fieldNames, transitionNames, fieldKinds, optionNames);
+				const released = versions.filter((v) => v.revision === r.revision);
+				for (const v of released) {
+					entry.what += `, released as version ${v.number}${v.label ? ` (${v.label})` : ''}`;
+				}
+				return entry;
+			})
+		)
 	);
+	const shown = $derived(all ? described : described.slice(0, LATEST));
 </script>
 
 <ol class="timeline" aria-label="Revisions">
-	{#each described as entry (entry.revision)}
+	{#each shown as entry (entry.revision)}
 		<li>
 			<p>
 				<strong>{entry.who}</strong>
@@ -53,6 +69,10 @@
 		</li>
 	{/each}
 </ol>
+{#if described.length > shown.length}
+	<Button size="sm" variant="ghost" onclick={() => (all = true)}>Show all {described.length}</Button
+	>
+{/if}
 
 <style>
 	.timeline {

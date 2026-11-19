@@ -120,7 +120,7 @@
 					{#each home.data.aktTypes as type (type.key)}
 						<li>
 							<a class="name" href={resolve('/types/[key]', { key: type.key })}
-								><TypeMark {type} size="md" named /></a
+								><TypeMark {type} size="md" named wrap /></a
 							>
 							<span class="count">{counted(type.akterCount, type)}</span>
 							<!-- r[impl app.permitted] -->

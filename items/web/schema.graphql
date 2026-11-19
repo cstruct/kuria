@@ -1202,6 +1202,11 @@ type Presentation {
 	The type's name in the plural, if it gives one.
 	"""
 	plural: String
+	"""
+	The sidebar's heading the type is listed under, if any
+	(`app.navigation`).
+	"""
+	group: String
 }
 
 """
