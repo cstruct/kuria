@@ -526,6 +526,12 @@ input CreateAktInput {
 	The containers to create it in, by number; the first is its parent.
 	"""
 	in: [String!]! = []
+	"""
+	Its number, such as the one it had where it is imported from, which
+	its type's pattern must give and no akt may have
+	(`akt.number.given`); else its next.
+	"""
+	number: String
 }
 
 """
@@ -1178,6 +1184,11 @@ type Presentation {
 	images (`akt.field.markdown.images`).
 	"""
 	image: String
+	"""
+	Whether references to its akter are shown with the akt's number
+	first (`app.references`).
+	"""
+	numberedReferences: Boolean!
 }
 
 """
@@ -1298,6 +1309,15 @@ input ReleaseVersionInput {
 	One line, at most 100 characters.
 	"""
 	label: String
+	"""
+	At most 2,000 characters, over several lines if need be.
+	"""
+	description: String
+	"""
+	The uploaded PDF the version is released with, for a type whose
+	versions carry a file (`version.release-file`).
+	"""
+	file: ID
 }
 
 """
@@ -1510,6 +1530,10 @@ type Version {
 	"""
 	revision: Int!
 	label: String
+	"""
+	What its releaser said of it, such as what changed.
+	"""
+	description: String
 	releasedBy: User!
 	releasedAt: DateTime!
 	"""

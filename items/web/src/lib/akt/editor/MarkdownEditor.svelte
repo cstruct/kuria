@@ -8,7 +8,8 @@
 		INSERT_HORIZONTAL_RULE_COMMAND
 	} from '@lexical/extension';
 	import { createEmptyHistoryState, registerHistory } from '@lexical/history';
-	import { $toggleLink as toggleLink } from '@lexical/link';
+	import { resolve } from '$app/paths';
+	import { $isLinkNode as isLinkNode, $toggleLink as toggleLink } from '@lexical/link';
 	import {
 		INSERT_CHECK_LIST_COMMAND,
 		INSERT_ORDERED_LIST_COMMAND,
@@ -25,12 +26,18 @@
 	} from '@lexical/rich-text';
 	import { $setBlocksType as setBlocksType } from '@lexical/selection';
 	import { INSERT_TABLE_COMMAND, registerTablePlugin } from '@lexical/table';
-	import { $insertNodeToNearestRoot as insertAtRoot, mergeRegister } from '@lexical/utils';
+	import {
+		$findMatchingParent as findMatchingParent,
+		$insertNodeToNearestRoot as insertAtRoot,
+		mergeRegister
+	} from '@lexical/utils';
 	import {
 		$createParagraphNode as createParagraph,
 		$createTextNode as createText,
 		$getRoot as getRoot,
+		$getNearestNodeFromDOMNode as getNearestNodeFromDOMNode,
 		$getNodeByKey as getNodeByKey,
+		$isTextNode as isTextNode,
 		$getSelection as getSelection,
 		$isRangeSelection as isRangeSelection,
 		$setSelection as setSelection,
@@ -44,6 +51,7 @@
 	import Button from '#lib/ui/Button.svelte';
 	import Combobox, { type Option } from '#lib/ui/Combobox.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
+	import Menu from '#lib/ui/Menu.svelte';
 	import { getClient } from '#lib/graphql/context.svelte.ts';
 	import {
 		AktReferable,
@@ -55,7 +63,7 @@
 	import { $isCodeNode as isCodeNode } from '@lexical/code';
 	import { upload } from '../upload';
 	import { pickable } from '../pickers';
-	import { destinationOf } from '../references';
+	import { destinationOf, parseReference } from '../references';
 	import { A4, guideOffsets, pagesOf } from '../sheets';
 	import {
 		$toDiagram as toDiagram,
@@ -590,6 +598,103 @@
 		link(destination, named?.text ?? found?.title ?? chosen.number);
 		referenceOpen = false;
 	}
+
+	// r[impl app.editor]: a link's or reference's context menu, from the
+	// mouse or the keyboard, to change, open or remove it.
+	let linkMenuOpen = $state(false);
+	let linkEditOpen = $state(false);
+	/** The link the menu is for: its node, element, text and address. */
+	let menuLink = $state<{
+		key: string;
+		element: HTMLElement;
+		text: string;
+		url: string;
+	} | null>(null);
+	let linkText = $state('');
+	let linkUrl = $state('');
+
+	/** The link under the pointer or, from the keyboard, at the cursor. */
+	function linkAt(target: EventTarget | null) {
+		return editor?.read(() => {
+			let node =
+				target instanceof Node && target !== root ? getNearestNodeFromDOMNode(target) : null;
+			if (!node) {
+				const selection = getSelection();
+				node = isRangeSelection(selection) ? selection.anchor.getNode() : null;
+			}
+			const found = node ? findMatchingParent(node, isLinkNode) : null;
+			return isLinkNode(found)
+				? { key: found.getKey(), text: found.getTextContent(), url: found.getURL() }
+				: null;
+		});
+	}
+
+	function openLinkMenu(event: MouseEvent | KeyboardEvent) {
+		if (
+			event instanceof KeyboardEvent &&
+			event.key !== 'ContextMenu' &&
+			!(event.shiftKey && event.key === 'F10')
+		)
+			return;
+		const found = linkAt(event instanceof KeyboardEvent ? null : event.target);
+		const element = found ? editor?.getElementByKey(found.key) : null;
+		// Anywhere else, the browser's own menu.
+		if (!found || !element) return;
+		event.preventDefault();
+		menuLink = { ...found, element };
+		linkMenuOpen = true;
+	}
+
+	/** Where the link goes: a reference to its akt's page in the app. */
+	function hrefOf(url: string): string {
+		const reference = parseReference(url);
+		if (!reference) return url;
+		const page = resolve('/akt/[number]', { number: reference.number });
+		const version = reference.version ? `?version=${reference.version}` : '';
+		return `${page}${version}${reference.heading ? `#${reference.heading}` : ''}`;
+	}
+
+	function editLink() {
+		if (!menuLink) return;
+		linkText = menuLink.text;
+		linkUrl = menuLink.url;
+		linkEditOpen = true;
+	}
+
+	function saveLink() {
+		const key = menuLink?.key;
+		const words = linkText.trim();
+		const address = linkUrl.trim();
+		editor?.update(() => {
+			const node = key ? getNodeByKey(key) : null;
+			if (!isLinkNode(node) || !address) return;
+			node.setURL(address);
+			const first = node.getFirstChild();
+			if (words && words !== node.getTextContent() && isTextNode(first)) {
+				// The link's first text takes the new words, keeping its
+				// formatting; the rest goes.
+				for (const rest of node.getChildren().slice(1)) rest.remove();
+				first.setTextContent(words);
+			}
+			const last = node.getLastChild();
+			if (isTextNode(last)) last.select(last.getTextContentSize(), last.getTextContentSize());
+		});
+		linkEditOpen = false;
+	}
+
+	/** The link removed, its text kept where it was. */
+	function removeLink() {
+		const key = menuLink?.key;
+		editor?.update(() => {
+			const node = key ? getNodeByKey(key) : null;
+			if (!isLinkNode(node)) return;
+			const children = node.getChildren();
+			for (const child of children) node.insertBefore(child);
+			node.remove();
+			children.at(-1)?.selectEnd();
+		});
+		editor?.focus();
+	}
 </script>
 
 <div class="editor">
@@ -688,6 +793,8 @@
 				aria-multiline="true"
 				aria-label={label}
 				tabindex="0"
+				oncontextmenu={openLinkMenu}
+				onkeydown={openLinkMenu}
 			></div>
 			<svg class="guides" aria-hidden="true" width="100%" height={guides.height}>
 				{#each guides.tops as top (top)}
@@ -769,6 +876,56 @@
 			form="image-form"
 			disabled={imageBusy || (!picked && !file)}>Insert</Button
 		>
+	{/snippet}
+</Dialog>
+
+<Menu
+	label={menuLink && parseReference(menuLink.url) ? 'Reference' : 'Link'}
+	anchor={menuLink?.element ?? null}
+	bind:open={linkMenuOpen}
+	onCloseAutoFocus={(e) => {
+		// Editing, the dialog takes focus; otherwise typing goes on.
+		e.preventDefault();
+		if (!linkEditOpen) editor?.focus();
+	}}
+	items={[
+		{
+			label: menuLink && parseReference(menuLink.url) ? 'Edit reference…' : 'Edit link…',
+			onSelect: editLink
+		},
+		{
+			label: 'Open in a new tab',
+			onSelect: () => {
+				if (menuLink) window.open(hrefOf(menuLink.url), '_blank', 'noopener');
+			}
+		},
+		{
+			label: menuLink && parseReference(menuLink.url) ? 'Remove reference' : 'Remove link',
+			onSelect: removeLink,
+			separated: true
+		}
+	]}
+/>
+
+<Dialog
+	bind:open={linkEditOpen}
+	title={menuLink && parseReference(menuLink.url) ? 'Edit reference' : 'Edit link'}
+	onCloseAutoFocus={backToEditor}
+>
+	<form
+		id="link-edit-form"
+		aria-label="Edit link"
+		onsubmit={(e) => {
+			e.preventDefault();
+			saveLink();
+		}}
+	>
+		<label>Text <input bind:value={linkText} required /></label>
+		<label>Address <input bind:value={linkUrl} required /></label>
+	</form>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (linkEditOpen = false)}>Cancel</Button>
+		<Button variant="primary" type="submit" form="link-edit-form">Save</Button>
 	{/snippet}
 </Dialog>
 

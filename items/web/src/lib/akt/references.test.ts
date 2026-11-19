@@ -38,6 +38,22 @@ describe('references', () => {
 		expect(html).toContain('target="_blank"');
 	});
 
+	it('show the number first where the target’s type says so', () => {
+		const numbered = { type: { presentation: { numberedReferences: true } } };
+		const html = renderReferenced(
+			'[Setup](kuria:D-4), [D-5 Guide](kuria:D-5) and [Other](kuria:N-1).\n',
+			[
+				{ destination: 'kuria:D-4', akt: numbered },
+				{ destination: 'kuria:D-5', akt: numbered },
+				{ destination: 'kuria:N-1', akt: { type: { presentation: { numberedReferences: false } } } }
+			],
+			href
+		);
+		expect(html).toContain('<a href="/akt/D-4">D-4 Setup</a>');
+		expect(html).toContain('<a href="/akt/D-5">D-5 Guide</a>');
+		expect(html).toContain('<a href="/akt/N-1">Other</a>');
+	});
+
 	it('stay safe', () => {
 		const html = renderReferenced(
 			'<p id="x" onclick="alert(1)">hi</p>\n\n[x](javascript:alert(1))\n\n<script>alert(1)</script>\n',

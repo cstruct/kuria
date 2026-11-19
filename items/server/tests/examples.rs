@@ -1,5 +1,5 @@
-//! The examples' bundles (`bundle.examples`): each example in
-//! `docs/examples` holds `bundle/`, its akt types with akter made here
+//! The examples' bundles (`bundle.examples`): each example listed in
+//! `EXAMPLES` holds `bundle/`, its akt types with akter made here
 //! through GraphQL, as the people of the end-to-end seed would make them in
 //! the app.
 //!
@@ -37,7 +37,10 @@ const EXAMPLES: [(&str, &[&str]); 4] = [
             "release_notes",
         ],
     ),
-    ("documents", &["image", "document", "document_index"]),
+    (
+        "documents",
+        &["image", "document", "external_document", "document_index"],
+    ),
     ("planning", &["plan", "task", "gap", "decision"]),
     ("test-protocols", &["test_case", "test_protocol"]),
 ];
@@ -351,6 +354,14 @@ async fn release_management(w: &World) {
             "First candidate",
         )
         .await;
+    w.link(
+        &rm,
+        &rc1,
+        "parent_board",
+        &backlog,
+        "Planned from the spring backlog",
+    )
+    .await;
     for member in [&checkout, &crash, &experiment] {
         w.add_to(&rm, &rc1, member, "In the first candidate").await;
     }
@@ -412,6 +423,14 @@ async fn release_management(w: &World) {
             "Second candidate, without search",
         )
         .await;
+    w.link(
+        &rm,
+        &rc2,
+        "parent_board",
+        &backlog,
+        "Planned from the spring backlog",
+    )
+    .await;
     for member in [&checkout, &sign_in, &crash, &deps] {
         w.add_to(&rm, &rc2, member, "In the second candidate").await;
     }
@@ -696,13 +715,34 @@ async fn documents(w: &World) {
         "Replaced by the release procedure",
     )
     .await;
+    // A supplier's policy, kept as the PDFs it publishes.
+    let supplier = w
+        .create(
+            &rm,
+            "external_document",
+            &[&manual],
+            json!({ "title": "Hosting supplier: information security policy", "owner": RM, "source": "The hosting supplier" }),
+            "Keep the supplier's policy with ours",
+        )
+        .await;
+    let issue = w
+        .upload(
+            &rm,
+            "supplier-security-policy.pdf",
+            "application/pdf",
+            include_bytes!("examples/supplier-security-policy.pdf").to_vec(),
+        )
+        .await;
+    w.release_file(&rm, &supplier, &issue, Some("Issue 3"))
+        .await;
     w.edit(
         &hedda,
         &manual,
         json!({ "folders": [
             { "title": "Policy", "items": [policy] },
             { "title": "Procedures", "items": [control, procedure, { "title": "Retired", "collapsible": true, "items": [old] }] },
-            { "title": "Engineering", "items": [onboarding] }
+            { "title": "Engineering", "items": [onboarding] },
+            { "title": "External", "items": [supplier] }
         ] }),
         "Sort the manual into folders",
     )

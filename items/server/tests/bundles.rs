@@ -305,7 +305,7 @@ async fn a_whole_tenant_moves_to_another_kuria_as_it_was() {
     let unpacked = archive::unpack(&archive).unwrap();
     assert_eq!(unpacked.attachments.len(), 1);
     let bundle: Value = serde_json::from_slice(&unpacked.bundle).unwrap();
-    assert_eq!(bundle["format"], 3);
+    assert_eq!(bundle["format"], 4);
     assert_eq!(bundle["scope"], "tenant");
     assert_eq!(bundle["people"][0]["email"], "ada@shop.example");
     assert_eq!(bundle["signedIn"][0]["subject"], SUBJECT);
@@ -659,7 +659,7 @@ fn document() -> Value {
 }
 
 const RELEASED: &str = "query($n: String!) { akt(number: $n) {
-    versions { number revision label releasedBy { id } releasedAt
+    versions { number revision label description releasedBy { id } releasedAt
       pins { destination number version revision } }
     revisions { revision commit } } }";
 
@@ -688,7 +688,7 @@ async fn released(kuria: &Kuria) -> (String, String) {
         kuria
             .ok(
                 "tenant",
-                "mutation($n: String!, $l: String) { releaseVersion(input: { number: $n, revision: 1, label: $l }) { number } }",
+                "mutation($n: String!, $l: String) { releaseVersion(input: { number: $n, revision: 1, label: $l, description: \"What changed.\" }) { number } }",
                 json!({ "n": number, "l": label }),
             )
             .await;
@@ -730,6 +730,11 @@ async fn versions_and_commits_move_with_their_akter() {
         assert_eq!(there, here, "{number}");
     }
     let here = source.ok("tenant", RELEASED, json!({ "n": guide })).await;
+    assert_eq!(
+        here["akt"]["versions"][0]["description"],
+        json!("What changed."),
+        "{here}"
+    );
     assert_eq!(
         here["akt"]["versions"][0]["pins"][0]["version"],
         json!(1),

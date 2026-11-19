@@ -5,15 +5,17 @@
 		revisions: RevisionData[];
 		fieldNames: Record<string, string>;
 		transitionNames: Record<string, string>;
+		/** Each field's kind, by key. */
+		fieldKinds?: Record<string, string>;
 		/** The versions, to say which revisions were released. */
 		versions?: readonly { number: number; revision: number; label?: string | null }[];
 	}
 
-	let { revisions, fieldNames, transitionNames, versions = [] }: Props = $props();
+	let { revisions, fieldNames, transitionNames, fieldKinds = {}, versions = [] }: Props = $props();
 	// r[impl version.history]: a release, said with the revision it names.
 	const described = $derived(
 		[...revisions].reverse().map((r) => {
-			const entry = describe(r, fieldNames, transitionNames);
+			const entry = describe(r, fieldNames, transitionNames, fieldKinds);
 			const released = versions.filter((v) => v.revision === r.revision);
 			for (const v of released) {
 				entry.what += `, released as version ${v.number}${v.label ? ` (${v.label})` : ''}`;

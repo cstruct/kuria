@@ -4,3 +4,4 @@ mise.local.toml
 !.agents/plans/PLANS.md
 .tracey/
 .claude/worktrees/
+/docs/examples/local-test/

@@ -20,6 +20,8 @@ pub struct Created<'a> {
     pub inside: &'a [String],
     pub sets: &'a [String],
     pub file: Option<&'a Path>,
+    /// Its number, if it is given one (`akt.number.given`).
+    pub number: Option<&'a str>,
     pub reason: Option<&'a str>,
 }
 
@@ -65,9 +67,9 @@ pub async fn create(session: &Session, asked: &Created<'_>) -> Result<Answer, Cl
     fields.retain(|_, v| !v.is_null());
     let data = session
         .graphql(
-            "mutation($t: String!, $f: JSON, $in: [String!]!, $r: String) {
-               createAkt(input: { type: $t, fields: $f, in: $in, reason: $r }) { number revision } }",
-            json!({ "t": shape.key, "f": fields, "in": inside, "r": asked.reason }),
+            "mutation($t: String!, $f: JSON, $in: [String!]!, $r: String, $n: String) {
+               createAkt(input: { type: $t, fields: $f, in: $in, reason: $r, number: $n }) { number revision } }",
+            json!({ "t": shape.key, "f": fields, "in": inside, "r": asked.reason, "n": asked.number }),
         )
         .await?;
     let number = data["createAkt"]["number"]

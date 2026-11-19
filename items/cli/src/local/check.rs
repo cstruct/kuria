@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use kuria_config::{check_field_references, check_state_references};
+use kuria_config::{check_field_references, check_sequences, check_state_references};
 use kuria_engine::rules::containment;
 use serde_json::json;
 
@@ -137,6 +137,7 @@ pub fn check(root: &Path) -> Result<Answer, CliError> {
             .collect();
         let mut found = check_state_references(&t.ty, &others);
         found.extend(check_field_references(&t.ty, &others));
+        found.extend(check_sequences(&t.ty, &others));
         for p in found {
             problems.add(
                 &root.join("types").join(format!("{key}.json")),

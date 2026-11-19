@@ -1,5 +1,7 @@
 # Kuria
 
+<img src="docs/brand/kuria-logo.svg" alt="Kuria" height="48">
+
 Kuria is a case and record management system for regulated work: issues,
 nested work, test protocols and records, release records and CAPA. It
 hardcodes as little as possible about what those are. Their kinds, fields,

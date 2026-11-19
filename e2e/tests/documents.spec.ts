@@ -9,7 +9,7 @@
 // and released while the rest waits on a branch, merged back and pushed
 // in turn. Each view is checked by axe.
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
@@ -266,4 +266,205 @@ test('a document is written and released at its version', async ({ browser }) =>
 		unstaged: [],
 		conflicted: []
 	});
+});
+
+/** The supplier's policy the documents example keeps, a one-page PDF. */
+const PDF = readFileSync(
+	join(import.meta.dirname, '..', '..', 'items', 'server', 'tests', 'examples', 'supplier-security-policy.pdf')
+);
+
+// r[verify app.external]
+// r[verify app.versions]
+// r[verify version.release-file]
+test('an external document is released as its PDF, shown and downloaded', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Suppliers ${stamp}` } }
+		)
+	).createAkt.number;
+	const rm = await signIn(browser, seeded().people.releaseManager);
+
+	// Created in the index, with no PDF to give yet.
+	await rm.goto(`/types/external_document/new?in=${index}`);
+	const form = rm.getByRole('form', { name: 'New External document' });
+	await expect(form.getByLabel('PDF')).toHaveCount(0);
+	await form.getByLabel('Title').fill(`Supplier policy ${stamp}`);
+	await form.getByRole('button', { name: 'Create' }).click();
+	await expect(rm.getByTestId('number')).toHaveText(`${index}-X01`);
+	const number = `${index}-X01`;
+	await expect(rm.locator('dd[data-field="released-pdf"]')).toContainText('No version has been released yet');
+	await expect(rm.getByRole('link', { name: 'Download PDF' })).toHaveCount(0);
+
+	// Released with the PDF uploaded.
+	const versions = rm.getByRole('region', { name: 'Versions' });
+	await versions.getByRole('button', { name: 'Release a version' }).click();
+	const release = rm.getByRole('dialog', { name: 'Release a version' });
+	await expect(release).toContainText('the PDF you upload');
+	await release.getByLabel('PDF').setInputFiles({ name: 'policy.pdf', mimeType: 'application/pdf', buffer: PDF });
+	await release.getByLabel('Label').fill('Issue 3');
+	await release.getByLabel('Description').fill('As the supplier published it.\nReplaces issue 2.');
+	expect(await violations(rm), 'the release dialog').toEqual([]);
+	await release.getByRole('button', { name: 'Release' }).click();
+	await expect(release).toBeHidden();
+
+	// Shown as the document, downloaded, and opened from the versions.
+	const shown = rm.locator('dd[data-field="released-pdf"] iframe');
+	await expect(shown).toHaveAttribute('src', `/akter/${number}/pdf?version=1`);
+	await expect(shown).toHaveAttribute('title', `Supplier policy ${stamp}, version 1`);
+	const served = await rm.request.get(`/akter/${number}/pdf?version=1`);
+	expect(served.headers()['content-type']).toBe('application/pdf');
+	expect(Buffer.from(await served.body()).equals(PDF)).toBe(true);
+	await expect(rm.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
+		'href',
+		`/akter/${number}/pdf?version=1&download`
+	);
+	// r[verify app.versions]: the version's description, as written.
+	await expect(versions.getByRole('listitem').first()).toContainText(
+		'As the supplier published it. Replaces issue 2.'
+	);
+	await expect(versions.getByRole('link', { name: 'Open PDF of version 1' })).toHaveAttribute(
+		'href',
+		`/akter/${number}/pdf?version=1`
+	);
+	expect(await violations(rm), 'the released document').toEqual([]);
+	// Its PDF field is the release's to set.
+	await expect(rm.getByRole('button', { name: 'Edit PDF' })).toHaveCount(0);
+});
+
+// r[verify cli.docs-import]
+// r[verify app.external]
+test('a document is imported from a folder, its old versions as PDFs', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Imported ${stamp}` } }
+		)
+	).createAkt.number;
+
+	// Signed in once, the owner is a user the import can name.
+	const rm = await signIn(browser, seeded().people.releaseManager);
+
+	// The folder: a docx draft, made by pandoc, and two PDFs.
+	const folder = mkdtempSync(join(tmpdir(), 'kuria-import-'));
+	writeFileSync(
+		join(folder, 'draft.md'),
+		'# My doc\n\nHello **world**, from Word.\n\n![The flow](flow.png){width=50%}\n'
+	);
+	writeFileSync(join(folder, 'flow.png'), PNG);
+	execFileSync('pandoc', ['draft.md', '-o', 'draft.docx'], { cwd: folder });
+	rmSync(join(folder, 'flow.png'));
+	writeFileSync(join(folder, 'version1.pdf'), PDF);
+	writeFileSync(join(folder, 'version2.pdf'), Buffer.from('%PDF-1.4 two'));
+	writeFileSync(
+		join(folder, 'metadata.json'),
+		JSON.stringify({
+			title: `My doc ${stamp}`,
+			owner: 'rm@shop.example',
+			draft: 'draft.docx',
+			versions: [
+				{ label: 'version 1', description: 'foo bar', file: 'version1.pdf' },
+				{ label: 'version 2', description: 'bar baz', file: 'version2.pdf' }
+			]
+		})
+	);
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	// The tenant may hold other types of pictures: this names the one.
+	const ran = await cli.run([
+		'docs',
+		'import',
+		folder,
+		'--type',
+		'document',
+		'--in',
+		index,
+		'--image-type',
+		'image',
+		'--format',
+		'json'
+	]);
+	expect(ran.code, ran.stderr).toBe(0);
+	const imported = JSON.parse(ran.stdout) as {
+		number: string;
+		versions: number[];
+		pictures: string[];
+		picturesLeftOut: number;
+	};
+	expect(imported.versions).toEqual([1, 2]);
+	// Its picture an image akt, embedded in the body as a figure.
+	expect(imported.pictures).toHaveLength(1);
+	expect(imported.picturesLeftOut).toBe(0);
+	const number = imported.number;
+
+	// The living version is the draft; version 1 is its PDF.
+	await open(rm, number);
+	await expect(rm.locator('dd[data-field="body"]')).toContainText('Hello world, from Word.');
+	await expect(rm.locator('dd[data-field="body"] figure img')).toHaveAttribute('alt', 'The flow');
+	await expect(rm.locator('dd[data-field="body"] figcaption')).toHaveText('The flow');
+	await expect(rm.locator('dd[data-field="released-pdf"]')).toHaveCount(0);
+	const versions = rm.getByRole('region', { name: 'Versions' });
+	await expect(versions.getByRole('listitem').first()).toContainText('bar baz');
+	await versions.getByRole('link', { name: 'Version 1 (version 1)' }).click();
+	const shown = rm.locator('dd[data-field="released-pdf"] iframe');
+	await expect(shown).toHaveAttribute('src', `/akter/${number}/pdf?version=1`);
+	await expect(rm.locator('dd[data-field="body"]')).toHaveCount(0);
+	const served = await rm.request.get(`/akter/${number}/pdf?version=1`);
+	expect(Buffer.from(await served.body()).equals(PDF)).toBe(true);
+	expect(await violations(rm), 'version 1 of the imported document').toEqual([]);
+});
+
+// r[verify cli.docs-import]
+// r[verify akt.number.given]
+// r[verify app.references]
+test('imported documents keep their numbers and refer to each other', async ({ browser }) => {
+	const stamp = Date.now();
+	await defineDocuments();
+	const admin = await api(seeded().clients.admin);
+	const index = (
+		await admin.graphql<{ createAkt: { number: string } }>(
+			'mutation($f: JSON) { createAkt(input: { type: "document_index", fields: $f, in: [] }) { number } }',
+			{ f: { title: `Kept ${stamp}` } }
+		)
+	).createAkt.number;
+	const [manual, policy] = [`${index}-D41`, `${index}-D42`];
+	const folder = (metadata: object, draft: string) => {
+		const at = mkdtempSync(join(tmpdir(), 'kuria-import-'));
+		writeFileSync(join(at, 'draft.md'), draft);
+		writeFileSync(join(at, 'metadata.json'), JSON.stringify({ ...metadata, draft: 'draft.md' }));
+		return at;
+	};
+	const cli = new Cli({ KURIA_KEY: seeded().clients.admin.key });
+	const pattern = String.raw`(?<id>DOCS-\d+-D\d{2})(?<label>(?:\s?\p{Lu}\w+)*)`;
+	const imported = async (at: string) => {
+		const ran = await cli.run(['docs', 'import', at, '--type', 'document', '--in', index, '--references', pattern, '--format', 'json']);
+		expect(ran.code, ran.stderr).toBe(0);
+		return (JSON.parse(ran.stdout) as { number: string }).number;
+	};
+	// The manual first, referring to the policy that isn't there yet.
+	expect(
+		await imported(folder({ number: manual, title: `Manual ${stamp}` }, `# Manual\n\nSuppliers follow ${policy} Supplier Policy.\n`))
+	).toBe(manual);
+	const rm = await signIn(browser, seeded().people.releaseManager);
+	await open(rm, manual);
+	const body = rm.locator('dd[data-field="body"]');
+	await expect(body).toContainText('broken reference');
+	expect(
+		await imported(folder({ number: policy, title: `Policy ${stamp}` }, `# Policy\n\nPart of ${manual} Quality Manual.\n`))
+	).toBe(policy);
+
+	// Both in, each refers to the other.
+	await rm.reload();
+	await expect(body.getByRole('link', { name: 'Supplier Policy' })).toHaveAttribute('href', `/akt/${policy}`);
+	await body.getByRole('link', { name: 'Supplier Policy' }).click();
+	await expect(rm.getByTestId('number')).toHaveText(policy);
+	await expect(rm.locator('dd[data-field="body"]').getByRole('link', { name: 'Quality Manual' })).toHaveAttribute(
+		'href',
+		`/akt/${manual}`
+	);
 });

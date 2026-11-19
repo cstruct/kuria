@@ -35,6 +35,10 @@ pub struct AktTypeDocument {
     pub name: String,
     /// The number pattern, such as `CAPA-{year}-{seq:4}`.
     pub number: String,
+    /// The sequence, by key, that akt types numbered by the same pattern
+    /// share (`akt.number.shared`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sequence: Option<String>,
     #[serde(default)]
     pub fields: Vec<FieldDef>,
     pub states: Vec<StateDef>,
@@ -159,6 +163,11 @@ pub struct VersionsDef {
     /// A Konklav action a release requires, besides `kuria:akter:edit`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+    /// The `attachment` field each version is released with a PDF in, for
+    /// akter written elsewhere, such as external documents
+    /// (`version.file`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
 }
 
 /// A kind of link an akt type's akter may have:
@@ -212,6 +221,10 @@ pub struct PresentationDef {
     /// its akter images (`akt.field.markdown.images`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Whether references to its akter are shown with the akt's number
+    /// first (`app.references`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub numbered_references: bool,
 }
 
 /// The media types an image's picture may have.
@@ -326,6 +339,9 @@ impl ContainsDef {
 #[serde(deny_unknown_fields)]
 pub struct BoardDef {
     pub columns: Vec<ColumnDef>,
+    /// The link kind whose targets are this board's parent boards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
 }
 
 /// One column of a board.

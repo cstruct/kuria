@@ -106,7 +106,7 @@ type.
     ([`src/writes/copy.rs`](src/writes/copy.rs)): `copyAkt`, then the
     copy's members walked, parents first, to answer each copy with its
     original;
-  - `release <number>… [--label]` (several together:
+  - `release <number>… [--label] [--file <pdf>]` (several together:
     `releaseVersions`), `versions <number>`, `diff <number>
     <from> [<to>]`, `pdf <number> [--field] [--version] -o <file>`, and
     `cat`/`show --version` ([`src/versions.rs`](src/versions.rs));
@@ -180,6 +180,22 @@ type.
   - `docs push`, `docs pull` and `docs fmt` use the clone's URL when
     neither `--url`, `KURIA_URL` nor the profile names one, and are
     refused against another Kuria.
+
+- **Importing a document** (`cli.docs-import`,
+  [`src/docs_import.rs`](src/docs_import.rs)): `docs import <folder>
+  --type <key> [--in <container>…]` reads `metadata.json`, converts the
+  draft with `pandoc` (Markdown as it is), then creates the akt, releases
+  each version with its PDF, label and description (`release --file`), and
+  sets the type's one `markdown` field to the draft, its pictures, which
+  pandoc extracts (a Lua filter keeps them Markdown), first made image
+  akter of `--image-type` or the one type of pictures and embedded as
+  `kuria:<number>`. `metadata.json`'s `number` keeps the akt's old
+  number (`akt.number.given`, as `new --number` does), and
+  `--references <regex>` or its `references` turns each match of the
+  groups `id` and `label`, outside code and links, into a reference;
+  `--pad-numbers` pads numbers written short to the pattern's widths
+  (`NumberPattern::padded`). On a
+  server and in local mode, where each step is committed.
 
 - **Archiving** (`cli.archive`, [`src/writes/archive.rs`](src/writes/archive.rs)):
   `archive <number>… [--reason]` and `unarchive <number>… [--reason]`

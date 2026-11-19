@@ -8,8 +8,9 @@ A PDF of a `markdown` field MUST hold its value rendered: headings,
 paragraphs, emphasis, lists, task lists, quotes, code, tables,
 horizontal rules and footnotes, in the field's order, each footnote at
 the foot of the page that first refers to it, numbered in that order. Each heading MUST be a bookmark,
-nested by level. A reference MUST be shown by its text, as a link to the
-akt in the app (`app.references`). An embedded image MUST be drawn as its
+nested by level. A reference MUST be shown by its text, after the akt's number if
+the akt's type says `numbered_references` and the PDF's reader may read
+it, as a link to the akt in the app (`app.references`). An embedded image MUST be drawn as its
 picture, as the PDF's version reads it, and a broken one as its alt text.
 A diagram block MUST be drawn from its source, as a vector drawing. A page
 break MUST start a new page. The PDF of an akt with a live draft MUST be of
@@ -38,7 +39,11 @@ akt's version `n` (`version.read`), to be shown where it opens, or with
 `&download` to be saved. It MUST be authenticated as `/graphql`
 is, and answer 404 for an akt the subject may not read, as if it did not
 exist, and for a field that isn't `markdown` or a version the akt doesn't
-have.
+have. For an akt whose type declares `versions.file`
+(`version.file`), it MUST answer instead the PDF the version asked for was
+released with, if it was; and for one whose type has no `markdown` fields,
+the latest version's PDF when none is asked for, and 404 before its first
+release.
 
 r[pdf.repeatable]
 A version's PDF MUST be the same each time it is rendered by the same

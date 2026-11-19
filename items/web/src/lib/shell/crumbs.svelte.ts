@@ -2,7 +2,11 @@
 
 export interface Crumb {
 	label: string;
+	/** Shown under the label, smaller, such as an akt's title. */
+	detail?: string;
 	href?: string;
+	/** The history state going to `href` gives its page (`app.trail`). */
+	state?: App.PageState;
 }
 
 export const crumbs = $state<{ trail: Crumb[] }>({ trail: [] });

@@ -53,6 +53,10 @@ Terms are introduced in dependency order: each definition only uses terms define
 
 - `number pattern`
   - The part of an akt type that says how its akt numbers read, such as `CAPA-{year}-{seq:4}`.
+  - `{seq}` counts akter; `{rand:N}` draws N random digits, free of every number in the tenant, such as `QR-{rand:4}` giving `QR-4821`.
+
+- `sequence` (of akt numbers)
+  - What akter are counted in for `{seq}`. Akt types numbered by the same pattern share one only by naming it, `"sequence": "qms"`, so that a Policy and a Procedure count `QMS-0001`, `QMS-0002`… between them.
 
 - `field`
   - One named value an akt type defines, such as `severity`. Every field has a `field kind`.
@@ -103,6 +107,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `reference`
   - A link in a `markdown` field's text to an akt, written `kuria:<NUMBER>`, optionally to one of its versions (`@<n>`) and one of its headings (`#<heading id>`), such as `kuria:DOCS-1-D04@2#install`. Recorded as a link of the kind the field names. Not to be confused with the `reference` field kind, a link to something outside Kuria.
 
+- `external document`
+  - A document written elsewhere, such as a supplier's policy, kept as the PDF each of its versions was released with: an akt of a type whose `versions` name a `file` field (`version.file`). Nothing in Kuria knows the name; it is the documents example's.
+
 - `deep link`
   - A reference to a heading of another akt.
 
@@ -149,7 +156,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - An akt as it is now, which edits change; as opposed to its versions.
 
 - `version`
-  - One revision of an akt, named by releasing it: numbered 1, 2, … per akt, with an optional label, recording who released it and when and what each of its references meant then. It never changes. Not to be confused with an `akt type version`.
+  - One revision of an akt, named by releasing it: numbered 1, 2, … per akt, with an optional label and an optional description of what changed, recording who released it and when and what each of its references meant then. It never changes. Not to be confused with an `akt type version`.
 
 - `release` (verb)
   - To name the current revision of an akt as its next version. Prefer `version` for the result: `release` is also an akt type in the release-management example.
@@ -207,6 +214,9 @@ Terms are introduced in dependency order: each definition only uses terms define
 
 - `board`
   - A container shown as columns. The container's akt type configures the columns, naming which states of which member akt types fall in each.
+
+- `parent board`
+  - An akt a container links to by the link kind its akt type names as `board.parent`, such as the backlog a release candidate is planned from. An akt created from the container's board is created in its parent boards too. It is a link, not a membership: the container is not in its parent board.
 
 - `presentation`
   - The part of an akt type that says how its akter are shown: which field is the title, which fields go on board cards and list columns, the tone of each state, and the type's icon and colour. It changes how akter look, never what they hold.

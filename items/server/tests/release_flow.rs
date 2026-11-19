@@ -523,7 +523,7 @@ async fn a_release_from_planning_to_closed() {
             "## Epic".to_owned(),
             format!("- {epic} Sign-in ()"),
             String::new(),
-            "## Backlog item".to_owned(),
+            "## Task".to_owned(),
             format!("- {reset} Password reset (Feature)"),
             format!("- {passkeys} Passkeys (Feature)"),
             format!("- {crash} Crash on save (Fix)"),

@@ -6,7 +6,7 @@
 // clients. Writes .state/kuria.env and .state/seeded.json. Does nothing
 // if it has run.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
 	APP,
@@ -116,8 +116,8 @@ const GRANTS: Record<string, Grant[]> = {
 		'reader',
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes', 'plan', 'task', 'gap', 'decision'] },
-		{ role: 'developer-work', at: ['test_protocol', 'test_case', 'document_index', 'image'] },
-		{ role: 'document-release', at: ['document'] }
+		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'image'] },
+		{ role: 'document-release', at: ['document', 'external_document'] }
 	],
 	'hedda@shop.example': ['reader']
 };
@@ -150,9 +150,9 @@ async function member(subject: string, grants: Grant[]) {
 }
 
 // The examples' people who sign in: every bundle's, once each, as the
-// subjects the bundles name.
+// subjects the bundles name. An example without a bundle names none.
 const named = new Map<string, { subject: string; name: string; email: string }>();
-for (const dir of examples) {
+for (const dir of examples.filter((d) => existsSync(join(d, 'bundle', 'bundle.json')))) {
 	const bundle: { people: { subject: string; name?: string | null; email?: string | null }[] } = JSON.parse(
 		readFileSync(join(dir, 'bundle', 'bundle.json'), 'utf8')
 	);

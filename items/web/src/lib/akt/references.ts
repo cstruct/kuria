@@ -23,6 +23,9 @@ export interface ShownReference {
 	broken?: string | null;
 	/** The version a version read pins it to, if it names none. */
 	pinnedVersion?: number | null;
+	/** The akt it names, if it is there to read, and whether its type shows
+	 * references to it with its number first (`akt.type.presentation`). */
+	akt?: { type: { presentation: { numberedReferences: boolean } } } | null;
 }
 
 /** An embedded image as the server answers it: its destination, and the
@@ -242,7 +245,12 @@ export function renderReferenced(
 				}
 				// Read at a version, a reference naming none goes where its pin says.
 				const to = { ...reference, version: reference.version ?? known?.pinnedVersion ?? null };
-				return `<a href="${escaped(hrefOf(to))}">${inner}</a>`;
+				// Its number first, if its type says so and the text doesn't.
+				const numbered =
+					known?.akt?.type.presentation.numberedReferences &&
+					!token.text.trimStart().startsWith(reference.number);
+				const linked = numbered ? `${escaped(reference.number)} ${inner}` : inner;
+				return `<a href="${escaped(hrefOf(to))}">${linked}</a>`;
 			}
 		}
 	});

@@ -1,4 +1,4 @@
-//! Number patterns, such as `CAPA-{year}-{seq:4}`.
+//! Number patterns, such as `CAPA-{year}-{seq:4}` or `QR-{rand:4}`.
 
 use std::fmt::Write;
 
@@ -23,6 +23,7 @@ enum Part {
     Month,
     Parent,
     Sequence { width: usize },
+    Random { width: usize },
 }
 
 /// What an akt number is rendered from, besides its sequence.
@@ -36,21 +37,27 @@ pub struct NumberContext<'a> {
     /// `{parent}`. A pattern that [uses it](NumberPattern::uses_parent) must
     /// be given one.
     pub parent: Option<&'a str>,
+    /// The digits drawn for each `{rand:N}`, in order
+    /// (`akt.number.random`). A pattern's scope is rendered without them,
+    /// as placeholders, until they are given.
+    pub random: &'a [String],
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PatternError {
     #[error(
-        "`{{{0}}}` is not a placeholder; use {{year}}, {{month}}, {{parent}}, {{seq}} or {{seq:N}}"
+        "`{{{0}}}` is not a placeholder; use {{year}}, {{month}}, {{parent}}, {{seq}}, {{seq:N}} or {{rand:N}}"
     )]
     UnknownPlaceholder(String),
     #[error("a `{{` is never closed")]
     Unclosed,
     #[error("a `}}` has no `{{`")]
     Unopened,
-    #[error("the pattern needs exactly one {{seq}} or {{seq:N}}, not {0}")]
+    #[error("the pattern can hold one {{seq}} or {{seq:N}}, not {0}")]
     Sequences(usize),
-    #[error("{{seq:N}} takes a width from 1 to 12")]
+    #[error("the pattern needs a {{seq}}, {{seq:N}} or {{rand:N}} to tell akter apart")]
+    Nothing,
+    #[error("{{seq:N}} and {{rand:N}} take a width from 1 to 12")]
     Width,
 }
 
@@ -82,16 +89,24 @@ impl NumberPattern {
                 "month" => Part::Month,
                 "parent" => Part::Parent,
                 "seq" => Part::Sequence { width: 1 },
-                other => match other.strip_prefix("seq:") {
-                    Some(width) => {
-                        let width: usize = width.parse().map_err(|_| PatternError::Width)?;
-                        if !(1..=MAX_WIDTH).contains(&width) {
-                            return Err(PatternError::Width);
+                "rand" => return Err(PatternError::Width),
+                other => {
+                    let width = |w: &str| -> Result<usize, PatternError> {
+                        let width: usize = w.parse().map_err(|_| PatternError::Width)?;
+                        if (1..=MAX_WIDTH).contains(&width) {
+                            Ok(width)
+                        } else {
+                            Err(PatternError::Width)
                         }
-                        Part::Sequence { width }
+                    };
+                    if let Some(w) = other.strip_prefix("seq:") {
+                        Part::Sequence { width: width(w)? }
+                    } else if let Some(w) = other.strip_prefix("rand:") {
+                        Part::Random { width: width(w)? }
+                    } else {
+                        return Err(PatternError::UnknownPlaceholder(other.to_owned()));
                     }
-                    None => return Err(PatternError::UnknownPlaceholder(other.to_owned())),
-                },
+                }
             });
             rest = &after[end + 1..];
         }
@@ -103,10 +118,67 @@ impl NumberPattern {
             .iter()
             .filter(|p| matches!(p, Part::Sequence { .. }))
             .count();
-        if sequences != 1 {
+        if sequences > 1 {
             return Err(PatternError::Sequences(sequences));
         }
-        Ok(Self { parts })
+        let pattern = Self { parts };
+        if sequences == 0 && pattern.random_widths().is_empty() {
+            return Err(PatternError::Nothing);
+        }
+        Ok(pattern)
+    }
+
+    /// Whether the pattern holds a `{seq}`, so that akter are counted.
+    #[must_use]
+    pub fn has_sequence(&self) -> bool {
+        self.parts
+            .iter()
+            .any(|p| matches!(p, Part::Sequence { .. }))
+    }
+
+    /// The width of each `{rand:N}`, in order.
+    #[must_use]
+    pub fn random_widths(&self) -> Vec<usize> {
+        self.parts
+            .iter()
+            .filter_map(|p| match p {
+                Part::Random { width } => Some(*width),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The pattern rendered for `context` as a SQL `LIKE` pattern, escaped
+    /// with `\\`: every number it can render for `context`, whatever digits
+    /// are drawn. Only for a pattern without a `{seq}`, whose numbers are
+    /// as wide as their digits.
+    #[must_use]
+    pub fn like(&self, context: &NumberContext<'_>) -> String {
+        let escape = |text: &str| {
+            text.chars().fold(String::new(), |mut out, c| {
+                if matches!(c, '%' | '_' | '\\') {
+                    out.push('\\');
+                }
+                out.push(c);
+                out
+            })
+        };
+        let mut out = String::new();
+        for part in &self.parts {
+            match part {
+                Part::Literal(text) => out.push_str(&escape(text)),
+                Part::Year => {
+                    let _ = write!(out, "{:04}", context.year);
+                }
+                Part::Month => {
+                    let _ = write!(out, "{:02}", context.month);
+                }
+                Part::Parent => out.push_str(&escape(context.parent.unwrap_or_default())),
+                Part::Sequence { .. } => out.push('%'),
+                Part::Random { width } => out.push_str(&"_".repeat(*width)),
+            }
+        }
+        out
     }
 
     /// Whether the pattern holds `{parent}`.
@@ -117,7 +189,8 @@ impl NumberPattern {
 
     /// The pattern rendered for `context` with the sequence left as a
     /// placeholder. Akt numbers with the same scope share a sequence, so a
-    /// pattern with `{parent}` counts separately in each parent.
+    /// pattern with `{parent}` counts separately in each parent, and one
+    /// with `{rand:N}` for each drawing.
     // r[impl akt.number.sequence]
     #[must_use]
     pub fn scope(&self, context: &NumberContext<'_>) -> String {
@@ -126,7 +199,8 @@ impl NumberPattern {
         })
     }
 
-    /// The akt number for `context` and `sequence`.
+    /// The akt number for `context` and `sequence`, which a pattern without
+    /// a `{seq}` doesn't use.
     #[must_use]
     pub fn render(&self, context: &NumberContext<'_>, sequence: u64) -> String {
         self.render_with(context, |out, width| {
@@ -140,6 +214,7 @@ impl NumberPattern {
         sequence: impl Fn(&mut String, usize),
     ) -> String {
         let mut out = String::new();
+        let mut drawn = 0;
         for part in &self.parts {
             match part {
                 Part::Literal(text) => out.push_str(text),
@@ -151,6 +226,15 @@ impl NumberPattern {
                 }
                 Part::Parent => out.push_str(context.parent.unwrap_or_default()),
                 Part::Sequence { width } => sequence(&mut out, *width),
+                Part::Random { width } => match context.random.get(drawn) {
+                    Some(digits) => out.push_str(digits),
+                    None => {
+                        let _ = write!(out, "{{rand:{width}}}");
+                    }
+                },
+            }
+            if matches!(part, Part::Random { .. }) {
+                drawn += 1;
             }
         }
         out
@@ -166,6 +250,64 @@ impl NumberPattern {
         self.read_from(0, number, &mut read, &|_| true)
             .then(|| read.sequence.map(|s| (read.scope, s)))
             .flatten()
+    }
+
+    /// Whether this pattern can give `number` to an akt created in
+    /// `parent`, whatever its year, month and drawn digits
+    /// (`akt.number.given`); if so, the counter scope and sequence it reads
+    /// as, if the pattern counts.
+    // r[impl akt.number.given]
+    #[must_use]
+    pub fn fits(&self, number: &str, parent: Option<&str>) -> Option<Option<(String, u64)>> {
+        let mut read = Read::default();
+        let accept = |p: &str| parent == Some(p);
+        self.read_from(0, number, &mut read, &accept)
+            .then(|| read.sequence.map(|s| (read.scope, s)))
+    }
+
+    /// `number` as this pattern gives it to an akt created in `parent`, its
+    /// `{seq}` and `{rand:N}` zero-padded to their widths where written
+    /// with fewer digits, such as `FOOID-0012` for `FOOID-12` of
+    /// `FOOID-{seq:4}` (`cli.docs-import`); `None` if it doesn't fit even
+    /// so.
+    // r[impl cli.docs-import]
+    #[must_use]
+    pub fn padded(&self, number: &str, parent: Option<&str>) -> Option<String> {
+        self.pad_from(0, number, parent)
+    }
+
+    fn pad_from(&self, index: usize, rest: &str, parent: Option<&str>) -> Option<String> {
+        let Some(part) = self.parts.get(index) else {
+            return rest.is_empty().then(String::new);
+        };
+        let then = |taken: usize, written: &str| {
+            self.pad_from(index + 1, &rest[taken..], parent)
+                .map(|tail| format!("{written}{tail}"))
+        };
+        let digits =
+            |n: usize| rest.len() >= n && rest.as_bytes()[..n].iter().all(u8::is_ascii_digit);
+        let run = rest.bytes().take_while(u8::is_ascii_digit).count();
+        match part {
+            Part::Literal(text) => rest
+                .starts_with(text.as_str())
+                .then(|| then(text.len(), text))
+                .flatten(),
+            Part::Year => digits(4).then(|| then(4, &rest[..4])).flatten(),
+            Part::Month => digits(2).then(|| then(2, &rest[..2])).flatten(),
+            Part::Parent => {
+                let parent = parent?;
+                rest.starts_with(parent)
+                    .then(|| then(parent.len(), parent))
+                    .flatten()
+            }
+            Part::Sequence { width } => (1..=run).rev().find_map(|n| {
+                let value: u64 = rest[..n].parse().ok()?;
+                then(n, &format!("{value:0width$}"))
+            }),
+            Part::Random { width } => (1..=run.min(*width))
+                .rev()
+                .find_map(|n| then(n, &format!("{:0>width$}", &rest[..n]))),
+        }
     }
 
     /// The parent `number` was numbered after, of those `is_parent` says
@@ -221,6 +363,8 @@ impl NumberPattern {
             }
             Part::Year => digits(4) && attempt(4, &rest[..4], None),
             Part::Month => digits(2) && attempt(2, &rest[..2], None),
+            // Drawn digits are part of the scope, as a year is.
+            Part::Random { width } => digits(*width) && attempt(*width, &rest[..*width], None),
             // A parent's number is any text, as short as the rest allows.
             Part::Parent => (1..=rest.len())
                 .filter(|&n| rest.is_char_boundary(n))
@@ -246,6 +390,7 @@ mod tests {
             year,
             month,
             parent: None,
+            random: &[],
         }
     }
 
@@ -276,7 +421,10 @@ mod tests {
     #[test]
     fn refuses_invalid_patterns() {
         for (pattern, error) in [
-            ("CAPA", PatternError::Sequences(0)),
+            ("CAPA", PatternError::Nothing),
+            ("A-{rand}", PatternError::Width),
+            ("A-{rand:0}", PatternError::Width),
+            ("A-{rand:13}", PatternError::Width),
             ("{seq}-{seq}", PatternError::Sequences(2)),
             (
                 "A-{day}-{seq}",
@@ -370,5 +518,88 @@ mod tests {
         assert_eq!(task.parent_of("PLAN-002-T01", &is_parent), None);
         let plan = NumberPattern::parse("PLAN-{seq:3}").unwrap();
         assert_eq!(plan.parent_of("PLAN-001", &|_| true), None);
+    }
+
+    // r[verify akt.number.pattern]
+    // r[verify akt.number.random]
+    #[test]
+    fn renders_and_reads_random_digits() {
+        let drawn = ["4821".to_owned()];
+        let context = NumberContext {
+            random: &drawn,
+            ..at(2026, 11)
+        };
+        let alone = NumberPattern::parse("QR-{rand:4}").unwrap();
+        assert!(!alone.has_sequence());
+        assert_eq!(alone.random_widths(), [4]);
+        assert_eq!(alone.render(&context, 0), "QR-4821");
+        assert_eq!(alone.like(&at(2026, 11)), "QR-____");
+        // No sequence, so nothing to count.
+        assert_eq!(alone.read("QR-4821"), None);
+
+        let both = NumberPattern::parse("QR_{year}-{rand:4}-{seq:2}").unwrap();
+        assert!(both.has_sequence());
+        assert_eq!(both.render(&context, 3), "QR_2026-4821-03");
+        // The drawn digits are part of the counter's scope.
+        assert_eq!(both.scope(&context), "QR_2026-4821-{seq:2}");
+        assert_eq!(
+            both.read("QR_2026-4821-03"),
+            Some(("QR_2026-4821-{seq:2}".to_owned(), 3))
+        );
+        assert_eq!(both.read("QR_2026-482-03"), None);
+        assert_eq!(both.like(&at(2026, 1)), "QR\\_2026-____-%");
+    }
+
+    // r[verify akt.number.given]
+    #[test]
+    fn says_whether_a_given_number_fits() {
+        let capa = NumberPattern::parse("FOOID-{seq:4}").unwrap();
+        assert_eq!(
+            capa.fits("FOOID-1234", None),
+            Some(Some(("FOOID-{seq:4}".to_owned(), 1234)))
+        );
+        assert_eq!(capa.fits("FOOID-12", None), None);
+        assert_eq!(capa.fits("BAR-1234", None), None);
+        let yearly = NumberPattern::parse("CAPA-{year}-{seq:4}").unwrap();
+        assert_eq!(
+            yearly.fits("CAPA-2019-0007", None),
+            Some(Some(("CAPA-2019-{seq:4}".to_owned(), 7)))
+        );
+        let drawn = NumberPattern::parse("QR-{rand:4}").unwrap();
+        assert_eq!(drawn.fits("QR-0042", None), Some(None));
+        assert_eq!(drawn.fits("QR-42", None), None);
+        let nested = NumberPattern::parse("{parent}-D{seq:2}").unwrap();
+        assert_eq!(
+            nested.fits("DOCS-1-D07", Some("DOCS-1")),
+            Some(Some(("DOCS-1-D{seq:2}".to_owned(), 7)))
+        );
+        assert_eq!(nested.fits("DOCS-2-D07", Some("DOCS-1")), None);
+        assert_eq!(nested.fits("DOCS-1-D07", None), None);
+    }
+
+    // r[verify cli.docs-import]
+    #[test]
+    fn pads_a_number_written_short() {
+        let foo = NumberPattern::parse("FOOID-{seq:4}").unwrap();
+        assert_eq!(foo.padded("FOOID-12", None).as_deref(), Some("FOOID-0012"));
+        assert_eq!(
+            foo.padded("FOOID-0012", None).as_deref(),
+            Some("FOOID-0012")
+        );
+        assert_eq!(
+            foo.padded("FOOID-12345", None).as_deref(),
+            Some("FOOID-12345")
+        );
+        assert_eq!(foo.padded("BAR-12", None), None);
+        assert_eq!(foo.padded("FOOID-", None), None);
+        let drawn = NumberPattern::parse("QR-{rand:4}").unwrap();
+        assert_eq!(drawn.padded("QR-42", None).as_deref(), Some("QR-0042"));
+        assert_eq!(drawn.padded("QR-12345", None), None);
+        let nested = NumberPattern::parse("{parent}-D{seq:2}").unwrap();
+        assert_eq!(
+            nested.padded("DOCS-1-D7", Some("DOCS-1")).as_deref(),
+            Some("DOCS-1-D07")
+        );
+        assert_eq!(nested.padded("DOCS-2-D7", Some("DOCS-1")), None);
     }
 }

@@ -108,6 +108,23 @@ impl AktType {
         &self.document.created_in
     }
 
+    /// The field each version is released with a file in, if the type's
+    /// versions carry one (`version.file`).
+    #[must_use]
+    pub fn released_file(&self) -> Option<&str> {
+        self.document.versions.as_ref()?.file.as_deref()
+    }
+
+    /// Whether its akter are written here, in `markdown` fields, rather
+    /// than only released as files (`version.file`).
+    #[must_use]
+    pub fn written_here(&self) -> bool {
+        self.document
+            .fields
+            .iter()
+            .any(|f| f.kind == FieldKind::Markdown)
+    }
+
     /// The board's configuration, if it has one.
     #[must_use]
     pub fn board(&self) -> Option<&BoardDef> {
@@ -163,11 +180,26 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
 
     let contained = containment(&mut problems, &document);
     links(&mut problems, &document);
+    // r[impl akt.number.shared]
+    if let Some(sequence) = &document.sequence {
+        problems.key("sequence", sequence);
+    }
     // r[impl version.declare]
     if let Some(action) = document.versions.as_ref().and_then(|v| v.action.as_ref())
         && let Err(message) = check_action(action)
     {
         problems.add("versions.action", message);
+    }
+    // r[impl version.file]
+    if let Some(key) = document.versions.as_ref().and_then(|v| v.file.as_ref()) {
+        let pdf_only =
+            |f: &FieldDef| f.kind == FieldKind::Attachment && f.media_types == ["application/pdf"];
+        if !document.fields.iter().any(|f| &f.key == key && pdf_only(f)) {
+            problems.add(
+                "versions.file",
+                format!("`{key}` must be an attachment field taking only application/pdf"),
+            );
+        }
     }
     // r[impl live.declare]
     if document.live_drafts && document.versions.is_none() {
@@ -190,6 +222,15 @@ pub fn validate(document: AktTypeDocument) -> Result<AktType, Vec<Problem>> {
     }
     if let Some(board) = &document.board {
         board_columns(&mut problems, board, &contained);
+        // r[impl board.parent]
+        if let Some(parent) = &board.parent
+            && !document.links.iter().any(|l| &l.key == parent)
+        {
+            problems.add(
+                "board.parent",
+                format!("`{parent}` must be a kind of link the akt type declares in `links`"),
+            );
+        }
     }
     archive_rules(&mut problems, &document);
     // r[impl akt.number.pattern]
@@ -1191,7 +1232,7 @@ mod tests {
         assert_eq!(
             problems(document),
             vec![
-                "number: the pattern needs exactly one {seq} or {seq:N}, not 0",
+                "number: the pattern needs a {seq}, {seq:N} or {rand:N} to tell akter apart",
                 "fields[0].options: only choice fields have options",
                 "fields[1].options: a choice field needs at least one option",
             ]
@@ -1320,6 +1361,24 @@ mod tests {
                 "board.columns[1].states.epic[1]: `epic.open` is already in the column `todo`",
                 "board.columns[2].states.epic[0]: `epic.open` is already in the column `todo`",
             ]
+        );
+    }
+
+    // r[verify board.parent]
+    #[test]
+    fn checks_a_boards_parent() {
+        let mut document = release_candidate();
+        document["links"] = json!([
+            { "key": "parent_board", "name": "Parent board", "inverse": "Parent board of",
+              "to": ["backlog"] }
+        ]);
+        document["board"]["parent"] = json!("parent_board");
+        let ty = validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        assert_eq!(ty.board().unwrap().parent.as_deref(), Some("parent_board"));
+        document["board"]["parent"] = json!("backlog");
+        assert_eq!(
+            problems(document),
+            vec!["board.parent: `backlog` must be a kind of link the akt type declares in `links`"]
         );
     }
 

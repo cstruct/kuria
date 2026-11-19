@@ -46,12 +46,16 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   `theme.test.ts` checks against WCAG 2.2 AA.
 - [`src/lib/ui`](src/lib/ui): the components every page builds on:
   `Button`, `IconButton`, `Badge`, `Card`, `Field`, `EmptyState`, `Mono`,
-  `Toaster` and `toast()`, and, on Bits UI's accessible primitives, `Menu`,
+  `Toaster` and `toast()`, and, on Bits UI's accessible primitives, `Menu`
+  (behind its own trigger, or opened at an element as a context menu),
   `Dialog` and `Combobox`. Icons from `@lucide/svelte`, bundled. `/design`
   shows them all, in either theme.
-- [`src/lib/shell`](src/lib/shell): the app's frame: a sidebar of akt
+- [`src/lib/shell`](src/lib/shell): the app's frame: its logo (`Logo`,
+  [docs/brand](../../docs/brand/README.md)) atop a sidebar of akt
   types with counts, Home and Contacts (a drawer below 900 pixels), a top
-  bar with breadcrumbs (`setCrumbs`), the viewer and Sign out, and search
+  bar with breadcrumbs (`setCrumbs`), an akt's title under its number,
+  which grow as references are followed (`trail.ts`, kept in history
+  state, and `akt/following.ts`), the viewer and Sign out, and search
   (`/` or Cmd-K) over akter by number or title.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
   the akt page's parts (`FieldRow`, editing one field in place;
@@ -59,7 +63,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   `Members`, the board for the akt types its columns name and a list per
   other akt type, from `members.ts`, reordered by dragging within a
   column or list (`reorder.svelte.ts`) or from each member's menu, and
-  dropped on another column to take a transition that leads there;
+  dropped on another column to take a transition that leads there, each
+  column offering "+" for the types whose initial state it names, created
+  in the container and its parent boards (`creating.ts`);
   `TypeMark`, a type's icon and colour from `identity.ts`; `LinksCard`, an
   akt's links both ways, added by a kind its type declares and removed;
   `Sections`, members in a `sections` field's nested sections, a
@@ -81,7 +87,11 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
   type contains, drafts and allows (`document.ts`), accessible names
-  (`labels.ts`), uploads, and the field editor and display components.
+  (`labels.ts`), uploads, and the field editor and display components,
+  a shown reference previewing its akt while pointed at or focused
+  (`ReferencePreview`, its excerpt from `previews.ts`), and an akt released as
+  files shown as the PDF of the version read (`ReleasedPdf`, the field from
+  `document.ts`'s `releasedFile`), asked for when releasing.
   Archived akter (`archive.ts`, `app.archive`): lists, search, boards and
   a container's members show live akter, **Show archived** (kept in the
   address as `?archived=all`) adding archived ones, marked "Archived"; a

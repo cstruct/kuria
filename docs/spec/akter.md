@@ -79,6 +79,7 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
 | `navigation` | Where the app's sidebar lists the type: `main`, the default, or `more`, under "Show more" (`app.navigation`). |
 | `image` | The key of an `attachment` field whose `media_types` are all images: an akt of the type is an image, and that field's value is its picture (`akt.field.markdown.images`). |
+| `numbered_references` | `true` to show each reference to its akter with the akt's number first, as `DOCS-1-D04 Installing` for `[Installing](kuria:DOCS-1-D04)`, unless its text already starts with it (`app.references`, `pdf.render`); `false`, the default, to show the text alone. |
 
 Every key MUST name a field or state the type defines, each at most once
 in its list, and the title a single-line `text` field; otherwise the
@@ -237,9 +238,11 @@ not define MUST be refused.
 r[akt.number.pattern]
 An akt type's number pattern MUST be literal text with these placeholders:
 `{year}` and `{month}` (of the akt's creation, in UTC, as 4 and 2 digits),
-`{parent}` (the akt number of the container the akt was created in), and
-exactly one `{seq}` or `{seq:N}`, the sequence number zero-padded to at least
-N digits. `{parent}` MUST only be used by an akt type with `created_in`
+`{parent}` (the akt number of the container the akt was created in), at
+most one `{seq}` or `{seq:N}`, the sequence number zero-padded to at least
+N digits, and any number of `{rand:N}`, N random digits
+(`akt.number.random`), N from 1 to 12. It MUST hold a `{seq}`, a `{rand:N}`
+or both. `{parent}` MUST only be used by an akt type with `created_in`
 (`container.created-in`). Literal text MUST NOT contain `{` or `}`.
 
 r[akt.number.sequence]
@@ -249,6 +252,41 @@ without its sequence, so that `CAPA-{year}-{seq:4}` gives `CAPA-2026-0001`,
 `{parent}-RC-{seq:4}` counts separately in each parent:
 `RELEASE-2026-0001-RC-0002` and `RELEASE-2026-0002-RC-0001`. Akt numbers MUST be
 unique in their tenant and MUST never change.
+
+r[akt.number.random]
+Each `{rand:N}` MUST be N digits drawn at random, each digit as likely as
+any other. With a `{seq}`, the digits MUST be drawn before the sequence,
+which then counts per pattern as rendered with them, as with `{year}`.
+Without one, the number MUST be drawn again until no akt of the tenant
+has it, so that `QR-{rand:4}` gives a free `QR-4821`; when every number
+the pattern can render is taken, creating the akt MUST be refused as
+`NUMBERS_EXHAUSTED`, naming the pattern. Two akter created at once MUST
+NOT draw the same number.
+
+r[akt.number.given]
+Creating an akt MAY give its number, such as the number it had in a
+system it is imported from. The number MUST be one the type's pattern
+can give an akt created in the containers named, whatever its year,
+month and drawn digits, its `{parent}` the first container's number;
+otherwise creating it MUST be refused as `BAD_REQUEST`. It MUST be free
+in the tenant, archived akter included, else refused as `NUMBER_TAKEN`.
+With a `{seq}`, the counter of the number's scope MUST be raised to at
+least its sequence, so that the number is never given again
+(`akt.number.sequence`); a `{rand:N}` without one never draws a number
+taken (`akt.number.random`).
+
+r[akt.number.shared]
+An akt type document MAY name a `sequence`, a key, that akt types number
+from together: a Policy and a Procedure both numbered `QMS-{seq:4}` and
+naming the sequence `qms` count `QMS-0001`, `QMS-0002`… between them.
+Defining an akt type MUST be refused, with a problem for each other akt
+type, when the latest version of another akt type numbers alike without
+naming the same sequence (neither naming one is not the same), or names
+the same sequence with another pattern, so that akt types share numbers
+only by saying so. Two akt types number alike when they have the same
+pattern and it has no `{parent}`, or they may be created in an akt type in
+common (`container.created-in`): `{parent}-D{seq:2}` created only in plans
+and only in document indexes never gives the same number.
 
 r[akt.edit]
 Editing an akt MUST change only the field values given, where a `null`

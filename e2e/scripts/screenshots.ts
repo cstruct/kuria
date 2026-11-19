@@ -68,7 +68,7 @@ for (const scheme of ['light', 'dark'] as const) {
 	if (scheme === 'light') {
 		await shoot(page, 'backlog-light', `/akt/${backlogs[0]}`, 'Members');
 		await shoot(page, 'notes-light', `/akt/${notes[0]}`, 'Details');
-		await shoot(page, 'list-light', '/types/backlog_item', 'Backlog item');
+		await shoot(page, 'list-light', '/types/backlog_item', 'Task');
 	}
 	await page.context().close();
 }

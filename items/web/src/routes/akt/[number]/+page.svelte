@@ -13,6 +13,8 @@
 	import Search from '@lucide/svelte/icons/search';
 	import X from '@lucide/svelte/icons/x';
 	import { setCrumbs } from '#lib/shell/crumbs.svelte.ts';
+	import { before, crumbsOf } from '#lib/shell/trail.ts';
+	import { setFollowing } from '#lib/akt/following.ts';
 	import FieldRow from '#lib/akt/FieldRow.svelte';
 	import HistoryList from '#lib/akt/HistoryList.svelte';
 	import CopyDialog from '#lib/akt/CopyDialog.svelte';
@@ -29,8 +31,11 @@
 		containedTypes,
 		linkKinds,
 		draftedFields,
+		releasedFile,
 		requiredFields
 	} from '#lib/akt/document.ts';
+	import ReleasedPdf from '#lib/akt/ReleasedPdf.svelte';
+	import { upload } from '#lib/akt/upload.ts';
 	import { oneField, settle } from '#lib/akt/editing.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import {
@@ -43,6 +48,7 @@
 	import { actionsOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
+	import { creatableIn, insideQuery, parentBoards } from '#lib/akt/creating.ts';
 	import { changes, draftOf, inputOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { LiveDraft } from '#lib/akt/live.svelte.ts';
 	import LivePresence from '#lib/akt/LivePresence.svelte';
@@ -109,13 +115,35 @@
 		}
 		return shown && shown.number === number && shown.version === atVersion ? shown.akt : undefined;
 	});
+	// r[impl app.trail]: the type, then the akter followed here, and this
+	// one, each with its title.
+	const trail = $derived(page.state.trail ?? []);
 	setCrumbs(() =>
 		akt
-			? [
-					{ label: akt.type.name, href: resolve('/types/[key]', { key: akt.type.key }) },
-					{ label: akt.number }
-				]
+			? crumbsOf(
+					trail,
+					{
+						number: akt.number,
+						title: akt.title ?? null,
+						type: { key: akt.type.key, name: akt.type.name }
+					},
+					(key) => resolve('/types/[key]', { key })
+				)
 			: [{ label: number }]
+	);
+	// Following a reference in a shown field goes on from here.
+	setFollowing(() =>
+		akt
+			? [
+					...before(trail, akt.number),
+					{
+						number: akt.number,
+						title: akt.title ?? null,
+						type: { key: akt.type.key, name: akt.type.name },
+						href: `${page.url.pathname}${page.url.search}`
+					}
+				]
+			: null
 	);
 	const fieldNames = $derived(
 		Object.fromEntries((akt?.type.fields ?? []).map((f) => [f.key, f.name]))
@@ -130,6 +158,23 @@
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
+	/** The new-akt page that creates an akt of the type `key` in this
+	 * container and in its parent boards that take it (`app.board-create`). */
+	// r[impl app.board-create]
+	const newMemberHref = (key: string) =>
+		akt
+			? `${resolve('/types/[key]/new', { key })}?${insideQuery(
+					akt.number,
+					parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? [])
+				)}`
+			: resolve('/types/[key]/new', { key });
+	const creatable = (column: string) =>
+		akt && editable
+			? creatableIn(akt.type.document, column, view.data?.aktTypes ?? []).map((t) => ({
+					name: t.name,
+					href: newMemberHref(t.key)
+				}))
+			: [];
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
 	// A version never changes: read at one, nothing is offered to change.
 	const actions = $derived(
@@ -177,32 +222,83 @@
 	// r[impl app.pdf]: each markdown field as a PDF, of what is being read,
 	// to download.
 	const markdownFields = $derived((akt?.type.fields ?? []).filter((f) => f.kind === 'MARKDOWN'));
+	// r[impl app.external]: an akt released as files has the PDF of the
+	// version read, else of its latest; one written here, the PDF of a
+	// version released with one, and its body's sheets otherwise.
+	const fileField = $derived(akt ? releasedFile(akt.type.document) : null);
+	const writtenHere = $derived(markdownFields.length > 0);
+	const readsFile = $derived(
+		Boolean(
+			fileField && atVersion && akt?.fields.some((v) => 'field' in v && v.field === fileField)
+		)
+	);
+	const showsFile = $derived(Boolean(fileField) && (!writtenHere || readsFile));
+	const shownVersion = $derived(
+		writtenHere ? atVersion : (atVersion ?? akt?.versions[0]?.number ?? null)
+	);
 	const pdfs = $derived(
-		markdownFields.map((f, _, all) => ({
-			key: f.key,
-			label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
-			href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}&download`
-		}))
+		showsFile
+			? shownVersion === null
+				? []
+				: [
+						{
+							key: fileField,
+							label: 'Download PDF',
+							href: `/akter/${encodeURIComponent(number)}/pdf?version=${shownVersion}&download`
+						}
+					]
+			: markdownFields.map((f, _, all) => ({
+					key: f.key,
+					label: all.length > 1 ? `${f.name} as PDF` : 'Download PDF',
+					href: `/akter/${encodeURIComponent(number)}/pdf?field=${f.key}${atVersion ? `&version=${atVersion}` : ''}&download`
+				}))
 	);
 	let comparing = $state<{ from: number; to: number | null } | null>(null);
 	let compareOpen = $state(false);
 
-	async function releaseVersion(label: string, together: string[] = []) {
+	async function releaseVersion(
+		label: string,
+		together: string[] = [],
+		file: File | null = null,
+		description = ''
+	) {
 		if (!akt) return false;
+		// r[impl app.external]: the PDF uploaded, then released with.
+		let uploaded: string | null = null;
+		if (file) {
+			try {
+				uploaded = (await upload(file)).id;
+			} catch (e) {
+				toast(e instanceof Error ? e.message : String(e), 'danger');
+				return false;
+			}
+		}
 		// r[impl app.live]: the live draft as it is, with every edit made.
 		if (live && !(await live.settled())) {
 			toast('Your last edits haven’t reached the server yet: try again', 'danger');
 			return false;
 		}
 		const named = label.trim() || null;
-		const input = { number: akt.number, revision: akt.revision, label: named };
+		const said = description.trim() || null;
+		const input = {
+			number: akt.number,
+			revision: akt.revision,
+			label: named,
+			description: said,
+			file: uploaded
+		};
 		if (together.length === 0) {
 			const released = await run(() => mutate(client, ReleaseVersion, { input }));
 			if (released) toast(`${akt.number}: released`, 'success');
 			return released;
 		}
 		// r[impl app.versions]: released together, each at the revision read now.
-		const others: { number: string; revision: number; label: string | null }[] = [];
+		const others: {
+			number: string;
+			revision: number;
+			label: string | null;
+			description: string | null;
+		}[] = [];
 		for (const number of together) {
 			const read = await client
 				.query(AktRevision, { number }, { requestPolicy: 'network-only' })
@@ -212,7 +308,7 @@
 				toast(`${number} can’t be read`, 'danger');
 				return false;
 			}
-			others.push({ number, revision: other.revision, label: named });
+			others.push({ number, revision: other.revision, label: named, description: said });
 		}
 		const released = await run(() =>
 			mutate(client, ReleaseVersions, { input: { akter: [input, ...others] } })
@@ -683,31 +779,44 @@
 				<Card title="Details">
 					<dl class="fields">
 						{#each akt.type.fields as field (field.key)}
-							<FieldRow
-								{field}
-								value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
-								bind:draft={drafts[field.key]}
-								bind:reason
-								{people}
-								editing={editingField === field.key}
-								{editable}
-								drafted={drafted.includes(field.key)}
-								{busy}
-								error={editingField === field.key && refusal ? refusal.message : undefined}
-								onEdit={() => {
-									if (editingField) cancelEdit(editingField);
-									editingField = field.key;
-								}}
-								onSave={() => save(field.key)}
-								onCancel={() => cancelEdit(field.key)}
-								onDraft={() => draft(field.key)}
-								members={memberNames}
-								number={akt.number}
-								judged={ownVerdicts}
-								onVerdict={(verdict) => giveVerdict(akt, verdict)}
-								liveDraft={Boolean(live)}
-								live={live && isLiveText(field) ? live : null}
-							/>
+							{#if field.key === fileField}
+								{#if showsFile}
+									<ReleasedPdf
+										number={akt.number}
+										name={field.name}
+										title={akt.title ?? akt.number}
+										version={shownVersion}
+									/>
+								{/if}
+							{:else if showsFile && field.kind === 'MARKDOWN'}
+								<!-- The version is its PDF, not its text. -->
+							{:else}
+								<FieldRow
+									{field}
+									value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
+									bind:draft={drafts[field.key]}
+									bind:reason
+									{people}
+									editing={editingField === field.key}
+									{editable}
+									drafted={drafted.includes(field.key)}
+									{busy}
+									error={editingField === field.key && refusal ? refusal.message : undefined}
+									onEdit={() => {
+										if (editingField) cancelEdit(editingField);
+										editingField = field.key;
+									}}
+									onSave={() => save(field.key)}
+									onCancel={() => cancelEdit(field.key)}
+									onDraft={() => draft(field.key)}
+									members={memberNames}
+									number={akt.number}
+									judged={ownVerdicts}
+									onVerdict={(verdict) => giveVerdict(akt, verdict)}
+									liveDraft={Boolean(live)}
+									live={live && isLiveText(field) ? live : null}
+								/>
+							{/if}
 						{/each}
 					</dl>
 				</Card>
@@ -743,9 +852,7 @@
 											label: `New ${typeNames[key] ?? key}`,
 											icon: Plus,
 											onSelect: () => {
-												location.assign(
-													`${resolve('/types/[key]/new', { key })}?in=${encodeURIComponent(akt.number)}`
-												);
+												location.assign(newMemberHref(key));
 											}
 										})),
 										{
@@ -782,6 +889,7 @@
 								onInto={into}
 								{me}
 								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
+								{creatable}
 							/>
 						{/if}
 					</section>
@@ -833,6 +941,8 @@
 						number={akt.number}
 						versions={akt.versions}
 						pdfFields={markdownFields}
+						withFile={Boolean(fileField)}
+						fileRequired={!writtenHere}
 						reading={atVersion}
 						releasable={!atVersion && !akt.archived}
 						{busy}
@@ -869,6 +979,7 @@
 						revisions={akt.revisions}
 						{fieldNames}
 						{transitionNames}
+						fieldKinds={Object.fromEntries(akt.type.fields.map((f) => [f.key, f.kind]))}
 						versions={akt.versions}
 					/>
 				</Card>

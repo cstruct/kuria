@@ -98,6 +98,8 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
+        AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
+        AktError::NumberTaken(_) => coded(message, "NUMBER_TAKEN"),
         AktError::Archived(_) => coded(message, "ARCHIVED"),
         AktError::NotContainable { .. } => coded(message, "NOT_CONTAINABLE"),
         AktError::AlreadyMember { .. } => coded(message, "ALREADY_MEMBER"),
@@ -656,6 +658,10 @@ pub struct CreateAktInput {
     /// The containers to create it in, by number; the first is its parent.
     #[graphql(name = "in", default)]
     inside: Vec<String>,
+    /// Its number, such as the one it had where it is imported from, which
+    /// its type's pattern must give and no akt may have
+    /// (`akt.number.given`); else its next.
+    number: Option<String>,
 }
 
 /// What editing an akt takes.
@@ -727,6 +733,7 @@ fn operation(input: OperationInput) -> async_graphql::Result<Operation> {
             key: i.key,
             reason: i.reason,
             inside: i.inside,
+            number: i.number,
         },
         OperationInput::EditAkt(i) => Operation::Edit {
             fields: field_values(Some(i.fields))?,
@@ -979,7 +986,14 @@ impl AkterMutation {
         let fields = field_values(input.fields)?;
         let akter = akter(ctx)?;
         let row = akter
-            .create(caller, &input.key, &fields, input.reason, &input.inside)
+            .create(
+                caller,
+                &input.key,
+                &fields,
+                input.reason,
+                &input.inside,
+                input.number.as_deref(),
+            )
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
@@ -1040,7 +1054,16 @@ impl AkterMutation {
             renderer: akter(ctx)?.renderer(),
         };
         let row = akter(ctx)?
-            .release(caller, &input.number, input.revision, input.label)
+            .release(
+                caller,
+                crate::akter::versions::Releasing {
+                    file: file_of(input.file.as_ref())?,
+                    number: input.number,
+                    revision: input.revision,
+                    label: input.label,
+                    description: input.description,
+                },
+            )
             .await
             .map_err(error)?;
         Ok(Version::from(&row))
@@ -1061,15 +1084,19 @@ impl AkterMutation {
             storage: akter(ctx)?.storage(),
             renderer: akter(ctx)?.renderer(),
         };
-        let releasing: Vec<_> = input
+        let releasing = input
             .akter
             .into_iter()
-            .map(|a| crate::akter::versions::Releasing {
-                number: a.number,
-                revision: a.revision,
-                label: a.label,
+            .map(|a| {
+                Ok(crate::akter::versions::Releasing {
+                    file: file_of(a.file.as_ref())?,
+                    number: a.number,
+                    revision: a.revision,
+                    label: a.label,
+                    description: a.description,
+                })
             })
-            .collect();
+            .collect::<async_graphql::Result<Vec<_>>>()?;
         let rows = akter(ctx)?
             .release_together(caller, &releasing)
             .await
@@ -1429,6 +1456,7 @@ impl AktType {
             colour: presentation.colour.unwrap_or_default().into(),
             navigation: presentation.navigation.unwrap_or_default().into(),
             image: presentation.image.clone(),
+            numbered_references: presentation.numbered_references,
         }
     }
 
@@ -1732,6 +1760,9 @@ pub struct Presentation {
     /// The `attachment` field holding each akt's picture, if its akter are
     /// images (`akt.field.markdown.images`).
     image: Option<String>,
+    /// Whether references to its akter are shown with the akt's number
+    /// first (`app.references`).
+    numbered_references: bool,
 }
 
 #[derive(SimpleObject)]
@@ -2680,6 +2711,8 @@ pub struct Version {
     /// The revision it names.
     revision: i32,
     label: Option<String>,
+    /// What its releaser said of it, such as what changed.
+    description: Option<String>,
     released_by: User,
     released_at: DateTime<Utc>,
     /// What its references naming no version meant (`version.pins`).
@@ -2702,6 +2735,7 @@ impl From<&VersionRow> for Version {
             number: row.number,
             revision: row.revision,
             label: row.label.clone(),
+            description: row.description.clone(),
             released_by: User(row.released_by),
             released_at: row.released_at,
             pins: pins
@@ -2735,6 +2769,20 @@ pub struct ReleaseVersionInput {
     revision: i32,
     /// One line, at most 100 characters.
     label: Option<String>,
+    /// At most 2,000 characters, over several lines if need be.
+    description: Option<String>,
+    /// The uploaded PDF the version is released with, for a type whose
+    /// versions carry a file (`version.release-file`).
+    file: Option<ID>,
+}
+
+/// The attachment `file` names, if it names one.
+fn file_of(file: Option<&ID>) -> async_graphql::Result<Option<Uuid>> {
+    file.map(|id| {
+        Uuid::parse_str(id)
+            .map_err(|_| coded(format!("`{}` is no attachment", id.as_str()), "BAD_REQUEST"))
+    })
+    .transpose()
 }
 
 /// What archiving or unarchiving an akt takes.

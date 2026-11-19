@@ -9,11 +9,23 @@ none is special.
 
 r[version.declare]
 An akt type document MAY declare `versions`, an object whose optional
-`action` names the Konklav action a release needs (`authz.release`). The
-action MUST follow `authz.transition-action`, and `versions` MUST NOT hold
-any other member; otherwise the document MUST be refused. Releasing an
+`action` names the Konklav action a release needs (`authz.release`), and
+whose optional `file` names the field each version is released with a
+file in (`version.file`). The action MUST follow
+`authz.transition-action`, and `versions` MUST NOT hold any other member;
+otherwise the document MUST be refused. Releasing an
 akt whose type version doesn't declare `versions` MUST be refused as
 `BAD_REQUEST`.
+
+r[version.file]
+`versions.file` MUST name an `attachment` field of the type that takes
+only `application/pdf` (`media_types`); otherwise the document MUST be
+refused. A type without `markdown` fields is one whose akter are written
+elsewhere, such as an external document, released as a PDF each; a type
+with them, such as a document whose earlier versions were kept as PDFs,
+renders a version from its text unless it was released with a PDF. Only a release MUST set the
+field: a write that would change it otherwise MUST be refused as
+`REFUSED`, and a copy (`akt.copy`) MUST NOT keep it.
 
 ## Releasing
 
@@ -21,15 +33,17 @@ r[version.release]
 `releaseVersion` MUST name the akt's current revision as its next
 version, or for an akt with a live draft record its live draft as a new
 revision and name that (`live.release`), with an optional label, a single line of at most 100
-characters. It MUST take the revision the caller read, and refuse a
+characters, and an optional description, text of at most 2,000
+characters that may run over several lines, such as what changed; either,
+blank once trimmed, is none. It MUST take the revision the caller read, and refuse a
 revision that isn't the akt's current one as `STALE`
 (`akt.revision.concurrency`). It MUST refuse a revision that is already a
 version as `BAD_REQUEST`. An akt in a final state MAY be released.
 
 r[version.number]
 An akt's versions MUST be numbered 1, 2, … in the order they were
-released, with no gaps. A version MUST record its number, its label, the
-revision it names, who released it and when.
+released, with no gaps. A version MUST record its number, its label, its
+description, the revision it names, who released it and when.
 
 r[version.immutable]
 A version MUST never change and never be removed, nor anything it records,
@@ -71,7 +85,23 @@ prefixed by the number of the akt it is in.
 r[version.history]
 A release MUST be shown in the akt's history, and MUST append a change
 event (`akt.change-event`) naming the akt and the version. It MUST NOT
-make an akt revision.
+make an akt revision, except as `live.release` and `version.release-file`
+say.
+
+r[version.release-file]
+Releasing an akt whose type declares `versions.file` MAY take a file, an
+attachment (`attachment.upload`) the releaser may read, of the media type
+`application/pdf`, and MUST take one if the type has no `markdown`
+fields; it MUST be refused as `BAD_REQUEST` without one where one is
+needed, or with one for a type that doesn't declare `versions.file`, and
+as an edit's attachment is (`attachment.media-types`) with one that isn't
+a PDF. A release with a file MUST record it in the field as a new akt
+revision, checked as an edit's attachment is (`attachment.references`),
+and name that revision as the version; a release without one, of an akt
+whose field holds a file, MUST clear it so, so that each version either is
+the PDF it was released with or has none. With a live draft
+(`live.release`), the file is recorded with the live draft, in the same
+revision. An akt in a final state MAY be released so too.
 
 ## Reading
 

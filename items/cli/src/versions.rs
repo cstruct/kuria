@@ -65,12 +65,30 @@ pub async fn pdf(
 pub async fn release(
     session: &Session,
     numbers: &[String],
-    label: Option<&str>,
+    released: &Releasing<'_>,
 ) -> Result<Answer, CliError> {
+    let Releasing {
+        label,
+        description,
+        file,
+    } = *released;
+    // r[impl version.release-file]: the PDF uploaded first, for one akt.
+    let file = match file {
+        Some(path) if numbers.len() == 1 => Some(upload(session, path, "application/pdf").await?),
+        Some(_) => {
+            return Err(CliError::refused(
+                "BAD_REQUEST",
+                "a file is released with one akt at a time",
+            ));
+        }
+        None => None,
+    };
     let mut akter = Vec::new();
     for number in numbers {
         let akt = crate::writes::akt(session, number).await?;
-        akter.push(json!({ "number": number, "revision": akt.revision, "label": label }));
+        akter.push(
+            json!({ "number": number, "revision": akt.revision, "label": label, "description": description, "file": file }),
+        );
     }
     let data = session
         .graphql(
@@ -106,6 +124,80 @@ pub async fn release(
     })
 }
 
+/// What a release says of its versions: their label and description, and
+/// the PDF a type released as files takes.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Releasing<'a> {
+    pub label: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub file: Option<&'a std::path::Path>,
+}
+
+/// `--description`'s text: as given, or read from the file `@<path>`, or
+/// standard input for `@-`; blank is none, and more than 2,000 characters
+/// is refused (`version.release`).
+// r[impl version.release]
+pub fn description_of(given: Option<&str>) -> Result<Option<String>, CliError> {
+    let text = match given {
+        None => return Ok(None),
+        Some("@-") => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                .map_err(|e| CliError::refused("BAD_FILE", format!("standard input: {e}")))?;
+            text
+        }
+        Some(given) => match given.strip_prefix('@') {
+            Some(path) => std::fs::read_to_string(path)
+                .map_err(|e| CliError::refused("BAD_FILE", format!("{path}: {e}")))?,
+            None => given.to_owned(),
+        },
+    };
+    let text = text.trim();
+    if text.chars().count() > 2000 {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "a description is at most 2,000 characters",
+        ));
+    }
+    Ok((!text.is_empty()).then(|| text.to_owned()))
+}
+
+/// Uploads the file at `path`, of `media_type`, as an attachment
+/// (`attachment.upload`), answering its id.
+pub(crate) async fn upload(
+    session: &Session,
+    path: &std::path::Path,
+    media_type: &str,
+) -> Result<String, CliError> {
+    let bytes = std::fs::read(path)
+        .map_err(|e| CliError::refused("BAD_FILE", format!("{}: {e}", path.display())))?;
+    let name = path.file_name().map_or_else(
+        || "version.pdf".to_owned(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let response = session
+        .http
+        .send(
+            reqwest::Method::POST,
+            &format!("{}/attachments", session.url),
+            Some(session.access_token()),
+            &crate::http::Body::File(&bytes, media_type, &name),
+        )
+        .await?;
+    if !response.status().is_success() {
+        return Err(CliError::unavailable(format!(
+            "Kuria answered {} to uploading {}",
+            response.status(),
+            path.display()
+        )));
+    }
+    let answered: serde_json::Value = response.json().await?;
+    answered["id"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| CliError::unavailable("Kuria answered an upload without its id"))
+}
+
 /// `kuria versions <number>`: its versions, latest first.
 // r[impl version.list]
 pub async fn list(source: Source<'_>, number: &str) -> Result<Answer, CliError> {
@@ -118,7 +210,14 @@ pub async fn list(source: Source<'_>, number: &str) -> Result<Answer, CliError> 
         format!("{number} has no versions.")
     } else {
         crate::md::table(
-            &["Version", "Revision", "Label", "Released by", "Released"],
+            &[
+                "Version",
+                "Revision",
+                "Label",
+                "Released by",
+                "Released",
+                "Description",
+            ],
             &rows,
         )
     };
@@ -130,6 +229,7 @@ pub async fn list(source: Source<'_>, number: &str) -> Result<Answer, CliError> 
                 "number": v.number,
                 "revision": v.revision,
                 "label": v.label,
+                "description": v.description,
                 "releasedBy": v.released_by.as_ref().map(|u| u.email.clone().unwrap_or_else(|| u.name.clone())),
                 "releasedAt": v.released_at,
             })).collect::<Vec<_>>(),
@@ -149,6 +249,10 @@ fn row(v: &Released) -> Vec<String> {
         v.released_at
             .as_deref()
             .map(crate::history::when)
+            .unwrap_or_default(),
+        v.description
+            .as_deref()
+            .map(|d| d.split_whitespace().collect::<Vec<_>>().join(" "))
             .unwrap_or_default(),
     ]
 }

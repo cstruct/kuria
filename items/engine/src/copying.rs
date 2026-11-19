@@ -56,6 +56,14 @@ pub fn keeps(kind: FieldKind) -> bool {
     )
 }
 
+/// Whether a copy of an akt of `ty` keeps its field `key`: as [`keeps`]
+/// says of its kind, and not the file only releases set
+/// (`version.file`).
+#[must_use]
+pub fn keeps_field(ty: &kuria_config::AktType, key: &str) -> bool {
+    ty.field(key).is_some_and(|f| keeps(f.kind)) && ty.released_file() != Some(key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

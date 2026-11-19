@@ -8,6 +8,7 @@ interface Document {
 	contains?: { type: string }[];
 	fields?: { key: string; draft?: unknown; references?: string }[];
 	links?: LinkKind[];
+	versions?: { file?: string };
 }
 
 /** A kind of link an akt type declares (`link.kinds`). */
@@ -25,6 +26,13 @@ function documentOf(document: unknown): Document {
 /** The akt types an akt of this type contains, by key. */
 export function containedTypes(document: unknown): string[] {
 	return (documentOf(document).contains ?? []).map((c) => c.type);
+}
+
+/** The field each version is released with a PDF in, if this type's
+ * versions carry one (`version.file`): only a release sets it. */
+// r[impl app.external]
+export function releasedFile(document: unknown): string | null {
+	return documentOf(document).versions?.file ?? null;
 }
 
 /** The kinds of link an akt of this type may have to others. */

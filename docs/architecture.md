@@ -244,7 +244,7 @@ Some things are simpler outside GraphQL:
 ## Decided
 
 - Akt types are written as whole documents and submitted through the API (`defineAktType`); each submission becomes a new, immutable akt type version. A UI editor or a CLI pushing files from version control can sit on top.
-- Akt numbers come from a number pattern in each akt type, such as `CAPA-{year}-{seq:4}`, counting per tenant and per pattern as rendered without its sequence. `{parent}` counts separately within each parent.
+- Akt numbers come from a number pattern in each akt type, such as `CAPA-{year}-{seq:4}`, counting per tenant and per pattern as rendered without its sequence. `{parent}` counts separately within each parent. `{rand:N}` draws N random digits under the tenant's order lock: beside a `{seq}` they scope its counter; alone, they are drawn until the number is free, and a create is refused as `NUMBERS_EXHAUSTED` once none is. Akt types share a counter only by naming one `sequence` and one pattern (`akt.number.shared`), checked as each is defined, next to the states and fields types name of each other.
 - One shared priority order per tenant, rather than an order per container.
 - Joining and leaving a container is a revision of both akter; a move is not.
 - Release notes are an akt drafted from members, not a special document.

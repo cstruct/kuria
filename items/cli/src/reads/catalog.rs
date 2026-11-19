@@ -128,8 +128,13 @@ fn schema_json(shape: &Shape) -> Json {
 
 fn schema_markdown(shape: &Shape) -> String {
     let document = &shape.document;
+    // r[impl akt.number.shared]: the sequence it shares, if it names one.
+    let shared = document["sequence"]
+        .as_str()
+        .map(|sequence| format!(", from the sequence `{sequence}`"))
+        .unwrap_or_default();
     let mut text = format!(
-        "# {} (`{}`, version {})\n\nNumbers: `{}`\n\n## Fields\n\n",
+        "# {} (`{}`, version {})\n\nNumbers: `{}`{shared}\n\n## Fields\n\n",
         shape.name, shape.key, shape.version, shape.number_pattern
     );
     let rows: Vec<Vec<String>> = shape
@@ -274,6 +279,10 @@ fn document_markdown(document: &Json) -> String {
                 c["name"].as_str().unwrap_or_default(),
                 states.join("; ")
             ));
+        }
+        // r[impl board.parent]
+        if let Some(parent) = document["board"]["parent"].as_str() {
+            text.push_str(&format!("\nParent boards: its `{parent}` links\n"));
         }
     }
     text

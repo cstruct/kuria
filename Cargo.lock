@@ -3159,6 +3159,7 @@ dependencies = [
  "kuria-test-support",
  "kuria-typst",
  "p256",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

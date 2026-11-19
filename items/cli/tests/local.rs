@@ -15,6 +15,15 @@ const TYPES: [&str; 4] = ["plan", "task", "gap", "decision"];
 
 /// An akt directory with the planning example's types, in a git
 /// repository whose `user.email` is `me@kuria.example`.
+/// A real one-pixel PNG, that pandoc can size and embed.
+const PIXEL: &[u8] = &[
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
+    0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+    0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e,
+    0x44, 0xae, 0x42, 0x60, 0x82,
+];
+
 struct Dir {
     _temp: tempfile::TempDir,
     root: PathBuf,
@@ -809,6 +818,379 @@ fn redefines_types_only_where_their_akter_fit() {
         refused.message.contains("PLAN-001-T01"),
         "{}",
         refused.message
+    );
+}
+
+/// Defines `plan` again as a type `key` numbered by `pattern`.
+fn define_numbered(dir: &Dir, key: &str, pattern: &str, sequence: Option<&str>) {
+    let example =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/planning/plan.json");
+    let mut ty: Value = serde_json::from_str(&std::fs::read_to_string(example).unwrap()).unwrap();
+    ty["key"] = json!(key);
+    ty["name"] = json!(key);
+    ty["number"] = json!(pattern);
+    if let Some(sequence) = sequence {
+        ty["sequence"] = json!(sequence);
+    }
+    let file = dir.root.join(format!("../{key}.json"));
+    std::fs::write(&file, ty.to_string()).unwrap();
+    dir.ok(&["types", "define", file.to_str().unwrap()]);
+}
+
+// r[verify cli.local.numbers]
+// r[verify akt.number.random]
+#[test]
+fn draws_random_numbers_free_among_the_directory_s() {
+    let dir = Dir::new();
+    define_numbered(&dir, "ticket", "T-{rand:1}", None);
+    let mut numbers: Vec<String> = (0..10)
+        .map(|i| {
+            let title = format!("title=Ticket {i}");
+            dir.ok(&["new", "ticket", "--set", &title, "--format", "json"])
+                .json["number"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    numbers.sort();
+    let every: Vec<String> = (0..10).map(|n| format!("T-{n}")).collect();
+    assert_eq!(numbers, every);
+    let refused = dir.refused(&["new", "ticket", "--set", "title=One more"]);
+    assert_eq!(refused.code, "NUMBERS_EXHAUSTED", "{}", refused.message);
+}
+
+// r[verify akt.number.shared]
+#[test]
+fn akt_types_naming_one_sequence_share_its_numbers() {
+    let dir = Dir::new();
+    define_numbered(&dir, "policy", "QMS-{seq:4}", Some("qms"));
+    define_numbered(&dir, "procedure", "QMS-{seq:4}", Some("qms"));
+    let new = |key: &str| {
+        dir.ok(&["new", key, "--set", "title=T", "--format", "json"])
+            .json["number"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    assert_eq!(new("policy"), "QMS-0001");
+    assert_eq!(new("procedure"), "QMS-0002");
+    // `plan` is numbered `PLAN-{seq:3}`, unnamed: another type can't be.
+    let example =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/planning/plan.json");
+    let mut ty: Value = serde_json::from_str(&std::fs::read_to_string(example).unwrap()).unwrap();
+    ty["key"] = json!("project");
+    let file = dir.root.join("../project.json");
+    std::fs::write(&file, ty.to_string()).unwrap();
+    let refused = dir.refused(&["types", "define", file.to_str().unwrap()]);
+    assert!(refused.message.contains("`plan`"), "{}", refused.message);
+}
+
+// r[verify cli.local.versions]
+// r[verify version.release-file]
+#[test]
+fn releases_an_external_document_with_its_pdf() {
+    let dir = Dir::new();
+    let ty = json!({
+        "key": "external_document", "name": "External document", "number": "EXT-{seq:3}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "pdf", "name": "PDF", "kind": "attachment", "media_types": ["application/pdf"] }
+        ],
+        "states": [{ "key": "draft", "name": "Draft", "initial": true }],
+        "versions": { "file": "pdf" }
+    });
+    let document = dir.root.join("../external.json");
+    std::fs::write(&document, ty.to_string()).unwrap();
+    dir.ok(&["types", "define", document.to_str().unwrap()]);
+    dir.ok(&["new", "external_document", "--set", "title=Supplier policy"]);
+    let pdf = dir.root.join("../policy.pdf");
+    std::fs::write(&pdf, b"%PDF-1.4 first").unwrap();
+    // Only a release sets it.
+    let at = format!("pdf=@{}", pdf.display());
+    assert_eq!(dir.refused(&["set", "EXT-001", &at]).code, "REFUSED");
+    dir.commit("Supplier policy");
+    assert_eq!(dir.refused(&["release", "EXT-001"]).code, "BAD_REQUEST");
+    let released = dir
+        .ok(&[
+            "release",
+            "EXT-001",
+            "--file",
+            pdf.to_str().unwrap(),
+            "--description",
+            "As the supplier published it.",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(released["version"], 1);
+    assert_eq!(released["revision"], 2);
+    // r[verify version.number]: its description, listed.
+    let listed = dir.ok(&["versions", "EXT-001", "--format", "json"]).json;
+    assert_eq!(
+        listed["versions"][0]["description"],
+        "As the supplier published it."
+    );
+    assert_eq!(
+        std::fs::read(dir.root.join("attachments/EXT-001/policy.pdf")).unwrap(),
+        b"%PDF-1.4 first"
+    );
+    assert!(file(&dir, "EXT-001").contains("attachments/EXT-001/policy.pdf"));
+    dir.commit("Version 1");
+    // Again, with no other change.
+    std::fs::write(&pdf, b"%PDF-1.4 second").unwrap();
+    let released = dir
+        .ok(&[
+            "release",
+            "EXT-001",
+            "--file",
+            pdf.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(
+        (released["version"].as_i64(), released["revision"].as_i64()),
+        (Some(2), Some(3))
+    );
+}
+
+// r[verify cli.docs-import]
+// r[verify version.release-file]
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one folder imported from start to end"
+)]
+fn imports_a_document_from_a_folder_its_old_versions_as_pdfs() {
+    let has_pandoc = Command::new("pandoc").arg("--version").output().is_ok();
+    if !has_pandoc {
+        eprintln!("skipped: pandoc isn't on the PATH");
+        return;
+    }
+    let dir = Dir::new();
+    let documents = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/documents");
+    for key in ["image", "document", "document_index"] {
+        let file = documents.join(format!("{key}.json"));
+        dir.ok(&["types", "define", file.to_str().unwrap()]);
+    }
+    dir.ok(&["new", "document_index", "--set", "title=Manual"]);
+    dir.commit("A manual");
+
+    // The folder: a docx draft with a picture, made here by pandoc, and
+    // two PDFs.
+    let folder = dir.root.join("../my-doc-folder");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(
+        folder.join("draft.md"),
+        "# My doc\n\nHello **world**, from Word.\n\n![The flow](flow.png){width=50%}\n",
+    )
+    .unwrap();
+    std::fs::write(folder.join("flow.png"), PIXEL).unwrap();
+    let made = Command::new("pandoc")
+        .current_dir(&folder)
+        .args(["draft.md", "-o", "draft.docx"])
+        .output()
+        .unwrap();
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stderr)
+    );
+    std::fs::remove_file(folder.join("draft.md")).unwrap();
+    std::fs::remove_file(folder.join("flow.png")).unwrap();
+    std::fs::write(folder.join("version1.pdf"), b"%PDF-1.4 one").unwrap();
+    std::fs::write(folder.join("version2.pdf"), b"%PDF-1.4 two").unwrap();
+    let metadata = json!({
+        "title": "My doc",
+        "owner": "bruce@example.com",
+        "draft": "draft.docx",
+        "versions": [
+            { "label": "version 1", "description": "foo bar", "file": "version1.pdf" },
+            { "label": "version 2", "description": "bar baz", "file": "version2.pdf" }
+        ]
+    });
+    std::fs::write(folder.join("metadata.json"), metadata.to_string()).unwrap();
+    let folder = folder.to_str().unwrap();
+
+    // Refused while anything is uncommitted, and before anything changes.
+    std::fs::write(dir.root.join("notes.txt"), "wip").unwrap();
+    let refused = dir.refused(&[
+        "docs", "import", folder, "--type", "document", "--in", "DOCS-1",
+    ]);
+    assert_eq!(refused.code, "UNCOMMITTED", "{}", refused.message);
+    std::fs::remove_file(dir.root.join("notes.txt")).unwrap();
+
+    let imported = dir
+        .ok(&[
+            "docs", "import", folder, "--type", "document", "--in", "DOCS-1", "--format", "json",
+        ])
+        .json;
+    assert_eq!(
+        imported,
+        json!({ "number": "DOCS-1-D01", "versions": [1, 2], "pictures": ["IMG-1"], "picturesLeftOut": 0 })
+    );
+    // Its picture an image akt, embedded so.
+    let image = file(&dir, "IMG-1");
+    assert!(image.contains("title: The flow"), "{image}");
+    assert!(image.contains("attachments/IMG-1/"), "{image}");
+    let listed = dir.ok(&["versions", "DOCS-1-D01", "--format", "json"]).json;
+    let said: Vec<(Value, Value)> = listed["versions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| (v["label"].clone(), v["description"].clone()))
+        .collect();
+    assert_eq!(
+        said,
+        [
+            (json!("version 2"), json!("bar baz")),
+            (json!("version 1"), json!("foo bar"))
+        ]
+    );
+    // Version 1 is its PDF; the living version is the draft, with no PDF.
+    let first = dir.ok(&["cat", "DOCS-1-D01", "--version", "1"]).markdown;
+    assert!(
+        first.contains("attachments/DOCS-1-D01/version1.pdf"),
+        "{first}"
+    );
+    let living = file(&dir, "DOCS-1-D01");
+    assert!(living.contains("Hello **world**, from Word."), "{living}");
+    assert!(living.contains("![The flow](kuria:IMG-1)"), "{living}");
+    assert!(living.contains("owner: bruce@example.com"), "{living}");
+    assert!(living.contains("by: me@kuria.example"), "{living}");
+    // Each step committed, and nothing left over.
+    assert!(
+        dir.ok(&["history", "DOCS-1-D01"])
+            .markdown
+            .contains("version 2")
+    );
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(&dir.root)
+        .args(["status", "--porcelain"])
+        .output()
+        .unwrap();
+    assert!(
+        status.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&status.stdout)
+    );
+}
+
+// r[verify cli.docs-import]
+// r[verify akt.number.given]
+#[test]
+#[expect(clippy::too_many_lines, reason = "three folders imported in turn")]
+fn imported_documents_keep_their_numbers_and_refer_to_each_other() {
+    let dir = Dir::new();
+    let documents = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/documents");
+    for key in ["image", "document"] {
+        let file = documents.join(format!("{key}.json"));
+        let mut ty: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+        if key == "document" {
+            // Numbered as the system they come from numbers them.
+            ty["key"] = json!("procedure");
+            ty["number"] = json!("FOOID-{seq:4}");
+            ty["created_in"] = json!([]);
+            ty["links"][0]["to"] = json!(["procedure", "image"]);
+            ty["fields"][2]["references"] = json!("refers_to");
+        }
+        let written = dir.root.join(format!("../{key}.json"));
+        std::fs::write(&written, ty.to_string()).unwrap();
+        dir.ok(&["types", "define", written.to_str().unwrap()]);
+    }
+    dir.commit("Types");
+    let folder = |name: &str, metadata: Value, draft: &str| {
+        let folder = dir.root.join(format!("../{name}"));
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("draft.md"), draft).unwrap();
+        std::fs::write(folder.join("metadata.json"), metadata.to_string()).unwrap();
+        folder.to_str().unwrap().to_owned()
+    };
+    let manual = folder(
+        "manual",
+        json!({ "number": "FOOID-0001", "title": "Quality manual", "draft": "draft.md" }),
+        "# Quality manual\n\nSuppliers follow FOOID-0002 Supplier Policy.\n",
+    );
+    let policy = folder(
+        "policy",
+        json!({ "number": "FOOID-0002", "title": "Supplier policy", "draft": "draft.md" }),
+        "# Supplier policy\n\nPart of FOOID-0001 Quality Manual, not `FOOID-0001` in code.\n",
+    );
+    let pattern = r"(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)";
+    let import = |folder: &str| {
+        dir.ok(&[
+            "docs",
+            "import",
+            folder,
+            "--type",
+            "procedure",
+            "--references",
+            pattern,
+            "--format",
+            "json",
+        ])
+        .json["number"]
+            .clone()
+    };
+    // The manual first: its reference to the policy is broken until then.
+    assert_eq!(import(&manual), "FOOID-0001");
+    assert_eq!(import(&policy), "FOOID-0002");
+    let manual = file(&dir, "FOOID-0001");
+    assert!(
+        manual.contains("Suppliers follow [Supplier Policy](kuria:FOOID-0002)."),
+        "{manual}"
+    );
+    let policy = file(&dir, "FOOID-0002");
+    assert!(
+        policy.contains("Part of [Quality Manual](kuria:FOOID-0001), not `FOOID-0001` in code."),
+        "{policy}"
+    );
+    // Taken, and not a number the pattern gives.
+    let taken = dir.refused(&[
+        "new",
+        "procedure",
+        "--set",
+        "title=T",
+        "--number",
+        "FOOID-0002",
+    ]);
+    assert_eq!(taken.code, "NUMBER_TAKEN", "{}", taken.message);
+    let wrong = dir.refused(&["new", "procedure", "--set", "title=T", "--number", "BAR-1"]);
+    assert_eq!(wrong.code, "BAD_REQUEST", "{}", wrong.message);
+    // The next goes on past them.
+    let next = dir
+        .ok(&["new", "procedure", "--set", "title=T", "--format", "json"])
+        .json;
+    assert_eq!(next["number"], "FOOID-0003");
+    dir.commit("Another procedure");
+
+    // Numbers written short, padded as the pattern writes them.
+    let short = folder(
+        "short",
+        json!({ "number": "FOOID-12", "title": "Short", "draft": "draft.md" }),
+        "# Short\n\nSee FOOID-1 Quality Manual.\n",
+    );
+    let padded = dir
+        .ok(&[
+            "docs",
+            "import",
+            &short,
+            "--type",
+            "procedure",
+            "--references",
+            r"(?<id>FOOID-\d{1,4})(?<label>(?:\s?\p{Lu}\w+)*)",
+            "--pad-numbers",
+            "--format",
+            "json",
+        ])
+        .json;
+    assert_eq!(padded["number"], "FOOID-0012");
+    let short = file(&dir, "FOOID-0012");
+    assert!(
+        short.contains("See [Quality Manual](kuria:FOOID-0001)."),
+        "{short}"
     );
 }
 
@@ -2314,7 +2696,7 @@ fn versions_go_to_a_bundle_and_back() {
         kuria_cli::local::convert::bundle_of(&dir.root, Some("me@kuria.example".to_owned()))
             .unwrap();
     let bundle = &unpacked.bundle;
-    assert_eq!(bundle["format"], 3);
+    assert_eq!(bundle["format"], 4);
     let akt = |number: &str| {
         bundle["akter"]
             .as_array()

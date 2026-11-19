@@ -31,3 +31,15 @@ of akter does.
 r[board.default]
 A container whose akt type configures no columns MUST be shown with all its
 members in the `unmapped` column.
+
+## Parent boards
+
+A board can feed another: a release candidate's board is planned from a
+backlog, and work created on it belongs in that backlog too. Which board
+is the parent is chosen per akt, as a link.
+
+r[board.parent]
+An akt type document MAY name, as `board.parent`, a link kind it declares
+(`link.kinds`). The akter an akt links to by that kind are its board's
+parent boards. A `board.parent` that names no link kind the document
+declares MUST be refused.

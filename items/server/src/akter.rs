@@ -41,7 +41,7 @@ use diesel_async::AsyncConnection;
 use konklav_core::{SubjectId, TenantId};
 use kuria_config::{
     AktType, AktTypeDocument, AttachmentFormat, FieldKind, Problem, check_field_references,
-    check_state_references, validate,
+    check_sequences, check_state_references, validate,
 };
 use tokio::sync::Notify;
 
@@ -107,6 +107,10 @@ pub enum AktError {
     },
     #[error("not permitted")]
     Forbidden,
+    #[error("every number `{0}` can give is taken")]
+    NumbersExhausted(String),
+    #[error("`{0}` is taken by another akt")]
+    NumberTaken(String),
     #[error("{0} is archived: unarchive it first")]
     Archived(String),
     #[error("`{container}` can't contain akter of the type `{member}`")]
@@ -695,9 +699,12 @@ async fn rank_after_last(
     rank_between(last.as_deref(), None).map_err(|e| AktError::Internal(e.to_string()))
 }
 
-/// The next akt number for `ty`, taken from the tenant's counter for the
-/// pattern's scope.
+/// The next akt number for `ty`: with a `{seq}`, taken from the tenant's
+/// counter for the pattern's scope, after drawing its `{rand:N}`; without
+/// one, drawn until it is free. The caller holds the tenant's order lock,
+/// so two creates can't draw the same number.
 // r[impl akt.number.sequence]
+// r[impl akt.number.random]
 async fn next_number(
     conn: &mut kuria_store::Connection,
     tenant: Uuid,
@@ -705,9 +712,26 @@ async fn next_number(
     parent: Option<&str>,
     now: DateTime<Utc>,
 ) -> Result<String, AktError> {
-    let sequence = store::next_counter(conn, tenant, &numbering::counter(ty, now, parent)).await?;
+    let mut random = system_random;
+    if !ty.number().has_sequence() {
+        let taken: std::collections::BTreeSet<String> =
+            store::numbers_like(conn, tenant, &numbering::like(ty, now, parent))
+                .await?
+                .into_iter()
+                .collect();
+        return numbering::draw_free(ty, now, parent, &taken, &mut random)
+            .ok_or_else(|| AktError::NumbersExhausted(ty.document().number.clone()));
+    }
+    let drawn = numbering::draw(ty, &mut random);
+    let counter = numbering::counter(ty, now, parent, &drawn);
+    let sequence = store::next_counter(conn, tenant, &counter).await?;
     let sequence = u64::try_from(sequence).map_err(|e| AktError::Internal(e.to_string()))?;
-    Ok(numbering::render(ty, now, parent, sequence))
+    Ok(numbering::render(ty, now, parent, &drawn, sequence))
+}
+
+/// A random number from the system.
+fn system_random() -> u64 {
+    getrandom::u64().expect("system randomness")
 }
 
 /// The revision recording `outcome` on `akt`.
@@ -919,6 +943,7 @@ pub(crate) async fn define_in(
         .collect::<Result<Vec<_>, _>>()?;
     let mut problems = check_state_references(&ty, &others);
     problems.extend(check_field_references(&ty, &others));
+    problems.extend(check_sequences(&ty, &others));
     if !problems.is_empty() {
         return Err(AktError::InvalidType(problems));
     }

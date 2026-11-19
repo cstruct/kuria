@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import FieldEditor from '#lib/akt/FieldEditor.svelte';
+	import { releasedFile } from '#lib/akt/document.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { draftOf, inputOf, isEmpty, type Draft } from '#lib/akt/values.ts';
@@ -75,8 +76,9 @@
 		{#if refusal}<p role="alert">{refusal.message}</p>{/if}
 		<form onsubmit={create} aria-label="New {type.name}">
 			{#each type.fields as field (field.key)}
-				<!-- Verdicts are given, and sections laid out, once it exists. -->
-				{#if drafts[field.key] && !['SHOWN', 'SECTIONS'].includes(drafts[field.key].kind)}
+				<!-- Verdicts are given, and sections laid out, once it exists; a
+				     released file, by releasing it (`version.file`). -->
+				{#if drafts[field.key] && !['SHOWN', 'SECTIONS'].includes(drafts[field.key].kind) && field.key !== releasedFile(type.document)}
 					<FieldEditor
 						{field}
 						bind:draft={drafts[field.key]}

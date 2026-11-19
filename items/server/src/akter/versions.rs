@@ -202,29 +202,29 @@ pub async fn target(
 }
 
 /// One akt to release: its number, the revision the releaser read, and
-/// an optional label.
+/// an optional label and description.
 #[derive(Clone, Debug)]
 pub struct Releasing {
     pub number: String,
     pub revision: i32,
     pub label: Option<String>,
+    /// What the releaser says of the version, such as what changed.
+    pub description: Option<String>,
+    /// The PDF a type whose versions carry a file is released with
+    /// (`version.release-file`).
+    pub file: Option<Uuid>,
 }
 
 impl Akter {
-    /// Releases the akt `number`'s current revision, which must be
-    /// `revision`, as its next version, and returns the version.
+    /// Releases the akt `releasing` names at its current revision, which
+    /// must be the one it read, as its next version, and returns the
+    /// version.
     pub async fn release(
         &self,
         caller: Caller<'_>,
-        number: &str,
-        revision: i32,
-        label: Option<String>,
+        releasing: Releasing,
     ) -> Result<VersionRow, AktError> {
-        let releasing = [Releasing {
-            number: number.to_owned(),
-            revision,
-            label,
-        }];
+        let releasing = [releasing];
         let mut rows = self.release_together(caller, &releasing).await?;
         rows.pop()
             .ok_or_else(|| AktError::Internal("a release answered no version".to_owned()))
@@ -258,7 +258,11 @@ struct Prepared {
     ty: StoredType,
     revision: i32,
     label: Option<String>,
+    description: Option<String>,
     draft: Option<super::live::Loaded>,
+    /// Whether the release records a revision: its live draft's, or one
+    /// setting or clearing its file (`version.release-file`).
+    records: bool,
     fields: std::collections::BTreeMap<String, kuria_engine::Value>,
     next: i32,
 }
@@ -299,7 +303,7 @@ async fn release_in(
             let json = kuria_engine::fields_to_json(&one.fields);
             found.versions.push(TargetVersion {
                 number: u32::try_from(one.next).unwrap_or_default(),
-                revision: one.akt.revision + i32::from(one.draft.is_some()),
+                revision: one.akt.revision + i32::from(one.records),
                 headings: markdown::heading_ids(&one.ty.ty, &one.fields),
                 picture: picture_in(&one.ty, &json).is_some(),
             });
@@ -343,24 +347,44 @@ async fn release_in(
     }
     let mut rows = Vec::new();
     for (one, pins) in prepared.into_iter().zip(pins) {
-        let revision = match one.draft {
-            Some(loaded) => record_draft(conn, caller, &one.ty, one.akt.clone(), loaded).await?,
-            None => one.revision,
-        };
-        let row = VersionRow {
-            tenant_id: tenant,
-            akt_id: one.akt.id,
-            number: one.next,
-            revision,
-            label: one.label,
-            released_by: caller.actor.subject.into(),
-            released_at: Utc::now(),
-            pins: serde_json::to_value(pins).map_err(|e| AktError::Internal(e.to_string()))?,
-        };
-        stored::insert(conn, &row).await?;
-        rows.push(row);
+        rows.push(record_version(conn, caller, one, pins).await?);
     }
     Ok(rows)
+}
+
+/// Stores `one` as the version it gets, with `pins`, after recording the
+/// revision it names, if the release makes one: its live draft's
+/// (`live.release`) or its file's (`version.release-file`).
+async fn record_version(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    one: Prepared,
+    pins: Vec<versions::Pin>,
+) -> Result<VersionRow, AktError> {
+    let revision = match one.draft {
+        Some(loaded) => {
+            record_draft(conn, caller, &one.ty, one.akt.clone(), loaded, &one.fields).await?
+        }
+        None if one.records => {
+            record_fields(conn, caller, &one.ty, one.akt.clone(), &one.fields)
+                .await?
+                .revision
+        }
+        None => one.revision,
+    };
+    let row = VersionRow {
+        tenant_id: one.akt.tenant_id,
+        akt_id: one.akt.id,
+        number: one.next,
+        revision,
+        label: one.label,
+        released_by: caller.actor.subject.into(),
+        released_at: Utc::now(),
+        pins: serde_json::to_value(pins).map_err(|e| AktError::Internal(e.to_string()))?,
+        description: one.description,
+    };
+    stored::insert(conn, &row).await?;
+    Ok(row)
 }
 
 /// Checks that `caller` may release `akt` at `one.revision` with
@@ -397,22 +421,18 @@ async fn prepare(
             current: akt.revision,
         });
     }
-    let label = one
-        .label
-        .as_ref()
-        .map(|l| l.trim().to_owned())
-        .filter(|l| !l.is_empty());
-    if label
-        .as_ref()
-        .is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r']))
-    {
-        return Err(AktError::BadRequest(
-            "a label is one line of at most 100 characters".to_owned(),
-        ));
-    }
+    let (label, description) = said(one)?;
+    let file = file_of(&ty, one, &number)?;
+    let current = values_of(&ty, &akt)?;
+    // A file set or cleared, as a live draft, makes the version's revision.
+    let changes_file = match &file {
+        Some((_, Some(_))) => true,
+        Some((key, None)) => current.contains_key(key),
+        None => false,
+    };
     let existing = stored::of(conn, tenant, akt.id).await?;
     let live = super::live::has_live_draft(&ty);
-    if !live && existing.iter().any(|v| v.revision == revision) {
+    if !live && !changes_file && existing.iter().any(|v| v.revision == revision) {
         return Err(AktError::BadRequest(format!(
             "revision {revision} of {number} is already a version"
         )));
@@ -422,10 +442,19 @@ async fn prepare(
     } else {
         None
     };
-    let fields = match &draft {
+    let mut fields = match &draft {
         Some(loaded) => loaded.fields.clone(),
-        None => values_of(&ty, &akt)?,
+        None => current,
     };
+    match file {
+        Some((key, Some(id))) => {
+            fields.insert(key, kuria_engine::Value::Attachment(id));
+        }
+        Some((key, None)) => {
+            fields.remove(&key);
+        }
+        None => {}
+    }
     // r[impl live.release]
     if draft.is_some()
         && let Some(latest) = existing.first()
@@ -447,9 +476,64 @@ async fn prepare(
         ty,
         revision,
         label,
+        description,
+        records: draft.is_some() || changes_file,
         draft,
         fields,
     })
+}
+
+/// `one`'s label and description, trimmed, each `None` if blank; refused
+/// unless the label is one line of at most 100 characters and the
+/// description at most 2,000 (`version.release`).
+fn said(one: &Releasing) -> Result<(Option<String>, Option<String>), AktError> {
+    let trimmed = |text: &Option<String>| {
+        text.as_ref()
+            .map(|t| t.trim().to_owned())
+            .filter(|t| !t.is_empty())
+    };
+    let (label, description) = (trimmed(&one.label), trimmed(&one.description));
+    if label
+        .as_ref()
+        .is_some_and(|l| l.chars().count() > 100 || l.contains(['\n', '\r']))
+    {
+        return Err(AktError::BadRequest(
+            "a label is one line of at most 100 characters".to_owned(),
+        ));
+    }
+    if description
+        .as_ref()
+        .is_some_and(|d| d.chars().count() > 2000)
+    {
+        return Err(AktError::BadRequest(
+            "a description is at most 2,000 characters".to_owned(),
+        ));
+    }
+    Ok((label, description))
+}
+
+/// The field `one` releases `number`, of the type `ty`, with a file in,
+/// and the PDF it is released with, if any: one that a type released only
+/// as files needs, one that a type written here may have, and that any
+/// other type refuses.
+// r[impl version.release-file]
+fn file_of(
+    ty: &StoredType,
+    one: &Releasing,
+    number: &str,
+) -> Result<Option<(String, Option<Uuid>)>, AktError> {
+    match (ty.ty.released_file(), one.file) {
+        (Some(key), Some(id)) => Ok(Some((key.to_owned(), Some(id)))),
+        (Some(key), None) if ty.ty.written_here() => Ok(Some((key.to_owned(), None))),
+        (Some(_), None) => Err(AktError::BadRequest(format!(
+            "{number} is released with its PDF: upload it and name it as `file`"
+        ))),
+        (None, Some(_)) => Err(AktError::BadRequest(format!(
+            "`{}` akter aren't released with a file",
+            ty.ty.key()
+        ))),
+        (None, None) => Ok(None),
+    }
 }
 
 /// Records `akt`'s live draft `loaded` as its next revision, checked as a
@@ -460,9 +544,28 @@ async fn record_draft(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
     ty: &StoredType,
-    mut akt: AktRow,
+    akt: AktRow,
     loaded: super::live::Loaded,
+    fields: &std::collections::BTreeMap<String, kuria_engine::Value>,
 ) -> Result<i32, AktError> {
+    // The live draft's fields, and the release's file (`version.release-file`).
+    let akt = record_fields(conn, caller, ty, akt, fields).await?;
+    super::live::released(conn, ty, &akt, &loaded, Utc::now()).await?;
+    Ok(akt.revision)
+}
+
+/// Records `fields` as `akt`'s next revision, checked as a write would be,
+/// and answers the akt as it then is: a live draft's (`live.release`), or a
+/// release's file (`version.release-file`), whose attachment is held as an
+/// edit's is.
+// r[impl version.release-file]
+async fn record_fields(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    ty: &StoredType,
+    mut akt: AktRow,
+    fields: &std::collections::BTreeMap<String, kuria_engine::Value>,
+) -> Result<AktRow, AktError> {
     let tenant = akt.tenant_id;
     let before = values_of(ty, &akt)?;
     // r[impl akt.field.required]
@@ -471,7 +574,7 @@ async fn record_draft(
         .document()
         .fields
         .iter()
-        .find(|f| f.required && !loaded.fields.contains_key(&f.key))
+        .find(|f| f.required && !fields.contains_key(&f.key))
     {
         return Err(AktError::Refused(kuria_engine::Refusal::Required(
             missing.key.clone(),
@@ -479,9 +582,9 @@ async fn record_draft(
     }
     let outcome = kuria_engine::Outcome {
         state: akt.state.clone(),
-        hash: kuria_engine::state_hash(&akt.state, &loaded.fields),
-        changes: super::live::changes(&before, &loaded.fields),
-        fields: loaded.fields.clone(),
+        hash: kuria_engine::state_hash(&akt.state, fields),
+        changes: super::live::changes(&before, fields),
+        fields: fields.clone(),
     };
     let now = Utc::now();
     let expected = akt.revision;
@@ -502,6 +605,5 @@ async fn record_draft(
     let mut recorded = super::revision(&akt, caller.actor, None, None, &outcome, now);
     super::references::record(conn, &ty.ty, &akt, &outcome.fields, &mut recorded).await?;
     store::append_revision(conn, &recorded).await?;
-    super::live::released(conn, ty, &akt, &loaded, now).await?;
-    Ok(akt.revision)
+    Ok(akt)
 }

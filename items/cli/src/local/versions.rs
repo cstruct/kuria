@@ -91,9 +91,16 @@ pub fn release(
     w: &mut Writer,
     times: &Times,
     numbers: &[String],
-    label: Option<&str>,
+    released: &crate::versions::Releasing<'_>,
 ) -> Result<Answer, CliError> {
-    let label = label_of(label)?;
+    let (file, description) = (released.file, released.description);
+    let label = label_of(released.label)?;
+    if file.is_some() && numbers.len() > 1 {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "a file is released with one akt at a time",
+        ));
+    }
     let mut releasing = Vec::new();
     for (i, number) in numbers.iter().enumerate() {
         if numbers[..i].contains(number) {
@@ -102,7 +109,7 @@ pub fn release(
                 format!("{number} is named twice"),
             ));
         }
-        releasing.push(releasable(w, times, number)?);
+        releasing.push(releasable(w, times, number, file.is_some())?);
     }
     // Each akt released here as it is released, at the version it gets.
     let dir = &w.dir;
@@ -142,29 +149,23 @@ pub fn release(
         }
     }
     if !broken.is_empty() {
-        let hint = if together.is_empty() {
-            String::new()
-        } else {
-            format!(
-                " (released together with {}, they would be mended: `kuria release` them all at once)",
-                together.join(", ")
-            )
-        };
-        return Err(CliError::refused(
-            "BROKEN_REFERENCES",
-            format!(
-                "the release has broken references: {}{hint}",
-                broken.join("; ")
-            ),
-        ));
+        return Err(broken_references(&broken, &together));
     }
     let mut lines = Vec::new();
     let mut released = Vec::new();
     for ((akt, ty, fields, next), pins) in releasing.into_iter().zip(pins) {
         let number = akt.number.clone();
+        // r[impl version.release-file]: the PDF copied in and recorded as a
+        // revision, which the version names.
+        let revision = match (ty.released_file(), file) {
+            (Some(key), Some(path)) => record_file(w, &ty, &number, key, Some(path))?,
+            // Released without one, a version written here has none.
+            (Some(key), None) if holds(&akt, key) => record_file(w, &ty, &number, key, None)?,
+            _ => akt.revision,
+        };
         let mut version = json!({
             "number": next,
-            "revision": akt.revision,
+            "revision": revision,
             "label": label,
             "by": w.ids.me.clone().unwrap_or_default(),
             "at": w.now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
@@ -176,15 +177,18 @@ pub fn release(
         if has_picture(&w.dir, &akt) {
             version["picture"] = true.into();
         }
-        // A release makes no revision (`version.history`).
+        // r[impl version.number]: its description, kept only if it has one.
+        if let Some(description) = description {
+            version["description"] = description.into();
+        }
+        // A release makes no revision but its file's (`version.history`).
         w.akt_mut(&number).versions.push(version);
         lines.push(format!(
-            "{number}: released version {next}{} (revision {}).",
+            "{number}: released version {next}{} (revision {revision}).",
             label.map(|l| format!(", {l}")).unwrap_or_default(),
-            akt.revision
         ));
         released.push(
-            json!({ "number": number, "version": next, "revision": akt.revision, "label": label }),
+            json!({ "number": number, "version": next, "revision": revision, "label": label }),
         );
     }
     let json = match <[Json; 1]>::try_from(released) {
@@ -192,6 +196,57 @@ pub fn release(
         Err(all) => json!({ "released": all }),
     };
     Ok(super::write::answer(lines.join("\n"), json, None))
+}
+
+/// The refusal of a release with `broken` references, saying which akter
+/// `together` would mend them released with it.
+fn broken_references(broken: &[String], together: &[String]) -> CliError {
+    let hint = if together.is_empty() {
+        String::new()
+    } else {
+        format!(
+            " (released together with {}, they would be mended: `kuria release` them all at once)",
+            together.join(", ")
+        )
+    };
+    CliError::refused(
+        "BROKEN_REFERENCES",
+        format!(
+            "the release has broken references: {}{hint}",
+            broken.join("; ")
+        ),
+    )
+}
+
+/// Whether `akt` holds a value in its field `key`.
+fn holds(akt: &LocalAkt, key: &str) -> bool {
+    akt.values.get(key).is_some_and(|v| !v.is_null())
+}
+
+/// Copies the PDF at `path` in as `number`'s field `key`, checked as an
+/// attachment is (`cli.local.attachments`), or clears the field without
+/// one, as its next revision; answers the revision.
+fn record_file(
+    w: &mut Writer,
+    ty: &kuria_config::AktType,
+    number: &str,
+    key: &str,
+    path: Option<&std::path::Path>,
+) -> Result<i32, CliError> {
+    let mut fields = w.current(number)?.fields;
+    if let Some(path) = path {
+        let raw = json!(format!("@{}", path.display()));
+        let Json::String(copied) = w.attachment(ty, key, number, &raw)? else {
+            return Err(CliError::refused("BAD_FILE", "the file wasn't copied in"));
+        };
+        let id = w.ids.attachment(&copied);
+        fields.insert(key.to_owned(), kuria_engine::Value::Attachment(id));
+    } else {
+        fields.remove(key);
+    }
+    let values = super::values::after(w.dir.akt(number), &fields, &[key.to_owned()], &w.ids);
+    w.akt_mut(number).values = values;
+    Ok(w.bump(number))
 }
 
 /// `label` trimmed, `None` if empty; refused unless one line of at most
@@ -214,6 +269,7 @@ fn releasable(
     w: &Writer,
     times: &Times,
     number: &str,
+    with_file: bool,
 ) -> Result<
     (
         LocalAkt,
@@ -237,7 +293,25 @@ fn releasable(
             format!("{number} has changes git hasn't committed: commit them, then release"),
         ));
     }
-    if akt.versions.iter().any(|v| v["revision"] == akt.revision) {
+    // r[impl version.release-file]
+    match (ty.released_file(), with_file) {
+        (Some(_), false) if !ty.written_here() => {
+            return Err(CliError::refused(
+                "BAD_REQUEST",
+                format!("{number} is released with its PDF: name it with --file"),
+            ));
+        }
+        (None, true) => {
+            return Err(CliError::refused(
+                "BAD_REQUEST",
+                format!("`{}` akter aren't released with a file", ty.key()),
+            ));
+        }
+        _ => {}
+    }
+    // A release that sets or clears its file makes its own revision.
+    let clears = !with_file && ty.released_file().is_some_and(|key| holds(&akt, key));
+    if !with_file && !clears && akt.versions.iter().any(|v| v["revision"] == akt.revision) {
         return Err(CliError::refused(
             "BAD_REQUEST",
             format!("revision {} of {number} is already a version", akt.revision),
@@ -299,6 +373,7 @@ pub fn shown(version: &Json) -> Json {
         "number": version["number"],
         "revision": version["revision"],
         "label": version["label"],
+        "description": version["description"],
         "releasedBy": { "id": by, "name": by, "email": by.contains('@').then_some(by) },
         "releasedAt": version["at"],
         "pins": version["pins"],

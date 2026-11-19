@@ -30,6 +30,7 @@
 pub mod account;
 pub mod args;
 pub mod clone;
+pub mod docs_import;
 pub mod dpop;
 pub mod error;
 pub mod file;
@@ -105,6 +106,30 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         .dir
         .clone()
         .or_else(|| env("KURIA_DIR").map(PathBuf::from));
+    if let Command::Docs {
+        action:
+            DocsCommand::Import {
+                folder,
+                akt_type,
+                inside,
+                image_type,
+                references,
+                pad_numbers,
+                reason,
+            },
+    } = &cli.command
+    {
+        let asked = docs_import::Asked {
+            folder,
+            akt_type,
+            inside,
+            image_type: image_type.as_deref(),
+            references: references.as_deref(),
+            pad_numbers: *pad_numbers,
+            reason: reason.as_deref(),
+        };
+        return import(&context, root.as_deref(), &asked).await;
+    }
     if let Command::Docs { action } = cli.command {
         if root.is_some() {
             return Err(local::unsupported(
@@ -150,6 +175,29 @@ pub async fn answer(cli: Cli) -> Result<Answer, CliError> {
         ) => writes::define(None, &files, true).await,
         (command, Some(root)) => local(&root, command).await,
         (command, None) => server(&context, command).await,
+    }
+}
+
+/// `kuria docs import`, against a server or in the akt directory `root`
+/// (`cli.docs-import`).
+async fn import(
+    context: &Context,
+    root: Option<&Path>,
+    asked: &docs_import::Asked<'_>,
+) -> Result<Answer, CliError> {
+    match root {
+        Some(root) => {
+            // r[impl cli.local.people]: `@me`, else git's email.
+            let me = std::env::var("KURIA_ME").ok().filter(|v| !v.is_empty());
+            let me = reads::Local::open(root, me)?.me;
+            docs_import::in_dir(root, me, asked)
+        }
+        None => {
+            let session = Session::open(context).await?;
+            let answer = docs_import::on_server(&session, asked).await;
+            session.close().await;
+            answer
+        }
     }
 }
 
@@ -389,8 +437,19 @@ fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, 
 /// `verdict` and `copy`, on a server.
 async fn protocol(session: &Session, command: Command) -> Result<Answer, CliError> {
     match command {
-        Command::Release { numbers, label } => {
-            versions::release(session, &numbers, label.as_deref()).await
+        Command::Release {
+            numbers,
+            label,
+            description,
+            file,
+        } => {
+            let description = versions::description_of(description.as_deref())?;
+            let released = versions::Releasing {
+                label: label.as_deref(),
+                description: description.as_deref(),
+                file: file.as_deref(),
+            };
+            versions::release(session, &numbers, &released).await
         }
         Command::Pdf {
             number,
@@ -433,14 +492,18 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             inside,
             sets,
             file,
+            number,
             reason,
         } => edits::create(
             &mut w,
-            &akt_type,
-            &inside,
-            &sets,
-            file.as_deref(),
-            reason.as_deref(),
+            &writes::Created {
+                akt_type: &akt_type,
+                inside: &inside,
+                sets: &sets,
+                file: file.as_deref(),
+                number: number.as_deref(),
+                reason: reason.as_deref(),
+            },
         ),
         Command::Apply {
             files,
@@ -466,9 +529,20 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
         | Command::Unlink { .. }
         | Command::Verdict { .. }
         | Command::Copy { .. }) => local_more(&mut w, command),
-        Command::Release { numbers, label } => {
+        Command::Release {
+            numbers,
+            label,
+            description,
+            file,
+        } => {
             let times = local::git::Times::of(&w.dir.root);
-            local::versions::release(&mut w, &times, &numbers, label.as_deref())
+            let description = versions::description_of(description.as_deref())?;
+            let released = versions::Releasing {
+                label: label.as_deref(),
+                description: description.as_deref(),
+                file: file.as_deref(),
+            };
+            local::versions::release(&mut w, &times, &numbers, &released)
         }
         // r[impl cli.local.archive]
         Command::Archive { numbers, reason } => {
@@ -591,6 +665,7 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             inside,
             sets,
             file,
+            number,
             reason,
         } => {
             let created = writes::Created {
@@ -598,6 +673,7 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
                 inside: &inside,
                 sets: &sets,
                 file: file.as_deref(),
+                number: number.as_deref(),
                 reason: reason.as_deref(),
             };
             writes::create(session, &created).await

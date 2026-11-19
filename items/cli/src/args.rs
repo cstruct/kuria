@@ -195,6 +195,10 @@ pub enum Command {
         /// Its fields from an akt file, as `kuria cat` writes one.
         #[arg(long)]
         file: Option<PathBuf>,
+        /// Its number, such as the one it had where it comes from, which
+        /// its type's pattern must give and no akt may have; else its next.
+        #[arg(long)]
+        number: Option<String>,
         #[arg(long)]
         reason: Option<String>,
     },
@@ -278,6 +282,14 @@ pub enum Command {
         /// A label beside the version's number, such as `2.0`.
         #[arg(long)]
         label: Option<String>,
+        /// What the version is, such as what changed: text of at most
+        /// 2,000 characters, `@<file>` or `@-` to read it.
+        #[arg(long)]
+        description: Option<String>,
+        /// The PDF the version is released with, for an akt type whose
+        /// versions carry one, such as an external document.
+        #[arg(long, value_name = "PDF")]
+        file: Option<std::path::PathBuf>,
     },
     /// Copy an akt and its members, or the part `--only` names, as new
     /// akter of the same types.
@@ -374,6 +386,38 @@ pub enum Command {
 /// `kuria docs`: a clone's commands (`clone.*`).
 #[derive(Debug, Subcommand)]
 pub enum DocsCommand {
+    /// Import a document kept elsewhere from a folder: `metadata.json`
+    /// names its field values, its draft (converted to Markdown with
+    /// pandoc) and its old versions, each a PDF, released oldest first.
+    Import {
+        /// The folder holding `metadata.json` and the files it names.
+        folder: std::path::PathBuf,
+        /// The akt type to make it as, such as `document`.
+        #[arg(long = "type", value_name = "TYPE")]
+        akt_type: String,
+        /// The containers to make it in, by number; the first is its
+        /// parent.
+        #[arg(long = "in", value_name = "CONTAINER")]
+        inside: Vec<String>,
+        /// The akt type to make the draft's pictures as; the one whose
+        /// presentation names an `image` field, if left out.
+        #[arg(long, value_name = "TYPE")]
+        image_type: Option<String>,
+        /// A pattern whose group `id` names an akt the draft refers to and
+        /// whose group `label`, if any, is the reference's text, such as
+        /// `(?<id>FOOID-\d{4})(?<label>(?:\s?\p{Lu}\w+)*)`; a folder's
+        /// `metadata.json` may give its own as `references`.
+        #[arg(long, value_name = "PATTERN")]
+        references: Option<String>,
+        /// Write a number given or captured with fewer digits than the
+        /// type's pattern, such as `FOOID-12` for `FOOID-{seq:4}`, padded:
+        /// `FOOID-0012`.
+        #[arg(long)]
+        pad_numbers: bool,
+        /// Why, recorded with each revision it makes.
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Clone a container and its members as files, recording the base
     /// they were cloned from in `<dir>/.kuria/`.
     Clone {

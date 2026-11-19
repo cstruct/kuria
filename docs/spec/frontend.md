@@ -12,6 +12,11 @@ and MUST answer every other `GET` that no route of its own takes with the
 app's fallback page, so that the app's own paths load it. Hashed assets
 MUST be cacheable for a year; the fallback page MUST NOT be cached.
 
+r[app.icon]
+The app's pages MUST name Kuria's mark as their icon, as SVG, as
+`/favicon.ico` for browsers that ask for it, and as an Apple touch icon,
+in the page as served, before any script runs.
+
 r[app.csp]
 The app MUST be served with a Content Security Policy that allows scripts,
 styles, images and connections from Kuria's own origin only, and forbids
@@ -40,6 +45,15 @@ r[app.header]
 An akt's page MUST show first its akt type, number, title and state, the
 state in its tone (`akt.type.presentation`), and the transitions its state
 allows as actions there.
+
+r[app.trail]
+The top bar MUST show where the page is as a trail: on an akt's page, its
+akt type, then its number with its title under it in smaller text.
+Following a reference in a shown `markdown` field MUST add the akt it
+goes to after the trail it was followed from, each earlier akt a link back
+to it, at the version it was read at, with the trail it had; reaching an
+akt already in the trail MUST cut the trail back to it. Going back and
+forward in the browser MUST show each page with the trail it had.
 
 r[app.fields]
 The app MUST show and edit each field by its kind: text in a single-line or
@@ -76,24 +90,37 @@ definition at the end, starting plain, where typing goes on. Saving MUST give th
 opening and saving an unchanged value MUST change nothing, its heading ids
 included. Inserting a reference MUST let a person find an akt
 (`app.pickers`), then choose one of its headings or none, and its living
-version or one of its versions.
+version or one of its versions. A link or reference in the editor MUST
+offer, from its context menu or from the keyboard's, to change its text
+and address, to open it in a new tab, and to remove it, keeping its text.
 
 r[app.references]
 The app MUST render a `markdown` field's headings with their ids as
 anchors, and each reference as a link to the akt's page, at its version if
 it names one or a version read pins it (`version.read`), and to its
-heading if it names one. A broken reference MUST be shown as broken,
-saying why. Each reference to a footnote MUST be its number, in the order
+heading if it names one, its text after the akt's number if the akt's
+type says `numbered_references` (`akt.type.presentation`). A broken
+reference MUST be shown as broken, saying why. Each reference to a footnote MUST be its number, in the order
 first referred to, linking to the note, and the notes MUST be listed after
 the text, each linking back; a definition nothing refers to MUST NOT be
 shown.
 
+r[app.reference-preview]
+Pointing at or focusing a reference in a shown, not edited, `markdown`
+field MUST, after a short pause and without leaving the page, preview the
+akt it goes to, read at the version the link goes to: its type, number,
+title and state, the version, and the start of the heading's section it
+names, else of its first `markdown` field, as plain text. The preview
+MUST stay open while the pointer is over it, and close when the pointer
+or focus leaves both, and on Escape.
+
 r[app.versions]
 An akt's page MUST list its versions, if its type declares them, and let a
-person release its current revision with an optional label, showing each
-broken reference a refusal names, and offering to release it together
-with each akt the refusal names under `together` (`version.together`),
-chosen by default. It MUST let a person read the akt at a
+person release its current revision with an optional label and
+description, showing each broken reference a refusal names, and offering
+to release it together with each akt the refusal names under `together`
+(`version.together`), chosen by default. The list MUST show each
+version's description. It MUST let a person read the akt at a
 version, saying which and that it is not the living version, and compare
 two versions, or a version and the living version (`version.diff`).
 
@@ -101,6 +128,17 @@ r[app.pdf]
 The app MUST offer a `markdown` field as a PDF, of the living version or
 of the version being read (`pdf.route`), to download, and each version's
 PDF opening in a new tab from the versions list.
+
+r[app.external]
+An akt whose type declares `versions.file` (`version.file`) MUST show a
+version that was released with a PDF as that PDF, as a page of the
+document, in place of its `markdown` fields' sheets. One whose type has no
+`markdown` fields MUST show so the version being read, else its latest;
+with no version yet, it MUST say that none has been released. Releasing
+it MUST ask for the PDF, uploading it, as optional where the type has
+`markdown` fields. The app MUST offer a version's PDF to download, and
+each version's PDF opening in a new tab from the versions list, as
+`app.pdf` does.
 
 r[app.sheets]
 The app MUST show and edit a `markdown` field as A4 sheets, white with
@@ -151,6 +189,14 @@ Dropping a card on another column of a board MUST offer the transitions
 from the member's state to a state that column names for its akt type,
 and perform the one chosen as `app.transitions` does, asking for the fields
 it requires. A column no such transition leads to MUST refuse the drop.
+
+r[app.board-create]
+Each column of a container's board MUST offer, to one who may edit the
+container, creating an akt of each akt type the container contains whose
+initial state the column names for it, inside the container. Creating an
+akt from a container's page, from a column or as a new member, MUST also
+create it in each of the container's parent boards (`board.parent`) whose
+akt type contains the akt's type, the container first.
 
 r[app.navigation]
 The sidebar MUST list the akt types whose `navigation` is `more`

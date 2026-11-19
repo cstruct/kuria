@@ -285,6 +285,15 @@ fn apply(
         set_verdicts(&mut fields, &mut changes, &def.key, &given, kept);
     }
     give_heading_ids(ty, before, &mut fields, &mut changes)?;
+    // r[impl version.file]
+    if let Some(file) = ty.released_file()
+        && changes.contains_key(file)
+    {
+        return Err(Refusal::InvalidValue {
+            field: file.to_owned(),
+            reason: "only releasing a version sets it, with the version's PDF".to_owned(),
+        });
+    }
     Ok((fields, changes))
 }
 

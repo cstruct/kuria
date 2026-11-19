@@ -15,9 +15,10 @@ attachment, `attachments/`, one file per attachment's bytes named by its
 SHA-256 in hex. `bundle.json` MUST say the bundle's format version, its
 scope (`types` or `tenant`), the akt type keys a `types` bundle selected,
 whether it holds akter, and when it was exported. Kuria MUST write format
-3, and read formats 1, 2 and 3: format 2 is format 3 without akter's
-archived state, and format 1 is format 2 without versions or the commits
-revisions were pushed in. On the wire, to and from
+4, and read formats 1 to 4: format 3 is format 4 without versions'
+descriptions, format 2 is format 3 without akter's archived state, and
+format 1 is format 2 without versions or the commits revisions were pushed
+in. On the wire, to and from
 the server, a bundle MUST travel as a tar archive of that directory.
 
 r[bundle.contents]
@@ -191,7 +192,9 @@ akter defines are defined by the nil subject too.
 ## The examples' bundles
 
 r[bundle.examples]
-Each example under `docs/examples` MUST hold `bundle/`: a `types` bundle of
+An example under `docs/examples` MAY hold `bundle/`: a `types` bundle of
 all its akt types with akter, made through Kuria's API, whose akt types'
 latest versions are the example's documents as its files hold them. Each
-MUST import into a fresh tenant (`bundle.bootstrap.fresh`).
+such bundle MUST import into a fresh tenant (`bundle.bootstrap.fresh`).
+An example without one is its akt type documents alone, defined into the
+tenant when it is served.

@@ -192,7 +192,8 @@ With `--dry-run` it MUST say what it would change and change nothing. `new
 r[cli.write]
 The client MUST offer:
 
-- `new <type> [--in <container>]… [--set <field>=<value>]…`, answering the
+- `new <type> [--in <container>]… [--set <field>=<value>]… [--number <number>]`
+  (`akt.number.given`), answering the
   new akt's number;
 - `set <number> <field>=<value>…`: an edit without a file;
 - `do <number> <transition> [--set <field>=<value>]…`: a transition, with
@@ -208,12 +209,16 @@ The client MUST offer:
   verdict, or one for another assignee (`akt.field.verdict`);
 - `copy <number> [--only <number>…] [--in <container>…]`, answering the
   copy's number and the numbers of the copies of its members (`akt.copy`);
-- `release <number> [--label <label>]`: its current revision as its next
-  version, answering the version's number, or each broken reference
-  (`version.release`, `version.references`);
+- `release <number> [--label <label>] [--description <text>] [--file <pdf>]`: its current
+  revision as its next version, answering the version's number, or each
+  broken reference (`version.release`, `version.references`); with
+  `--file`, the PDF an akt type whose versions carry one is released with,
+  uploaded first (`version.release-file`);
 - `docs clone`, `docs status`, `docs diff`, `docs add`, `docs pull` and
   `docs push`: a container as files synced with Kuria (`clone.*`);
 - `docs fmt`, in a clone: its files in normal form (`clone.normal`);
+- `docs import <folder> --type <key> [--in <container>…] [--image-type <key>] [--references <pattern>] [--pad-numbers]`: a document
+  kept elsewhere, its old versions as PDFs (`cli.docs-import`);
 - `types export [<key>…]` and `types define <file>…`, the latter with
   `--check` to validate documents without defining them;
 - `export (--types <key>,… [--akter] | --whole-tenant) -o <dir>` and
@@ -223,6 +228,48 @@ The client MUST offer:
 
 Every command that edits, transitions, links or arranges MUST take
 `--reason`, recorded with the revisions it makes.
+
+r[cli.docs-import]
+`docs import <folder>` MUST read `<folder>/metadata.json`, an object
+whose `draft` names a file in the folder, whose `versions` lists, oldest
+first, objects naming a PDF in the folder as `file` with an optional
+`label` and `description`, and whose every other member is a field's
+value by key, written as `--set` reads it (`cli.values`). It MUST check
+all of it, refusing as `BAD_FILE` a missing or unreadable file, a version
+that isn't a PDF, or a draft without the type's one `markdown` field to
+hold it, before it changes anything. A draft in Markdown (`.md`,
+`.markdown`) MUST be taken as it is; any other MUST be converted to
+GitHub-flavoured Markdown by `pandoc` on the `PATH`, refused as
+`PANDOC_MISSING` without one and as `PANDOC_FAILED` naming what it said
+if it fails. It MUST then create the akt of `--type` in the containers
+`--in` names with those values, release each version with its PDF, label
+and description, oldest first (`version.release-file`), and set the
+`markdown` field to the draft, each with `--reason`, and answer the akt's
+number, its versions, the image akter it made and how many of the draft's
+pictures it left out. Each picture the draft embeds, extracted by pandoc
+or, for a Markdown draft, a file in the folder, in a format the image
+type takes, MUST first be made an image akt (`akt.field.markdown.images`)
+of `--image-type`, else of the one akt type whose presentation names an
+`image` field, refused as `BAD_REQUEST` before anything changes if
+several do; titled by its alt text, else its file's name, each file once;
+and the draft MUST embed it as `kuria:<number>`. A picture it can't so
+make MUST be left as it is and counted. A `number` in `metadata.json`
+MUST be the akt's (`akt.number.given`). With a pattern, `--references`
+or, overriding it, `metadata.json`'s `references`, which MUST name a
+group `id`, refused as `BAD_REQUEST` otherwise, each match in the draft
+outside code and outside links and pictures MUST become a reference to the
+akt `id` names, `[label](kuria:<id>)`, its text the group `label`
+trimmed, else the number; the target need not exist yet, and the reference
+is shown as broken until it does (`app.references`). With `--pad-numbers`, a
+number given or captured that the type of `--type` would give, in the
+first container `--in` names, but for its `{seq}` or `{rand:N}` written
+with fewer digits than the pattern's width, such as `FOOID-12` for
+`FOOID-{seq:4}`, MUST be taken as that number zero-padded, `FOOID-0012`;
+the pattern's `id` group must then match the shorter form. It
+is not one transaction: a failure after the akt is made MUST say what was
+made. In local mode, the directory MUST have no uncommitted changes, and
+each step MUST be committed with a message saying it, since a version is
+read from git (`cli.local.versions`).
 
 r[cli.values]
 `--set` and `--where` values MUST be read by the field's kind: an option by
@@ -314,7 +361,9 @@ refused as `STALE` (`cli.apply`).
 r[cli.local.numbers]
 A new akt's number MUST be one past the highest sequence of its number's
 scope among the directory's akt files, read through their type's number
-pattern; the directory keeps no counter.
+pattern; the directory keeps no counter. A number without a sequence MUST
+be drawn free of every number in the directory, archived akter's included
+(`akt.number.random`).
 
 r[cli.local.people]
 Users and contacts MUST be written and read as text: an email, else a
@@ -382,7 +431,9 @@ a front-matter `versions` list of what `version.number` and
 makes no revision, so an akt file can't change with one. A release MUST be refused as `UNCOMMITTED` while
 the akt has changes git hasn't committed, and reading an akt at a version
 MUST read it from the latest commit at which it had the version's
-revision (`cli.local.history`).
+revision (`cli.local.history`). A release of an akt whose type declares `versions.file`
+MUST copy the file in as `cli.local.attachments` says and record it as a
+new revision (`version.release-file`), which the version names.
 
 r[cli.local.attachments]
 In an akt directory, an attachment MUST be a file under

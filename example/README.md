@@ -1,7 +1,8 @@
 # The example stack
 
 Serves one example from [`docs/examples`](../docs/examples/README.md) with
-its bundle loaded, to click around in: a Konklav of its own, kept between
+its bundle loaded, or, for one without a bundle, its akt types defined, to
+click around in: a Konklav of its own, kept between
 starts, and a fresh Kuria for every start, with the app from Vite's dev
 server, so edits under `items/web` show at once. Its ports and database
 don't clash with the end-to-end stack's (`e2e/`) or the dogfooding stack's
@@ -45,8 +46,11 @@ ten seconds.
   users with no subjects mapping (`bundle.import.subjects`).
 - Each start drops and makes `kuria_example`, then starts `kuria-server`
   with `KURIA_BOOTSTRAP_BUNDLE` set to the example's bundle, into the
-  seeded tenant (`bundle.bootstrap.*`). It checks the tenant holds just the
-  bundle's akt types before printing who can sign in.
+  seeded tenant (`bundle.bootstrap.*`). An example without `bundle/` is its
+  akt type documents alone: each JSON file in it with a `key` and `states`
+  is defined through `defineAktType`, those naming types not yet defined
+  again after the others, into an empty tenant. It checks the tenant holds
+  just the example's akt types before printing who can sign in.
 - The server runs from a copy in `.state/`, made again only when the build
   changes: on macOS a binary cargo has just checked takes seconds longer to
   start, which is also why it isn't `cargo run`.

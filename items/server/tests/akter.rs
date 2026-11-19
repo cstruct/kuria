@@ -466,6 +466,197 @@ async fn concurrent_creates_get_distinct_numbers() {
     assert_eq!(numbers, expected);
 }
 
+// r[verify akt.number.random]
+#[tokio::test(flavor = "multi_thread")]
+async fn random_numbers_are_free_until_none_is() {
+    let world = World::new().await;
+    let mut digit = capa();
+    digit["number"] = json!("QR-{rand:1}");
+    world.define(digit).await;
+    // Created at once, ten akter take the ten numbers `QR-{rand:1}` gives.
+    let mut tasks = Vec::new();
+    for i in 0..10 {
+        let router = world.router.clone();
+        tasks.push(tokio::spawn(async move {
+            send(
+                &router,
+                graphql_with(
+                    "tenant",
+                    "mutation($f: JSON) { createAkt(input: { type: \"capa\", fields: $f }) { number } }",
+                    &json!({ "f": { "title": format!("Akt {i}") } }),
+                ),
+            )
+            .await
+            .json()["data"]["createAkt"]["number"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        }));
+    }
+    let mut numbers = Vec::new();
+    for task in tasks {
+        numbers.push(task.await.unwrap());
+    }
+    numbers.sort();
+    let every: Vec<String> = (0..10).map(|n| format!("QR-{n}")).collect();
+    assert_eq!(numbers, every);
+    let refused = world
+        .run(
+            "mutation { createAkt(input: { type: \"capa\", fields: { title: \"One more\" } }) { number } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(code(&refused), "NUMBERS_EXHAUSTED", "{refused}");
+    assert!(
+        refused["errors"][0]["message"]
+            .as_str()
+            .unwrap()
+            .contains("QR-{rand:1}"),
+        "{refused}"
+    );
+
+    // Beside a sequence, the drawn digits count on their own.
+    let mut both = capa();
+    both["number"] = json!("LOT-{rand:3}-{seq:2}");
+    world.define(both).await;
+    let number = world.create(json!({ "title": "Lot" })).await["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (digits, sequence) = number["LOT-".len()..].split_once('-').unwrap();
+    assert_eq!(digits.len(), 3, "{number}");
+    assert!(digits.bytes().all(|b| b.is_ascii_digit()), "{number}");
+    assert_eq!(sequence, "01", "{number}");
+}
+
+// r[verify akt.number.shared]
+#[tokio::test(flavor = "multi_thread")]
+async fn akt_types_naming_one_sequence_share_its_numbers() {
+    let world = World::new().await;
+    let named = |key: &str, sequence: Option<&str>| {
+        let mut ty = capa();
+        ty["key"] = json!(key);
+        ty["number"] = json!("QMS-{seq:4}");
+        if let Some(sequence) = sequence {
+            ty["sequence"] = json!(sequence);
+        }
+        ty
+    };
+    world.define(named("capa", Some("qms"))).await;
+    world.define(named("procedure", Some("qms"))).await;
+    let create = |key: &'static str| {
+        let world = &world;
+        async move {
+            world
+                .data(
+                    "mutation($t: String!) { createAkt(input: { type: $t, fields: { title: \"T\" } }) { number } }",
+                    json!({ "t": key }),
+                )
+                .await["createAkt"]["number"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        }
+    };
+    assert_eq!(create("capa").await, "QMS-0001");
+    assert_eq!(create("procedure").await, "QMS-0002");
+    assert_eq!(create("capa").await, "QMS-0003");
+
+    // The same pattern without the sequence is refused, as is the sequence
+    // with another pattern.
+    let refused = world
+        .run(
+            "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+            json!({ "d": named("form", None) }),
+        )
+        .await;
+    assert_eq!(code(&refused), "INVALID_AKT_TYPE", "{refused}");
+    assert_eq!(
+        refused["errors"][0]["extensions"]["problems"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let mut elsewhere = named("form", Some("qms"));
+    elsewhere["number"] = json!("FORM-{seq:4}");
+    let refused = world
+        .run(
+            "mutation($d: JSON!) { defineAktType(document: $d) { key } }",
+            json!({ "d": elsewhere }),
+        )
+        .await;
+    assert_eq!(
+        refused["errors"][0]["extensions"]["problems"][0]["path"], "sequence",
+        "{refused}"
+    );
+}
+
+// r[verify akt.number.given]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_akt_may_be_given_a_number_its_pattern_gives() {
+    let world = World::new().await;
+    let mut foo = capa();
+    foo["number"] = json!("FOOID-{seq:4}");
+    world.define(foo).await;
+    let create = |number: Option<&str>| {
+        let world = &world;
+        let number = number.map(str::to_owned);
+        async move {
+            world
+                .run(
+                    "mutation($n: String) { createAkt(input: { type: \"capa\", fields: { title: \"T\" }, number: $n }) { number } }",
+                    json!({ "n": number }),
+                )
+                .await
+        }
+    };
+    let given = create(Some("FOOID-1234")).await;
+    assert_eq!(
+        given["data"]["createAkt"]["number"], "FOOID-1234",
+        "{given}"
+    );
+    // Taken, and not one the pattern gives.
+    assert_eq!(code(&create(Some("FOOID-1234")).await), "NUMBER_TAKEN");
+    assert_eq!(code(&create(Some("FOOID-12")).await), "BAD_REQUEST");
+    assert_eq!(code(&create(Some("BAR-1234")).await), "BAD_REQUEST");
+    // The counter goes on past it, never giving it again.
+    let next = create(None).await;
+    assert_eq!(next["data"]["createAkt"]["number"], "FOOID-1235", "{next}");
+    // An earlier number, free, may still be given.
+    let earlier = create(Some("FOOID-0007")).await;
+    assert_eq!(
+        earlier["data"]["createAkt"]["number"], "FOOID-0007",
+        "{earlier}"
+    );
+    assert_eq!(
+        create(None).await["data"]["createAkt"]["number"],
+        "FOOID-1236"
+    );
+
+    // Drawn digits: any the pattern gives, then never drawn.
+    let mut drawn = capa();
+    drawn["key"] = json!("qr");
+    drawn["number"] = json!("QR-{rand:1}");
+    world.define(drawn).await;
+    let made = world
+        .run(
+            "mutation { createAkt(input: { type: \"qr\", fields: { title: \"T\" }, number: \"QR-7\" }) { number } }",
+            json!({}),
+        )
+        .await;
+    assert_eq!(made["data"]["createAkt"]["number"], "QR-7", "{made}");
+    for _ in 0..9 {
+        let drawn = world
+            .run(
+                "mutation { createAkt(input: { type: \"qr\", fields: { title: \"T\" } }) { number } }",
+                json!({}),
+            )
+            .await;
+        assert_ne!(drawn["data"]["createAkt"]["number"], "QR-7", "{drawn}");
+    }
+}
+
 async fn record_person(world: &World, name: Option<&str>, email: Option<&str>) {
     let mut conn = world.db.pool().get().await.unwrap();
     kuria_store::people::record(

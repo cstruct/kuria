@@ -12,6 +12,7 @@
 		number: number;
 		revision: number;
 		label?: string | null;
+		description?: string | null;
 		releasedAt: string;
 		releasedBy: { name: string };
 	}
@@ -21,6 +22,11 @@
 		versions: readonly ShownVersion[];
 		/** The akt's `markdown` fields, each version's PDFs. */
 		pdfFields?: readonly { key: string; name: string }[];
+		/** Whether each version is released with a PDF, uploaded here
+		 * (`app.external`). */
+		withFile?: boolean;
+		/** Whether a release needs its PDF; else it may have one. */
+		fileRequired?: boolean;
 		/** The version being read, if one is. */
 		reading: number | null;
 		/** Whether the living version can be released now. */
@@ -28,8 +34,14 @@
 		busy: boolean;
 		refusal: Refusal | null;
 		/** Releases the living version with `label`, together with the
-		 * akter `together` names (`version.together`). */
-		onRelease: (label: string, together: string[]) => Promise<boolean>;
+		 * akter `together` names (`version.together`), with `file` if it is
+		 * released with one. */
+		onRelease: (
+			label: string,
+			together: string[],
+			file: File | null,
+			description: string
+		) => Promise<boolean>;
 		onCompare: (from: number, to: number | null) => void;
 	}
 
@@ -37,6 +49,8 @@
 		number,
 		versions,
 		pdfFields = [],
+		withFile = false,
+		fileRequired = true,
 		reading,
 		releasable,
 		busy,
@@ -47,22 +61,36 @@
 
 	let releaseOpen = $state(false);
 	let label = $state('');
+	let description = $state('');
+	let file = $state<File | null>(null);
 	/** The akter chosen to release together, of those a refusal named. */
 	let together = $derived<string[]>(refusal?.together ?? []);
 	let from = $state('');
 	let to = $state('');
 
 	// r[impl app.pdf]: each version's PDF, opened where it is shown.
-	const pdfOf = (version: number, field: string) =>
-		`/akter/${encodeURIComponent(number)}/pdf?field=${encodeURIComponent(field)}&version=${version}`;
+	const pdfOf = (version: number, field: string | null) =>
+		`/akter/${encodeURIComponent(number)}/pdf?${field ? `field=${encodeURIComponent(field)}&` : ''}version=${version}`;
+	// r[impl app.external]: a version released as a file has that PDF.
+	const pdfLinks = $derived(
+		withFile
+			? [{ key: null, shown: 'Open PDF' }]
+			: pdfFields.map((f) => ({
+					key: f.key,
+					shown: pdfFields.length > 1 ? `Open ${f.name} PDF` : 'Open PDF'
+				}))
+	);
 
 	const page = (version: number | null) =>
 		`${resolve('/akt/[number]', { number })}${version ? `?version=${version}` : ''}`;
 
 	async function release() {
-		if (await onRelease(label, together)) {
+		if (withFile && fileRequired && !file) return;
+		if (await onRelease(label, together, file, description)) {
 			releaseOpen = false;
 			label = '';
+			description = '';
+			file = null;
 			together = [];
 		}
 	}
@@ -89,17 +117,19 @@
 							>{ago(v.releasedAt)}</time
 						></span
 					>
-					{#if pdfFields.length}
+					{#if v.description}
+						<p class="description">{v.description}</p>
+					{/if}
+					{#if pdfLinks.length}
 						<span class="pdfs">
-							{#each pdfFields as f (f.key)}
-								{@const shown = pdfFields.length > 1 ? `Open ${f.name} PDF` : 'Open PDF'}
+							{#each pdfLinks as f (f.key)}
 								<!-- The server's PDF route, not a page of the app. -->
 								<!-- eslint-disable svelte/no-navigation-without-resolve -->
 								<a
 									href={pdfOf(v.number, f.key)}
 									target="_blank"
 									rel="noopener"
-									aria-label="{shown} of version {v.number}">{shown}</a
+									aria-label="{f.shown} of version {v.number}">{f.shown}</a
 								>
 								<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							{/each}
@@ -150,7 +180,11 @@
 <Dialog
 	bind:open={releaseOpen}
 	title="Release a version"
-	description="It names this revision, which then never changes."
+	description={withFile && fileRequired
+		? 'It is the PDF you upload, kept as this version, which then never changes.'
+		: withFile
+			? 'It names this revision, or the PDF you upload, which then never changes.'
+			: 'It names this revision, which then never changes.'}
 >
 	<form
 		id="release-form"
@@ -160,9 +194,28 @@
 			release();
 		}}
 	>
+		{#if withFile}
+			<label>
+				{#if fileRequired}PDF{:else}<span>PDF <span class="optional">(optional)</span></span>{/if}
+				<input
+					type="file"
+					accept="application/pdf"
+					required={fileRequired}
+					onchange={(e) => (file = e.currentTarget.files?.[0] ?? null)}
+				/>
+			</label>
+		{/if}
 		<label>
-			Label <span class="optional">(optional)</span>
+			<span>Label <span class="optional">(optional)</span></span>
 			<input bind:value={label} maxlength="100" placeholder="2.0" />
+		</label>
+		<label>
+			<span>Description <span class="optional">(optional)</span></span>
+			<textarea
+				bind:value={description}
+				maxlength="2000"
+				rows="4"
+				placeholder="What changed, and why"></textarea>
 		</label>
 		{#if refusal}
 			<div role="alert">
@@ -195,6 +248,14 @@
 </Dialog>
 
 <style>
+	/* What its releaser said, as they wrote it, line breaks kept. */
+	.description {
+		margin: var(--space-1) 0 0;
+		white-space: pre-line;
+		font-size: var(--text-sm);
+		color: var(--text-muted);
+	}
+
 	.together {
 		display: flex;
 		flex-direction: column;
@@ -251,6 +312,13 @@
 		align-items: end;
 		gap: var(--space-2);
 		margin-bottom: var(--space-3);
+	}
+
+	/* Each field under the one before, its name and hint on one line. */
+	#release-form {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
 	}
 
 	.compare label,

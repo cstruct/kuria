@@ -4,7 +4,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use kuria_config::{AktTypeDocument, check_field_references, check_state_references, validate};
+use kuria_config::{
+    AktTypeDocument, check_field_references, check_sequences, check_state_references, validate,
+};
 use kuria_engine::rules::{containment, numbering};
 use kuria_engine::{Refusal, rank_between};
 use serde_json::{Map, Value as Json, json};
@@ -68,14 +70,15 @@ fn field_input(
 /// `kuria new <type>` in local mode.
 // r[impl cli.local.rules]
 // r[impl cli.local.numbers]
-pub fn create(
-    w: &mut Writer,
-    akt_type: &str,
-    inside: &[String],
-    sets: &[String],
-    path: Option<&Path>,
-    reason: Option<&str>,
-) -> Result<Answer, CliError> {
+pub fn create(w: &mut Writer, asked: &crate::writes::Created<'_>) -> Result<Answer, CliError> {
+    let crate::writes::Created {
+        akt_type,
+        inside,
+        sets,
+        file: path,
+        number: asked_number,
+        reason,
+    } = *asked;
     let shape = w.shape(akt_type)?;
     let mut given = Map::new();
     let mut containers: Vec<String> = Vec::new();
@@ -95,16 +98,16 @@ pub fn create(
     containers.extend(inside.iter().cloned());
     given.extend(split_sets(&shape, sets)?);
     // The number it will have, for the attachments it is given.
-    let number = numbering::next_from(
-        &w.dir.types[akt_type].ty,
-        w.now,
-        containers.first().map(String::as_str),
-        numbers(&w.dir),
-    );
+    let ty = w.dir.types[akt_type].ty.clone();
+    let parent = containers.first().map(String::as_str);
+    let number = match asked_number {
+        Some(given) => given_number(w, &ty, given, parent)?,
+        None => next_number(w, &ty, parent)?,
+    };
     let mut fields = inputs(w, &shape, &number, &given)?;
     fields.retain(|_, v| !v.is_null());
 
-    let number = create_with(w, akt_type, &fields, &containers)?;
+    let number = create_with(w, akt_type, &fields, &containers, Some(number))?;
     Ok(answer(
         format!("Created {number}."),
         revision(&number, 1),
@@ -112,8 +115,48 @@ pub fn create(
     ))
 }
 
+/// The number a new akt of `ty` created in `parent` takes, from the
+/// directory's numbers (`cli.local.numbers`), drawing its random digits from
+/// the system.
+// r[impl cli.local.numbers]
+// r[impl akt.number.random]
+fn next_number(
+    w: &Writer,
+    ty: &kuria_config::AktType,
+    parent: Option<&str>,
+) -> Result<String, CliError> {
+    let mut random = || getrandom::u64().expect("system randomness");
+    numbering::next_from(ty, w.now, parent, numbers(&w.dir), &mut random).ok_or_else(|| {
+        CliError::refused(
+            "NUMBERS_EXHAUSTED",
+            format!("every number `{}` can give is taken", ty.document().number),
+        )
+    })
+}
+
+/// `number`, given to a new akt of `ty` in `parent`, checked as one its
+/// pattern gives and free among the directory's numbers, archived akter's
+/// too (`akt.number.given`).
+// r[impl akt.number.given]
+fn given_number(
+    w: &Writer,
+    ty: &kuria_config::AktType,
+    number: &str,
+    parent: Option<&str>,
+) -> Result<String, CliError> {
+    numbering::given(ty, number, parent).map_err(|m| CliError::refused("BAD_REQUEST", m))?;
+    if numbers(&w.dir).any(|n| n == number) {
+        return Err(CliError::refused(
+            "NUMBER_TAKEN",
+            format!("`{number}` is taken by another akt"),
+        ));
+    }
+    Ok(number.to_owned())
+}
+
 /// Creates an akt of `akt_type` with the inputs `fields` in `containers`,
-/// by the rules a server creates one by, and answers its number.
+/// by the rules a server creates one by, and answers its number: `number`
+/// if one was already drawn for it, else the next.
 // r[impl cli.local.rules]
 // r[impl cli.local.numbers]
 pub(crate) fn create_with(
@@ -121,6 +164,7 @@ pub(crate) fn create_with(
     akt_type: &str,
     fields: &Map<String, Json>,
     containers: &[String],
+    number: Option<String>,
 ) -> Result<String, CliError> {
     let refs: Vec<&str> = containers.iter().map(String::as_str).collect();
     containment::check_distinct(&refs)?;
@@ -136,12 +180,10 @@ pub(crate) fn create_with(
     let change = w.change();
     let outcome = kuria_engine::create(&t.ty, fields, change).map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, None, &outcome.changes)?;
-    let number = numbering::next_from(
-        &t.ty,
-        w.now,
-        containers.first().map(String::as_str),
-        numbers(&w.dir),
-    );
+    let number = match number {
+        Some(number) => number,
+        None => next_number(w, &t.ty, containers.first().map(String::as_str))?,
+    };
     let rank = rank_between(w.last_rank(), None)
         .map_err(|e| CliError::refused("INTERNAL", e.to_string()))?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
@@ -493,6 +535,7 @@ pub fn define(w: &mut Writer, documents: Vec<Json>) -> Result<Answer, CliError> 
             .collect();
         let mut problems = check_state_references(&ty, &others);
         problems.extend(check_field_references(&ty, &others));
+        problems.extend(check_sequences(&ty, &others));
         if !problems.is_empty() {
             return Err(CliError::refused(
                 "INVALID_AKT_TYPE",

@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use uuid::Uuid;
 
-/// The bundle format this server writes. Format 2 is the same without
-/// akter's archived state, and format 1 without versions and commits too,
-/// so it reads all three.
-pub const FORMAT: u32 = 3;
+/// The bundle format this server writes. Format 3 is the same without
+/// versions' descriptions, format 2 without akter's archived state too,
+/// and format 1 without versions and commits too, so it reads all four.
+pub const FORMAT: u32 = 4;
 
 /// The formats this server reads.
-pub const READS: [u32; 3] = [1, 2, 3];
+pub const READS: [u32; 4] = [1, 2, 3, 4];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -149,6 +149,9 @@ pub struct BundleAktVersion {
     pub revision: i32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// What its releaser said of it (format 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub released_by: Uuid,
     pub released_at: DateTime<Utc>,
     /// What each reference naming no version meant at release

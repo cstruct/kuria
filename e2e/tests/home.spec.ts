@@ -23,7 +23,8 @@ test('home shows what changed recently and every akt type', async ({ browser }) 
 	await expect(recent.getByRole('listitem').first()).toContainText('Open');
 
 	const types = page.getByRole('region', { name: 'Akt types' });
-	await expect(types.getByRole('link', { name: 'Backlog item', exact: true })).toBeVisible();
+	// By its address: the planning example's tasks are named Task too.
+	await expect(types.locator('a[href="/types/backlog_item"]')).toBeVisible();
 	// Each type with the icon its presentation gives it.
 	await expect(types.getByRole('link', { name: 'Release', exact: true }).locator('svg')).toBeVisible();
 	const backlogs = types
@@ -37,9 +38,9 @@ test('home shows what changed recently and every akt type', async ({ browser }) 
 		{ f: { title: 'Assigned to the developer', assignee: seeded().people.developer.subject } }
 	);
 	await page.reload();
-	await expect(page.getByRole('list', { name: 'My work: Backlog item' })).toContainText(
-		'Assigned to the developer'
-	);
+	await expect(
+		page.getByRole('list', { name: 'My work: Task' }).filter({ hasText: 'Assigned to the developer' })
+	).toBeVisible();
 
 	await recent.getByRole('link', { name: /Home-page backlog/ }).click();
 	await expect(page.getByTestId('number')).toContainText(createAkt.number);

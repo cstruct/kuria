@@ -2,6 +2,7 @@
 	import { Dialog } from 'bits-ui';
 	import { MediaQuery } from 'svelte/reactivity';
 	import type { Snippet } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Menu from '@lucide/svelte/icons/menu';
 	import LogOut from '@lucide/svelte/icons/log-out';
@@ -11,10 +12,22 @@
 	import { Shell } from '#lib/graphql/operations.ts';
 	import Sidebar from './Sidebar.svelte';
 	import SearchDialog from './SearchDialog.svelte';
-	import { crumbs } from './crumbs.svelte';
+	import { crumbs, type Crumb } from './crumbs.svelte';
 	import { NARROW, isSearchShortcut, shortcutLabel } from './shell';
 
 	let { children }: { children: Snippet } = $props();
+
+	// r[impl app.trail]: an earlier akt on the trail goes back to it with
+	// the trail it had; a new tab or window gets none.
+	function backTo(event: MouseEvent, crumb: Crumb) {
+		if (!crumb.state || !crumb.href) return;
+		if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+			return;
+		event.preventDefault();
+		// Already resolved: the app's own link.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		void goto(crumb.href, { state: crumb.state });
+	}
 
 	const shell = query(Shell, () => ({}));
 	const narrow = new MediaQuery(NARROW);
@@ -38,6 +51,14 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+{#snippet named(crumb: Crumb)}
+	{#if crumb.detail}
+		<span class="named"
+			><span class="label">{crumb.label}</span><small class="detail">{crumb.detail}</small></span
+		>
+	{:else}{crumb.label}{/if}
+{/snippet}
+
 <div class="shell" class:narrow={narrow.current}>
 	{#if !narrow.current}
 		<aside class="side">
@@ -57,10 +78,10 @@
 							{#if i > 0}<ChevronRight size={14} aria-hidden={true} />{/if}
 							{#if crumb.href && i < crumbs.trail.length - 1}
 								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-								<a href={crumb.href}>{crumb.label}</a>
+								<a href={crumb.href} onclick={(e) => backTo(e, crumb)}>{@render named(crumb)}</a>
 							{:else}
 								<span aria-current={i === crumbs.trail.length - 1 ? 'page' : undefined}
-									>{crumb.label}</span
+									>{@render named(crumb)}</span
 								>
 							{/if}
 						</li>
@@ -181,6 +202,24 @@
 	.crumbs li span {
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	/* A title under its number, smaller. */
+	.crumbs .named {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		line-height: 1.25;
+	}
+
+	.crumbs .named > * {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.crumbs .detail {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
 	}
 
 	.crumbs li:last-child span {

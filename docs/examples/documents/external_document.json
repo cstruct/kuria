@@ -1,0 +1,28 @@
+{
+  "key": "external_document",
+  "name": "External document",
+  "number": "{parent}-X{seq:2}",
+  "created_in": ["document_index"],
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "owner", "name": "Owner", "kind": "user" },
+    { "key": "source", "name": "Source", "kind": "text",
+      "description": "Who writes it, such as a supplier or a standards body." },
+    { "key": "pdf", "name": "PDF", "kind": "attachment", "media_types": ["application/pdf"],
+      "description": "The released version's PDF, uploaded with each release." }
+  ],
+  "states": [
+    { "key": "current", "name": "Current", "initial": true },
+    { "key": "retired", "name": "Retired", "final": true }
+  ],
+  "transitions": [
+    { "key": "retire", "name": "Retire", "from": ["current"], "to": "retired" }
+  ],
+  "versions": { "action": "documents:release", "file": "pdf" },
+  "presentation": {
+    "numbered_references": true,
+    "icon": "archive", "colour": "purple",
+    "list": ["owner", "source"],
+    "tones": { "current": "active", "retired": "neutral" }
+  }
+}

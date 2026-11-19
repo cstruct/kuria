@@ -1,5 +1,6 @@
 //! `markdown` fields as PDFs (`pdf.*`): of the living version or of a
-//! version, rendered by `kuria-typst`.
+//! version, rendered by `kuria-typst`; and the PDF each version of an akt
+//! released as files carries (`version.file`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,6 +40,15 @@ pub(crate) struct PdfState {
 /// the file it is read from, and its bytes.
 type Picture = (String, String, Vec<u8>);
 
+/// What an akt's PDF is made from.
+enum Found {
+    /// A `markdown` field: its text, the pins it is read with, the pictures
+    /// of its images, and whether it allows diagrams.
+    Rendered(String, Vec<Pin>, Vec<Picture>, bool),
+    /// The PDF a version was released with, and the version.
+    File(kuria_store::attachments::AttachmentRow, i32),
+}
+
 #[derive(Deserialize)]
 pub(crate) struct Asked {
     field: Option<String>,
@@ -67,7 +77,19 @@ pub(crate) async fn pdf(
     let tenant: Uuid = principal.tenant.into();
     let found = wanted(&state, &authorizer, tenant, &number, &asked);
     let (text, pins, pictures, diagrams) = match found.await {
-        Ok(Some(found)) => found,
+        Ok(Some(Found::Rendered(text, pins, pictures, diagrams))) => {
+            (text, pins, pictures, diagrams)
+        }
+        Ok(Some(Found::File(row, version))) => {
+            return released(
+                &state,
+                tenant,
+                &row,
+                &format!("{number}-v{version}.pdf"),
+                &asked,
+            )
+            .await;
+        }
         Ok(None) => return (StatusCode::NOT_FOUND, "not found").into_response(),
         Err(AktError::Unavailable(e)) => {
             tracing::warn!("{e}");
@@ -107,7 +129,12 @@ pub(crate) async fn pdf(
         Some(v) => format!("{number}-v{v}.pdf"),
         None => format!("{number}.pdf"),
     };
-    let mut response = bytes.into_response();
+    as_pdf(bytes.into_response(), &name, &asked)
+}
+
+/// `response` as the PDF `name`, shown inline unless `download` is asked
+/// for.
+fn as_pdf(mut response: Response, name: &str, asked: &Asked) -> Response {
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_TYPE,
@@ -121,7 +148,29 @@ pub(crate) async fn pdf(
     if let Ok(disposition) = HeaderValue::from_str(&format!("{disposition}; filename=\"{name}\"")) {
         headers.insert(header::CONTENT_DISPOSITION, disposition);
     }
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     response
+}
+
+/// The PDF a version was released with, `row`, as the PDF `name`.
+// r[impl version.file]
+async fn released(
+    state: &PdfState,
+    tenant: Uuid,
+    row: &kuria_store::attachments::AttachmentRow,
+    name: &str,
+    asked: &Asked,
+) -> Response {
+    match state.storage.get(tenant, &row.sha256).await {
+        Ok(bytes) => as_pdf(bytes.into_response(), name, asked),
+        Err(e) => {
+            tracing::error!("reading a version's PDF: {e}");
+            (StatusCode::SERVICE_UNAVAILABLE, "storage is unavailable").into_response()
+        }
+    }
 }
 
 /// `text` as typst, its references linking into the app at `public_url`,
@@ -175,7 +224,7 @@ async fn wanted(
     tenant: Uuid,
     number: &str,
     asked: &Asked,
-) -> Result<Option<(String, Vec<Pin>, Vec<Picture>, bool)>, AktError> {
+) -> Result<Option<Found>, AktError> {
     let mut conn = state.pool.get().await?;
     let Some(akt) = store::akt_by_number(&mut conn, tenant, number).await? else {
         return Ok(None);
@@ -188,6 +237,51 @@ async fn wanted(
         .await?
     {
         return Ok(None);
+    }
+    // r[impl version.file]: the PDF a version was released with; of a type
+    // written elsewhere, the latest's when none is asked for, and none
+    // before its first release.
+    if let Some(key) = ty.ty.released_file() {
+        let written_here = ty.ty.written_here();
+        if asked.field.as_ref().is_some_and(|f| f != key) && !written_here {
+            return Ok(None);
+        }
+        let version = match asked.version {
+            Some(n) => Some(n),
+            None if written_here => None,
+            None => match kuria_store::versions::of(&mut conn, tenant, akt.id)
+                .await?
+                .first()
+            {
+                Some(latest) => Some(latest.number),
+                None => return Ok(None),
+            },
+        };
+        if let Some(version) = version
+            && asked.field.as_ref().is_none_or(|f| f == key)
+        {
+            let Some((row, _)) =
+                crate::akter::versions::at_version(&mut conn, &ty, &akt, version).await?
+            else {
+                return Ok(None);
+            };
+            let id = row
+                .fields
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .and_then(|id| Uuid::parse_str(id).ok());
+            match id {
+                Some(id) => {
+                    return Ok(kuria_store::attachments::find(&mut conn, tenant, &[id])
+                        .await?
+                        .pop()
+                        .map(|file| Found::File(file, version)));
+                }
+                // A version of a type written here without a PDF is rendered.
+                None if written_here && asked.field.is_none() => {}
+                None => return Ok(None),
+            }
+        }
     }
     let field = match &asked.field {
         Some(key) => ty.ty.field(key).cloned(),
@@ -228,7 +322,41 @@ async fn wanted(
         _ => String::new(),
     };
     let pictures = pictures_of(state, &mut conn, authorizer, tenant, &text, &pins).await?;
-    Ok(Some((text, pins, pictures, field.diagrams)))
+    let numbered = numbered(&mut conn, authorizer, tenant, &text).await?;
+    let text = kuria_engine::markdown::number_references(&text, &|n| numbered.contains(n));
+    Ok(Some(Found::Rendered(text, pins, pictures, field.diagrams)))
+}
+
+/// The akter `text` refers to whose type shows references to them with
+/// their number first, of those the reader may read (`pdf.render`).
+// r[impl pdf.render]
+async fn numbered(
+    conn: &mut kuria_store::Connection,
+    authorizer: &crate::authorize::Authorizer,
+    tenant: Uuid,
+    text: &str,
+) -> Result<std::collections::HashSet<String>, AktError> {
+    let mut found = std::collections::HashSet::new();
+    let numbers: std::collections::BTreeSet<String> = kuria_engine::markdown::references(text)
+        .into_iter()
+        .map(|r| r.number)
+        .collect();
+    for number in numbers {
+        let Some(akt) = store::akt_by_number(conn, tenant, &number).await? else {
+            continue;
+        };
+        let ty = crate::akter::versions::type_of_akt(conn, tenant, &akt).await?;
+        if ty.ty.document().presentation.numbered_references
+            && authorizer
+                .allows(&Permission::Read {
+                    key: ty.ty.key().to_owned(),
+                })
+                .await?
+        {
+            found.insert(number);
+        }
+    }
+    Ok(found)
 }
 
 /// The pictures of the images `text` embeds, as read with `pins`: each one
