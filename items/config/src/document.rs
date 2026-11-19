@@ -418,6 +418,9 @@ pub struct FieldDef {
     /// rendered when it is written (`akt.field.markdown.diagrams`).
     #[serde(default, skip_serializing_if = "is_false")]
     pub diagrams: bool,
+    /// The states in which it is given, if not all (`akt.field.states`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<String>,
     /// What a single `user` field is offered as when an akt is created
     /// (`akt.field.default`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

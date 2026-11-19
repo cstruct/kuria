@@ -623,9 +623,9 @@ Verified:
 <!-- akt: PLAN-025-T12 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b61
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T17]
 title: Ask for fields in the state they belong to
@@ -638,6 +638,26 @@ Covers findings 2.3 (every field on day one), 3.1 and 3.3.
 - The create form asks only for the creation fields. The others show on the akt's page once its state reaches them, or in the transition that sets them.
 - "Go for release" becomes its own step, with the approver, "on behalf of", and a confirmation.
 - Rules: `akt.type` (a new member, specified in `docs/spec/akter.md`), `app.create`, `app.fields`.
+
+## Done
+
+G06 is resolved for fields: `states` (`akt.field.states`), validated in items/config, enforced in items/engine (`Refusal::NotInState`).
+
+- The create page asks only for fields given in the initial state.
+- An akt's page hides a field it doesn't give in its state until the field holds a value, and then shows it without an edit.
+- The example names states for Released on (released, closed), Go for release (testing, released, closed), a task's Pull request (in review, done) and a run's Conclusion (done).
+- Creating a release now asks for its title, version and manager only. Go for release is given while testing, or by the Release transition, which requires it, with its approver and "for".
+
+Not done: a separate "Go for release" step with its own confirmation. The Release transition's dialog asks for it, with who checked it for whom.
+
+Verified:
+
+- the engine test `a_field_is_given_only_in_its_states`;
+- the config test;
+- `document.test.ts`;
+- the bundles written again;
+- `mise run test`;
+- e2e release-flow, test-protocols, archive-rules, members and cli.
 
 <!-- field: acceptance -->
 - Creating a release asks for its title, version and manager only.
@@ -887,9 +907,9 @@ The example's tasks gain "Put back", In progress to To do, so that a start can b
 <!-- akt: PLAN-025-G06 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6C
-state: open
+state: closed
 in: [PLAN-025]
 title: How a type says the states its fields and verdicts belong to
 ---
@@ -905,6 +925,11 @@ Possible additions:
 - for verdicts, the states in which they are given.
 
 Specify in `docs/spec/akter.md` with the server's enforcement, not only the app's hiding. Resolve before T12 and T14.
+
+<!-- field: resolution -->
+Decided and built for fields. A field may name its `states` (`akt.field.states`). The engine, which the server and the CLI's local mode share, refuses giving the field outside them: on creation, unless the initial state is one, and on an edit in any other state. A transition may give it if it requires it, or leads to or leaves one of those states. The app asks for it only there, and shows it outside them only once it holds a value, read-only.
+
+Verdicts on test cases are left to T14. A test case's own state never changes; whether its verdicts may be given depends on the state of the run that contains it. That needs a rule about containers, not a field's own `states`.
 
 <!-- akt: PLAN-025-G07 -->
 ---

@@ -9,7 +9,7 @@
 	import Alert from '#lib/ui/Alert.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
-	import { releasedFile } from '#lib/akt/document.ts';
+	import { givenIn, releasedFile } from '#lib/akt/document.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import { creatorDefaults, peopleOf, type Person } from '#lib/akt/people.ts';
 	import { draftOf, inputOf, isEmpty, type Draft } from '#lib/akt/values.ts';
@@ -62,6 +62,8 @@
 			(f) =>
 				drafts[f.key] &&
 				!['SHOWN', 'SECTIONS'].includes(drafts[f.key].kind) &&
+				// r[impl akt.field.states]: only what its first state gives.
+				givenIn(type?.document, f.key, initialState) &&
 				f.key !== releasedFile(type?.document)
 		)
 	);
@@ -88,6 +90,8 @@
 	$effect(() => {
 		if (parentChosen === null && parentChoices.length > 0) parentChosen = parentChoices[0].number;
 	});
+
+	const initialState = $derived(type?.states.find((s) => s.initial)?.key ?? '');
 
 	/** Where Cancel goes: the container it was opened from, else its type. */
 	const back = $derived(

@@ -344,6 +344,15 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
     if field.multiple && field.kind != FieldKind::User {
         problems.add(&format!("{path}.multiple"), "only user fields are multiple");
     }
+    // r[impl akt.field.states]
+    for (j, state) in field.states.iter().enumerate() {
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(
+                &format!("{path}.states[{j}]"),
+                format!("no state `{state}`"),
+            );
+        }
+    }
     // r[impl akt.field.default]
     if field.default.is_some() && (field.kind != FieldKind::User || field.multiple) {
         problems.add(
@@ -943,6 +952,11 @@ mod tests {
         assert_eq!(
             with("/fields/0/multiple", json!(true)),
             ["fields[0].multiple: only user fields are multiple"]
+        );
+        // r[verify akt.field.states]
+        assert_eq!(
+            with("/fields/0/states", json!(["gone"])),
+            ["fields[0].states[0]: no state `gone`"]
         );
         // r[verify akt.field.default]
         assert_eq!(

@@ -1066,3 +1066,59 @@ fn markdown_fields_get_heading_ids_unique_across_the_akt() {
         })
     );
 }
+
+/// The CAPA type, its root cause given only once it is investigated.
+fn capa_with_states() -> AktType {
+    let mut document = serde_json::to_value(capa().document()).unwrap();
+    let fields = document["fields"].as_array_mut().unwrap();
+    let root = fields
+        .iter_mut()
+        .find(|f| f["key"] == "root_cause")
+        .unwrap();
+    root["states"] = json!(["investigating", "closed"]);
+    validate(serde_json::from_value(document).unwrap()).unwrap()
+}
+
+// r[verify akt.field.states]
+#[test]
+fn a_field_is_given_only_in_its_states() {
+    let ty = capa_with_states();
+    let refused = |state: &str| Refusal::NotInState {
+        field: "root_cause".to_owned(),
+        state: state.to_owned(),
+        states: vec!["investigating".to_owned(), "closed".to_owned()],
+    };
+    // Not on creation, in the initial state, nor by an edit while open.
+    assert_eq!(
+        create(
+            &ty,
+            &input(json!({ "title": "T", "root_cause": "R" })),
+            change()
+        ),
+        Err(refused("open"))
+    );
+    let open = current("open", json!({ "title": "T" }));
+    assert_eq!(
+        edit(&ty, &open, &input(json!({ "root_cause": "R" })), change()),
+        Err(refused("open"))
+    );
+    // By a transition into one of its states, and by edits while in one.
+    let outcome = transition(
+        &ty,
+        &open,
+        "investigate",
+        &input(json!({ "root_cause": "R" })),
+        change(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(outcome.state, "investigating");
+    let investigating = current("investigating", json!({ "title": "T", "root_cause": "R" }));
+    edit(
+        &ty,
+        &investigating,
+        &input(json!({ "root_cause": "S" })),
+        change(),
+    )
+    .unwrap();
+}

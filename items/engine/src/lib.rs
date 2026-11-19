@@ -59,6 +59,12 @@ pub enum Refusal {
     InvalidValue { field: String, reason: String },
     #[error("`{0}` is required")]
     Required(String),
+    #[error("`{field}` is given only while {}, not while `{state}`", one_of(.states))]
+    NotInState {
+        field: String,
+        state: String,
+        states: Vec<String>,
+    },
     #[error("the akt is in a final state")]
     Final,
     #[error("the change changes nothing")]
@@ -98,6 +104,7 @@ fn one_of(words: &[String]) -> String {
 // r[impl akt.create]
 pub fn create(ty: &AktType, input: &Map<String, Json>, change: Change) -> Result<Outcome, Refusal> {
     let state = ty.initial_state().key.clone();
+    in_states(ty, input, |states| states.contains(&state), &state)?;
     let (fields, changes) = apply(ty, &BTreeMap::new(), input, change)?;
     // r[impl akt.field.required]
     if let Some(missing) = ty
@@ -120,11 +127,42 @@ pub fn edit(
     change: Change,
 ) -> Result<Outcome, Refusal> {
     refuse_final(ty, current)?;
+    in_states(
+        ty,
+        input,
+        |states| states.contains(&current.state),
+        &current.state,
+    )?;
     let (fields, changes) = apply(ty, &current.fields, input, change)?;
     if changes.is_empty() {
         return Err(Refusal::NoChange);
     }
     Ok(outcome(current.state.clone(), fields, changes))
+}
+
+/// Refuses a value `input` gives for a field that names the states it is
+/// given in (`akt.field.states`) unless `open` says those states allow it
+/// now, while in `state`.
+// r[impl akt.field.states]
+fn in_states(
+    ty: &AktType,
+    input: &Map<String, Json>,
+    open: impl Fn(&[String]) -> bool,
+    state: &str,
+) -> Result<(), Refusal> {
+    for key in input.keys() {
+        let Some(def) = ty.document().fields.iter().find(|f| &f.key == key) else {
+            continue;
+        };
+        if !def.states.is_empty() && !open(&def.states) {
+            return Err(Refusal::NotInState {
+                field: key.clone(),
+                state: state.to_owned(),
+                states: def.states.clone(),
+            });
+        }
+    }
+    Ok(())
 }
 
 /// Whether editing `current` with `input` would change anything, final or
@@ -161,6 +199,19 @@ pub fn transition(
             transition: transition.to_owned(),
             state: current.state.clone(),
         });
+    }
+    // A transition gives what it requires, and what belongs to the state
+    // it leaves or the one it leads to.
+    for key in input.keys() {
+        if def.requires.contains(key) {
+            continue;
+        }
+        in_states(
+            ty,
+            &Map::from_iter([(key.clone(), Json::Null)]),
+            |states| states.contains(&current.state) || states.contains(&def.to),
+            &current.state,
+        )?;
     }
     let (fields, changes) = apply(ty, &current.fields, input, change)?;
     // r[impl akt.field.checkbox]

@@ -33,7 +33,8 @@
 		linkKinds,
 		draftedFields,
 		releasedFile,
-		requiredFields
+		requiredFields,
+		givenIn
 	} from '#lib/akt/document.ts';
 	import ReleasedPdf from '#lib/akt/ReleasedPdf.svelte';
 	import { upload } from '#lib/akt/upload.ts';
@@ -947,6 +948,8 @@
 								{/if}
 							{:else if showsFile && field.kind === 'MARKDOWN'}
 								<!-- The version is its PDF, not its text. -->
+							{:else if !givenIn(akt.type.document, field.key, akt.state.key) && !akt.fields.some((v) => 'field' in v && v.field === field.key)}
+								<!-- r[impl akt.field.states]: not yet given, and not in its states. -->
 							{:else}
 								<FieldRow
 									{field}
@@ -955,7 +958,7 @@
 									bind:reason
 									{people}
 									editing={editingField === field.key}
-									{editable}
+									editable={editable && givenIn(akt.type.document, field.key, akt.state.key)}
 									drafted={drafted.includes(field.key)}
 									{busy}
 									error={editingField === field.key && refusal ? refusal.message : undefined}

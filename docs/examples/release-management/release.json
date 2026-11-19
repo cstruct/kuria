@@ -5,9 +5,9 @@
   "fields": [
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "version", "name": "Version", "kind": "text" },
-    { "key": "released_on", "name": "Released on", "kind": "date" },
+    { "key": "released_on", "name": "Released on", "kind": "date", "states": ["released", "closed"] },
     { "key": "release_manager", "name": "Release manager", "kind": "user", "default": "creator" },
-    { "key": "go", "name": "Go for release", "kind": "checkbox" }
+    { "key": "go", "name": "Go for release", "kind": "checkbox", "states": ["testing", "released", "closed"] }
   ],
   "states": [
     { "key": "planning", "name": "Planning", "initial": true },

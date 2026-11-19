@@ -85,3 +85,13 @@ export function outcomeRefusal(
 	const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} or ${words.at(-1)}` : words[0];
 	return `Only when the outcome is ${list}`;
 }
+
+/** Whether the field `key` of the type `document` is given in the state
+ * `state`: in every state, unless it names its `states`
+ * (`akt.field.states`). */
+// r[impl akt.field.states]
+export function givenIn(document: unknown, key: string, state: string): boolean {
+	const fields = (document as { fields?: { key?: string; states?: string[] }[] } | null)?.fields;
+	const states = fields?.find((f) => f.key === key)?.states;
+	return !Array.isArray(states) || states.length === 0 || states.includes(state);
+}

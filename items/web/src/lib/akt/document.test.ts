@@ -3,6 +3,7 @@ import {
 	availableTransitions,
 	containedTypes,
 	draftedFields,
+	givenIn,
 	linkKinds,
 	outcomeRefusal,
 	requiredFields
@@ -58,5 +59,18 @@ describe('linkKinds', () => {
 			links: [kind('refers_to'), kind('replaces')]
 		};
 		expect(linkKinds(document).map((k) => k.key)).toEqual(['replaces']);
+	});
+});
+
+// r[verify akt.field.states]
+describe('givenIn', () => {
+	const document = {
+		fields: [{ key: 'title' }, { key: 'released_on', states: ['released', 'closed'] }]
+	};
+
+	it('gives a field in its states only, or in all without any', () => {
+		expect(givenIn(document, 'title', 'planning')).toBe(true);
+		expect(givenIn(document, 'released_on', 'planning')).toBe(false);
+		expect(givenIn(document, 'released_on', 'released')).toBe(true);
 	});
 });

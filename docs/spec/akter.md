@@ -148,6 +148,16 @@ akt is offered as its value, to keep or change (`app.create`). A `default`
 of anything else, or on a field of another kind or one that is `multiple`,
 MUST be refused.
 
+r[akt.field.states]
+A field MAY name, in `states`, the states in which it is given: it MUST
+then be refused when an akt is created, unless the initial state is one
+of them, and when it is edited in any other state. A transition MAY give
+it if it requires it, or if it leads to one of those states or leaves
+one. The app MUST ask for such a field only in those states, or by the
+transitions that give it, and MUST show it outside them only once it holds
+a value (`app.create`, `app.fields`). Every state it names MUST be one the
+type defines; otherwise the document MUST be refused.
+
 r[akt.field.sections]
 A `sections` field MUST hold a list of items, in order, each either an akt
 number, naming a member of the akt, or a section: an optional `title`, an

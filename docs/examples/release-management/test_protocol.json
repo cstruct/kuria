@@ -10,7 +10,7 @@
       "description": "Its test cases in sections." },
     { "key": "owner", "name": "Owner", "kind": "user", "default": "creator" },
     { "key": "conclusion", "name": "Conclusion", "kind": "text", "multiline": true,
-      "description": "What the run showed, and what follows from it." }
+      "description": "What the run showed, and what follows from it.", "states": ["done"] }
   ],
   "states": [
     { "key": "draft", "name": "Draft", "initial": true },

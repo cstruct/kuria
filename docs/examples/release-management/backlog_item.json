@@ -12,7 +12,7 @@
       ] },
     { "key": "description", "name": "Description", "kind": "text", "multiline": true },
     { "key": "assignee", "name": "Assignee", "kind": "user" },
-    { "key": "change", "name": "Pull request", "kind": "reference" }
+    { "key": "change", "name": "Pull request", "kind": "reference", "states": ["in_review", "done"] }
   ],
   "states": [
     { "key": "open", "name": "Open", "initial": true },
