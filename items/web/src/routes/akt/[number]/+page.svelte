@@ -51,6 +51,7 @@
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
 	import { undoOf } from '#lib/akt/members.ts';
+	import { readiness } from '#lib/akt/outcomes.ts';
 	import { parentOf } from '#lib/akt/pulling.ts';
 	import PullDialog from '#lib/akt/PullDialog.svelte';
 	import {
@@ -269,6 +270,8 @@
 			}
 		)
 	);
+	/** Of its members with outcomes, how many passed (`app.header`). */
+	const ready = $derived(akt ? readiness(akt.board.columns.flatMap((c) => c.akter)) : null);
 	const primaryTransition = $derived(
 		actions.primary?.kind === 'transition' ? actions.primary.transition : undefined
 	);
@@ -813,7 +816,10 @@
 					{#if akt.outcome}
 						<div>
 							<dt>Result</dt>
-							<dd><span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span></dd>
+							<dd>
+								<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span>
+								{#if ready}<span class="ready">{ready.passed} of {ready.of} passed</span>{/if}
+							</dd>
 						</div>
 					{/if}
 					{#if akt.archived}<div>
@@ -1384,7 +1390,14 @@
 
 	.badges dd {
 		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 		margin: 0;
+	}
+
+	.ready {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
 	}
 
 	.origin {

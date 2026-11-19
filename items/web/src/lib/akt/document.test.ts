@@ -41,8 +41,12 @@ describe('akt type documents', () => {
 describe('outcomeRefusal', () => {
 	const finish = { outcomes: ['PASS', 'FAIL', 'SKIP'] };
 	it('says what a transition allows while the outcome is another', () => {
-		expect(outcomeRefusal(finish, 'PENDING')).toBe('Only when the outcome is pass, fail or skip');
-		expect(outcomeRefusal({ outcomes: ['PASS'] }, null)).toBe('Only when the outcome is pass');
+		expect(outcomeRefusal(finish, 'PENDING')).toBe(
+			'Needs the result to be passed, failed or skipped; it is pending'
+		);
+		expect(outcomeRefusal({ outcomes: ['PASS'] }, null)).toBe(
+			'Needs the result to be passed; it is pending'
+		);
 	});
 	it('lets the outcomes it allows, and any for a transition naming none, through', () => {
 		expect(outcomeRefusal(finish, 'FAIL')).toBeNull();

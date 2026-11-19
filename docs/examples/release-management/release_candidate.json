@@ -4,8 +4,9 @@
   "number": "{parent}-RC-{seq:4}",
   "created_in": ["release"],
   "fields": [
-    { "key": "build", "name": "Build", "kind": "reference" },
-    { "key": "test_record", "name": "Test record", "kind": "reference" }
+    { "key": "label", "name": "Label", "kind": "text",
+      "description": "What people call it, such as 4.2.0-rc.1." },
+    { "key": "build", "name": "Build", "kind": "reference" }
   ],
   "states": [
     { "key": "testing", "name": "Testing", "initial": true },
@@ -14,7 +15,7 @@
   ],
   "transitions": [
     { "key": "accept", "name": "Accept", "from": ["testing"], "to": "accepted",
-      "requires": ["build", "test_record"] },
+      "requires": ["build"], "outcomes": ["pass"] },
     { "key": "reject", "name": "Reject", "from": ["testing"], "to": "rejected" }
   ],
   "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" },
@@ -33,7 +34,7 @@
   "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {
     "icon": "flask-conical", "colour": "teal", "navigation": "more",
-    "card": ["build"], "list": ["build", "test_record"],
+    "title": "label", "card": ["build"], "list": ["build"],
     "tones": { "testing": "active", "accepted": "success", "rejected": "danger" }
   }
 }

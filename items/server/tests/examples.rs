@@ -354,7 +354,7 @@ async fn release_management(w: &World) {
             &rm,
             "release_candidate",
             &[&spring],
-            json!({}),
+            json!({ "label": "4.2.0-rc.1" }),
             "First candidate",
         )
         .await;
@@ -438,7 +438,7 @@ async fn release_management(w: &World) {
             &rm,
             "release_candidate",
             &[&spring],
-            json!({}),
+            json!({ "label": "4.2.0-rc.2" }),
             "Second candidate, without search",
         )
         .await;
@@ -480,7 +480,8 @@ async fn release_management(w: &World) {
         .await;
     w.transition(&dev, &sign_in, "finish", None, "All its items are done")
         .await;
-    let passed = acceptance_run(
+    // The candidate's run passes: what lets it be accepted.
+    acceptance_run(
         w,
         &acceptance,
         &rc2,
@@ -503,8 +504,7 @@ async fn release_management(w: &World) {
         &rc2,
         "accept",
         Some(json!({
-            "build": { "url": "https://ci.example/shop/builds/812", "label": "Build 812" },
-            "test_record": { "url": format!("https://kuria.example/akt/{passed}"), "label": format!("Acceptance test {passed}") }
+            "build": { "url": "https://ci.example/shop/builds/812", "label": "Build 812" }
         })),
         "Passed acceptance",
     )

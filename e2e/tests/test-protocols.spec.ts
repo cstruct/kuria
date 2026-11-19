@@ -227,7 +227,9 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	// Pending, the run can't be finished.
 	const finish = dev.getByRole('button', { name: 'Finish', exact: true });
 	await expect(finish).toBeDisabled();
-	await expect(finish).toHaveAccessibleDescription('Finish: only when the outcome is pass, fail or skip');
+	await expect(finish).toHaveAccessibleDescription(
+		'Finish: needs the result to be passed, failed or skipped; it is pending'
+	);
 	expect(await violations(dev), 'a run that is pending').toEqual([]);
 
 	// The test cases still pending, as the list of test cases filters them.

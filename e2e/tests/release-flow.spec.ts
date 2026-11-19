@@ -143,12 +143,35 @@ test('a release from planning to closed', async ({ browser }) => {
 	await addMembers(rm, epic, crash, typo, backendRc2, noSearch);
 	for (const done of [passkeys, reset, typo]) await finish(done);
 	await open(rm, rc2);
+	// r[verify app.header]: Accept waits for the candidate's test run to
+	// pass, saying so beside it.
+	const admin = await api(clients.admin);
+	const made = async (type: string, fields: Record<string, unknown>, inside: string) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($t: String!, $f: JSON, $in: [String!]!) { createAkt(input: { type: $t, fields: $f, in: $in }) { number } }',
+				{ t: type, f: fields, in: [inside] }
+			)
+		).createAkt.number;
+	const run = await made('test_protocol', { title: 'Acceptance' }, rc2);
+	const check = await made('test_case', { title: 'Checkout', testers: [people.releaseManager.subject] }, run);
+	await open(rm, rc2);
+	const accept = rm.getByRole('main').getByRole('button', { name: 'Accept', exact: true });
+	await expect(accept).toBeDisabled();
+	await expect(rm.getByText('Accept: needs the result to be passed; it is pending')).toBeVisible();
+	await open(rm, check);
+	await rm.getByRole('group', { name: `Your verdict on ${check}` }).getByRole('button', { name: 'Report' }).click();
+	const report = rm.getByRole('dialog', { name: `Report on ${check}` });
+	await report.getByRole('radio', { name: 'Pass' }).check();
+	await report.getByRole('button', { name: 'Save' }).click();
+	await expect(report).toBeHidden();
+	await open(rm, rc2);
+	await expect(rm.getByTestId('outcome')).toHaveText('Passed');
 	await transition(rm, 'Accept');
 	await expect(rm.getByRole('alert')).toContainText('requires');
 	await rm.getByRole('button', { name: 'Cancel' }).click();
 	await moved(rm, 'Accept', 'Accepted', {
-		Build: { url: 'https://ci.example/builds/812', label: 'Build 812' },
-		'Test record': { url: 'https://kuria.example/akt/TR-17' }
+		Build: { url: 'https://ci.example/builds/812', label: 'Build 812' }
 	});
 
 	// The go comes from the head of product, who isn't a user yet: the

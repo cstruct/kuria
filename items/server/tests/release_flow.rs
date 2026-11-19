@@ -256,6 +256,9 @@ fn roles(decider: &FakeDecider) {
     for key in ["release", "release_candidate", "hotfix", "release_notes"] {
         decider.grant_at(RM, key, &[CREATE, EDIT, TRANSITION, "release:approve"]);
     }
+    for key in ["test_protocol", "test_case"] {
+        decider.grant_at(RM, key, &[CREATE, EDIT, TRANSITION]);
+    }
 }
 
 fn code(answer: &Value) -> &str {
@@ -395,17 +398,40 @@ async fn a_release_from_planning_to_closed() {
         "REFUSED",
         "acceptance needs its evidence"
     );
-    world
-        .transitioned(
+    let build = json!({
+        "build": { "url": "https://ci.example/builds/812", "label": "Build 812" }
+    });
+    // Its test run passes before it may be accepted.
+    let run = world
+        .create(
             RM,
-            &rc2,
-            "accept",
-            json!({
-                "build": { "url": "https://ci.example/builds/812", "label": "Build 812" },
-                "test_record": { "url": "https://kuria.example/akt/TR-17" }
-            }),
+            "test_protocol",
+            &[&rc2],
+            json!({ "title": "Acceptance" }),
         )
         .await;
+    let test = world
+        .create(
+            RM,
+            "test_case",
+            &[&run],
+            json!({ "title": "Checkout", "testers": [SUBJECT] }),
+        )
+        .await;
+    assert_eq!(
+        code(&world.transition(RM, &rc2, "accept", build.clone()).await),
+        "REFUSED",
+        "acceptance needs the run passed"
+    );
+    let revision = world.revision(&test).await;
+    world
+        .ok(
+            RM,
+            "mutation($i: EditAktInput!) { editAkt(input: $i) { revision } }",
+            json!({ "i": { "number": test, "revision": revision, "fields": { "verdict": "pass" } } }),
+        )
+        .await;
+    world.transitioned(RM, &rc2, "accept", build).await;
 
     // A second release numbers its candidates from 1 again.
     let next = world

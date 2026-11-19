@@ -667,9 +667,9 @@ Verified:
 <!-- akt: PLAN-025-T13 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b62
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocked by PLAN-025-T03, Blocks PLAN-025-T17]
 title: "Candidate readiness: a checklist, and Accept gated by its test runs"
@@ -684,6 +684,29 @@ Covers findings 4.2, 4.6 and 7.14.
 - The test record is computed from the finished runs, or dropped from the type if the runs are the record.
 - Accepting confirms with a summary.
 - Rules: `app.transitions`, `app.header`; the example's `release_candidate.json`.
+
+## Done
+
+Changes:
+
+- The example's Accept requires the candidate's result to be Passed (`outcomes: ["pass"]`, the existing `akt.transition.outcomes`), and the build. The Test record field is gone: the candidate's test runs are its record.
+- Candidates get a Label, such as "4.2.0-rc.1", which titles them (`presentation.title`). The example bundle labels its two.
+- The header says why a transition isn't available, beside it: "Accept: needs the result to be passed; it is pending" (`outcomeRefusal`).
+- Beside Result, it says how many of the members with outcomes passed: "1 of 2 passed" (`readiness`). This replaces a separate checklist.
+- Accepting confirms, as every transition to a final state does (T03).
+
+Not done:
+
+- Naming a candidate "Candidate 1" before it has a label. It shows its number until then.
+- "3 of 5 cases need a verdict" on a run's Finish. That goes with T14.
+
+Verified:
+
+- `outcomes.test.ts` and `document.test.ts`;
+- items/server/tests/release_flow.rs: Accept is refused until the run passes;
+- the bundles written again;
+- e2e release-flow: Accept disabled with its reason, a verdict given, then accepted;
+- e2e test-protocols.
 
 <!-- field: acceptance -->
 - An end-to-end test can't accept a candidate whose runs aren't all passed, and sees why next to Accept.

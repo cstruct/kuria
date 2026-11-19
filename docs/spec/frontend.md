@@ -44,8 +44,10 @@ way to create one.
 r[app.header]
 An akt's page MUST show first its akt type, number, title and state, the
 state in its tone (`akt.type.presentation`) and labelled as its status, its
-outcome, if it has one, labelled as its result, and the transitions its
-state allows as actions there. It MUST offer one action as the primary one: the
+outcome, if it has one, labelled as its result, with how many of its
+members with outcomes passed, of how many, and the transitions its state
+allows as actions there, each one its outcome doesn't allow saying why
+beside it. It MUST offer one action as the primary one: the
 one its type's presentation names for its state (`primary`), else, on a
 container the viewer may add to, creating an akt of the first akt type its
 board's first column offers (`app.board-create`), else none. No other
