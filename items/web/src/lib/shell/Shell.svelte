@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Avatar from '#lib/ui/Avatar.svelte';
 	import { Dialog } from 'bits-ui';
 	import { MediaQuery } from 'svelte/reactivity';
 	import type { Snippet } from 'svelte';
@@ -94,7 +95,10 @@
 				>
 			{/if}
 			{#if shell.data}
-				<span class="viewer" title={shell.data.viewer.subject}>{shell.data.viewer.user.name}</span>
+				<span class="viewer" title={shell.data.viewer.subject}
+					><Avatar name={shell.data.viewer.user.name} size="md" />{shell.data.viewer.user
+						.name}</span
+				>
 			{/if}
 			<IconButton label="Sign out" icon={LogOut} onclick={signOut} />
 		</header>
@@ -229,6 +233,9 @@
 	}
 
 	.viewer {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
 		font-size: var(--text-sm);
 		color: var(--text-muted);
 		max-width: 14rem;

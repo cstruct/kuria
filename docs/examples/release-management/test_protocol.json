@@ -8,7 +8,7 @@
       "description": "What it tests, and against what build or system." },
     { "key": "layout", "name": "Layout", "kind": "sections", "of": ["test_case"],
       "description": "Its test cases in sections." },
-    { "key": "owner", "name": "Owner", "kind": "user" },
+    { "key": "owner", "name": "Owner", "kind": "user", "default": "creator" },
     { "key": "conclusion", "name": "Conclusion", "kind": "text", "multiline": true,
       "description": "What the run showed, and what follows from it." }
   ],

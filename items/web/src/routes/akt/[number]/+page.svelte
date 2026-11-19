@@ -152,7 +152,12 @@
 		Object.fromEntries((akt?.type.transitions ?? []).map((t) => [t.key, t.name]))
 	);
 	const people = $derived<Person[]>(
-		peopleOf(view.data?.viewer.subject, users.data?.users, contacts.data?.contacts)
+		peopleOf(
+			view.data?.viewer.subject,
+			users.data?.users,
+			contacts.data?.contacts,
+			view.data?.viewer.user
+		)
 	);
 	const typeNames = $derived(
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))

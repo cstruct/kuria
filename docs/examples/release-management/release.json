@@ -6,7 +6,7 @@
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "version", "name": "Version", "kind": "text" },
     { "key": "released_on", "name": "Released on", "kind": "date" },
-    { "key": "release_manager", "name": "Release manager", "kind": "user" },
+    { "key": "release_manager", "name": "Release manager", "kind": "user", "default": "creator" },
     { "key": "go", "name": "Go for release", "kind": "checkbox" }
   ],
   "states": [

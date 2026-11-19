@@ -345,6 +345,10 @@ export const AktPage = graphql(`
 	query AktPage($number: String!, $version: Int, $boardArchived: ArchivedFilter) {
 		viewer {
 			subject
+			user {
+				name
+				email
+			}
 		}
 		aktTypes {
 			key
@@ -487,6 +491,10 @@ export const NewAkt = graphql(`
 	query NewAkt($type: String!) {
 		viewer {
 			subject
+			user {
+				name
+				email
+			}
 		}
 		aktType(key: $type) {
 			...TypeShape

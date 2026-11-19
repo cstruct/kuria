@@ -414,6 +414,19 @@ pub struct FieldDef {
     /// rendered when it is written (`akt.field.markdown.diagrams`).
     #[serde(default, skip_serializing_if = "is_false")]
     pub diagrams: bool,
+    /// What a single `user` field is offered as when an akt is created
+    /// (`akt.field.default`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<FieldDefault>,
+}
+
+/// What a field is offered as when an akt is created (`akt.field.default`).
+// r[impl akt.field.default]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldDefault {
+    /// The one creating it.
+    Creator,
 }
 
 /// What files an `attachment` field holds.

@@ -10,7 +10,7 @@
 	import Card from '#lib/ui/Card.svelte';
 	import { releasedFile } from '#lib/akt/document.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
-	import { peopleOf, type Person } from '#lib/akt/people.ts';
+	import { creatorDefaults, peopleOf, type Person } from '#lib/akt/people.ts';
 	import { draftOf, inputOf, isEmpty, type Draft } from '#lib/akt/values.ts';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import { Contacts, CreateAkt, NewAkt, Users } from '#lib/graphql/operations.ts';
@@ -28,7 +28,12 @@
 		{ label: 'New' }
 	]);
 	const people = $derived<Person[]>(
-		peopleOf(view.data?.viewer.subject, users.data?.users, contacts.data?.contacts)
+		peopleOf(
+			view.data?.viewer.subject,
+			users.data?.users,
+			contacts.data?.contacts,
+			view.data?.viewer.user
+		)
 	);
 
 	let drafts = $state<Record<string, Draft>>({});
@@ -57,6 +62,11 @@
 	$effect(() => {
 		if (type && preparedFor !== type.key) {
 			drafts = Object.fromEntries(type.fields.map((f) => [f.key, draftOf(f, undefined)]));
+			// r[impl akt.field.default]: offered as its creator, to keep or change.
+			const me = view.data?.viewer.subject;
+			for (const key of creatorDefaults(type.document)) {
+				if (me && drafts[key]?.kind === 'USER') drafts[key] = { kind: 'USER', who: { user: me } };
+			}
 			preparedFor = type.key;
 		}
 	});

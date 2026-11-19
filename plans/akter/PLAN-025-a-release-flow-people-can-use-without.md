@@ -92,12 +92,13 @@ Any of T09 to T14 may grow into a plan of its own when it is started. Leave the 
 <!-- akt: PLAN-025-T01 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b5q
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T09]
 title: "Create forms in the app's design system, validated before they are sent"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -113,6 +114,24 @@ Covers findings 1.1, 1.2, 1.3, 2.2, 3.2 (the doubled label) and 1.4 (the client-
 - Show refusals in an alert block (`app.errors`) that says what to do next.
 - Rules: `app.fields`, `app.errors`, and a new `app.create` for the create page.
 
+## Done
+
+The create page (`items/web/src/routes/types/[key]/new/+page.svelte`) is now built from the app's own parts:
+
+- a card of fields, each labelled once, above its control, with its hint below and required fields marked;
+- Cancel and Create on the right;
+- the note for the history under a closed disclosure.
+
+`FieldEditor` lost its fieldset chrome everywhere it is used, and `SomeoneSelect` no longer repeats the label. Required fields left empty are named on the field, and nothing is sent (`missingRequired`). A refusal shows in the new `Alert`.
+
+Spec: `app.create`.
+
+Verified:
+
+- unit tests in `creating.test.ts`;
+- `mise run e2e`, in which every test that creates through the page passed;
+- by eye in the example.
+
 <!-- field: acceptance -->
 - Every type's create page uses the detail page's field styles, with no browser-default fieldset or button.
 - Submitting without a required field shows the problem on the field, and sends nothing.
@@ -122,9 +141,9 @@ Covers findings 1.1, 1.2, 1.3, 2.2, 3.2 (the doubled label) and 1.4 (the client-
 <!-- akt: PLAN-025-T02 -->
 ---
 type: task
-revision: 1
+revision: 4
 rank: b5r
-state: todo
+state: done
 in: [PLAN-025]
 title: Offer only the actions the viewer may perform
 ---
@@ -138,6 +157,31 @@ Covers findings 1.4, 5.4 and the home page's 3 ("New" on every tile).
 - On the home page, offer "New" only for types the viewer may create that live outside a container. For a type created inside a container, link to where it is made instead.
 - Rules: `app.board-create`, `app.home`, and a new `app.permitted` stating that the app offers no action the viewer can't perform.
 
+## Done
+
+G01 is resolved: `AktType.viewerMay` (`authz.viewer`).
+
+The app offers by it (`app.permitted`):
+
+- "New" on the home page and on a type's list, only for types the viewer may create;
+- a column's "+", only for types they may create;
+- edits, the board's Add, card menus and verdicts, only where they may edit;
+- transitions, only where they may perform them;
+- Make a copy, only where they may create;
+- Archive and Unarchive, only where they may archive;
+- the "In" panel's remove and move, only for containers they may edit.
+
+Not done:
+
+- "Say who can". Konklav doesn't answer who holds a permission, so actions are hidden rather than explained.
+- New only for "top-level" types. Kuria lets any type be created on its own, so the home page shows New for every type the viewer may create.
+
+Verified:
+
+- `an_akt_type_says_what_the_viewer_may_do` in items/server/tests/authorization.rs;
+- the end-to-end test "a reader is offered nothing to create, edit or move" in e2e/tests/home.spec.ts;
+- by eye as Hedda Lund in the example.
+
 <!-- field: acceptance -->
 - Signed in as a role with read only, no create action shows anywhere.
 - As a role that may create in some types, only those types' actions show.
@@ -146,9 +190,9 @@ Covers findings 1.4, 5.4 and the home page's 3 ("New" on every tile).
 <!-- akt: PLAN-025-T03 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5s
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T13]
 title: "Make the next best step the primary action, and put transitions in a status menu"
@@ -165,6 +209,33 @@ Covers findings 1.5, 3.7, 4.2, 7.3 and 7.10.
 - A transition into a `success` or `danger` toned state is never primary by default. Its dialog confirms with a summary of the akt.
 - Rules: `app.header`, `app.transitions`, and `akt.type.presentation` if G02 adds a member.
 
+## Done
+
+G02 is resolved: `presentation.primary`, validated in items/config.
+
+The header (`actionsOf` in `header.ts`) now offers first:
+
+- the action the presentation names for the state; else
+- creating the first type the board's first column offers, on a container the viewer may add to; else
+- none.
+
+No transition is primary by default. A transition to a final state says, when confirmed, that the akt stays there.
+
+The example names primary actions as follows:
+
+- test protocols: Start on a draft, Make a copy on a template, Finish on a run;
+- tasks and epics: their next step.
+
+Backlogs and releases get "New …" instead of Close or Start testing. Candidates get no primary action, so Accept is no longer one.
+
+Not done: transitions are still buttons beside each other, not in a status menu. That is left to T06's status line.
+
+Verified:
+
+- `header.test.ts`;
+- the presentation test in items/config/src/validate.rs;
+- `mise run e2e`.
+
 <!-- field: acceptance -->
 - The review's four cases each show the intended primary action:
   - a new backlog: Add task;
@@ -176,9 +247,9 @@ Covers findings 1.5, 3.7, 4.2, 7.3 and 7.10.
 <!-- akt: PLAN-025-T04 -->
 ---
 type: task
-revision: 1
+revision: 4
 rank: b5t
-state: todo
+state: done
 in: [PLAN-025]
 title: "Show people by name with an avatar, and pick them by name"
 ---
@@ -192,6 +263,28 @@ Covers findings 2.6, 3.2 (default "Nobody", options as emails), 5.6 and 7.6.
 - The user picker shows names and avatars and searches by name.
 - A `user` field the creator would usually fill in defaults to them ("Me (Rami Moberg)") where the type says so (G02 or a field member).
 - Rules: `person.name`, `app.fields`, `app.pickers`.
+
+## Done
+
+G03 is resolved. A sign-in no longer erases the name a bundle recorded (`person.from-sign-in`). The example's people keep their names after signing in, and the account shows "Rami Moberg" rather than rm@shop.example.
+
+Also:
+
+- A user value is shown with an initials avatar (`Avatar`), as is the account.
+- A picker names the viewer "Me (their name)".
+- A single `user` field may say `"default": "creator"` (`akt.field.default`), which the create page fills with the creator. The example's release manager and test protocol owner do.
+
+Not done:
+
+- The email on hover. A user's email isn't asked for where values are shown, and contacts' emails are shown only to those who may read contacts.
+- Avatars and chips on board cards. That is T06.
+
+Verified:
+
+- `a_sign_in_without_a_name_keeps_the_recorded_one` in items/server/tests/browser_sessions.rs;
+- the default test in items/config;
+- `people.test.ts`;
+- by eye as Rami in the example.
 
 <!-- field: acceptance -->
 - In the example, no email shows as a person's label anywhere in the seven flows.
@@ -531,9 +624,9 @@ Covers what the generic tasks leave to the example.
 <!-- akt: PLAN-025-G01 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b67
-state: open
+state: closed
 in: [PLAN-025]
 title: How the app learns what the viewer may do
 ---
@@ -548,12 +641,15 @@ Options:
 
 Either way it must stay a hint, and the server still checks every write. Resolve before T02.
 
+<!-- field: resolution -->
+Built. `AktType.viewerMay { create edit transition archive }` answers what the request's subject may do with the type's akter, decided by the same Konklav requirements as the writes (`authz.viewer`, in docs/spec/authorization.md). Each is decided only when asked for, and remembered for the request. A transition's own action, such as `release:approve`, isn't part of `transition`, so the app may still offer a transition the server then refuses. That refusal is shown (`app.errors`). The app offers by it (`app.permitted`); every write is still decided on its own.
+
 <!-- akt: PLAN-025-G02 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b68
-state: open
+state: closed
 in: [PLAN-025]
 title: "How a type says its primary action, and the fields its creator fills in"
 ---
@@ -568,12 +664,17 @@ Possible additions to `presentation`:
 
 Alternatively, a rule with no new member: content actions always first, and transitions never primary. Decide in `docs/spec/akter.md` before T03 and T04.
 
+<!-- field: resolution -->
+Decided and built. `presentation.primary` names, per state, the action an akt's page offers first: a transition from that state, or `copy` (`akt.type.presentation`, validated in items/config). Without one, the page offers creating the first akt type its board's first column offers, on a container the viewer may add to, else no primary action. No transition is primary by default (`app.header`).
+
+A `user` field that is not `multiple` may say `"default": "creator"` (`akt.field.default`). The create page then offers its creator as the value.
+
 <!-- akt: PLAN-025-G03 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b69
-state: open
+state: closed
 in: [PLAN-025]
 title: "Why the example's users show as emails"
 ---
@@ -588,6 +689,9 @@ Find out whether:
 - people who haven't signed in have nothing recorded.
 
 Then fix the source: the seed, Konklav's claims, or names taken from a bundle's people. Resolve before T04.
+
+<!-- field: resolution -->
+Found and fixed. Konklav keeps no profile data, so its userinfo gives no name, and every browser sign-in replaced the recorded name with none. Names from a bundle's people were lost the first time each person signed in, and they then showed as their email. A sign-in now keeps what was recorded for a claim it doesn't receive (`person.from-sign-in`, tested in items/server/tests/browser_sessions.rs). People with no recorded name are still shown by email (`person.name`).
 
 <!-- akt: PLAN-025-G04 -->
 ---

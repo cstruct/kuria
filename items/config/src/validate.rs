@@ -344,6 +344,13 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
     if field.multiple && field.kind != FieldKind::User {
         problems.add(&format!("{path}.multiple"), "only user fields are multiple");
     }
+    // r[impl akt.field.default]
+    if field.default.is_some() && (field.kind != FieldKind::User || field.multiple) {
+        problems.add(
+            &format!("{path}.default"),
+            "only a single user field defaults to its creator",
+        );
+    }
     if field.kind == FieldKind::Sections {
         for (j, key) in field.of.iter().enumerate() {
             if !document.contains.iter().any(|c| &c.akt_type == key) {
@@ -929,6 +936,15 @@ mod tests {
         assert_eq!(
             with("/fields/0/multiple", json!(true)),
             ["fields[0].multiple: only user fields are multiple"]
+        );
+        // r[verify akt.field.default]
+        assert_eq!(
+            with("/fields/0/default", json!("creator")),
+            ["fields[0].default: only a single user field defaults to its creator"]
+        );
+        assert_eq!(
+            with("/fields/1/default", json!("creator")),
+            ["fields[1].default: only a single user field defaults to its creator"]
         );
         assert_eq!(
             with("/fields/1/multiple", json!(false)),

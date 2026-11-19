@@ -141,6 +141,12 @@ A `user` field that says `multiple` MUST hold a list of distinct users and
 contacts, in the order given, and is without a value when the list is
 empty. `multiple` MUST be refused on any other kind of field.
 
+r[akt.field.default]
+A single `user` field MAY say `"default": "creator"`: the one creating an
+akt is offered as its value, to keep or change (`app.create`). A `default`
+of anything else, or on a field of another kind or one that is `multiple`,
+MUST be refused.
+
 r[akt.field.sections]
 A `sections` field MUST hold a list of items, in order, each either an akt
 number, naming a member of the akt, or a section: an optional `title`, an
