@@ -671,11 +671,12 @@ A decision that supersedes PLAN-024's design goes in this plan. Resolve before T
 <!-- akt: PLAN-025-D01 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b6E
-state: proposed
+state: decided
 in: [PLAN-025]
 title: "The app speaks in the type's words; Kuria's terms stay in code and docs"
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
