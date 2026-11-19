@@ -1280,7 +1280,8 @@
 			</Dialog>
 		{/if}
 
-		{#if parent && editable}
+		{#if parent && editable && pullOpen}
+			<!-- Mounted only while open: its board is read when asked for. -->
 			<PullDialog
 				bind:open={pullOpen}
 				{parent}

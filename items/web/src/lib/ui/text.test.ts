@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { orList, truncateMiddle } from './text';
+import { articled, orList, truncateMiddle } from './text';
 
 describe('truncateMiddle', () => {
 	it('keeps short values and shortens long ones in the middle', () => {
@@ -19,5 +19,12 @@ describe('orList', () => {
 		expect(orList(['task'])).toBe('task');
 		expect(orList(['task', 'epic'])).toBe('task or epic');
 		expect(orList(['task', 'epic', 'bug'])).toBe('task, epic or bug');
+	});
+});
+
+describe('articled', () => {
+	it('takes a or an', () => {
+		expect(articled('task')).toBe('a task');
+		expect(articled('epic')).toBe('an epic');
 	});
 });

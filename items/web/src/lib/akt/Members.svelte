@@ -14,7 +14,7 @@
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import Menu, { type MenuItem } from '#lib/ui/Menu.svelte';
 	import Mono from '#lib/ui/Mono.svelte';
-	import { truncateMiddle } from '#lib/ui/text.ts';
+	import { articled, truncateMiddle } from '#lib/ui/text.ts';
 	import { boardLabels } from './labels';
 	import {
 		groupMembers,
@@ -309,9 +309,9 @@
 							</select>
 						{/if}
 						<input
-							aria-label="Add a {chosen.name.toLowerCase()} to {column.name}"
+							aria-label="Add {articled(chosen.name.toLowerCase())} to {column.name}"
 							aria-describedby="quick-hint"
-							placeholder="Add a {chosen.name.toLowerCase()}…"
+							placeholder="Add {articled(chosen.name.toLowerCase())}…"
 							bind:value={typed[column.key]}
 							aria-busy={quickBusy || undefined}
 							onkeydown={(e) => quickKey(e, column.key, [chosen, ...quick])}
