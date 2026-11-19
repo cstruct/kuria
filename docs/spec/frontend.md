@@ -236,10 +236,16 @@ MUST open the page creating it with the title typed. A column offering
 several such types MUST let the person choose which.
 
 r[app.board-drop]
-Dropping a card on another column of a board MUST offer the transitions
-from the member's state to a state that column names for its akt type,
-and perform the one chosen as `app.transitions` does, asking for the fields
-it requires. A column no such transition leads to MUST refuse the drop.
+Dropping a card on another column of a board MUST, when one transition
+from the member's state leads to a state that column names for its akt
+type and it requires no fields, perform it at once, saying so as
+`app.toasts` does, with an offer to undo it when a transition from the new
+state back to the former one requires no fields either. Otherwise it MUST
+offer the transitions that lead there, and perform the one chosen as
+`app.transitions` does, asking for the fields it requires. A column no
+such transition leads to MUST refuse the drop, saying why while the card
+is over it. A card's menu MUST offer the same moves, each by the column it
+goes to, so that a card can be moved without a pointer.
 
 r[app.board-create]
 Each column of a container's board MUST offer, to one who may edit the

@@ -7,6 +7,17 @@
 	{#each toasts as item (item.id)}
 		<div class="toast {item.tone}">
 			<span>{item.message}</span>
+			{#if item.action}
+				{@const action = item.action}
+				<button
+					type="button"
+					class="action"
+					onclick={() => {
+						dismiss(item.id);
+						action.run();
+					}}>{action.label}</button
+				>
+			{/if}
 			<button type="button" aria-label="Dismiss" onclick={() => dismiss(item.id)}>
 				<X size={14} aria-hidden={true} />
 			</button>
@@ -54,6 +65,17 @@
 		border: 0;
 		background: transparent;
 		color: var(--text-muted);
+		cursor: pointer;
+	}
+
+	.action {
+		margin-left: auto;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: var(--accent);
+		font: inherit;
+		font-weight: 600;
 		cursor: pointer;
 	}
 </style>

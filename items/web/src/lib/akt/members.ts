@@ -194,3 +194,13 @@ export function sortAkter<A extends { rank: string; updatedAt: string }>(
 			: b.updatedAt.localeCompare(a.updatedAt)
 	);
 }
+
+/** The transition that undoes a move from the state `from` to `to`: one
+ * leading straight back that requires no fields, if the type has one
+ * (`app.board-drop`). */
+// r[impl app.board-drop]
+export function undoOf<
+	T extends { from: readonly string[]; to: string; requires: readonly unknown[] }
+>(transitions: readonly T[], from: string, to: string): T | undefined {
+	return transitions.find((t) => t.from.includes(to) && t.to === from && t.requires.length === 0);
+}

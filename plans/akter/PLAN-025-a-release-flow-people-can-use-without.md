@@ -532,9 +532,9 @@ Verified:
 <!-- akt: PLAN-025-T10 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5z
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocked by PLAN-025-T08]
 title: "Board moves without a modal, undone from a toast"
@@ -549,6 +549,25 @@ Covers findings 5.7, 6.2, 6.3, 6.4 and 6.5.
 - A column the card can't go to says why when the card is dragged over it, as in "Start it first".
 - The card menu gains "Move to ▸" with the allowed states, and menu items lose the number ("Move up").
 - Rules: `app.board-drop`, `app.transitions`, `app.accessible` (moving without a pointer).
+
+## Done
+
+Changes:
+
+- A drop on a column with one transition there, needing no fields, moves the card at once. The toast says "<title> moved to <column>" and offers Undo when a transition leads back (`undoOf`, G05).
+- A dialog opens only when several transitions lead there, or when one needs fields. Those fields are asked for on the member's page, as before.
+- A column the dragged card can't go to says "Can't move here from <status>".
+- A card's menu offers "Move to <column>" for each column a transition reaches, so cards move by keyboard. The other items lose the number: "Move up", "Move down", "Remove from here".
+- Toasts can carry an action (`toast(…, action)`).
+- The example's tasks gain "Put back".
+
+Spec: `app.board-drop`.
+
+Verified:
+
+- `members.test.ts` (`undoOf`) and `labels.test.ts`;
+- the e2e members test: a drop moves at once, Undo moves it back, and "Move to In progress" from the menu;
+- release-flow.
 
 <!-- field: acceptance -->
 - Dragging a task from To do to In progress makes one write and shows no dialog. Undo returns it.
@@ -823,9 +842,9 @@ Resolve before T05 and T15.
 <!-- akt: PLAN-025-G05 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6B
-state: open
+state: closed
 in: [PLAN-025]
 title: What Undo means for a move
 ---
@@ -839,6 +858,11 @@ Decide whether Undo:
 - is a short delay before the write is sent, so that nothing is written until the toast closes.
 
 The second needs `app.live` to tolerate the wait. Resolve before T10.
+
+<!-- field: resolution -->
+Decided and built (`app.board-drop`). Undo is offered only when a transition leads straight from the new state back to the former one and requires no fields (`undoOf`). It performs that transition, with the member's current revision. Writes are not held back until the toast closes, which would have fought live updates and other readers. A type without a way back, such as one whose akter can't be reopened, offers no Undo.
+
+The example's tasks gain "Put back", In progress to To do, so that a start can be undone.
 
 <!-- akt: PLAN-025-G06 -->
 ---

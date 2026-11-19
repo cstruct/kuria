@@ -124,7 +124,7 @@ export async function column(page: Page, name: string): Promise<string[]> {
 
 /** Does `action` (`up`, `down` or `remove`) from a member's menu. */
 export async function memberAction(page: Page, number: string, action: 'up' | 'down' | 'remove') {
-	const name = { up: `Move ${number} up`, down: `Move ${number} down`, remove: `Remove ${number}` }[action];
+	const name = { up: 'Move up', down: 'Move down', remove: 'Remove from here' }[action];
 	await page.getByRole('button', { name: `Actions for ${number}` }).click();
 	await page.getByRole('menuitem', { name }).click();
 }

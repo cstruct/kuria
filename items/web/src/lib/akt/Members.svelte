@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Avatar from '#lib/ui/Avatar.svelte';
 	// r[impl app.members]
 	import { resolve } from '$app/paths';
@@ -124,6 +125,22 @@
 	function itemsFor(group: readonly Member[], i: number): MenuItem[] {
 		const member = group[i];
 		const labels = boardLabels(member.number);
+		// r[impl app.board-drop]: the moves a drop makes, by the column they go to.
+		const moves: MenuItem[] = grouped.columns
+			.filter((c) => c.key !== 'unmapped' && !c.akter.some((m) => m.number === member.number))
+			.flatMap((c) => {
+				const transitions = into(member.number, c.key);
+				return transitions.length > 0
+					? [
+							{
+								label: labels.into(c.name),
+								icon: ArrowRight,
+								disabled: busy || !editable,
+								onSelect: () => onInto(member, transitions, c.name)
+							}
+						]
+					: [];
+			});
 		return [
 			{
 				label: labels.up,
@@ -137,6 +154,7 @@
 				disabled: busy || !movable || i === group.length - 1,
 				onSelect: () => onMove(member.number, { after: group[i + 1].number })
 			},
+			...moves.map((m, k) => (k === 0 ? { ...m, separated: true } : m)),
 			{
 				label: labels.remove,
 				icon: X,
@@ -178,7 +196,6 @@
 				class:takes={reorder.takes(column.key)}
 				class:over={reorder.into === column.key}
 				aria-label={column.name}
-				title={reorder.refuses(column.key) ? 'It can’t move here from its status' : undefined}
 			>
 				<header class="column-head">
 					<h3>{column.name} <span class="count">{column.akter.length}</span></h3>
@@ -273,6 +290,13 @@
 					{/each}
 					{@render dropLine(column.key, column.akter.length)}
 				</ol>
+				<!-- r[impl app.board-drop]: why a column refuses the card dragged over it. -->
+				{#if reorder.refuses(column.key) && reorder.dragging}
+					{@const dragged = memberOf(reorder.dragging.number)}
+					<p class="refused" role="status">
+						Can’t move here from {dragged?.state.name ?? 'its status'}
+					</p>
+				{/if}
 				{#if editable && onQuickAdd && quick.length > 0}
 					{@const chosen = quick.find((o) => o.key === adding[column.key]) ?? quick[0]}
 					<div class="quick-add">
@@ -663,5 +687,15 @@
 
 	.quick-add input:not(:focus) {
 		border-style: dashed;
+	}
+
+	.refused {
+		margin-top: var(--space-2);
+		padding: var(--space-2);
+		border-radius: var(--radius-md);
+		background: var(--bg-muted);
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		text-align: center;
 	}
 </style>

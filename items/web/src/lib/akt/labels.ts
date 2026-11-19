@@ -9,13 +9,14 @@ export function legendOf(field: Pick<FieldDef, 'name' | 'required'>): string {
 	return field.required ? `${field.name} (required)` : field.name;
 }
 
-/** A member's menu and its items, named by the member, since the menu's
- * trigger shows only an ellipsis. */
+/** A member's menu, named by the member, since its trigger shows only an
+ * ellipsis, and its items, which the menu's name already places. */
 export function boardLabels(number: string) {
 	return {
 		menu: `Actions for ${number}`,
-		up: `Move ${number} up`,
-		down: `Move ${number} down`,
-		remove: `Remove ${number}`
+		up: 'Move up',
+		down: 'Move down',
+		remove: 'Remove from here',
+		into: (column: string) => `Move to ${column}`
 	};
 }

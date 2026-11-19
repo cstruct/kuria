@@ -66,19 +66,26 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	// The menu does the same from the keyboard.
 	await page.getByRole('button', { name: `Actions for ${third}` }).focus();
 	await page.keyboard.press('Enter');
-	await page.getByRole('menuitem', { name: `Move ${third} down` }).press('Enter');
+	await page.getByRole('menuitem', { name: 'Move down' }).press('Enter');
 	await expect.poll(() => column(page, 'To do')).toEqual([first, third]);
 	// Dropped on a column no transition leads to, it stays where it is.
 	await drag(page, first, done);
 	await page.waitForTimeout(300);
 	expect(await column(page, 'To do')).toEqual([first, third]);
 	await expect(page.getByRole('dialog')).toHaveCount(0);
-	// Dropped on one a transition leads to, it asks, and moves.
+	// Dropped on one a transition needing nothing leads to, it moves at
+	// once, with a way back.
 	await drag(page, first, second);
-	const move = page.getByRole('dialog', { name: 'Move First to In progress' });
-	await move.getByRole('button', { name: 'Start' }).click();
-	await expect(move).toBeHidden();
 	await expect.poll(() => column(page, 'In progress')).toEqual([first, second]);
+	expect(await column(page, 'To do')).toEqual([third]);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	const moved = page.getByRole('status').filter({ hasText: 'First moved to In progress' });
+	await moved.getByRole('button', { name: 'Undo' }).click();
+	await expect.poll(() => column(page, 'To do')).toEqual(expect.arrayContaining([first, third]));
+	// The card's menu makes the same move, by the column it goes to.
+	await page.getByRole('button', { name: `Actions for ${first}` }).click();
+	await page.getByRole('menuitem', { name: 'Move to In progress' }).click();
+	await expect.poll(() => column(page, 'In progress')).toEqual(expect.arrayContaining([first, second]));
 	expect(await column(page, 'To do')).toEqual([third]);
 	await memberAction(page, third, 'remove');
 	await expect.poll(() => column(page, 'To do')).toEqual([]);

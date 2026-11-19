@@ -22,6 +22,7 @@
   ],
   "transitions": [
     { "key": "start", "name": "Start", "from": ["open"], "to": "in_progress" },
+    { "key": "put_back", "name": "Put back", "from": ["in_progress"], "to": "open" },
     { "key": "review", "name": "Send to review", "from": ["in_progress"], "to": "in_review",
       "requires": ["change"] },
     { "key": "rework", "name": "Rework", "from": ["in_review"], "to": "in_progress" },

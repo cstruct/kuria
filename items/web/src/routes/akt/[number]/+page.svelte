@@ -49,6 +49,7 @@
 	import { actionsOf, confirmationOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
+	import { undoOf } from '#lib/akt/members.ts';
 	import {
 		creatableIn,
 		insideQuery,
@@ -580,9 +581,27 @@
 		}
 	}
 
+	// r[impl app.board-drop]: one move that needs nothing is made at once;
+	// otherwise the choice of transitions, or their fields, is asked for.
 	function into(member: Member, transitions: MemberTransition[], column: string) {
 		moving = { member, transitions, column };
+		const only = transitions.length === 1 ? transitions[0] : null;
+		if (only && only.requires.length === 0) {
+			void moveInto(only);
+			return;
+		}
 		movingOpen = true;
+	}
+
+	/** Moves a member back the way it came (`app.board-drop`). */
+	async function undoMove(number: string, title: string, transition: MemberTransition) {
+		const fresh = await refetch();
+		const member = fresh?.board.columns.flatMap((c) => c.akter).find((m) => m.number === number);
+		if (!member) return;
+		const input = { number, revision: member.revision, transition: transition.key };
+		if (await run(() => mutate(client, PerformTransition, { input }))) {
+			toast(`${title} moved back`, 'success');
+		}
 	}
 
 	/** Performs a transition on the member being moved, or, when it needs
@@ -599,7 +618,14 @@
 		const input = { number: member.number, revision: member.revision, transition: transition.key };
 		if (await run(() => mutate(client, PerformTransition, { input }))) {
 			movingOpen = false;
-			toast(`${member.title ?? member.number} moved to ${moving.column}`, 'success');
+			const title = member.title ?? member.number;
+			const back = undoOf(member.type.transitions, member.state.key, transition.to);
+			toast(
+				`${title} moved to ${moving.column}`,
+				'success',
+				5000,
+				back ? { label: 'Undo', run: () => void undoMove(member.number, title, back) } : undefined
+			);
 		}
 	}
 
