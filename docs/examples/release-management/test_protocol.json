@@ -28,6 +28,7 @@
     { "key": "withdraw", "name": "Withdraw", "from": ["draft", "template", "running"], "to": "withdrawn" }
   ],
   "contains": [{ "type": "test_case" }],
+  "archive": { "rules": [{ "with_container": "release_candidate" }] },
   "presentation": {
     "icon": "clipboard-check", "colour": "purple",
     "list": ["owner"],

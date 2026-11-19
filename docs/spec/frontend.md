@@ -176,7 +176,11 @@ shows them.
 r[app.verdicts]
 Each member with a `verdict` field MUST show, where its sections or its
 container list it, its assignees, each one's verdict, and its outcome, and
-MUST let an assignee give, change or take back their own verdict there.
+their descriptions, and MUST let an assignee report their own verdict
+there, in a dialog taking its status, `pass`, `fail` or `skip`, and its
+description, which it MUST require for `fail` and `skip`
+(`akt.field.verdict.description`). Once reported, the dialog MUST let them
+change either, or delete the verdict.
 An akt's page MUST show its outcome, if it has outcomes (`akt.outcome`).
 
 r[app.copy]

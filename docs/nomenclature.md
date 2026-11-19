@@ -284,7 +284,7 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `assignee`
   - A user or contact named in the `multiple` `user` field a `verdict` field names: someone who is to give the akt a verdict.
 - `verdict`
-  - An assignee's judgement of an akt: `pass`, `fail` or `skip`, recorded with who gave it and when.
+  - An assignee's judgement of an akt: `pass`, `fail` or `skip`, recorded with who gave it and when, and a description of what they saw, which a `fail` or a `skip` must have. Reported in the app, given in the API.
 - `outcome`
   - What an akt's verdicts, or its members' outcomes, add up to: `pass`, `fail`, `skip` or `pending`. Derived when read, never stored.
 - `batch`

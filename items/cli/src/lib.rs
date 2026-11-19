@@ -421,9 +421,17 @@ fn local_more(w: &mut local::write::Writer, command: Command) -> Result<Answer, 
         Command::Verdict {
             number,
             verdict,
+            description,
             for_whom,
             reason,
-        } => local::edits::verdict(w, &number, &verdict, for_whom.as_deref(), reason.as_deref()),
+        } => local::edits::verdict(
+            w,
+            &number,
+            &verdict,
+            description.as_deref(),
+            for_whom.as_deref(),
+            reason.as_deref(),
+        ),
         Command::Copy {
             number,
             only,
@@ -460,6 +468,7 @@ async fn protocol(session: &Session, command: Command) -> Result<Answer, CliErro
         Command::Verdict {
             number,
             verdict,
+            description,
             for_whom,
             reason,
         } => {
@@ -467,6 +476,7 @@ async fn protocol(session: &Session, command: Command) -> Result<Answer, CliErro
                 session,
                 &number,
                 &verdict,
+                description.as_deref(),
                 for_whom.as_deref(),
                 reason.as_deref(),
             )

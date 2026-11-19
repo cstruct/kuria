@@ -738,6 +738,10 @@ type GivenVerdict {
 	assignee: Someone!
 	verdict: Verdict!
 	"""
+	What the assignee saw: a fail or a skip given since has one.
+	"""
+	description: String
+	"""
 	Who gave it: the assignee, unless given for them.
 	"""
 	by: User!

@@ -22,7 +22,7 @@
 	import OutcomeBadge from '#lib/akt/OutcomeBadge.svelte';
 	import Sections from '#lib/akt/Sections.svelte';
 	import { numbersIn, readSections } from '#lib/akt/sections.ts';
-	import { judgedOf, verdictInput } from '#lib/akt/verdicts.ts';
+	import { judgedOf, verdictInput, type Report } from '#lib/akt/verdicts.ts';
 	import LinksCard, { type ShownLink } from '#lib/akt/LinksCard.svelte';
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
@@ -53,7 +53,7 @@
 	import { LiveDraft } from '#lib/akt/live.svelte.ts';
 	import LivePresence from '#lib/akt/LivePresence.svelte';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
-	import type { AktPageQuery, Verdict } from '#lib/graphql/generated/graphql.ts';
+	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
 	import {
 		AddLink,
 		AddToContainer,
@@ -519,8 +519,8 @@
 		}
 	}
 
-	/** Gives the viewer's verdict on `of`, this akt or a member, or takes
-	 * it back. */
+	/** Reports the viewer's verdict on `of`, this akt or a member, or
+	 * deletes it. */
 	// r[impl app.verdicts]
 	async function giveVerdict(
 		of: {
@@ -529,7 +529,7 @@
 			fields: Akt['fields'];
 			type: Akt['type'] | Member['type'];
 		},
-		verdict: Verdict | null
+		verdict: Report | null
 	) {
 		const judged = judgedOf(of, me);
 		if (!judged) return;

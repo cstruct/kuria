@@ -23,7 +23,7 @@ use support::decider::FakeDecider;
 use support::world::{World, write_bundle};
 
 /// Each example, and its akt types in the order they are defined.
-const EXAMPLES: [(&str, &[&str]); 4] = [
+const EXAMPLES: [(&str, &[&str]); 3] = [
     (
         "release-management",
         &[
@@ -35,6 +35,8 @@ const EXAMPLES: [(&str, &[&str]); 4] = [
             "release_candidate",
             "hotfix",
             "release_notes",
+            "test_case",
+            "test_protocol",
         ],
     ),
     (
@@ -42,7 +44,6 @@ const EXAMPLES: [(&str, &[&str]); 4] = [
         &["image", "document", "external_document", "document_index"],
     ),
     ("planning", &["plan", "task", "gap", "decision"]),
-    ("test-protocols", &["test_case", "test_protocol"]),
 ];
 
 /// The examples' people, with the emails of the end-to-end seed
@@ -200,7 +201,6 @@ async fn write_example_bundles() {
             "release-management" => release_management(&world).await,
             "documents" => documents(&world).await,
             "planning" => planning(&world).await,
-            "test-protocols" => test_protocols(&world).await,
             other => panic!("no data for {other}"),
         }
         let archive = world
@@ -220,8 +220,9 @@ fn digest(digit: char) -> String {
 }
 
 /// Two releases of a web shop: spring's, released with a rejected and an
-/// accepted candidate, approved notes and a hotfix, and closed; summer's,
-/// being planned.
+/// accepted candidate, each with its run of the acceptance test, approved
+/// notes and a hotfix, and closed; summer's, being planned, with a test
+/// protocol in draft.
 #[expect(clippy::too_many_lines, reason = "one release told from start to end")]
 async fn release_management(w: &World) {
     let (dev, rm, ci) = (t(DEV), t(RM), t(CI));
@@ -342,6 +343,9 @@ async fn release_management(w: &World) {
             .await;
     };
 
+    // The acceptance test every candidate runs, kept as a template.
+    let acceptance = acceptance_template(w).await;
+
     // The first candidate: the pipeline's builds, a fix, and the experiment.
     w.transition(&rm, &spring, "test", None, "Feature freeze")
         .await;
@@ -404,6 +408,21 @@ async fn release_management(w: &World) {
             .await;
     }
     finish(&crash, "backend", 311).await;
+    acceptance_run(
+        w,
+        &acceptance,
+        &rc1,
+        "4.2.0-rc.1",
+        |title| match title {
+            "Browse and search" => (
+                ("fail", Some("Search took 5 s with the new ranking.")),
+                ("fail", Some("The product list took several seconds.")),
+            ),
+            _ => (("pass", None), ("pass", None)),
+        },
+        "Failed: search is too slow; the candidate is rejected.",
+    )
+    .await;
     w.transition(
         &rm,
         &rc1,
@@ -461,13 +480,31 @@ async fn release_management(w: &World) {
         .await;
     w.transition(&dev, &sign_in, "finish", None, "All its items are done")
         .await;
+    let passed = acceptance_run(
+        w,
+        &acceptance,
+        &rc2,
+        "4.2.0-rc.2",
+        |title| match title {
+            "Sign in with a passkey" => (
+                ("pass", Some("On a phone and a laptop.")),
+                (
+                    "skip",
+                    Some("No passkey on my test phone; Devi covered it."),
+                ),
+            ),
+            _ => (("pass", None), ("pass", None)),
+        },
+        "Passed: 4.2.0-rc.2 is fit to release.",
+    )
+    .await;
     w.transition(
         &rm,
         &rc2,
         "accept",
         Some(json!({
             "build": { "url": "https://ci.example/shop/builds/812", "label": "Build 812" },
-            "test_record": { "url": "https://kuria.example/akt/TP-002", "label": "Acceptance test TP-002" }
+            "test_record": { "url": format!("https://kuria.example/akt/{passed}"), "label": format!("Acceptance test {passed}") }
         })),
         "Passed acceptance",
     )
@@ -609,6 +646,25 @@ async fn release_management(w: &World) {
     w.transition(&dev, &wishlist, "start", None, "Work started")
         .await;
     w.transition(&dev, &save, "start", None, "Picked up").await;
+
+    // Summer's own protocol, in draft until it has a candidate to run in.
+    let wishes = w
+        .create(
+            &dev,
+            "test_protocol",
+            &[],
+            json!({ "title": "Wish list test", "owner": DEV, "scope": "The summer release's wish lists." }),
+            "Start the wish list protocol",
+        )
+        .await;
+    w.create(
+        &dev,
+        "test_case",
+        &[&wishes],
+        json!({ "title": "Save a product for later", "steps": "1. Open a product.\n2. Tap the heart.", "expected": "It is in the wish list.", "testers": [DEV] }),
+        "First case",
+    )
+    .await;
 }
 
 /// A quality manual with folders of documents, which refer to each other
@@ -1058,12 +1114,10 @@ async fn planning(w: &World) {
     .await;
 }
 
-/// A smoke-test template, an acceptance run copied from it with verdicts
-/// from two testers, finished, and a draft.
-#[expect(clippy::too_many_lines, reason = "a template and its runs")]
-async fn test_protocols(w: &World) {
-    let (dev, rm, hedda) = (t(DEV), t(RM), t(HEDDA));
-
+/// The shop's acceptance test, kept as a template: five test cases in three
+/// sections, for the developer and the head of product to run.
+async fn acceptance_template(w: &World) -> String {
+    let rm = t(RM);
     let template = w
         .create(
             &rm,
@@ -1074,46 +1128,41 @@ async fn test_protocols(w: &World) {
             "The protocol every candidate runs",
         )
         .await;
-    let case = async |protocol: &str, title: &str, steps: &str, expected: &str| {
+    let case = async |title: &str, steps: &str, expected: &str| {
         w.create(
             &rm,
             "test_case",
-            &[protocol],
+            &[&template],
             json!({ "title": title, "steps": steps, "expected": expected, "testers": [DEV, HEDDA] }),
             "Add the protocol's cases",
         )
         .await
     };
     let browse = case(
-        &template,
         "Browse and search",
         "1. Open the shop.\n2. Search for `mug`.\n3. Open a product.",
         "Results in under a second; the product page shows price and stock.",
     )
     .await;
     let basket = case(
-        &template,
         "Fill the basket",
         "1. Add two products.\n2. Change a quantity.\n3. Remove one.",
         "The total follows every change.",
     )
     .await;
     let guest = case(
-        &template,
         "Pay as a guest",
         "1. Check out without signing in.\n2. Pay with the test card.",
         "An order confirmation, by email too.",
     )
     .await;
     let passkey = case(
-        &template,
         "Sign in with a passkey",
         "1. Sign in.\n2. Choose the passkey.",
         "Signed in, without a password.",
     )
     .await;
     let reset = case(
-        &template,
         "Reset a password",
         "1. Ask for a reset.\n2. Follow the email's link.\n3. Set a new password.",
         "Signed in with the new password; the link no longer works.",
@@ -1132,13 +1181,32 @@ async fn test_protocols(w: &World) {
     .await;
     w.transition(&rm, &template, "keep", None, "Reviewed: a template now")
         .await;
+    template
+}
 
-    // The spring candidate's run, copied from the template.
+/// A tester's verdict on a test case, and its description.
+type Said = (&'static str, Option<&'static str>);
+
+/// A run of `template` for `candidate`: a copy made in the candidate, named
+/// after its `build`, started, with a verdict from each tester on every
+/// test case, `verdicts` answering the developer's and the head of
+/// product's for the test case of a title, each with its description, and
+/// finished with `conclusion`.
+/// Answers the run's number.
+async fn acceptance_run(
+    w: &World,
+    template: &str,
+    candidate: &str,
+    build: &str,
+    verdicts: impl Fn(&str) -> (Said, Said),
+    conclusion: &str,
+) -> String {
+    let (dev, rm, hedda) = (t(DEV), t(RM), t(HEDDA));
     let run = w
         .ok(
             &rm,
-            "mutation($n: String!) { copyAkt(input: { number: $n, reason: \"Run it for RC-2\" }) { number } }",
-            json!({ "n": template }),
+            "mutation($n: String!, $in: [String!], $why: String) { copyAkt(input: { number: $n, in: $in, reason: $why }) { number } }",
+            json!({ "n": template, "in": [candidate], "why": format!("Run it for {build}") }),
         )
         .await["copyAkt"]["number"]
         .as_str()
@@ -1147,10 +1215,12 @@ async fn test_protocols(w: &World) {
     w.edit(
         &rm,
         &run,
-        json!({ "title": "Shop acceptance test: 4.2.0-rc.2" }),
+        json!({ "title": format!("Shop acceptance test: {build}") }),
         "Name the run",
     )
     .await;
+    w.transition(&rm, &run, "start", None, "Testing on staging")
+        .await;
     let members = w
         .ok(
             &rm,
@@ -1158,124 +1228,25 @@ async fn test_protocols(w: &World) {
             json!({ "n": run }),
         )
         .await;
-    let cases: Vec<(String, String)> = members["akt"]["members"]["nodes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| {
-            (
-                m["number"].as_str().unwrap().to_owned(),
-                m["title"].as_str().unwrap().to_owned(),
-            )
-        })
-        .collect();
-    w.transition(&rm, &run, "start", None, "Testing on staging")
-        .await;
-    for (number, title) in &cases {
-        let (dev_verdict, hedda_verdict) = match title.as_str() {
-            "Sign in with a passkey" => ("pass", "skip"),
-            _ => ("pass", "pass"),
-        };
-        w.edit(&dev, number, json!({ "verdict": dev_verdict }), "Tested")
-            .await;
-        w.edit(
-            &hedda,
-            number,
-            json!({ "verdict": hedda_verdict }),
-            "Tested",
-        )
-        .await;
-        if hedda_verdict == "skip" {
-            w.edit(
-                &hedda,
-                number,
-                json!({ "notes": "No passkey on my test phone; Devi covered it." }),
-                "Why skipped",
-            )
-            .await;
+    for m in members["akt"]["members"]["nodes"].as_array().unwrap() {
+        let number = m["number"].as_str().unwrap();
+        let (devs, heddas) = verdicts(m["title"].as_str().unwrap());
+        for (tester, (verdict, description)) in [(&dev, devs), (&hedda, heddas)] {
+            let verdict = match description {
+                Some(description) => json!({ "verdict": verdict, "description": description }),
+                None => json!(verdict),
+            };
+            w.edit(tester, number, json!({ "verdict": verdict }), "Tested")
+                .await;
         }
     }
     w.transition(
         &rm,
         &run,
         "finish",
-        Some(json!({ "conclusion": "Passed: 4.2.0-rc.2 is fit to release." })),
-        "All cases passed",
+        Some(json!({ "conclusion": conclusion })),
+        "Every tester has answered",
     )
     .await;
-
-    // A run that found a failure, and a draft of a new protocol.
-    let failing = w
-        .ok(
-            &rm,
-            "mutation($n: String!) { copyAkt(input: { number: $n, reason: \"Run it for RC-1\" }) { number } }",
-            json!({ "n": template }),
-        )
-        .await["copyAkt"]["number"]
-        .as_str()
-        .unwrap()
-        .to_owned();
-    w.edit(
-        &rm,
-        &failing,
-        json!({ "title": "Shop acceptance test: 4.2.0-rc.1" }),
-        "Name the run",
-    )
-    .await;
-    w.transition(&rm, &failing, "start", None, "Testing on staging")
-        .await;
-    let members = w
-        .ok(
-            &rm,
-            "query($n: String!) { akt(number: $n) { members { nodes { number title } } } }",
-            json!({ "n": failing }),
-        )
-        .await;
-    for m in members["akt"]["members"]["nodes"].as_array().unwrap() {
-        let number = m["number"].as_str().unwrap();
-        let verdict = if m["title"] == "Browse and search" {
-            "fail"
-        } else {
-            "pass"
-        };
-        w.edit(&dev, number, json!({ "verdict": verdict }), "Tested")
-            .await;
-        w.edit(&hedda, number, json!({ "verdict": verdict }), "Tested")
-            .await;
-        if verdict == "fail" {
-            w.edit(
-                &dev,
-                number,
-                json!({ "notes": "Search took 5 s with the new ranking." }),
-                "What failed",
-            )
-            .await;
-        }
-    }
-    w.transition(
-        &rm,
-        &failing,
-        "finish",
-        Some(json!({ "conclusion": "Failed: search is too slow; the candidate is rejected." })),
-        "A case failed",
-    )
-    .await;
-
-    let draft = w
-        .create(
-            &dev,
-            "test_protocol",
-            &[],
-            json!({ "title": "Wish list test", "owner": DEV, "scope": "The summer release's wish lists." }),
-            "Start the wish list protocol",
-        )
-        .await;
-    w.create(
-        &dev,
-        "test_case",
-        &[&draft],
-        json!({ "title": "Save a product for later", "steps": "1. Open a product.\n2. Tap the heart.", "expected": "It is in the wish list.", "testers": [DEV] }),
-        "First case",
-    )
-    .await;
+    run
 }

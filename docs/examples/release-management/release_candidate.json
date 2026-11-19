@@ -17,16 +17,18 @@
       "requires": ["build", "test_record"] },
     { "key": "reject", "name": "Reject", "from": ["testing"], "to": "rejected" }
   ],
-  "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" }],
+  "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" },
+               { "type": "test_protocol" }],
   "links": [{ "key": "parent_board", "name": "Parent board", "inverse": "Parent board of",
               "to": ["backlog"] }],
   "board": { "parent": "parent_board", "columns": [
     { "key": "todo", "name": "To do",
-      "states": { "backlog_item": ["open"], "epic": ["open"] } },
+      "states": { "backlog_item": ["open"], "epic": ["open"], "test_protocol": ["draft"] } },
     { "key": "doing", "name": "In progress",
-      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"] } },
+      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"],
+                  "test_protocol": ["running"] } },
     { "key": "done", "name": "Done",
-      "states": { "backlog_item": ["done"], "epic": ["done"] } }
+      "states": { "backlog_item": ["done"], "epic": ["done"], "test_protocol": ["done"] } }
   ] },
   "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {

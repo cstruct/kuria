@@ -1,16 +1,24 @@
 /** Verdicts in the app (`app.verdicts`): a member's assignees, each one's
- * verdict, and whether the viewer is one of them, from its fields; and the
- * input that gives or takes back one's own. Nothing here knows any akt
- * type. */
+ * verdict and its description, and whether the viewer is one of them, from
+ * its fields; and the input that reports or deletes one's own. Nothing
+ * here knows any akt type. */
 // r[impl app.verdicts]
 import type { Verdict } from '#lib/graphql/generated/graphql.ts';
 import { nameOf, type Value } from './values';
+
+/** A verdict as it is reported: its status and what was seen, empty if
+ * nothing was said. */
+export interface Report {
+	verdict: Verdict;
+	description: string;
+}
 
 export interface Assignee {
 	/** A user's subject or a contact's id. */
 	id: string;
 	name: string;
 	verdict: Verdict | null;
+	description: string | null;
 }
 
 export interface Judged {
@@ -18,8 +26,8 @@ export interface Judged {
 	field: string;
 	assignees: Assignee[];
 	/** The viewer's verdict if they are an assignee: `null` if they
-	 * haven't given one; `undefined` if they aren't one. */
-	mine: Verdict | null | undefined;
+	 * haven't reported one; `undefined` if they aren't one. */
+	mine: Report | null | undefined;
 }
 
 interface Judgeable {
@@ -37,22 +45,48 @@ export function judgedOf(akt: Judgeable, me: string | undefined): Judged | null 
 	const verdicts = given?.__typename === 'VerdictValue' ? given.verdicts : [];
 	const assignees: Assignee[] =
 		people?.__typename === 'UsersValue'
-			? people.users.map((someone) => ({
-					id: someone.id,
-					name: nameOf(someone),
-					verdict:
-						verdicts.find(
-							(v) => v.assignee.__typename === someone.__typename && v.assignee.id === someone.id
-						)?.verdict ?? null
-				}))
+			? people.users.map((someone) => {
+					const theirs = verdicts.find(
+						(v) => v.assignee.__typename === someone.__typename && v.assignee.id === someone.id
+					);
+					return {
+						id: someone.id,
+						name: nameOf(someone),
+						verdict: theirs?.verdict ?? null,
+						description: theirs?.description ?? null
+					};
+				})
 			: [];
 	const own = assignees.find((a) => a.id === me);
-	return { field: def.key, assignees, mine: own ? own.verdict : undefined };
+	const mine = own
+		? own.verdict
+			? { verdict: own.verdict, description: own.description ?? '' }
+			: null
+		: undefined;
+	return { field: def.key, assignees, mine };
 }
 
-/** The input that gives `verdict` as one's own, or takes it back. */
-export function verdictInput(verdict: Verdict | null): unknown {
-	return verdict ? verdict.toLowerCase() : { clear: true };
+/** Whether `verdict` must say why (`akt.field.verdict.description`). */
+export const needsDescription = (verdict: Verdict): boolean => verdict !== 'PASS';
+
+/** Why `report` can't be saved, if it can't: nothing chosen, or a fail or
+ * a skip that doesn't say why. */
+export function reportError(report: {
+	verdict: Verdict | null;
+	description: string;
+}): string | null {
+	if (!report.verdict) return 'Choose a status.';
+	if (needsDescription(report.verdict) && report.description.trim() === '')
+		return `Say why it ${report.verdict === 'FAIL' ? 'failed' : 'was skipped'}.`;
+	return null;
+}
+
+/** The input that reports `report` as one's own verdict, or deletes it. */
+export function verdictInput(report: Report | null): unknown {
+	if (!report) return { clear: true };
+	const description = report.description.trim();
+	const verdict = report.verdict.toLowerCase();
+	return description ? { verdict, description } : verdict;
 }
 
 export const VERDICTS: readonly { verdict: Verdict; label: string }[] = [

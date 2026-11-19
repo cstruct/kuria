@@ -2963,9 +2963,27 @@ pub struct VerdictValue {
 pub struct GivenVerdict {
     assignee: Someone,
     verdict: VerdictKind,
+    /// What the assignee saw: a fail or a skip given since has one.
+    description: Option<String>,
     /// Who gave it: the assignee, unless given for them.
     by: User,
     at: DateTime<Utc>,
+}
+
+impl From<&kuria_engine::verdicts::Given> for GivenVerdict {
+    fn from(g: &kuria_engine::verdicts::Given) -> Self {
+        Self {
+            assignee: g.assignee.into(),
+            verdict: match g.verdict {
+                kuria_engine::verdicts::Verdict::Pass => VerdictKind::Pass,
+                kuria_engine::verdicts::Verdict::Fail => VerdictKind::Fail,
+                kuria_engine::verdicts::Verdict::Skip => VerdictKind::Skip,
+            },
+            description: g.description.clone(),
+            by: User(g.by),
+            at: g.at,
+        }
+    }
 }
 
 /// A verdict: pass, fail or skip.
@@ -3064,19 +3082,7 @@ impl FieldValue {
             }),
             Value::Verdicts(given) => Self::Verdict(VerdictValue {
                 field,
-                verdicts: given
-                    .iter()
-                    .map(|g| GivenVerdict {
-                        assignee: g.assignee.into(),
-                        verdict: match g.verdict {
-                            kuria_engine::verdicts::Verdict::Pass => VerdictKind::Pass,
-                            kuria_engine::verdicts::Verdict::Fail => VerdictKind::Fail,
-                            kuria_engine::verdicts::Verdict::Skip => VerdictKind::Skip,
-                        },
-                        by: User(g.by),
-                        at: g.at,
-                    })
-                    .collect(),
+                verdicts: given.iter().map(GivenVerdict::from).collect(),
             }),
         }
     }

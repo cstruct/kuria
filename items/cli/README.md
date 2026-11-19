@@ -99,9 +99,10 @@ type.
     the type lacks, are refused with the key as the field;
   - `set <number> <field>=<value>…`; `do <number> <transition>` (by key or
     name) `[--set …]`; `draft <number> <field>`;
-  - `verdict <number> pass|fail|skip|clear [--for <user>]`: one's own
-    verdict, or one for another assignee, as an edit of the type's
-    `verdict` field, answering the outcome after it;
+  - `verdict <number> pass|fail|skip|clear [--description <text>] [--for <user>]`:
+    one's own verdict, or one for another assignee, with its description,
+    which a fail or a skip must have, as an edit of the type's `verdict`
+    field, answering the outcome after it;
   - `copy <number> [--only <number>…] [--in <container>…]`
     ([`src/writes/copy.rs`](src/writes/copy.rs)): `copyAkt`, then the
     copy's members walked, parents first, to answer each copy with its
@@ -230,7 +231,8 @@ type.
 - **The akt file's kinds** (`cli.file.kinds`): several people are a list;
   a sections field is a section of its own whose body is YAML, a list of
   member numbers and `{title, text, collapsible, items}`; verdicts are a
-  mapping of each assignee to `pass`, `fail` or `skip`; and an akt whose
+  mapping of each assignee to `pass`, `fail` or `skip`, or to `{verdict,
+  description}` when it has a description; and an akt whose
   type has outcomes has `outcome` after `state`. `show` gives the outcome,
   each member's, and the members in their sections, a nested list with
   each section's outcome; `ls` adds an Outcome column when any row has

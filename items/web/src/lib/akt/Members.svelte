@@ -18,8 +18,7 @@
 	import OutcomeBadge from './OutcomeBadge.svelte';
 	import { Reorder, type Place } from './reorder.svelte';
 	import VerdictButtons from './VerdictButtons.svelte';
-	import { judgedOf } from './verdicts';
-	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
+	import { judgedOf, type Report } from './verdicts';
 
 	type Columns = NonNullable<AktPageQuery['akt']>['board']['columns'];
 	type Member = Columns[number]['akter'][number];
@@ -42,7 +41,7 @@
 		/** The viewer's subject, for their own verdicts. */
 		me?: string;
 		/** Gives the viewer's verdict on a member, or takes it back. */
-		onVerdict?: (member: Member, verdict: Verdict | null) => void;
+		onVerdict?: (member: Member, verdict: Report | null) => void;
 		/** The akter a column offers to create, each with its type's name
 		 * and the new-akt page that creates it (`app.board-create`). */
 		creatable?: (column: string) => { name: string; href: string }[];

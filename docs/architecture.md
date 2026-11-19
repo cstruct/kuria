@@ -160,10 +160,10 @@ Containment is the one link kind Kuria builds in ([containers](spec/containers.m
 
 `docs/examples/release-management` shows these together, and `items/server/tests/release_flow.rs` walks a release through it.
 
-- A `sections` field lays out an akt's members in nested sections, checked against its members on every write; a member that leaves takes its place in them with it. A `verdict` field holds each assignee's verdict. Outcomes are derived from verdicts and members each time they are read, never stored, in `engine` (`outcomes`).
+- A `sections` field lays out an akt's members in nested sections, checked against its members on every write; a member that leaves takes its place in them with it. A `verdict` field holds each assignee's verdict and its description, which giving a fail or a skip requires (`engine`, `verdicts`). Outcomes are derived from verdicts and members each time they are read, never stored, in `engine` (`outcomes`).
 - `copyAkt` copies an akt and the part of its member tree chosen, in one transaction, through the create path; which akter it keeps and which values it leaves behind are in `engine` (`copying`), shared with the CLI in local mode. `akt_origin` records what each copy was copied from.
 
-`docs/examples/test-protocols` shows these together: protocols kept as templates, copied for each run, and testers' verdicts adding up.
+`docs/examples/release-management` shows these together too: test protocols kept as templates, copied into each release candidate for a run, and testers' verdicts adding up.
 
 ## Documents
 

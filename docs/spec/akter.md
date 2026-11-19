@@ -111,7 +111,7 @@ fits the field's kind:
 | `docker` | A container image: its repository, such as `registry.example/team/backend`, its digest (`sha256:` and 64 lowercase hexadecimal digits), and optionally a tag. |
 | `attachment` | A file uploaded to Kuria, by its identifier; see `akt.field.attachment`. |
 | `sections` | The akt's members laid out in nested sections; see `akt.field.sections`. |
-| `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`; see `akt.field.verdict`. |
+| `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`, with a description; see `akt.field.verdict`. |
 | `markdown` | Markdown whose headings keep ids and whose links may name akter; see `akt.field.markdown`. |
 
 r[akt.field.checkbox]
@@ -214,14 +214,22 @@ r[akt.field.verdict]
 A `verdict` field MUST name, as `assignees`, a `multiple` `user` field of
 its type, and MUST hold at most one verdict, `pass`, `fail` or `skip`, per
 assignee. Giving one MUST take the verdict, or `{"verdict": <verdict>,
-"for": <user>}` to give it for another assignee, `<user>` being a value a
-`user` field takes, and `{"clear": true}` or `{"clear": true, "for":
-<user>}` to take one back. It MUST record who gave it and when, taken from
-the change, never from the input, and for whom when that is someone else.
+"description": <text>, "for": <user>}` to give it with a description, or
+for another assignee, `<user>` being a value a `user` field takes, and
+`{"clear": true}` or `{"clear": true, "for": <user>}` to take one back. It
+MUST record who gave it and when, taken from the change, never from the
+input, and for whom when that is someone else.
 A verdict MUST be refused unless it is for an assignee: one's own only if
 one is an assignee, and anyone's, with `for`, only for an assignee. An
 assignee removed from the `user` field MUST lose their verdict in the same
 change. An akt type MUST have at most one `verdict` field.
+
+r[akt.field.verdict.description]
+A verdict MAY have a description, text saying what the assignee saw.
+Giving `fail` or `skip` MUST be refused without one that isn't blank.
+Giving a verdict replaces the assignee's, description and all: one given
+without a description has none. Giving the same verdict with the same
+description again MUST change nothing.
 
 r[akt.field.required]
 A field marked `required` MUST hold a value from the moment the akt is

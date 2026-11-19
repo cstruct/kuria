@@ -26,8 +26,8 @@ mise exec -- npx --prefix e2e playwright test -g "release"
 mise run e2e:serve
 ```
 
-starts the same stack, defines the release-management,
-test-protocols and documents examples' akt types, and prints who can sign in at <http://localhost:18090> (use
+starts the same stack, defines the release-management and documents
+examples' akt types, and prints who can sign in at <http://localhost:18090> (use
 `localhost`, not `127.0.0.1`). Each start begins with an empty Kuria and
 a fresh Konklav. Ctrl-C stops the server.
 
@@ -159,15 +159,16 @@ beside its OIDC client's (`KONKLAV_AUDIENCE=kuria,konklav`).
   written as code, previewed through a compile error and back, toggled to
   its picture and saved; axe on each dialog and view.
 - [`tests/test-protocols.spec.ts`](tests/test-protocols.spec.ts): the
-  [test-protocols example](../docs/examples/test-protocols/README.md):
+  [release-management example's test protocols](../docs/examples/release-management/README.md#test-protocols):
   a template of three sections copied with two of them from the copy
   dialog, started, and run by two testers (the developer and the release
-  manager, who may work on `test_protocol` and `test_case`), giving,
-  changing and taking back verdicts in its sections, a collapsible one
+  manager, who may work on `test_protocol` and `test_case`), reporting,
+  editing and deleting verdicts in a dialog, a fail refused until it says
+  why, in its sections, a collapsible one
   opened, and in its list; a test case taken out of the sections in the
   outline; each test case's, section's and the protocol's outcome; the run
   finished, and the template unchanged. axe checks the copy dialog, the
-  run in its sections and the outline.
+  report dialog, the run in its sections and the outline.
 - [`tests/shell.spec.ts`](tests/shell.spec.ts): search from the keyboard,
   the drawer and no sideways scrolling at 390 pixels, signing out of
   Kuria and of the login page's Konklav session, and akt types under "Show

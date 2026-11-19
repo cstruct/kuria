@@ -8,8 +8,7 @@
 	import type { Person } from './people';
 	import type { Draft, FieldDef, Value } from './values';
 	import VerdictButtons from './VerdictButtons.svelte';
-	import type { Judged } from './verdicts';
-	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
+	import type { Judged, Report } from './verdicts';
 	import type { LiveDraft } from './live.svelte';
 
 	interface Props {
@@ -35,7 +34,7 @@
 		/** For a verdict field: the akt's number, its verdicts, and giving one. */
 		number?: string;
 		judged?: Judged | null;
-		onVerdict?: (verdict: Verdict | null) => void;
+		onVerdict?: (verdict: Report | null) => void;
 		/** Whether the akt has a live draft: an edit changes it, without a
 		 * reason (`app.live`). */
 		liveDraft?: boolean;

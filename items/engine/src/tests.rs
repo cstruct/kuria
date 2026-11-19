@@ -734,8 +734,14 @@ fn assignees_give_verdicts_and_the_outcome_follows() {
     );
     // Not an assignee: not one's own, and not for someone else either.
     for (raw, who) in [
-        (json!("fail"), outsider),
-        (json!({ "verdict": "skip", "for": subject(outsider) }), a),
+        (
+            json!({ "verdict": "fail", "description": "Broken" }),
+            outsider,
+        ),
+        (
+            json!({ "verdict": "skip", "description": "Away", "for": subject(outsider) }),
+            a,
+        ),
         (Json::Null, a),
     ] {
         let refused = give(&mut now, &raw, who).unwrap_err();
@@ -747,7 +753,7 @@ fn assignees_give_verdicts_and_the_outcome_follows() {
     // For an assignee, by anyone, recorded as given by them.
     give(
         &mut now,
-        &json!({ "verdict": "skip", "for": subject(b) }),
+        &json!({ "verdict": "skip", "description": "Away", "for": subject(b) }),
         outsider,
     )
     .unwrap();
@@ -767,10 +773,91 @@ fn assignees_give_verdicts_and_the_outcome_follows() {
         ]
     );
     assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pass));
-    give(&mut now, &json!("fail"), b).unwrap();
+    give(
+        &mut now,
+        &json!({ "verdict": "fail", "description": "Broken" }),
+        b,
+    )
+    .unwrap();
     assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Fail));
     give(&mut now, &json!({ "clear": true }), b).unwrap();
     assert_eq!(outcome_of(&now), Some(outcomes::Outcome::Pending));
+}
+
+// r[verify akt.field.verdict.description]
+#[test]
+fn a_fail_or_a_skip_says_why() {
+    let a = 1;
+    let described = |now: &Current| match now.fields.get("verdict") {
+        Some(Value::Verdicts(given)) => given
+            .iter()
+            .map(|g| (g.verdict.as_str(), g.description.clone()))
+            .collect(),
+        _ => Vec::new(),
+    };
+    let mut now = assigned();
+    // Not without a description, nor with a blank one.
+    for raw in [
+        json!("fail"),
+        json!("skip"),
+        json!({ "verdict": "fail" }),
+        json!({ "verdict": "skip", "description": "  " }),
+        json!({ "verdict": "fail", "description": 3 }),
+        json!({ "clear": true, "description": "Why" }),
+    ] {
+        let refused = give(&mut now, &raw, a).unwrap_err();
+        assert!(
+            matches!(refused, Refusal::InvalidValue { .. }),
+            "{raw}: {refused:?}"
+        );
+    }
+    give(
+        &mut now,
+        &json!({ "verdict": "fail", "description": " The total is wrong " }),
+        a,
+    )
+    .unwrap();
+    assert_eq!(
+        described(&now),
+        [("fail", Some("The total is wrong".to_owned()))]
+    );
+    // The same again changes nothing; another description does.
+    assert!(matches!(
+        give(
+            &mut now,
+            &json!({ "verdict": "fail", "description": "The total is wrong" }),
+            a
+        ),
+        Err(Refusal::NoChange)
+    ));
+    give(
+        &mut now,
+        &json!({ "verdict": "fail", "description": "The total is off by one" }),
+        a,
+    )
+    .unwrap();
+    assert_eq!(
+        described(&now),
+        [("fail", Some("The total is off by one".to_owned()))]
+    );
+    // A pass may have one, and has none when given without.
+    give(
+        &mut now,
+        &json!({ "verdict": "pass", "description": "After a retry" }),
+        a,
+    )
+    .unwrap();
+    assert_eq!(
+        described(&now),
+        [("pass", Some("After a retry".to_owned()))]
+    );
+    give(&mut now, &json!("pass"), a).unwrap();
+    assert_eq!(described(&now), [("pass", None)]);
+    // One stored without a description, as before the rule, still reads.
+    let stored = json!([{ "assignee": subject(a), "verdict": "fail",
+        "by": Uuid::from_u128(a).to_string(), "at": "2026-01-01T00:00:00Z" }]);
+    let field = test_type().field("verdict").unwrap().clone();
+    assert!(Value::from_json(&field, &stored).is_ok());
 }
 
 // r[verify akt.field.multiple]
@@ -841,7 +928,12 @@ fn a_transition_may_require_an_outcome() {
     assert!(finish(&now, Some(outcomes::Outcome::Pass)).is_err());
     give(&mut now, &json!("pass"), 1).unwrap();
     assert!(finish(&now, None).is_err(), "2 hasn't answered");
-    give(&mut now, &json!("fail"), 2).unwrap();
+    give(
+        &mut now,
+        &json!({ "verdict": "fail", "description": "Broken" }),
+        2,
+    )
+    .unwrap();
     assert_eq!(finish(&now, None).unwrap().state, "closed");
     // A verdict the transition gives counts.
     let mut later = assigned();
@@ -850,7 +942,7 @@ fn a_transition_may_require_an_outcome() {
         &ty,
         &later,
         "finish",
-        &input(json!({ "verdict": "skip" })),
+        &input(json!({ "verdict": { "verdict": "skip", "description": "Away" } })),
         by(2),
         None,
     );

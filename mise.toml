@@ -106,7 +106,7 @@ depends = ["db:up", "web:install", "example:up"]
 dir = "example"
 usage = '''
 arg "<example>" help="The example in docs/examples to load" {
-  choices "release-management" "documents" "planning" "test-protocols" "local-test"
+  choices "release-management" "documents" "planning" "local-test"
 }
 '''
 run = "node scripts/serve.ts {{usage.example}}"

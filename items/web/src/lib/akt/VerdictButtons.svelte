@@ -1,20 +1,24 @@
 <script lang="ts">
-	// r[impl app.verdicts]: a member's assignees and their verdicts, and an
-	// assignee's own verdict given, changed or taken back in place.
+	// r[impl app.verdicts]: a member's assignees, their verdicts and what
+	// they saw, and an assignee's own reported, changed or deleted in a
+	// dialog.
 	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
 	import Button from '#lib/ui/Button.svelte';
-	import { VERDICTS, type Judged } from './verdicts';
+	import VerdictDialog from './VerdictDialog.svelte';
+	import { VERDICTS, type Judged, type Report } from './verdicts';
 
 	interface Props {
 		/** The akt it is the verdicts of, for labels. */
 		number: string;
 		judged: Judged;
 		busy: boolean;
-		/** Gives one's own verdict, or takes it back with `null`. */
-		onGive: (verdict: Verdict | null) => void;
+		/** Reports one's own verdict, or deletes it with `null`. */
+		onGive: (report: Report | null) => void;
 	}
 
 	let { number, judged, busy, onGive }: Props = $props();
+
+	let open = $state(false);
 
 	const said = (verdict: Verdict | null) =>
 		verdict ? (VERDICTS.find((v) => v.verdict === verdict)?.label ?? verdict) : 'Not yet';
@@ -31,27 +35,20 @@
 					<span class="verdict {assignee.verdict?.toLowerCase() ?? 'none'}"
 						>{said(assignee.verdict)}</span
 					>
+					{#if assignee.description}
+						<span class="description">{assignee.description}</span>
+					{/if}
 				</li>
 			{/each}
 		</ul>
 	{/if}
 	{#if judged.mine !== undefined}
 		<div class="mine" role="group" aria-label="Your verdict on {number}">
-			{#each VERDICTS as { verdict, label } (verdict)}
-				<Button
-					size="sm"
-					variant={judged.mine === verdict ? 'primary' : 'secondary'}
-					aria-pressed={judged.mine === verdict}
-					disabled={busy}
-					onclick={() => onGive(judged.mine === verdict ? null : verdict)}>{label}</Button
-				>
-			{/each}
-			{#if judged.mine}
-				<Button size="sm" variant="ghost" disabled={busy} onclick={() => onGive(null)}
-					>Take back</Button
-				>
-			{/if}
+			<Button size="sm" disabled={busy} onclick={() => (open = true)}
+				>{judged.mine ? 'Edit' : 'Report'}</Button
+			>
 		</div>
+		<VerdictDialog bind:open {number} mine={judged.mine} {busy} onSave={onGive} />
 	{/if}
 </div>
 
@@ -95,8 +92,13 @@
 	}
 
 	.verdict.none,
-	.hint {
+	.hint,
+	.description {
 		color: var(--text-muted);
+	}
+
+	.description {
+		white-space: pre-line;
 	}
 
 	.mine {

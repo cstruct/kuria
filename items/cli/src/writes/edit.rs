@@ -552,13 +552,30 @@ pub(crate) fn verdict_field<'a>(
 }
 
 /// A verdict's input (`akt.field.verdict`): `pass`, `fail` or `skip` for
-/// oneself, with `for` another assignee's, and `clear` to take one back.
+/// oneself, with its description, with `for` another assignee's, and
+/// `clear` to take one back.
 // r[impl cli.write]
-pub(crate) fn verdict_input(given: &str, for_whom: Option<Json>) -> Result<Json, CliError> {
+pub(crate) fn verdict_input(
+    given: &str,
+    description: Option<&str>,
+    for_whom: Option<Json>,
+) -> Result<Json, CliError> {
     let given = given.trim().to_ascii_lowercase();
     match (given.as_str(), for_whom) {
-        ("pass" | "fail" | "skip", None) => Ok(given.into()),
-        ("pass" | "fail" | "skip", Some(who)) => Ok(json!({ "verdict": given, "for": who })),
+        ("pass" | "fail" | "skip", who) => {
+            let mut input = json!({ "verdict": given });
+            if let Some(description) = description {
+                input["description"] = description.into();
+            }
+            if let Some(who) = who {
+                input["for"] = who;
+            }
+            Ok(input)
+        }
+        ("clear", _) if description.is_some() => Err(CliError::refused(
+            "BAD_REQUEST",
+            "a verdict taken back has no description".to_owned(),
+        )),
         ("clear", None) => Ok(json!({ "clear": true })),
         ("clear", Some(who)) => Ok(json!({ "clear": true, "for": who })),
         _ => Err(CliError::refused(
@@ -604,12 +621,14 @@ pub(crate) fn verdict_answer(
     )
 }
 
-/// `kuria verdict <number> pass|fail|skip|clear [--for <user>]`.
+/// `kuria verdict <number> pass|fail|skip|clear [--description <text>]
+/// [--for <user>]`.
 // r[impl cli.write]
 pub async fn verdict(
     session: &Session,
     number: &str,
     given: &str,
+    description: Option<&str>,
     for_whom: Option<&str>,
     reason: Option<&str>,
 ) -> Result<Answer, CliError> {
@@ -624,7 +643,7 @@ pub async fn verdict(
         None => None,
     };
     let mut fields = Map::new();
-    fields.insert(field.key.clone(), verdict_input(given, who)?);
+    fields.insert(field.key.clone(), verdict_input(given, description, who)?);
     let data = session
         .graphql(
             "mutation($n: String!, $v: Int!, $f: JSON!, $r: String) {

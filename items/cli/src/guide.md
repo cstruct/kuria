@@ -108,7 +108,8 @@ Markdown, as long as it needs.
 - A field naming several people is a list: `testers: [a@x.example, b@x.example]`.
   A sections field is a section whose body is YAML: a list of member
   numbers and sections, each `{title, text, collapsible, items}`.
-- `verdict` (each assignee's `pass`, `fail` or `skip`) and `outcome` (what
+- `verdict` (each assignee's `pass`, `fail` or `skip`, or `{verdict,
+  description}` with what they saw) and `outcome` (what
   verdicts, or members' outcomes, add up to) are read-only: give verdicts
   with `kuria verdict`.
 - A `markdown` field is a section of its own, Markdown whose headings keep
@@ -205,7 +206,7 @@ kuria members transfer <member> <from> <to>    # out of one container, into anot
 kuria members place <number> --before <other>  # on every board; or --after
 kuria link <number> blocks <other>      kuria unlink <number> blocks <other>
 kuria draft <number> <field>
-kuria verdict <test> pass|fail|skip|clear [--for <assignee>]
+kuria verdict <test> pass|fail|skip|clear [--description "…"] [--for <assignee>]
 kuria copy <template> [--only <number>…] [--in <container>]   # with its members
 kuria release <number> [--label 2.0]   # its current revision as its next version
 kuria release <number> <other>…        # together, all or nothing: links between them

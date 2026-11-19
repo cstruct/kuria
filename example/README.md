@@ -11,7 +11,7 @@ don't clash with the end-to-end stack's (`e2e/`) or the dogfooding stack's
 ## Running it
 
 ```sh
-mise run example planning     # or release-management, documents, test-protocols
+mise run example planning     # or release-management, documents
 mise run example:down         # stops Konklav, keeping it
 mise run example:reset        # forgets it all
 ```

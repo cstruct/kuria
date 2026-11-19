@@ -2,14 +2,14 @@
 	// r[impl app.sections]
 	// r[impl app.verdicts]
 	import { resolve } from '$app/paths';
-	import type { AktPageQuery, Verdict } from '#lib/graphql/generated/graphql.ts';
+	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Mono from '#lib/ui/Mono.svelte';
 	import { renderMarkdown } from './markdown';
 	import OutcomeBadge from './OutcomeBadge.svelte';
 	import { sectionOutcome, type Item, type Section } from './sections';
 	import VerdictButtons from './VerdictButtons.svelte';
-	import { judgedOf } from './verdicts';
+	import { judgedOf, type Report } from './verdicts';
 
 	type Member = NonNullable<AktPageQuery['akt']>['board']['columns'][number]['akter'][number];
 
@@ -20,7 +20,7 @@
 		/** The viewer's subject. */
 		me: string | undefined;
 		busy: boolean;
-		onVerdict: (member: Member, verdict: Verdict | null) => void;
+		onVerdict: (member: Member, verdict: Report | null) => void;
 		/** The collapsible sections opened, by path, kept by the page so a
 		 * change that reloads the akt doesn't close them. */
 		opened: Set<string>;

@@ -15,7 +15,9 @@ export const TYPES = [
 	'release',
 	'release_candidate',
 	'hotfix',
-	'release_notes'
+	'release_notes',
+	'test_case',
+	'test_protocol'
 ];
 
 /** Defines every akt type of the example, as the seeded admin. Defining
@@ -32,19 +34,6 @@ export async function defineExample(): Promise<void> {
 /** The example's document for `key`, as its file holds it. */
 export function exampleDocument(key: string): Record<string, unknown> {
 	return JSON.parse(readFileSync(join(EXAMPLE, `${key}.json`), 'utf8'));
-}
-
-const TEST_PROTOCOLS = join(import.meta.dirname, '..', '..', 'docs', 'examples', 'test-protocols');
-
-/** Defines the test-protocols example's akt types (docs/examples/test-protocols),
- * test cases before the protocols that name them, as the seeded admin. */
-export async function defineTestProtocols(): Promise<void> {
-	const admin = await api(seeded().clients.admin);
-	for (const key of ['test_case', 'test_protocol']) {
-		await admin.graphql('mutation($d: JSON!) { defineAktType(document: $d) { key } }', {
-			d: JSON.parse(readFileSync(join(TEST_PROTOCOLS, `${key}.json`), 'utf8'))
-		});
-	}
 }
 
 const DOCUMENTS = join(import.meta.dirname, '..', '..', 'docs', 'examples', 'documents');

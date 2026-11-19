@@ -10,14 +10,13 @@
     { "key": "expected", "name": "Expected result", "kind": "text", "multiline": true },
     { "key": "testers", "name": "Testers", "kind": "user", "multiple": true,
       "description": "Who runs it; each gives a verdict." },
-    { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" },
-    { "key": "notes", "name": "Notes", "kind": "text", "multiline": true,
-      "description": "What was seen, such as why it failed." }
+    { "key": "verdict", "name": "Verdict", "kind": "verdict", "assignees": "testers" }
   ],
   "states": [
     { "key": "open", "name": "Open", "initial": true }
   ],
   "transitions": [],
+  "archive": { "rules": [{ "with_container": "test_protocol" }] },
   "presentation": {
     "icon": "flask-conical", "colour": "blue",
     "card": ["testers"], "list": ["testers"]

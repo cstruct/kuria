@@ -250,9 +250,15 @@ fn verdicts(given: &serde_json::Map<String, Json>) -> Option<Json> {
         .iter()
         .map(|(who, verdict)| {
             let by = someone(who);
+            // `pass`, or `{verdict, description}`.
+            let (verdict, description) = match verdict {
+                Json::Object(o) => (&o["verdict"], o.get("description")),
+                other => (other, None),
+            };
             json!({
                 "assignee": by,
                 "verdict": verdict.as_str().unwrap_or_default().to_ascii_uppercase(),
+                "description": description,
                 "by": { "id": by["id"], "name": by["name"], "email": by["email"] },
                 "at": "",
             })

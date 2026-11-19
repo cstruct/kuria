@@ -256,11 +256,15 @@ pub enum Command {
         reason: Option<String>,
     },
     /// Give one's verdict of an akt, or one for another assignee with
-    /// `--for`; `clear` takes it back.
+    /// `--for`; `clear` takes it back. A fail or a skip says why, with
+    /// `--description`.
     Verdict {
         number: String,
         /// `pass`, `fail`, `skip` or `clear`.
         verdict: String,
+        /// What was seen: required for `fail` and `skip`.
+        #[arg(long, value_name = "TEXT")]
+        description: Option<String>,
         /// The assignee to give it for, by email, name or `@me`.
         #[arg(long = "for", value_name = "USER")]
         for_whom: Option<String>,

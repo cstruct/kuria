@@ -34,7 +34,7 @@ pub const VALUES: &str = "fragment Values on FieldValue {
   ... on DockerValue { field repository digest tag }
   ... on AttachmentValue { field attachment { id name mediaType size sha256 url } }
   ... on UsersValue { field users { ...Someone } }
-  ... on VerdictValue { field verdicts { assignee { ...Someone } verdict by { id name email } at } }
+  ... on VerdictValue { field verdicts { assignee { ...Someone } verdict description by { id name email } at } }
   ... on SectionsValue { field value }
   ... on MarkdownValue { field markdown references { destination broken } }
 }";
@@ -282,6 +282,9 @@ pub struct GivenVerdict {
     pub assignee: Someone,
     /// `PASS`, `FAIL` or `SKIP`.
     pub verdict: String,
+    /// What the assignee saw.
+    #[serde(default)]
+    pub description: Option<String>,
     pub by: User,
     pub at: String,
 }

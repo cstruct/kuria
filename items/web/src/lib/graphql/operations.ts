@@ -212,6 +212,7 @@ export const FieldValues = graphql(`
 			field
 			verdicts {
 				verdict
+				description
 				assignee {
 					...SomeoneShown
 				}

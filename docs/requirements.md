@@ -29,9 +29,10 @@ else in this document is still to come.
 The release, backlog and epic processes run on this today, with build
 artifacts, SBOMs and a go for release given by someone who need not be a
 user: see [the release-management example](examples/release-management/README.md).
-Test protocols run on it too, kept as templates and copied for each run,
-with testers' verdicts adding up to each test's, section's and protocol's
-outcome: see [the test-protocols example](examples/test-protocols/README.md).
+Test protocols run on it too, kept as templates and copied into each
+release candidate for a run, with testers' verdicts adding up to each
+test's, section's and protocol's outcome: see
+[the same example](examples/release-management/README.md#test-protocols).
 Documents too: written in a rich-text editor as Markdown, linked to each
 other down to a heading, released as versions that never change once no
 link is broken, read as PDFs, with images that are akter of their own and
