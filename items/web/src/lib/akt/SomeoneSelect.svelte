@@ -9,9 +9,12 @@
 		people: Person[];
 		/** What choosing nobody means, such as "Nobody" or "Me". */
 		none: string;
+		/** Whether to show the label: not when the field around it already
+		 * does, so that it isn't said twice (`app.create`). */
+		labelled?: boolean;
 	}
 
-	let { label, who = $bindable(), people, none }: Props = $props();
+	let { label, who = $bindable(), people, none, labelled = true }: Props = $props();
 
 	const OTHER = 'other';
 	// Read once, when the picker opens: a subject not among `people` is one
@@ -30,7 +33,7 @@
 </script>
 
 <label>
-	{label}
+	{#if labelled}{label}{/if}
 	<select aria-label={label} value={choice} onchange={(e) => pick(e.currentTarget.value)}>
 		<option value="">{none}</option>
 		{#each people as person (keyOf(person.who))}

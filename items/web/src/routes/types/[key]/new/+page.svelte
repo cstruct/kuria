@@ -4,6 +4,10 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import FieldEditor from '#lib/akt/FieldEditor.svelte';
+	import { missingRequired } from '#lib/akt/creating.ts';
+	import Alert from '#lib/ui/Alert.svelte';
+	import Button from '#lib/ui/Button.svelte';
+	import Card from '#lib/ui/Card.svelte';
 	import { releasedFile } from '#lib/akt/document.ts';
 	import { refusalOf, type Refusal } from '#lib/akt/errors.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
@@ -31,7 +35,24 @@
 	let preparedFor = $state('');
 	let reason = $state('');
 	let refusal = $state<Refusal | null>(null);
+	/** The required fields left empty when it was last sent, by key. */
+	let missing = $state<Record<string, string>>({});
 	let busy = $state(false);
+
+	/** The fields asked for here: verdicts are given, and sections laid
+	 * out, once it exists; a released file, by releasing it (`version.file`). */
+	const asked = $derived(
+		(type?.fields ?? []).filter(
+			(f) =>
+				drafts[f.key] &&
+				!['SHOWN', 'SECTIONS'].includes(drafts[f.key].kind) &&
+				f.key !== releasedFile(type?.document)
+		)
+	);
+	/** Where Cancel goes: the container it was opened from, else its type. */
+	const back = $derived(
+		inside[0] ? resolve('/akt/[number]', { number: inside[0] }) : resolve('/types/[key]', { key })
+	);
 
 	$effect(() => {
 		if (type && preparedFor !== type.key) {
@@ -43,6 +64,18 @@
 	async function create(event: SubmitEvent) {
 		event.preventDefault();
 		if (!type) return;
+		// r[impl app.create]: nothing is sent while a required field is empty.
+		missing = missingRequired(asked, drafts);
+		if (Object.keys(missing).length > 0) {
+			refusal = null;
+			const first = asked.find((f) => missing[f.key]);
+			document
+				.querySelector<HTMLElement>(
+					`[data-field-editor="${first?.key}"] :is(input, select, textarea, [contenteditable])`
+				)
+				?.focus();
+			return;
+		}
 		const fields = Object.fromEntries(
 			type.fields
 				.filter((f) => drafts[f.key] && drafts[f.key].kind !== 'SHOWN' && !isEmpty(drafts[f.key]))
@@ -67,41 +100,104 @@
 	<title>New {type?.name ?? key} · Kuria</title>
 </svelte:head>
 
-<main>
+<main class="create">
 	{#if view.error && !type}
-		<p role="alert">{refusalOf(view.error).message}</p>
+		<Alert>{refusalOf(view.error).message}</Alert>
 	{:else if type}
-		<h1>New {type.name}</h1>
-		{#if inside.length > 0}<p>In {inside.join(', ')}</p>{/if}
-		{#if refusal}<p role="alert">{refusal.message}</p>{/if}
-		<form onsubmit={create} aria-label="New {type.name}">
-			{#each type.fields as field (field.key)}
-				<!-- Verdicts are given, and sections laid out, once it exists; a
-				     released file, by releasing it (`version.file`). -->
-				{#if drafts[field.key] && !['SHOWN', 'SECTIONS'].includes(drafts[field.key].kind) && field.key !== releasedFile(type.document)}
-					<FieldEditor
-						{field}
-						bind:draft={drafts[field.key]}
-						{people}
-						error={refusal?.field === field.key ? refusal.message : undefined}
-					/>
-				{/if}
-			{/each}
-			<label>Reason <input bind:value={reason} /></label>
-			<button type="submit" disabled={busy}>Create</button>
+		<header>
+			<h1>New {type.name}</h1>
+			{#if inside.length > 0}<p class="inside">In {inside.join(', ')}</p>{/if}
+		</header>
+		<form onsubmit={create} aria-label="New {type.name}" novalidate>
+			<Card>
+				<div class="fields">
+					{#if refusal}<Alert title="It wasn’t created">{refusal.message}</Alert>{/if}
+					{#each asked as field (field.key)}
+						<div data-field-editor={field.key}>
+							<FieldEditor
+								{field}
+								bind:draft={drafts[field.key]}
+								{people}
+								error={missing[field.key] ??
+									(refusal?.field === field.key ? refusal.message : undefined)}
+							/>
+						</div>
+					{/each}
+					<details class="note">
+						<summary>Add a note for the history</summary>
+						<label>
+							Note <span class="optional">(optional)</span>
+							<input bind:value={reason} />
+						</label>
+					</details>
+				</div>
+			</Card>
+			<div class="actions">
+				<Button variant="ghost" href={back}>Cancel</Button>
+				<Button variant="primary" type="submit" {busy}>Create</Button>
+			</div>
 		</form>
 	{:else if view.data}
-		<p role="alert">There is no akt type {key}, or you can’t see it.</p>
+		<Alert>There is no akt type {key}, or you can’t see it.</Alert>
 	{:else}
-		<p>Loading…</p>
+		<p role="status">Loading…</p>
 	{/if}
 </main>
 
 <style>
+	.create {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		max-width: 44rem;
+	}
+
+	header {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+	}
+
+	.inside {
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+
 	form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		max-width: 40rem;
+		gap: var(--space-4);
+	}
+
+	.fields {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.note summary {
+		cursor: pointer;
+		color: var(--text-muted);
+		font-size: var(--text-sm);
+	}
+
+	.note label {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin-top: var(--space-2);
+		font-size: var(--text-sm);
+		font-weight: 500;
+	}
+
+	.optional {
+		color: var(--text-muted);
+		font-weight: 400;
+	}
+
+	.actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-2);
 	}
 </style>

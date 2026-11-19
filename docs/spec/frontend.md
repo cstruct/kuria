@@ -64,6 +64,16 @@ repository with a digest and tag, an attachment uploaded or downloaded,
 several users or contacts for a `multiple` field, each assignee's
 verdict, and a `markdown` field in a rich-text editor (`app.editor`).
 
+r[app.create]
+The page creating an akt MUST ask for the fields its type is created
+with, each labelled once, above its control, with its description as a
+hint below it, and the required ones marked. It MUST refuse to send while
+a required field is empty, saying so on that field, and MUST offer to
+cancel, going back to the container it was opened from, if any, else to
+its akt type. A note for the history MAY be given, under a disclosure
+closed until opened. A refusal MUST be shown as an alert, naming its field
+(`app.errors`).
+
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
 saving only that field.

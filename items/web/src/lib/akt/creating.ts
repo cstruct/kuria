@@ -3,6 +3,7 @@
  * beside the container. Nothing here knows any akt type. */
 // r[impl app.board-create]
 // r[impl app.akt-types]
+import { isEmpty, type Draft, type FieldDef } from './values';
 
 interface Document {
 	contains?: { type?: string }[];
@@ -76,4 +77,20 @@ export function insideQuery(container: string, parents: readonly string[]): stri
 	return [container, ...parents.filter((p) => p !== container)]
 		.map((n) => `in=${encodeURIComponent(n)}`)
 		.join('&');
+}
+
+/** What the create page says on each required field left empty, by field
+ * key, so that nothing is sent until they are given (`app.create`). Fields
+ * without a draft aren't asked for there, and aren't named. */
+// r[impl app.create]
+export function missingRequired(
+	fields: readonly Pick<FieldDef, 'key' | 'name' | 'required'>[],
+	drafts: Readonly<Record<string, Draft | undefined>>
+): Record<string, string> {
+	return Object.fromEntries(
+		fields.flatMap((f) => {
+			const draft = drafts[f.key];
+			return f.required && draft && isEmpty(draft) ? [[f.key, `${f.name} is required.`]] : [];
+		})
+	);
 }
