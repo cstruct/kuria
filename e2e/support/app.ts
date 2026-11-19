@@ -89,7 +89,7 @@ export async function addTo(page: Page, container: string) {
 	await expect(page.getByRole('combobox', { name: 'Add to', exact: true })).toBeFocused();
 	await pick(page, 'Add to', container);
 	await expect(page.getByRole('dialog', { name: 'Add to…' })).toBeHidden();
-	await expect(page.getByRole('list', { name: 'Part of' }).getByRole('link', { name: container })).toBeVisible();
+	await expect(page.getByRole('list', { name: 'Part of' })).toContainText(container);
 }
 
 /** Moves the open akt from `from` to `to`. */
@@ -99,7 +99,7 @@ export async function transfer(page: Page, from: string, to: string) {
 	await dialog.getByLabel('From').selectOption(from);
 	await pick(page, 'To', to);
 	await expect(dialog).toBeHidden();
-	await expect(page.getByRole('list', { name: 'Part of' }).getByRole('link', { name: to })).toBeVisible();
+	await expect(page.getByRole('list', { name: 'Part of' })).toContainText(to);
 }
 
 /** The text of the headings and list items a field's Markdown renders to. */

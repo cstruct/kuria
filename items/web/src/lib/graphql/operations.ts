@@ -409,6 +409,11 @@ export const AktPage = graphql(`
 						edit
 					}
 				}
+				containers {
+					id
+					number
+					title
+				}
 			}
 			board(first: 500, archived: $boardArchived) {
 				columns {

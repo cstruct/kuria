@@ -12,10 +12,24 @@ const typeHref = (key: string) => `/types/${key}`;
 
 // r[verify app.trail]
 describe('the trail', () => {
-	it('is the type, then the akt, its title under its number', () => {
+	it('is the type, then the akt, its number under its title', () => {
 		expect(crumbsOf([], { number: 'D-1', title: 'Policy', type: doc }, typeHref)).toEqual([
 			{ label: 'Document', href: '/types/document' },
-			{ label: 'D-1', detail: 'Policy' }
+			{ label: 'Policy', detail: 'D-1' }
+		]);
+	});
+
+	it('is where it is, outermost first, when it is in containers', () => {
+		const places = [
+			{ number: 'REL-1', title: 'Autumn', href: '/akt/REL-1' },
+			{ number: 'RC-1', title: null, href: '/akt/RC-1' }
+		];
+		expect(
+			crumbsOf([], { number: 'T-1', title: 'Gift cards', type: doc }, typeHref, places)
+		).toEqual([
+			{ label: 'Autumn', detail: 'REL-1', href: '/akt/REL-1' },
+			{ label: 'RC-1', detail: undefined, href: '/akt/RC-1' },
+			{ label: 'Gift cards', detail: 'T-1' }
 		]);
 	});
 
@@ -24,9 +38,9 @@ describe('the trail', () => {
 		const index = { key: 'index', name: 'Index' };
 		expect(crumbsOf(trail, { number: 'X-3', title: 'Setup', type: index }, typeHref)).toEqual([
 			{ label: 'Document', href: '/types/document' },
-			{ label: 'D-1', detail: 'Policy', href: '/akt/D-1', state: { trail: [] } },
+			{ label: 'Policy', detail: 'D-1', href: '/akt/D-1', state: { trail: [] } },
 			{ label: 'D-2', detail: undefined, href: '/akt/D-2?version=2', state: { trail: [trail[0]] } },
-			{ label: 'X-3', detail: 'Setup' }
+			{ label: 'Setup', detail: 'X-3' }
 		]);
 	});
 

@@ -394,9 +394,9 @@ Verified:
 <!-- akt: PLAN-025-T07 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5w
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T09]
 title: "Trails by place, headings by title, numbers as eyebrows"
@@ -410,6 +410,21 @@ Covers findings 2.1 (the "Task › New" trail), 2.5, 4.1, 4.5 and 5.6.
 - Creating from a board returns to that board unless the person asks to see what they made. That also lands with T09.
 - An akt whose title is its number, as candidates are today, gets a title from the type's presentation. The example names candidates by build or "Candidate 1" (T17).
 - Rules: `app.trail`, `app.header`, `akt.type.presentation` (`title`).
+
+## Done
+
+The trail follows where an akt is: its first container's own container, then that container, then the akt, as in "Summer › Summer backlog › Save a product for later". An akt that is in nothing, or one reached by following references, keeps the type-first trail. Every akt on the trail leads with its title, with its number under it (`app.trail`). The "Part of" card links by title too, with the type and number under it. The heading already showed the title, with the number in the eyebrow.
+
+Not done:
+
+- Returning to the board after creating from it. That goes with T09's quick-add.
+- Candidates titled by build. That is T17, the example.
+
+Verified:
+
+- `trail.test.ts`;
+- e2e members, release-flow, links, documents, test-protocols and shell;
+- by eye on a task in a backlog in a release.
 
 <!-- field: acceptance -->
 - A task made in a backlog shows "Autumn backlog › Gift cards at checkout".

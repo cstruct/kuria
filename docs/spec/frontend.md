@@ -53,8 +53,11 @@ transition MUST be shown as primary. A transition to a final state MUST be
 confirmed, saying the state it leads to.
 
 r[app.trail]
-The top bar MUST show where the page is as a trail: on an akt's page, its
-akt type, then its number with its title under it in smaller text.
+The top bar MUST show where the page is as a trail: on an akt's page, the
+container it is in and that container's own, outermost first, each a link,
+else its akt type; then the akt. Each akt on the trail MUST be named by its
+title with its number under it in smaller text, or by its number if it has
+no title.
 Following a reference in a shown `markdown` field MUST add the akt it
 goes to after the trail it was followed from, each earlier akt a link back
 to it, at the version it was read at, with the trail it had; reaching an

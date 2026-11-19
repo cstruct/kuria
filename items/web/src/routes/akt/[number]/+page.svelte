@@ -128,7 +128,15 @@
 						title: akt.title ?? null,
 						type: { key: akt.type.key, name: akt.type.name }
 					},
-					(key) => resolve('/types/[key]', { key })
+					(key) => resolve('/types/[key]', { key }),
+					// r[impl app.trail]: where it is, its first container's own first.
+					akt.containers[0]
+						? [...akt.containers[0].containers.slice(0, 1), akt.containers[0]].map((c) => ({
+								number: c.number,
+								title: c.title ?? null,
+								href: resolve('/akt/[number]', { number: c.number })
+							}))
+						: []
 				)
 			: [{ label: number }]
 	);
@@ -975,9 +983,13 @@
 								<li>
 									<span>
 										<a href={resolve('/akt/[number]', { number: container.number })}
-											>{container.number}</a
+											>{container.title ?? container.number}</a
 										>
-										<span class="hint">{container.title ?? container.type.name}</span>
+										<span class="hint"
+											>{container.title
+												? `${container.type.name} · ${container.number}`
+												: container.type.name}</span
+										>
 									</span>
 									<!-- r[impl app.permitted]: only from a container they may edit. -->
 									{#if !akt.archived && container.type.viewerMay.edit}

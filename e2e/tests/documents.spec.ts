@@ -125,7 +125,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 	const sidebar = dev.getByRole('navigation', { name: 'Kuria' });
 	await sidebar.getByRole('button', { name: /^Show more/ }).click();
 	await expect(
-		sidebar.getByRole('list', { name: 'More akt types' }).getByRole('link', { name: /^Image( \d+)?$/ })
+		sidebar.getByRole('list', { name: 'More work' }).getByRole('link', { name: /^Image( \d+)?$/ })
 	).toBeVisible();
 
 	// The release manager may release documents; a broken link is refused.
