@@ -49,3 +49,35 @@ test('home shows what changed recently and every akt type', async ({ browser }) 
 	await types.getByRole('link', { name: 'New Backlog', exact: true }).click();
 	await expect(page).toHaveURL(/\/types\/backlog\/new$/);
 });
+
+// r[verify app.permitted]
+test('a reader is offered nothing to create, edit or move', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	const { createAkt } = await admin.graphql<{ createAkt: { number: string } }>(
+		'mutation { createAkt(input: { type: "backlog", fields: { title: "Read-only backlog" } }) { number } }'
+	);
+
+	const page = await signIn(browser, seeded().people.headOfProduct);
+	await page.goto('/');
+	const types = page.getByRole('region', { name: 'Akt types' });
+	await expect(types.locator('a[href="/types/backlog"]')).toBeVisible();
+	await expect(types.getByRole('link', { name: /^New / })).toHaveCount(0);
+
+	await page.goto('/types/backlog');
+	await expect(page.getByRole('heading', { level: 1 })).toContainText('Backlog');
+	await expect(page.getByRole('link', { name: 'New Backlog' })).toHaveCount(0);
+
+	await page.goto(`/akt/${createAkt.number}`);
+	await expect(page.getByTestId('number')).toHaveText(createAkt.number);
+	const main = page.getByRole('main');
+	await expect(main.getByRole('button', { name: 'Close', exact: true })).toHaveCount(0);
+	await expect(main.getByRole('button', { name: /^Edit / })).toHaveCount(0);
+	await expect(main.getByRole('button', { name: 'Make a copy' })).toHaveCount(0);
+	await expect(main.getByRole('button', { name: /^New .* in / })).toHaveCount(0);
+
+	// The developer, who may, is offered them.
+	const developer = await signIn(browser, seeded().people.developer);
+	await developer.goto(`/akt/${createAkt.number}`);
+	await expect(developer.getByRole('main').getByRole('button', { name: 'Close', exact: true })).toBeVisible();
+});

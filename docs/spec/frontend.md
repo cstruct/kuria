@@ -74,6 +74,14 @@ its akt type. A note for the history MAY be given, under a disclosure
 closed until opened. A refusal MUST be shown as an alert, naming its field
 (`app.errors`).
 
+r[app.permitted]
+The app MUST NOT offer an action the viewer's akt type permissions
+(`authz.viewer`) don't allow: creating an akt of a type they may not
+create, in a container they may not edit, editing or adding to an akt
+they may not edit, performing a transition of a type whose transitions
+they may not perform, or archiving one they may not archive. A refusal
+the server answers all the same MUST still be shown (`app.errors`).
+
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
 saving only that field.

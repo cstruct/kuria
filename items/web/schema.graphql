@@ -180,6 +180,11 @@ type AktType {
 	"""
 	numberPattern: String!
 	fields: [Field!]!
+	"""
+	What the request's subject may do with its akter: what the app
+	offers by. Every write is still decided on its own.
+	"""
+	viewerMay: ViewerMay!
 	states: [State!]!
 	"""
 	How its akter are shown: the title field, and what cards and lists
@@ -1572,6 +1577,26 @@ type Viewer {
 	The subject, shown by name.
 	"""
 	user: User!
+}
+
+type ViewerMay {
+	"""
+	Whether they may create its akter.
+	"""
+	create: Boolean!
+	"""
+	Whether they may edit its akter.
+	"""
+	edit: Boolean!
+	"""
+	Whether they may perform its transitions, those that name no
+	action of their own.
+	"""
+	transition: Boolean!
+	"""
+	Whether they may archive and unarchive its akter.
+	"""
+	archive: Boolean!
 }
 
 """

@@ -327,3 +327,20 @@ async fn decides_a_sender_constrained_request_with_its_accepted_presentation() {
     // Released once the request was answered.
     assert_eq!(world.host.released(), before + 1);
 }
+
+// r[verify authz.viewer]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_akt_type_says_what_the_viewer_may_do() {
+    let world = World::new().await;
+    let may = "{ aktType(key: \"capa\") { viewerMay { create edit transition archive } } }";
+    world.decider.grant_at(ALICE, "capa", &[READ]);
+    assert_eq!(
+        world.ok(ALICE, may, json!({})).await["aktType"]["viewerMay"],
+        json!({ "create": false, "edit": false, "transition": false, "archive": false })
+    );
+    world.decider.grant_at(ALICE, "capa", &[CREATE, EDIT]);
+    assert_eq!(
+        world.ok(ALICE, may, json!({})).await["aktType"]["viewerMay"],
+        json!({ "create": true, "edit": true, "transition": false, "archive": false })
+    );
+}

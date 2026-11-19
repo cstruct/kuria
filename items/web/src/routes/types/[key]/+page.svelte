@@ -139,9 +139,12 @@
 	{:else if type}
 		<header>
 			<h1><TypeMark {type} size="md" named /></h1>
-			<Button variant="primary" href={resolve('/types/[key]/new', { key: type.key })}>
-				<Plus size={16} aria-hidden={true} /> New {type.name}
-			</Button>
+			<!-- r[impl app.permitted] -->
+			{#if type.viewerMay.create}
+				<Button variant="primary" href={resolve('/types/[key]/new', { key: type.key })}>
+					<Plus size={16} aria-hidden={true} /> New {type.name}
+				</Button>
+			{/if}
 		</header>
 
 		<div class="filters">

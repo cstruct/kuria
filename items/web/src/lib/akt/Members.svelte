@@ -185,7 +185,10 @@
 									title={member.title ? undefined : member.number}
 									>{member.title ?? truncateMiddle(member.number, 26)}</a
 								>
-								<Menu label={boardLabels(member.number).menu} items={itemsFor(column.akter, i)} />
+								<!-- r[impl app.permitted]: nothing to do with it unless they may edit the container. -->
+								{#if editable}
+									<Menu label={boardLabels(member.number).menu} items={itemsFor(column.akter, i)} />
+								{/if}
 							</div>
 							{#if member.type.presentation.card.length > 0}
 								<dl class="shown">
@@ -290,10 +293,10 @@
 								>
 							{/if}
 							<td class="menu"
-								><Menu
-									label={boardLabels(member.number).menu}
-									items={itemsFor(list.akter, i)}
-								/></td
+								>{#if editable}<Menu
+										label={boardLabels(member.number).menu}
+										items={itemsFor(list.akter, i)}
+									/>{/if}</td
 							>
 						</tr>
 					{/each}

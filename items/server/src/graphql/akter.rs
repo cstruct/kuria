@@ -1427,6 +1427,15 @@ impl AktType {
             .collect()
     }
 
+    /// What the request's subject may do with its akter: what the app
+    /// offers by. Every write is still decided on its own.
+    // r[impl authz.viewer]
+    async fn viewer_may(&self) -> ViewerMay {
+        ViewerMay {
+            key: self.0.row.key.clone(),
+        }
+    }
+
     async fn states(&self) -> Vec<State> {
         self.0
             .ty
@@ -3274,5 +3283,73 @@ fn archived_key(archived: ArchivedFilter) -> &'static str {
         ArchivedFilter::Live => "live",
         ArchivedFilter::Archived => "archived",
         ArchivedFilter::All => "all",
+    }
+}
+
+/// What the request's subject may do with an akt type's akter
+/// (`authz.viewer`), each decided only when asked for.
+pub struct ViewerMay {
+    key: String,
+}
+
+impl ViewerMay {
+    async fn allows(
+        &self,
+        ctx: &Context<'_>,
+        permission: Permission,
+    ) -> async_graphql::Result<bool> {
+        authorizer(ctx)?
+            .allows(&permission)
+            .await
+            .map_err(|e| error(e.into()))
+    }
+}
+
+#[Object]
+impl ViewerMay {
+    /// Whether they may create its akter.
+    async fn create(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Create {
+                key: self.key.clone(),
+            },
+        )
+        .await
+    }
+
+    /// Whether they may edit its akter.
+    async fn edit(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Edit {
+                key: self.key.clone(),
+            },
+        )
+        .await
+    }
+
+    /// Whether they may perform its transitions, those that name no
+    /// action of their own.
+    async fn transition(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Transition {
+                key: self.key.clone(),
+                action: None,
+            },
+        )
+        .await
+    }
+
+    /// Whether they may archive and unarchive its akter.
+    async fn archive(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Archive {
+                key: self.key.clone(),
+            },
+        )
+        .await
     }
 }

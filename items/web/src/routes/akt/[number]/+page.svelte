@@ -168,9 +168,14 @@
 					parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? [])
 				)}`
 			: resolve('/types/[key]/new', { key });
+	// r[impl app.permitted]: only the types the viewer may create.
 	const creatable = (column: string) =>
 		akt && editable
-			? creatableIn(akt.type.document, column, view.data?.aktTypes ?? []).map((t) => ({
+			? creatableIn(
+					akt.type.document,
+					column,
+					(view.data?.aktTypes ?? []).filter((t) => t.viewerMay.create)
+				).map((t) => ({
 					name: t.name,
 					href: newMemberHref(t.key)
 				}))
@@ -209,6 +214,8 @@
 		// A live draft is edited once it is in hand, by those who may.
 		Boolean(
 			akt &&
+			// r[impl app.permitted]: edits only to one who may make them.
+			akt.type.viewerMay.edit &&
 			!akt.state.final &&
 			!atVersion &&
 			// r[impl app.archive]: an archived akt offers no edit.
@@ -729,19 +736,27 @@
 					<Menu
 						label="More actions for {akt.number}"
 						items={[
-							{
-								label: 'Attach to…',
-								icon: Link2,
-								disabled: busy,
-								onSelect: () => (attachOpen = true)
-							},
-							{
-								separated: true,
-								label: 'Archive…',
-								icon: Archive,
-								disabled: busy,
-								onSelect: () => beginArchiving('archive')
-							}
+							...(akt.type.viewerMay.edit
+								? [
+										{
+											label: 'Attach to…',
+											icon: Link2,
+											disabled: busy,
+											onSelect: () => (attachOpen = true)
+										}
+									]
+								: []),
+							...(akt.type.viewerMay.archive
+								? [
+										{
+											separated: akt.type.viewerMay.edit,
+											label: 'Archive…',
+											icon: Archive,
+											disabled: busy,
+											onSelect: () => beginArchiving('archive')
+										}
+									]
+								: [])
 						]}
 					/>
 				{/if}
@@ -766,7 +781,7 @@
 					{#if archived.reason}<p class="archived-reason">“{archived.reason}”</p>{/if}
 					<p class="archived-hint">It is read-only until it is unarchived.</p>
 				</div>
-				{#if !atVersion}
+				{#if !atVersion && akt.type.viewerMay.archive}
 					<Button disabled={busy} onclick={() => beginArchiving('unarchive')}
 						><ArchiveRestore size={14} aria-hidden={true} /> Unarchive</Button
 					>
@@ -910,7 +925,8 @@
 										>
 										<span class="hint">{container.title ?? container.type.name}</span>
 									</span>
-									{#if !akt.archived}
+									<!-- r[impl app.permitted]: only from a container they may edit. -->
+									{#if !akt.archived && container.type.viewerMay.edit}
 										<IconButton
 											label="Remove from {container.number}"
 											icon={X}
@@ -923,7 +939,9 @@
 							{/each}
 						</ul>
 					{/if}
-					{#if !akt.archived && akt.containers.length > 0}<div class="container-tools">
+					{#if !akt.archived && akt.containers.some((c) => c.type.viewerMay.edit)}<div
+							class="container-tools"
+						>
 							<Button
 								size="sm"
 								onclick={() => {

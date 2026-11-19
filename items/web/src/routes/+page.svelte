@@ -129,13 +129,16 @@
 								><TypeMark {type} size="md" named /></a
 							>
 							<span class="count">{counted(type.akterCount)}</span>
-							<Button
-								size="sm"
-								href={resolve('/types/[key]/new', { key: type.key })}
-								aria-label="New {type.name}"
-							>
-								<Plus size={14} aria-hidden={true} /> New
-							</Button>
+							<!-- r[impl app.permitted] -->
+							{#if type.viewerMay.create}
+								<Button
+									size="sm"
+									href={resolve('/types/[key]/new', { key: type.key })}
+									aria-label="New {type.name}"
+								>
+									<Plus size={14} aria-hidden={true} /> New
+								</Button>
+							{/if}
 						</li>
 					{/each}
 				</ul>

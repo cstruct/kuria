@@ -121,6 +121,14 @@ Exporting a bundle MUST require `kuria:tenant:export`, and importing one
 tenant has in its scope, whatever else the subject may read: the action is
 the permission to see it all.
 
+r[authz.viewer]
+An akt type MUST answer, as `viewerMay`, whether the request's subject may
+create its akter (`authz.create`), edit them (`authz.edit`), perform its
+transitions (`authz.transition`, without the transitions' own actions) and
+archive them (`archive.authz`), decided as those rules decide. The answer
+is what the app offers by (`app.permitted`); every write MUST still be
+decided by its own rule.
+
 r[authz.members]
 Lists of an akt's members and of its containers MUST leave out the akter the
 subject may not read.

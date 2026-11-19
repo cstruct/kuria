@@ -21,6 +21,9 @@ export const Home = graphql(`
 		aktTypes {
 			...TypeMark
 			akterCount
+			viewerMay {
+				create
+			}
 			fields {
 				key
 				kind
@@ -56,6 +59,9 @@ export const AkterOfType = graphql(`
 	) {
 		aktType(key: $type) {
 			...ShownType
+			viewerMay {
+				create
+			}
 			states {
 				key
 				name
@@ -294,6 +300,12 @@ export const TypeShape = graphql(`
 		...TypeMark
 		document
 		liveDrafts
+		viewerMay {
+			create
+			edit
+			transition
+			archive
+		}
 		fields {
 			key
 			name
@@ -343,6 +355,9 @@ export const AktPage = graphql(`
 				initial
 			}
 			document
+			viewerMay {
+				create
+			}
 		}
 		akt(number: $number, version: $version) {
 			id
@@ -385,6 +400,9 @@ export const AktPage = graphql(`
 					key
 					version
 					name
+					viewerMay {
+						edit
+					}
 				}
 			}
 			board(first: 500, archived: $boardArchived) {
