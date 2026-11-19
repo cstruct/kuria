@@ -434,9 +434,9 @@ Verified:
 <!-- akt: PLAN-025-T08 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5x
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T10]
 title: "One dialog, one toast, one picker"
@@ -451,6 +451,27 @@ Covers findings 1.10, 4.4, 5.2, 5.3, 6.5, 6.7, 7.15 and 7.18.
 - Creating anything invalidates the sidebar's counts.
 - One transition dialog serves the header, the board and the card menu alike.
 - Rules: `app.dialog-focus`, `app.transitions`, `app.pickers`.
+
+## Done
+
+Changes:
+
+- Every dialog ends alike: Cancel, or Close for the version diff, then its action on the right. A deleting action, the verdict's Delete, sits apart at the start (`Dialog`'s `cancel` and `start`). The dialogs' own Cancel buttons are gone.
+- Pickers in dialogs show their results inside the dialog (`Combobox`'s `inline`, bits-ui's `ContentStatic`). A picker empties its input once something is picked.
+- `scrollbar-gutter: stable` keeps the page from shifting when a dialog opens.
+- Toasts say what changed and where it went: "<title> moved to <state>", "Copied to <title>", "<title> archived" (`app.toasts`).
+- The sidebar's counts are fetched again when akter change (`query`'s `additionalTypenames`).
+- The markdown editor's reference picker is labelled "Item".
+
+Spec: `app.dialog-focus`, `app.pickers`, `app.toasts`.
+
+Not done: Undo in toasts, which comes with T10's moves.
+
+Verified:
+
+- unit tests;
+- the full e2e suite, run after this commit, with any follow-up fixed in its own commit;
+- by eye on the add dialog.
 
 <!-- field: acceptance -->
 - Every dialog in the seven flows has the same footer.

@@ -67,6 +67,8 @@ export async function moved(page: Page, name: string, to: string, fields: Record
 	// The change feed may show the state before the dialog has its answer.
 	await expect(page.getByRole('dialog', { name })).toBeHidden();
 	await expect(page.getByTestId('state')).toHaveText(to);
+	// r[verify app.toasts]: said by what moved and where to.
+	await expect(page.getByText(new RegExp(` moved to ${escape(to)}$`)).first()).toBeVisible();
 }
 
 /** Adds `members` to the open container. */

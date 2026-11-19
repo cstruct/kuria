@@ -285,7 +285,9 @@ such fields.
 r[app.pickers]
 Wherever the app asks for an akt, such as a container to add an akt to, or
 a member to add, it MUST let the person find it by number or title
-(`akt.search`), rather than only type its number.
+(`akt.search`), rather than only type its number. In a dialog, what it
+finds MUST show inside the dialog. Once one is picked, its search MUST be
+emptied.
 
 r[app.search]
 The app MUST offer search (`akt.search`) on every page, from the keyboard
@@ -325,7 +327,16 @@ Every control MUST have an accessible role and name.
 r[app.dialog-focus]
 A dialog that asks for something, such as a container to attach an akt to,
 MUST put focus in its first field when it opens, so the person can type at
-once. One with no field MUST put focus inside it.
+once. One with no field MUST put focus inside it. Every dialog MUST end
+alike: Cancel, or Close where there is nothing to do, then its action, on
+the right, with an action that deletes apart at the start. Opening one
+MUST NOT shift the page behind it.
+
+r[app.toasts]
+What a change did MUST be said the same way wherever it is made, by what
+was changed and where it went: "Gift cards at checkout moved to In
+progress", "Copied to Shop acceptance test", never by its number and a
+transition's name alone.
 
 r[app.themes]
 The app MUST follow the system's light or dark appearance, with text and

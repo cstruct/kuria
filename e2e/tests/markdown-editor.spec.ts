@@ -44,7 +44,7 @@ test('a markdown field is written in the editor, with a reference to a heading',
 	await page.keyboard.type(' See ');
 	await page.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Reference' }).click();
 	const dialog = page.getByRole('dialog', { name: 'Reference' });
-	await pick(page, 'Akt', setup);
+	await pick(page, 'Item', setup);
 	await dialog.getByLabel('Heading').selectOption({ label: 'Installing' });
 	expect(
 		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,

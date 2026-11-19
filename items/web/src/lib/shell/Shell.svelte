@@ -30,7 +30,8 @@
 		void goto(crumb.href, { state: crumb.state });
 	}
 
-	const shell = query(Shell, () => ({}));
+	// Its counts change as akter are made: fetched again then.
+	const shell = query(Shell, () => ({}), ['Akt']);
 	const narrow = new MediaQuery(NARROW);
 	const shortcut = shortcutLabel(navigator.platform);
 	let drawer = $state(false);

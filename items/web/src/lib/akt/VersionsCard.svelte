@@ -242,7 +242,6 @@
 		{/if}
 	</form>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (releaseOpen = false)}>Cancel</Button>
 		<Button variant="primary" type="submit" form="release-form" {busy}>Release</Button>
 	{/snippet}
 </Dialog>

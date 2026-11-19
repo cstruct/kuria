@@ -8,6 +8,9 @@
 
 html {
 	-webkit-text-size-adjust: 100%;
+	/* Room kept for the scrollbar, so that the page doesn't shift when a
+	   dialog or menu stops it scrolling. */
+	scrollbar-gutter: stable;
 }
 
 body {

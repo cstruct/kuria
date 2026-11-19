@@ -74,7 +74,6 @@
 		{#if general}<p role="alert">{general.message}</p>{/if}
 	</form>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
 		<Button variant="primary" type="submit" form="transition-form" {busy}>{name}</Button>
 	{/snippet}
 </Dialog>

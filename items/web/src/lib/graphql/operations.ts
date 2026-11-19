@@ -621,6 +621,7 @@ export const CopyAkt = graphql(`
 		copyAkt(input: $input) {
 			id
 			number
+			title
 		}
 	}
 `);

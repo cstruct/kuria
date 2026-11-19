@@ -339,7 +339,7 @@
 		};
 		if (together.length === 0) {
 			const released = await run(() => mutate(client, ReleaseVersion, { input }));
-			if (released) toast(`${akt.number}: released`, 'success');
+			if (released) toast(`${headingOf(akt)} released`, 'success');
 			return released;
 		}
 		// r[impl app.versions]: released together, each at the revision read now.
@@ -363,7 +363,7 @@
 		const released = await run(() =>
 			mutate(client, ReleaseVersions, { input: { akter: [input, ...others] } })
 		);
-		if (released) toast(`${[akt.number, ...together].join(', ')}: released together`, 'success');
+		if (released) toast(`${headingOf(akt)} released, with ${together.length} more`, 'success');
 		return released;
 	}
 	const me = $derived(view.data?.viewer.subject);
@@ -542,7 +542,9 @@
 			transitionOpen = false;
 			pending = null;
 			reason = '';
-			toast(`${transition.name}: done`, 'success');
+			// r[impl app.toasts]: what changed, and where it went.
+			const to = akt.type.states.find((s) => s.key === transition.to);
+			toast(`${headingOf(akt)} moved to ${to?.name ?? transition.name}`, 'success');
 		}
 	}
 
@@ -565,7 +567,7 @@
 		const input = { number: member.number, revision: member.revision, transition: transition.key };
 		if (await run(() => mutate(client, PerformTransition, { input }))) {
 			movingOpen = false;
-			toast(`${member.number}: ${transition.name}`, 'success');
+			toast(`${member.title ?? member.number} moved to ${moving.column}`, 'success');
 		}
 	}
 
@@ -603,7 +605,7 @@
 			return;
 		}
 		copyOpen = false;
-		toast(`Copied to ${data.copyAkt.number}`, 'success');
+		toast(`Copied to ${data.copyAkt.title ?? data.copyAkt.number}`, 'success');
 		await goto(resolve('/akt/[number]', { number: data.copyAkt.number }));
 	}
 
@@ -674,6 +676,7 @@
 		if (!akt || !archiving) return;
 		const kind = archiving;
 		const target = akt.number;
+		const heading = headingOf(akt);
 		busy = true;
 		archiveRefusal = null;
 		const input = { number: target, reason: archiveReason.trim() || null };
@@ -689,7 +692,7 @@
 		await refetch();
 		busy = false;
 		archiveOpen = false;
-		toast(`${target}: ${kind === 'archive' ? 'archived' : 'unarchived'}`, 'success');
+		toast(`${heading} ${kind === 'archive' ? 'archived' : 'unarchived'}`, 'success');
 	}
 
 	function toggleArchivedMembers(on: boolean) {
@@ -1130,7 +1133,6 @@
 				{#if archiveRefusal}<p role="alert">{archiveRefusal.message}</p>{/if}
 			</form>
 			{#snippet footer()}
-				<Button variant="ghost" onclick={() => (archiveOpen = false)}>Cancel</Button>
 				<Button variant="primary" type="submit" form="archive-form" {busy}
 					>{archiving === 'unarchive' ? 'Unarchive' : 'Archive'}</Button
 				>
@@ -1143,6 +1145,7 @@
 			description="Find what to add it to, by number or title."
 		>
 			<Combobox
+				inline
 				label="Add to"
 				placeholder="Number or title…"
 				search={(text) =>
@@ -1165,6 +1168,7 @@
 				</select>
 			</label>
 			<Combobox
+				inline
 				label="To"
 				placeholder="Where to move it…"
 				search={(text) =>
@@ -1199,6 +1203,7 @@
 			description="Find it by number or title."
 		>
 			<Combobox
+				inline
 				label="Item to add"
 				placeholder="Number or title…"
 				search={(text) =>

@@ -82,10 +82,12 @@
 			{/snippet}
 		</Field>
 	</form>
-	{#snippet footer()}
+	{#snippet start()}
 		{#if mine}
 			<Button variant="danger" disabled={busy} onclick={remove}>Delete</Button>
 		{/if}
+	{/snippet}
+	{#snippet footer()}
 		<Button variant="primary" type="submit" {form} {busy}>Save</Button>
 	{/snippet}
 </Dialog>

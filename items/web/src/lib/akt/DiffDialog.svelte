@@ -74,7 +74,7 @@
 	});
 </script>
 
-<Dialog bind:open title="Version {from} → {to ? `version ${to}` : 'now'}">
+<Dialog bind:open title="Version {from} → {to ? `version ${to}` : 'now'}" cancel="Close">
 	{#if failed}
 		<p role="alert">Those versions couldn’t be read.</p>
 	{:else if !compared}

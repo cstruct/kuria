@@ -22,9 +22,19 @@
 		onPick: (option: Option) => void;
 		/** Shown when nothing matches. */
 		empty?: string;
+		/** Whether the options show in the page's flow, under the input,
+		 * as in a dialog, rather than floating over what is below it. */
+		inline?: boolean;
 	}
 
-	let { label, placeholder, search, onPick, empty = 'Nothing matches.' }: Props = $props();
+	let {
+		label,
+		placeholder,
+		search,
+		onPick,
+		empty = 'Nothing matches.',
+		inline = false
+	}: Props = $props();
 
 	let text = $state('');
 	let options = $state<Option[]>([]);
@@ -64,7 +74,26 @@
 	}
 </script>
 
-<Combobox.Root type="single" bind:open bind:value onValueChange={pick} items={options}>
+{#snippet found()}
+	{#each options as option (option.value)}
+		<Combobox.Item class="combobox-item" value={option.value} label={option.label}>
+			<span class="label">{option.label}</span>
+			{#if option.hint}<span class="hint">{option.hint}</span>{/if}
+		</Combobox.Item>
+	{:else}
+		<p class="combobox-empty">{searching ? 'Searching…' : empty}</p>
+	{/each}
+{/snippet}
+
+<!-- r[impl app.pickers]: emptied once something is picked. -->
+<Combobox.Root
+	type="single"
+	bind:open
+	bind:value
+	onValueChange={pick}
+	items={options}
+	inputValue={text}
+>
 	<div class="combobox">
 		<Search size={14} aria-hidden={true} />
 		<Combobox.Input
@@ -74,18 +103,18 @@
 			oninput={(e) => (text = e.currentTarget.value)}
 		/>
 	</div>
-	<Combobox.Portal>
-		<Combobox.Content class="combobox-content" sideOffset={4}>
-			{#each options as option (option.value)}
-				<Combobox.Item class="combobox-item" value={option.value} label={option.label}>
-					<span class="label">{option.label}</span>
-					{#if option.hint}<span class="hint">{option.hint}</span>{/if}
-				</Combobox.Item>
-			{:else}
-				<p class="combobox-empty">{searching ? 'Searching…' : empty}</p>
-			{/each}
-		</Combobox.Content>
-	</Combobox.Portal>
+	{#if inline}
+		<!-- In a dialog: under the input, inside the dialog, which scrolls. -->
+		<Combobox.ContentStatic class="combobox-content combobox-inline">
+			{@render found()}
+		</Combobox.ContentStatic>
+	{:else}
+		<Combobox.Portal>
+			<Combobox.Content class="combobox-content" sideOffset={4}>
+				{@render found()}
+			</Combobox.Content>
+		</Combobox.Portal>
+	{/if}
 </Combobox.Root>
 
 <style>
@@ -150,5 +179,11 @@
 		padding: var(--space-2) var(--space-3);
 		font-size: var(--text-sm);
 		color: var(--text-muted);
+	}
+
+	:global(.combobox-inline) {
+		position: static;
+		width: 100%;
+		margin-top: var(--space-1);
 	}
 </style>

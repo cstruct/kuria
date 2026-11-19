@@ -84,7 +84,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 		await dev.keyboard.press('End');
 		await dev.keyboard.type(' See ');
 		await dev.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Reference' }).click();
-		await pick(dev, 'Akt', setup);
+		await pick(dev, 'Item', setup);
 		await dev.getByRole('dialog', { name: 'Reference' }).getByLabel('Heading').selectOption({ label: 'Install' });
 		await dev.getByRole('dialog', { name: 'Reference' }).getByRole('button', { name: 'Insert' }).click();
 		await dev.keyboard.type(' first.');

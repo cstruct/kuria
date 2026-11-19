@@ -824,7 +824,7 @@
 	bind:open={imageOpen}
 	title="Image"
 	onCloseAutoFocus={backToEditor}
-	description="An image akt, found or made from a file you upload, shown here."
+	description="An image, found or made from a file you upload, shown here."
 >
 	<form
 		id="image-form"
@@ -835,9 +835,10 @@
 		}}
 	>
 		{#if imageTypes.length === 0}
-			<p>No akt type holds images.</p>
+			<p>Nothing here holds images.</p>
 		{:else}
 			<Combobox
+				inline
 				label="Find an image"
 				placeholder="Number or title"
 				search={searchImages}
@@ -869,7 +870,6 @@
 		{/if}
 	</form>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (imageOpen = false)}>Cancel</Button>
 		<Button
 			variant="primary"
 			type="submit"
@@ -924,7 +924,6 @@
 		<label>Address <input bind:value={linkUrl} required /></label>
 	</form>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (linkEditOpen = false)}>Cancel</Button>
 		<Button variant="primary" type="submit" form="link-edit-form">Save</Button>
 	{/snippet}
 </Dialog>
@@ -942,7 +941,6 @@
 		<label>Address <input type="url" bind:value={url} required /></label>
 	</form>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (linkOpen = false)}>Cancel</Button>
 		<Button variant="primary" type="submit" form="link-form">Link</Button>
 	{/snippet}
 </Dialog>
@@ -961,7 +959,7 @@
 			insertReference();
 		}}
 	>
-		<Combobox label="Akt" placeholder="Number or title" {search} onPick={choose} />
+		<Combobox inline label="Item" placeholder="Number or title" {search} onPick={choose} />
 		{#if chosen}
 			<p>{chosen.label} <span class="hint">{chosen.number}</span></p>
 			<label>
@@ -987,7 +985,6 @@
 		{/if}
 	</form>
 	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (referenceOpen = false)}>Cancel</Button>
 		<Button variant="primary" type="submit" form="reference-form" disabled={!chosen}>Insert</Button>
 	{/snippet}
 </Dialog>
