@@ -4,7 +4,8 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import FieldEditor from '#lib/akt/FieldEditor.svelte';
-	import { missingRequired } from '#lib/akt/creating.ts';
+	import { missingRequired, titleFieldOf } from '#lib/akt/creating.ts';
+	import { toast } from '#lib/ui/toast.svelte.ts';
 	import Alert from '#lib/ui/Alert.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
@@ -19,6 +20,9 @@
 	const key = $derived(page.params.key ?? '');
 	/** The containers to create it in, from `?in=`. */
 	const inside = $derived(page.url.searchParams.getAll('in'));
+	/** Whether to go back to the container once it is made, as from its
+	 * board (`app.create`). */
+	const returning = $derived(page.url.searchParams.has('return') && inside.length > 0);
 	const view = query(NewAkt, () => ({ type: key }));
 	const contacts = query(Contacts, () => ({}));
 	const users = query(Users, () => ({}));
@@ -62,6 +66,12 @@
 	$effect(() => {
 		if (type && preparedFor !== type.key) {
 			drafts = Object.fromEntries(type.fields.map((f) => [f.key, draftOf(f, undefined)]));
+			// A title typed on a board before asking for the whole form.
+			const titled = titleFieldOf(type.document);
+			const given = page.url.searchParams.get('title');
+			if (titled && given && drafts[titled]?.kind === 'TEXT') {
+				drafts[titled] = { kind: 'TEXT', text: given };
+			}
 			// r[impl akt.field.default]: offered as its creator, to keep or change.
 			const me = view.data?.viewer.subject;
 			for (const key of creatorDefaults(type.document)) {
@@ -100,6 +110,12 @@
 			refusal = error
 				? refusalOf(error, Object.fromEntries(type.fields.map((f) => [f.key, f.name])))
 				: null;
+			return;
+		}
+		if (returning) {
+			// r[impl app.create]: back to the board it was made from.
+			toast(`Added ${data.createAkt.title ?? data.createAkt.number}`, 'success');
+			await goto(back);
 			return;
 		}
 		await goto(resolve('/akt/[number]', { number: data.createAkt.number }));

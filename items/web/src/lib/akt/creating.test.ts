@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { creatableIn, insideQuery, missingRequired, parentBoards } from './creating';
+import {
+	creatableIn,
+	insideQuery,
+	missingRequired,
+	parentBoards,
+	quickAddable,
+	titleFieldOf
+} from './creating';
 
 const candidate = {
 	contains: [{ type: 'epic' }, { type: 'task' }, { type: 'artifact' }],
@@ -91,5 +98,29 @@ describe('the create page', () => {
 				kind: { kind: 'CHOICE', key: 'feature' }
 			})
 		).toEqual({});
+	});
+});
+
+// r[verify app.quick-add]
+describe('quick-add', () => {
+	const task = {
+		fields: [
+			{ key: 'title', kind: 'text', required: true },
+			{ key: 'notes', kind: 'text', multiline: true }
+		]
+	};
+
+	it('titles by the presentation, else the first required line of text', () => {
+		expect(titleFieldOf(task)).toBe('title');
+		expect(titleFieldOf({ ...task, presentation: { title: 'name' } })).toBe('name');
+		expect(titleFieldOf({ fields: [{ key: 'notes', kind: 'text', multiline: true }] })).toBeNull();
+	});
+
+	it('creates from a title alone only what needs nothing else', () => {
+		expect(quickAddable(task)).toBe(true);
+		expect(
+			quickAddable({ fields: [...task.fields, { key: 'why', kind: 'text', required: true }] })
+		).toBe(false);
+		expect(quickAddable({ fields: [] })).toBe(false);
 	});
 });

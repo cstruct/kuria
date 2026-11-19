@@ -1,7 +1,7 @@
 ---
 number: PLAN-025
 type: plan
-revision: 27
+revision: 28
 rank: b5p
 state: active
 title: "A release flow people can use without knowing Kuria's model"
@@ -482,9 +482,9 @@ Verified:
 <!-- akt: PLAN-025-T09 -->
 ---
 type: task
-revision: 3
+revision: 6
 rank: b5y
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocked by PLAN-025-T01, Blocked by PLAN-025-T07]
 title: "Quick-add in board columns, with a side sheet for details"
@@ -498,6 +498,31 @@ Covers findings 1.8, 1.9, 2.1, 2.3 and 2.4.
 - An empty board shows an empty state in its first column, with that input and "Add existing…".
 - The board's "Add" becomes "Add existing…", and a column's "+" is the only "new here".
 - Rules: `app.board-create`, plus a new `app.quick-add`.
+
+## Done
+
+Changes:
+
+- A column offering a type whose akter need only a title has an "Add a task…" input. Enter creates the akt in the column and its parent boards, says "Added …", and keeps focus for the next. A column offering several such types gets a choice of which (`app.quick-add`; `quickAddable`, `titleFieldOf`).
+- Shift+Enter opens the create page with the title filled in.
+- The create page, opened from a container's board ("+", Add, Shift+Enter), goes back there once the akt is made, saying it was added (`app.create`).
+- Cards with nothing to show no longer leave an empty row.
+
+Also fixed, for T07: following a reference keeps the containers the trail began with, so an index's document starts its trail with the index when references are followed too.
+
+Not done:
+
+- The side sheet. It is recorded as a gap of this plan.
+- An empty state inside the first column. The board's columns already show when empty, with the quick-add input in them.
+- Renaming "Add" to "Add existing…". "Add items" now offers New and Existing, so it stays.
+
+Verified:
+
+- `creating.test.ts` and `trail.test.ts`;
+- e2e "a column adds tasks by their titles, staying on the board": five by keyboard, then Shift+Enter;
+- e2e "a column creates its types…", which now comes back to the board;
+- the markdown editor's trail test;
+- by eye in the example.
 
 <!-- field: acceptance -->
 - An end-to-end test adds five tasks to a backlog with the keyboard alone, without the page navigating.
@@ -875,3 +900,18 @@ The review found "akt", "akter", "member", "container" and "transition" througho
 
 <!-- field: why -->
 The people who use a tenant think in its types. Admins and agents, who define types, need the model's words to be exact. One vocabulary can't serve both, and the type document already holds the tenant's words.
+
+<!-- akt: PLAN-025-G08 -->
+---
+type: gap
+revision: 1
+rank: b6F
+state: open
+in: [PLAN-025]
+title: "A side sheet for creating with more fields, over the board"
+---
+
+<!-- field: description -->
+T09 built quick-add, with Shift+Enter opening the whole create page and that page coming back to the board. The review asked for more: a side sheet over the board, holding the type's other fields, so that the board stays in view while they are filled in.
+
+Building it means turning the create page's form into a component that both the route and a sheet can hold. Kept apart from T09 so that quick-add could land first.

@@ -44,6 +44,16 @@ describe('the trail', () => {
 		]);
 	});
 
+	it('keeps where it began as references are followed', () => {
+		const places = [{ number: 'IDX-1', title: 'Handbook', href: '/akt/IDX-1' }];
+		const trail = [{ ...step('D-1', 'Policy'), places }];
+		expect(crumbsOf(trail, { number: 'D-2', title: 'Process', type: doc }, typeHref)).toEqual([
+			{ label: 'Handbook', detail: 'IDX-1', href: '/akt/IDX-1' },
+			{ label: 'Policy', detail: 'D-1', href: '/akt/D-1', state: { trail: [] } },
+			{ label: 'Process', detail: 'D-2' }
+		]);
+	});
+
 	it('is cut back to an akt already on it', () => {
 		const trail = [step('D-1'), step('D-2'), step('D-3')];
 		expect(before(trail, 'D-2')).toEqual([trail[0]]);

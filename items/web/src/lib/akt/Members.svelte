@@ -50,9 +50,13 @@
 		me?: string;
 		/** Gives the viewer's verdict on a member, or takes it back. */
 		onVerdict?: (member: Member, verdict: Report | null) => void;
-		/** The akter a column offers to create, each with its type's name
-		 * and the new-akt page that creates it (`app.board-create`). */
-		creatable?: (column: string) => { name: string; href: string }[];
+		/** The akter a column offers to create, each with its type's key
+		 * and name, the new-akt page that creates it (`app.board-create`),
+		 * and whether a title alone makes one (`app.quick-add`). */
+		creatable?: (column: string) => { key?: string; name: string; href: string; quick?: boolean }[];
+		/** Creates an akt of a type, by key, from its title, on the board;
+		 * answers whether it was made. */
+		onQuickAdd?: (type: string, title: string) => Promise<boolean>;
 	}
 
 	type Transition = Member['type']['transitions'][number];
@@ -69,8 +73,36 @@
 		onInto,
 		me,
 		onVerdict = () => {},
-		creatable = () => []
+		creatable = () => [],
+		onQuickAdd
 	}: Props = $props();
+
+	/** What each column's quick-add has typed, and the type it adds. */
+	let typed = $state<Record<string, string>>({});
+	let adding = $state<Record<string, string>>({});
+	let quickBusy = $state(false);
+
+	/** Enter adds what was typed and stays for the next; Shift+Enter opens
+	 * the whole form with it, to give more (`app.quick-add`). */
+	// r[impl app.quick-add]
+	async function quickKey(
+		event: KeyboardEvent,
+		column: string,
+		offered: { key?: string; href: string }[]
+	) {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		const title = (typed[column] ?? '').trim();
+		const type = offered.find((o) => o.key === adding[column]) ?? offered[0];
+		if (event.shiftKey) {
+			location.assign(`${type.href}${title ? `&title=${encodeURIComponent(title)}` : ''}`);
+			return;
+		}
+		if (!title || !type.key || !onQuickAdd || quickBusy) return;
+		quickBusy = true;
+		if (await onQuickAdd(type.key, title)) typed[column] = '';
+		quickBusy = false;
+	}
 
 	const grouped = $derived(groupMembers(columns, mappedTypes(document), contained));
 	const memberOf = (number: string) =>
@@ -129,6 +161,8 @@
 	<EmptyState title="Nothing here yet" description="Add an existing item, or create one here." />
 {/if}
 
+<p id="quick-hint" class="visually-hidden">Enter adds it; Shift+Enter opens the form for more.</p>
+
 {#if grouped.columns.length > 0}
 	<!-- Focusable, so a keyboard can scroll it sideways when its columns
 	     hold nothing to focus. -->
@@ -137,6 +171,7 @@
 		{#each grouped.columns as column (column.key)}
 			{@const numbers = column.akter.map((m) => m.number)}
 			{@const offered = column.key === 'unmapped' ? [] : creatable(column.key)}
+			{@const quick = offered.filter((o) => o.quick && o.key)}
 			<section
 				class="column"
 				class:refuses={reorder.refuses(column.key)}
@@ -198,7 +233,7 @@
 									<Menu label={boardLabels(member.number).menu} items={itemsFor(column.akter, i)} />
 								{/if}
 							</div>
-							{#if member.type.presentation.card.length > 0}
+							{#if shownFields(member, 'card').some((f) => f.text || f.picture)}
 								<dl class="shown">
 									{#each shownFields(member, 'card') as field (field.name)}
 										{#if field.picture}
@@ -238,6 +273,28 @@
 					{/each}
 					{@render dropLine(column.key, column.akter.length)}
 				</ol>
+				{#if editable && onQuickAdd && quick.length > 0}
+					{@const chosen = quick.find((o) => o.key === adding[column.key]) ?? quick[0]}
+					<div class="quick-add">
+						{#if quick.length > 1}
+							<select
+								aria-label="What to add to {column.name}"
+								value={chosen.key}
+								onchange={(e) => (adding[column.key] = e.currentTarget.value)}
+							>
+								{#each quick as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
+							</select>
+						{/if}
+						<input
+							aria-label="Add a {chosen.name.toLowerCase()} to {column.name}"
+							aria-describedby="quick-hint"
+							placeholder="Add a {chosen.name.toLowerCase()}…"
+							bind:value={typed[column.key]}
+							aria-busy={quickBusy || undefined}
+							onkeydown={(e) => quickKey(e, column.key, [chosen, ...quick])}
+						/>
+					</div>
+				{/if}
 			</section>
 		{/each}
 	</div>
@@ -588,5 +645,23 @@
 	td.menu {
 		width: 1%;
 		text-align: right;
+	}
+
+	.quick-add {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin-top: var(--space-2);
+	}
+
+	.quick-add input,
+	.quick-add select {
+		min-height: 2rem;
+		background: var(--surface);
+		font-size: var(--text-sm);
+	}
+
+	.quick-add input:not(:focus) {
+		border-style: dashed;
 	}
 </style>

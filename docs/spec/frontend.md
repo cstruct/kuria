@@ -81,7 +81,8 @@ a required field is empty, saying so on that field, and MUST offer to
 cancel, going back to the container it was opened from, if any, else to
 its akt type. A note for the history MAY be given, under a disclosure
 closed until opened. A refusal MUST be shown as an alert, naming its field
-(`app.errors`).
+(`app.errors`). Opened from a container's page, it MUST go back there once
+the akt is made, saying it was added; otherwise it MUST show the akt made.
 
 r[app.permitted]
 The app MUST NOT offer an action the viewer's akt type permissions
@@ -224,6 +225,15 @@ r[app.copy]
 The app MUST let a person copy an akt (`akt.copy`), choosing the sections
 and members to keep, all of them at first, and showing the copy once it is
 made.
+
+r[app.quick-add]
+Each column of a board that offers creating an akt type
+(`app.board-create`) whose akter need nothing but their title MUST offer
+adding one by typing its title: Enter MUST create it, in the column and
+its parent boards as `app.board-create` does, without leaving the board,
+and keep the input ready for the next. Asking for more, by Shift+Enter,
+MUST open the page creating it with the title typed. A column offering
+several such types MUST let the person choose which.
 
 r[app.board-drop]
 Dropping a card on another column of a board MUST offer the transitions

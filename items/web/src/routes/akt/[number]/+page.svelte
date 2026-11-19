@@ -49,7 +49,13 @@
 	import { actionsOf, confirmationOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
-	import { creatableIn, insideQuery, parentBoards } from '#lib/akt/creating.ts';
+	import {
+		creatableIn,
+		insideQuery,
+		parentBoards,
+		quickAddable,
+		titleFieldOf
+	} from '#lib/akt/creating.ts';
 	import { changes, draftOf, inputOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { LiveDraft } from '#lib/akt/live.svelte.ts';
 	import LivePresence from '#lib/akt/LivePresence.svelte';
@@ -64,6 +70,7 @@
 		AktPage,
 		Contacts,
 		CopyAkt,
+		CreateAkt,
 		Users,
 		DraftField,
 		EditAkt,
@@ -119,6 +126,16 @@
 	// r[impl app.trail]: the type, then the akter followed here, and this
 	// one, each with its title.
 	const trail = $derived(page.state.trail ?? []);
+	// r[impl app.trail]: where it is, its first container's own first.
+	const places = $derived(
+		akt?.containers[0]
+			? [...akt.containers[0].containers.slice(0, 1), akt.containers[0]].map((c) => ({
+					number: c.number,
+					title: c.title ?? null,
+					href: resolve('/akt/[number]', { number: c.number })
+				}))
+			: []
+	);
 	setCrumbs(() =>
 		akt
 			? crumbsOf(
@@ -129,14 +146,7 @@
 						type: { key: akt.type.key, name: akt.type.name }
 					},
 					(key) => resolve('/types/[key]', { key }),
-					// r[impl app.trail]: where it is, its first container's own first.
-					akt.containers[0]
-						? [...akt.containers[0].containers.slice(0, 1), akt.containers[0]].map((c) => ({
-								number: c.number,
-								title: c.title ?? null,
-								href: resolve('/akt/[number]', { number: c.number })
-							}))
-						: []
+					places
 				)
 			: [{ label: number }]
 	);
@@ -149,7 +159,9 @@
 						number: akt.number,
 						title: akt.title ?? null,
 						type: { key: akt.type.key, name: akt.type.name },
-						href: `${page.url.pathname}${page.url.search}`
+						href: `${page.url.pathname}${page.url.search}`,
+						// The trail's start, carried on from its first page.
+						...(before(trail, akt.number).length === 0 ? { places } : {})
 					}
 				]
 			: null
@@ -187,13 +199,31 @@
 	/** The new-akt page that creates an akt of the type `key` in this
 	 * container and in its parent boards that take it (`app.board-create`). */
 	// r[impl app.board-create]
+	const parentsFor = (key: string) =>
+		akt ? parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? []) : [];
+	// r[impl app.create]: made from here, it comes back here.
 	const newMemberHref = (key: string) =>
 		akt
-			? `${resolve('/types/[key]/new', { key })}?${insideQuery(
-					akt.number,
-					parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? [])
-				)}`
+			? `${resolve('/types/[key]/new', { key })}?${insideQuery(akt.number, parentsFor(key))}&return=1`
 			: resolve('/types/[key]/new', { key });
+
+	/** Creates an akt of the type `key` titled `title` in this container
+	 * and its parent boards that take it, staying on the board
+	 * (`app.quick-add`). */
+	// r[impl app.quick-add]
+	async function quickAdd(key: string, title: string): Promise<boolean> {
+		const type = view.data?.aktTypes.find((t) => t.key === key);
+		const field = type ? titleFieldOf(type.document) : null;
+		if (!akt || !field) return false;
+		const into = [akt.number, ...parentsFor(key).filter((p) => p !== akt.number)];
+		const created = await run(() =>
+			mutate(client, CreateAkt, {
+				input: { type: key, fields: { [field]: title }, in: into, reason: null }
+			})
+		);
+		if (created) toast(`Added ${title}`, 'success');
+		return created;
+	}
 	// r[impl app.permitted]: only the types the viewer may create.
 	const creatable = (column: string) =>
 		akt && editable
@@ -202,8 +232,10 @@
 					column,
 					(view.data?.aktTypes ?? []).filter((t) => t.viewerMay.create)
 				).map((t) => ({
+					key: t.key,
 					name: t.name,
-					href: newMemberHref(t.key)
+					href: newMemberHref(t.key),
+					quick: quickAddable(t.document)
 				}))
 			: [];
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
@@ -972,6 +1004,7 @@
 								{me}
 								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
 								{creatable}
+								onQuickAdd={quickAdd}
 							/>
 						{/if}
 					</section>

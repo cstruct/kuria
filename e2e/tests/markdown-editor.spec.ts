@@ -398,16 +398,16 @@ test('following references adds each akt to the trail', async ({ browser }) => {
 	const body = page.locator('dd[data-field="body"]');
 	await open(page, policy);
 	// The akt's title under its number.
-	await expect(trail).toHaveText(['Document', `Policy ${stamp}${policy}`]);
+	await expect(trail).toHaveText([`Trail ${stamp}${index}`, `Policy ${stamp}${policy}`]);
 
 	// Each reference followed goes on along the trail.
 	await body.getByRole('link', { name: 'the process' }).click();
 	await expect(page.getByTestId('number')).toHaveText(process);
-	await expect(trail).toHaveText(['Document', `Policy ${stamp}${policy}`, `Process ${stamp}${process}`]);
+	await expect(trail).toHaveText([`Trail ${stamp}${index}`, `Policy ${stamp}${policy}`, `Process ${stamp}${process}`]);
 	await body.getByRole('link', { name: 'the form' }).click();
 	await expect(page.getByTestId('number')).toHaveText(form);
 	await expect(trail).toHaveText([
-		'Document',
+		`Trail ${stamp}${index}`,
 		`Policy ${stamp}${policy}`,
 		`Process ${stamp}${process}`,
 		`Form ${stamp}${form}`
@@ -416,7 +416,7 @@ test('following references adds each akt to the trail', async ({ browser }) => {
 	// An earlier akt goes back to it, with the trail it had.
 	await trail.getByRole('link', { name: process }).click();
 	await expect(page.getByTestId('number')).toHaveText(process);
-	await expect(trail).toHaveText(['Document', `Policy ${stamp}${policy}`, `Process ${stamp}${process}`]);
+	await expect(trail).toHaveText([`Trail ${stamp}${index}`, `Policy ${stamp}${policy}`, `Process ${stamp}${process}`]);
 	// The browser's back shows the page with the trail it had.
 	await page.goBack();
 	await expect(page.getByTestId('number')).toHaveText(form);
@@ -427,5 +427,5 @@ test('following references adds each akt to the trail', async ({ browser }) => {
 	// Reaching an akt already on the trail cuts it back.
 	await body.getByRole('link', { name: 'the policy' }).click();
 	await expect(page.getByTestId('number')).toHaveText(policy);
-	await expect(trail).toHaveText(['Document', `Policy ${stamp}${policy}`]);
+	await expect(trail).toHaveText([`Trail ${stamp}${index}`, `Policy ${stamp}${policy}`]);
 });

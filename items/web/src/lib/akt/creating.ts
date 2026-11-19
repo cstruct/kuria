@@ -94,3 +94,35 @@ export function missingRequired(
 		})
 	);
 }
+
+interface FieldShape {
+	key?: string;
+	kind?: string;
+	required?: boolean;
+	multiline?: boolean;
+}
+
+function fieldsOf(document: unknown): FieldShape[] {
+	const fields = (document as { fields?: FieldShape[] } | null)?.fields;
+	return Array.isArray(fields) ? fields : [];
+}
+
+/** The key of the field an akt type's akter are titled by: its
+ * presentation's `title`, else its first required single-line text field
+ * (`akt.type.presentation`). */
+export function titleFieldOf(document: unknown): string | null {
+	const named = (document as { presentation?: { title?: string } } | null)?.presentation?.title;
+	if (named) return named;
+	return (
+		fieldsOf(document).find((f) => f.kind === 'text' && f.required && !f.multiline)?.key ?? null
+	);
+}
+
+/** Whether an akt of the type can be created from its title alone, as a
+ * board's quick-add does (`app.quick-add`): it has a title field, and no
+ * other field it requires. */
+// r[impl app.quick-add]
+export function quickAddable(document: unknown): boolean {
+	const title = titleFieldOf(document);
+	return Boolean(title) && !fieldsOf(document).some((f) => f.required && f.key !== title);
+}

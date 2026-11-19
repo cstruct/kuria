@@ -187,12 +187,42 @@ test('a column creates its types, in the board and its parent boards', async ({ 
 	await expect(page.getByText(`In ${candidate}, ${backlog}`)).toBeVisible();
 	await page.getByRole('group', { name: /^Title/ }).getByLabel('Title', { exact: true }).fill('Winter tyres');
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
-	await expect(page).toHaveURL(/\/akt\//);
-	const task = (await page.getByTestId('number').textContent())!.trim();
+	// r[verify app.create]: back on the board it was made from.
+	await expect(page.getByTestId('number')).toHaveText(candidate);
+	await expect(page.getByText('Added Winter tyres').first()).toBeVisible();
+	const tyres = page.getByRole('region', { name: 'To do', exact: true }).locator('[data-number]').filter({ hasText: 'Winter tyres' });
+	const task = (await tyres.getAttribute('data-number'))!;
 	expect(task).toMatch(/^TASK-\d{4}$/);
 
-	await open(page, candidate);
 	expect(await column(page, 'To do')).toEqual([task]);
 	await open(page, backlog);
 	expect(await column(page, 'To do')).toEqual([task]);
+});
+
+// r[verify app.quick-add]
+test('a column adds tasks by their titles, staying on the board', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	const { createAkt } = await admin.graphql<{ createAkt: { number: string } }>(
+		'mutation { createAkt(input: { type: "backlog", fields: { title: "Quick backlog" } }) { number } }'
+	);
+	const page = await signIn(browser, seeded().people.developer);
+	await open(page, createAkt.number);
+	const input = page.getByRole('textbox', { name: 'Add a task to To do' });
+	const titles = ['One', 'Two', 'Three', 'Four', 'Five'];
+	for (const title of titles) {
+		await input.fill(title);
+		await input.press('Enter');
+		await expect(input).toHaveValue('');
+		await expect(input).toBeFocused();
+	}
+	await expect(page).toHaveURL(new RegExp(`/akt/${createAkt.number}$`));
+	const todo = page.getByRole('region', { name: 'To do', exact: true });
+	await expect(todo.locator('[data-number]')).toHaveText(titles.map((t) => new RegExp(t)));
+
+	// Shift+Enter opens the whole form, with the title typed.
+	await input.fill('Six, with more');
+	await input.press('Shift+Enter');
+	await expect(page.getByRole('heading', { name: 'New Task' })).toBeVisible();
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Six, with more');
 });

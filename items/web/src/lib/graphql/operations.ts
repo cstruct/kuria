@@ -603,6 +603,7 @@ export const CreateAkt = graphql(`
 		createAkt(input: $input) {
 			id
 			number
+			title
 		}
 	}
 `);

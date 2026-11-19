@@ -13,6 +13,16 @@ export interface Step {
 	type: { key: string; name: string };
 	/** Its page, at the version it was read at. */
 	href: string;
+	/** Where the trail began, for its first step: the containers it was
+	 * shown in, outermost first, if any. */
+	places?: readonly Place[];
+}
+
+/** A container an akt is in, as the trail shows it. */
+export interface Place {
+	number: string;
+	title: string | null;
+	href: string;
 }
 
 /** The steps before `number`: the trail cut back to it if it is already
@@ -38,15 +48,16 @@ export function crumbsOf(
 	trail: readonly Step[],
 	here: Omit<Step, 'href'>,
 	typeHref: (key: string) => string,
-	places: readonly { number: string; title: string | null; href: string }[] = []
+	places: readonly Place[] = []
 ): Crumb[] {
 	const earlier = before(trail, here.number);
-	if (earlier.length === 0 && places.length > 0) {
-		return [...places.map((p) => ({ ...named(p), href: p.href })), named(here)];
-	}
+	// Begun where the first akt was: its containers, else its type.
+	const start = earlier.length > 0 ? (earlier[0].places ?? []) : places;
 	const first = earlier[0]?.type ?? here.type;
 	return [
-		{ label: first.name, href: typeHref(first.key) },
+		...(start.length > 0
+			? start.map((p) => ({ ...named(p), href: p.href }))
+			: [{ label: first.name, href: typeHref(first.key) }]),
 		...earlier.map((step, i) => ({
 			...named(step),
 			href: step.href,
