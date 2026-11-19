@@ -809,9 +809,9 @@ Verified:
 <!-- akt: PLAN-025-T16 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b65
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocks PLAN-025-T17]
 title: Boards and pages that work at phone width
@@ -823,6 +823,24 @@ Covers the 375-pixel findings 1 and 2.
 - On narrow screens, a board's columns stack as collapsible groups, or snap-scroll with tabs naming each column and its count.
 - The board comes before Details, Links and History.
 - Rules: `app.narrow`.
+
+## Done
+
+Below 600 pixels wide:
+
+- a board's columns stack one under another, at full width, each with its name and count, instead of scrolling sideways out of sight;
+- a container's page shows its contents before its details.
+
+Together with T15's hidden Details, a backlog on a phone opens on its board.
+
+Spec: `app.narrow`.
+
+Not done: column tabs or collapsible columns. Stacking was enough to make every column reachable.
+
+Verified:
+
+- by eye at 375 wide in the example;
+- e2e accessibility, which runs axe on the main pages.
 
 <!-- field: acceptance -->
 - At 375 wide, every column of a three-column board is reachable, with its count visible, and the board is the first thing after the header.

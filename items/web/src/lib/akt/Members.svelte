@@ -701,4 +701,18 @@
 		font-size: var(--text-xs);
 		text-align: center;
 	}
+
+	/* r[impl app.narrow]: on a phone, a board's columns one under another,
+	   each with its name and count, rather than cut off to the side. */
+	@media (max-width: 599px) {
+		.board {
+			flex-direction: column;
+			overflow-x: visible;
+		}
+
+		.column {
+			flex: 0 0 auto;
+			max-width: none;
+		}
+	}
 </style>

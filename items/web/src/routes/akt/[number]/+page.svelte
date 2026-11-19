@@ -1635,6 +1635,13 @@
 		}
 	}
 
+	/* r[impl app.narrow]: on a phone, what it holds before its details. */
+	@media (max-width: 599px) {
+		.main > .members {
+			order: -1;
+		}
+	}
+
 	.main,
 	.side {
 		display: flex;

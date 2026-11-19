@@ -384,4 +384,6 @@ controls contrasting with their background as WCAG 2.2 level AA requires.
 
 r[app.narrow]
 Every page MUST be usable at 390 pixels wide, without scrolling sideways
-except inside boards and tables.
+except inside tables. There, a board's columns MUST be shown one under
+another, each with its name and count, and a container's page MUST show
+what it holds before its details.
