@@ -41,7 +41,9 @@ others.
 - Replanning an item into another backlog is a transfer: one step, recorded
   on the item and both backlogs.
 - Release candidates and hotfixes are accepted or deployed with evidence:
-  the build, and for a candidate its test record, as references.
+  the build, as a reference. A candidate is accepted only once its result,
+  what its test runs add up to, is Passed; its page says why Accept waits,
+  and how many runs have passed.
 - A candidate's test protocols live in it: each is a run, a copy of a
   template made in the candidate, shown on its board from draft to done
   beside the work it tests. A candidate takes and loses protocols only
@@ -88,11 +90,15 @@ others.
   protocol's owner, a test case's testers), and the
   tone of each state (in progress is active, in review a warning, done,
   accepted, deployed and approved a success, rejected a danger). Titles
-  come from each type's first required single-line text field; a
-  candidate, a hotfix and release notes have none, and show their number.
-  Tasks, release candidates and release notes are reached from inside
-  backlogs and releases, so the sidebar lists them under **Show more**
-  (`navigation`).
+  come from each type's first required single-line text field, a
+  candidate's from its label; a hotfix and release notes have none, and
+  show their number. The sidebar lists the types by job, under Planning,
+  Releasing and Testing (`group`). Release candidates and release notes
+  are reached from inside releases, so it lists them under **Show more**
+  (`navigation`). Pages offer each state's next step first (`primary`), a
+  release's manager and a protocol's owner default to whoever creates them
+  (`default`), and fields such as a release's date or a task's pull
+  request are asked for only in the states they belong to (`states`).
 
 ## Test protocols
 
@@ -144,19 +150,23 @@ can use ([spec](../../spec/akter.md)).
 
 ### A run, in the app
 
-1. Open the template and choose **Make a copy**. Every section and test
-   case is chosen at first; clear the ones this run leaves out, then
-   **Copy**. The copy opens. Add it to the candidate it tests, from the
-   candidate's members.
+1. Open the template and choose **Make a copy**, the page's first
+   action on a template. Choose the candidate it is for under **Copy
+   into**, the most recently changed open one at first. Every section and
+   test case is chosen at first; clear the ones this run leaves out, then
+   **Copy**. The copy opens, in the candidate, named after it, such as
+   "Shop acceptance test: 4.2.0-rc.1".
 2. **Start** it. Its test cases are listed in their sections, collapsible
-   ones closed until opened, each with its testers, their verdicts and
-   its outcome.
-3. Each tester reports their verdict with **Report** beside the test
-   case: a status, pass, fail or skip, and a description, required for a
-   fail or a skip. **Edit** then changes either, or deletes the verdict.
-   The outcome of the test case, its sections and the protocol follow.
+   ones closed until opened and saying how many they hold, each with its
+   testers, their verdicts and its outcome. A template, or a run not yet
+   started, takes no verdicts.
+3. Each tester gives their verdict in place, beside the test case:
+   **Pass** at once, or **Fail** or **Skip** with a description of what
+   they saw, which a fail or a skip needs before it is saved. Choosing
+   again changes it, and **Clear** takes it back. The outcome of the test
+   case, its sections and the protocol follow.
 4. **Finish** it with a conclusion. While a test case is pending,
-   **Finish** is unavailable, and says the outcomes it allows.
+   **Finish** is unavailable, and says why beside it.
 
 A tester finds their test cases under **My work** on Home, and those
 still pending on the test cases' list, with **Outcome** set to Pending.

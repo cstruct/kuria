@@ -848,9 +848,9 @@ Verified:
 <!-- akt: PLAN-025-T17 -->
 ---
 type: task
-revision: 7
+revision: 10
 rank: b66
-state: todo
+state: done
 in: [PLAN-025]
 links: [Blocked by PLAN-025-T11, Blocked by PLAN-025-T12, Blocked by PLAN-025-T13, Blocked by PLAN-025-T14, Blocked by PLAN-025-T15, Blocked by PLAN-025-T16]
 title: "The release-management example, its README and an end-to-end walk of the seven flows"
@@ -865,6 +865,40 @@ Covers what the generic tasks leave to the example.
 - Fields are asked by state, using the members G02, G04 and G06 decide.
 - Write the bundle again, and update docs/examples/release-management/README.md and the server's example tests (`items/server/tests/examples.rs`).
 - Add the end-to-end walk the plan's verification describes.
+
+## Done
+
+The example's changes landed with the tasks that needed them. They are:
+
+- primary actions (T03);
+- creator defaults (T04);
+- the release notes' plural (T05);
+- "Put back" for tasks (T10);
+- "Ships from" (T11);
+- fields by state (T12);
+- candidates labelled, and accepted only once passed (T13);
+- groups (T15).
+
+The bundles were written again each time. This task brings the README up to date with how the app now shows the flows: Accept gated by the runs; a run copied into its candidate and named after it; verdicts in place; the presentation members the example uses.
+
+The seven flows are walked end to end by the specs updated along the way, rather than one new spec:
+
+| Flow | Spec |
+|---|---|
+| Create a backlog | home |
+| Add tasks to it | members, "a column adds tasks by their titles" |
+| Plan a release | release-flow, the release manager by default |
+| Start a candidate | members, "a candidate takes several tasks…", with Ships from defaulting to the backlog |
+| Fill it | members (pull) |
+| Move cards | members, a drop with no dialog, Undo, Move to |
+| Run a protocol | test-protocols, copy into the candidate, inline verdicts, finish |
+
+Release-flow's acceptance waits for a passed run.
+
+Verified:
+
+- the full e2e suite, 52 of 53, and the 53rd fixed and rerun;
+- `mise run test` and `mise run lint`.
 
 <!-- field: acceptance -->
 - `mise run e2e` walks all seven flows as their roles.
