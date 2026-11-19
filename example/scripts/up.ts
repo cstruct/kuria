@@ -6,10 +6,12 @@
 // Konklav found may hold another checkout's seeding, or none this one
 // recorded: unless it takes this checkout's bootstrap token and holds the
 // tenant `.state/seeded.json` names, its data is thrown away and setup
-// seeds it again.
+// seeds it again. So it is when the seeding is older than what seed.ts
+// now holds (its roles, grants or people changed): setup seeds only once.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { FINGERPRINT } from './seed.ts';
 import { KONKLAV_CONTROL, KONKLAV_SUBJECT, STATE, seeded } from './stack.ts';
 
 const compose = ['compose', '-f', join(import.meta.dirname, '..', 'compose.yaml')];
@@ -46,15 +48,20 @@ function start() {
 	docker('up', '-d', 'konklav');
 }
 
-if (!(await ready())) {
+/** Seeded by this checkout, but with an older seed.ts. */
+const stale = seeded() !== null && seeded()!.fingerprint !== FINGERPRINT;
+if (!stale && !(await ready())) {
 	if (seeded()) {
 		// Stopped by `example:down`, most likely: its data is kept.
 		start();
 		await untilReady();
 	}
 }
-if (!(await ready()) || !(await ours())) {
-	if (seeded() || (await ready())) {
+if (stale) {
+	console.log("the example stack's Konklav was seeded with other roles, grants or people: starting it afresh");
+}
+if (stale || !(await ready()) || !(await ours())) {
+	if (!stale && (seeded() || (await ready()))) {
 		console.log("the example stack's Konklav holds another checkout's data, or none this one seeded: starting it afresh");
 	}
 	docker('down', '--volumes');
