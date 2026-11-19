@@ -79,6 +79,7 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
 | `navigation` | Where the app's sidebar lists the type: `main`, the default, or `more`, under "Show more" (`app.navigation`). |
 | `image` | The key of an `attachment` field whose `media_types` are all images: an akt of the type is an image, and that field's value is its picture (`akt.field.markdown.images`). |
+| `primary` | Per state key, the action an akt's page offers first in that state (`app.header`): the key of a transition from that state, or `copy`, to make a copy (`akt.copy`). |
 | `numbered_references` | `true` to show each reference to its akter with the akt's number first, as `DOCS-1-D04 Installing` for `[Installing](kuria:DOCS-1-D04)`, unless its text already starts with it (`app.references`, `pdf.render`); `false`, the default, to show the text alone. |
 
 Every key MUST name a field or state the type defines, each at most once
@@ -88,9 +89,10 @@ value of the type's first required single-line `text` field, if it has
 one. A state without a tone MUST be shown as `neutral`. An icon or colour
 not in its list MUST be refused; without one, a type MUST be shown without
 an icon, in `neutral`. A `navigation` other than `main` or `more` MUST be
-refused, and an `image` naming a field that isn't an `attachment` field,
-or one that doesn't list media types, or lists one that isn't `image/png`,
-`image/jpeg`, `image/svg+xml` or `image/webp`.
+refused, as MUST a `primary` naming a state the type lacks or a transition
+that doesn't leave that state, and an `image` naming a field that isn't an
+`attachment` field, or one that doesn't list media types, or lists one that
+isn't `image/png`, `image/jpeg`, `image/svg+xml` or `image/webp`.
 
 ## Fields
 

@@ -221,11 +221,20 @@ pub struct PresentationDef {
     /// its akter images (`akt.field.markdown.images`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// Per state key, the action an akt's page offers first in that
+    /// state: a transition from it, by key, or [`PRIMARY_COPY`]
+    /// (`app.header`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub primary: BTreeMap<String, String>,
     /// Whether references to its akter are shown with the akt's number
     /// first (`app.references`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub numbered_references: bool,
 }
+
+/// A `primary` action that makes a copy of the akt (`akt.copy`), rather
+/// than performing a transition.
+pub const PRIMARY_COPY: &str = "copy";
 
 /// The media types an image's picture may have.
 pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];

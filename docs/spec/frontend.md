@@ -44,7 +44,12 @@ way to create one.
 r[app.header]
 An akt's page MUST show first its akt type, number, title and state, the
 state in its tone (`akt.type.presentation`), and the transitions its state
-allows as actions there.
+allows as actions there. It MUST offer one action as the primary one: the
+one its type's presentation names for its state (`primary`), else, on a
+container the viewer may add to, creating an akt of the first akt type its
+board's first column offers (`app.board-create`), else none. No other
+transition MUST be shown as primary. A transition to a final state MUST be
+confirmed, saying the state it leads to.
 
 r[app.trail]
 The top bar MUST show where the page is as a trail: on an akt's page, its

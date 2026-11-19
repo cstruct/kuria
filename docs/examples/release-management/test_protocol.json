@@ -32,6 +32,7 @@
   "presentation": {
     "icon": "clipboard-check", "colour": "purple",
     "list": ["owner"],
-    "tones": { "template": "neutral", "running": "active", "done": "success", "withdrawn": "neutral" }
+    "tones": { "template": "neutral", "running": "active", "done": "success", "withdrawn": "neutral" },
+    "primary": { "draft": "start", "template": "copy", "running": "finish" }
   }
 }

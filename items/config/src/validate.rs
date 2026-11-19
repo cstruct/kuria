@@ -607,6 +607,22 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             );
         }
     }
+    for (state, action) in &presentation.primary {
+        let path = format!("presentation.primary.{state}");
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(&path, format!("no state `{state}`"));
+        } else if action != crate::PRIMARY_COPY
+            && !document
+                .transitions
+                .iter()
+                .any(|t| &t.key == action && t.from.contains(state))
+        {
+            problems.add(
+                &path,
+                format!("no transition `{action}` from `{state}`, nor `copy`"),
+            );
+        }
+    }
 }
 
 /// Whether `text` reads as a media type: `type/subtype`, lowercase, of
@@ -1421,6 +1437,20 @@ mod tests {
             "presentation.card: a card shows at most 4 fields",
             "presentation.list[0]: no field `nope`",
             "presentation.tones.gone: no state `gone`",
+        ] {
+            assert!(
+                found.iter().any(|p| p == expected),
+                "{expected} not in {found:?}"
+            );
+        }
+        // The primary action: a transition leaving the state, or a copy.
+        document["presentation"] = json!({ "primary": { "open": "close", "closed": "copy" } });
+        validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        document["presentation"] = json!({ "primary": { "gone": "close", "closed": "close" } });
+        let found = problems(document.clone());
+        for expected in [
+            "presentation.primary.gone: no state `gone`",
+            "presentation.primary.closed: no transition `close` from `closed`, nor `copy`",
         ] {
             assert!(
                 found.iter().any(|p| p == expected),

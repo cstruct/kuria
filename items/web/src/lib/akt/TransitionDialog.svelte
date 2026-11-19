@@ -10,6 +10,9 @@
 		open: boolean;
 		/** The transition's name, the dialog's title and its action. */
 		name: string;
+		/** What performing it means, said before it is, such as that it
+		 * ends the akt (`app.header`). */
+		confirm?: string;
 		/** The fields it requires, asked for here. */
 		fields: FieldDef[];
 		drafts: Record<string, Draft>;
@@ -23,6 +26,7 @@
 	let {
 		open = $bindable(),
 		name,
+		confirm,
 		fields,
 		drafts = $bindable(),
 		reason = $bindable(),
@@ -43,7 +47,9 @@
 <Dialog
 	bind:open
 	title={name}
-	description={fields.length > 0 ? 'It needs these fields.' : undefined}
+	description={[confirm, fields.length > 0 ? 'It needs these fields.' : '']
+		.filter(Boolean)
+		.join(' ') || undefined}
 >
 	<form
 		id="transition-form"

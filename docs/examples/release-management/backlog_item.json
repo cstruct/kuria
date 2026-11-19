@@ -31,6 +31,7 @@
   "presentation": {
     "icon": "file-text", "colour": "neutral", "navigation": "more",
     "card": ["kind", "assignee"], "list": ["kind", "assignee"],
-    "tones": { "in_progress": "active", "in_review": "warning", "done": "success" }
+    "tones": { "in_progress": "active", "in_review": "warning", "done": "success" },
+    "primary": { "open": "start", "in_progress": "review", "in_review": "finish" }
   }
 }

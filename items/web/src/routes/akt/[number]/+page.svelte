@@ -45,7 +45,7 @@
 		showsArchived,
 		withArchived
 	} from '#lib/akt/archive.ts';
-	import { actionsOf, headingOf } from '#lib/akt/header.ts';
+	import { actionsOf, confirmationOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
 	import { creatableIn, insideQuery, parentBoards } from '#lib/akt/creating.ts';
@@ -182,12 +182,29 @@
 			: [];
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
 	// A version never changes: read at one, nothing is offered to change.
+	/** The key of the first column of the akt's board, if it has one. */
+	const firstColumn = $derived(
+		(akt?.type.document as { board?: { columns?: { key?: string }[] } } | null)?.board?.columns?.[0]
+			?.key
+	);
+	// r[impl app.header]: the action offered first, by the presentation,
+	// else creating a member; never a transition by default.
 	const actions = $derived(
 		actionsOf(
-			akt && !atVersion && !akt.archived
+			// r[impl app.permitted]: transitions only to one who may perform them.
+			akt && !atVersion && !akt.archived && akt.type.viewerMay.transition
 				? availableTransitions(akt.type.transitions, akt.state)
-				: []
+				: [],
+			{
+				document: akt?.type.document,
+				state: akt?.state.key,
+				copyable: Boolean(akt?.type.viewerMay.create && !atVersion),
+				creatable: firstColumn ? creatable(firstColumn) : []
+			}
 		)
+	);
+	const primaryTransition = $derived(
+		actions.primary?.kind === 'transition' ? actions.primary.transition : undefined
 	);
 	// r[impl app.live]: an akt with a live draft is its live draft, edited
 	// together with everyone else who has it open.
@@ -706,32 +723,38 @@
 					<!-- The server's PDF route, not a page of the app. -->
 					<Button href={pdf.href} download="">{pdf.label}</Button>
 				{/each}
-				<Button
-					disabled={busy || atVersion !== null}
-					onclick={() => {
-						refusal = null;
-						copyOpen = true;
-					}}><Copy size={14} aria-hidden={true} /> Make a copy</Button
-				>
-				{#if actions.primary}
-					{@const primary = actions.primary}
-					{#each actions.others as transition (transition.key)}
-						{@const blocked = outcomeRefusal(transition, akt.outcome)}
-						<Button
-							disabled={busy || blocked !== null}
-							aria-describedby={blocked ? `blocked-${transition.key}` : undefined}
-							onclick={() => begin(transition)}>{transition.name}</Button
-						>
-					{/each}
-					{@const blocked = outcomeRefusal(primary, akt.outcome)}
+				{#if akt.type.viewerMay.create}
+					<Button
+						variant={actions.primary?.kind === 'copy' ? 'primary' : 'secondary'}
+						disabled={busy || atVersion !== null}
+						onclick={() => {
+							refusal = null;
+							copyOpen = true;
+						}}><Copy size={14} aria-hidden={true} /> Make a copy</Button
+					>
+				{/if}
+				{#each actions.others as transition (transition.key)}
+					{@const blocked = outcomeRefusal(transition, akt.outcome)}
+					<Button
+						disabled={busy || blocked !== null}
+						aria-describedby={blocked ? `blocked-${transition.key}` : undefined}
+						onclick={() => begin(transition)}>{transition.name}</Button
+					>
+				{/each}
+				{#if primaryTransition}
+					{@const blocked = outcomeRefusal(primaryTransition, akt.outcome)}
 					<Button
 						variant="primary"
 						disabled={busy || blocked !== null}
-						aria-describedby={blocked ? `blocked-${primary.key}` : undefined}
-						onclick={() => begin(primary)}>{primary.name}</Button
+						aria-describedby={blocked ? `blocked-${primaryTransition.key}` : undefined}
+						onclick={() => begin(primaryTransition)}>{primaryTransition.name}</Button
 					>
+				{:else if actions.primary?.kind === 'create'}
+					<Button variant="primary" href={actions.primary.href}>
+						<Plus size={14} aria-hidden={true} /> New {actions.primary.name}
+					</Button>
 				{/if}
-				{#if !akt.archived && !atVersion}
+				{#if !akt.archived && !atVersion && (akt.type.viewerMay.edit || akt.type.viewerMay.archive)}
 					<!-- r[impl app.archive]: Archive, in the akt's menu. -->
 					<Menu
 						label="More actions for {akt.number}"
@@ -761,7 +784,7 @@
 					/>
 				{/if}
 				<!-- r[impl app.transitions]: a transition the outcome doesn't allow, unavailable, saying what it allows. -->
-				{#each [...actions.others, ...(actions.primary ? [actions.primary] : [])] as transition (transition.key)}
+				{#each [...actions.others, ...(primaryTransition ? [primaryTransition] : [])] as transition (transition.key)}
 					{@const blocked = outcomeRefusal(transition, akt.outcome)}
 					{#if blocked}
 						<p class="blocked" id="blocked-{transition.key}">
@@ -1017,6 +1040,10 @@
 			<TransitionDialog
 				bind:open={transitionOpen}
 				name={pending.name}
+				confirm={confirmationOf(
+					headingOf(akt),
+					akt.type.states.find((s) => s.key === pending?.to)
+				)}
 				fields={required(pending)}
 				bind:drafts
 				bind:reason
