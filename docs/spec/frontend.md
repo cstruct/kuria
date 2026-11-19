@@ -43,8 +43,9 @@ way to create one.
 
 r[app.header]
 An akt's page MUST show first its akt type, number, title and state, the
-state in its tone (`akt.type.presentation`), and the transitions its state
-allows as actions there. It MUST offer one action as the primary one: the
+state in its tone (`akt.type.presentation`) and labelled as its status, its
+outcome, if it has one, labelled as its result, and the transitions its
+state allows as actions there. It MUST offer one action as the primary one: the
 one its type's presentation names for its state (`primary`), else, on a
 container the viewer may add to, creating an akt of the first akt type its
 board's first column offers (`app.board-create`), else none. No other
@@ -193,8 +194,11 @@ r[app.members]
 A container's page MUST show its members of the akt types its board names
 on the board, and its members of every other akt type as a list per akt
 type, not as one unmapped column. Cards and lists MUST show each member's
-number, title, state and the fields its type's presentation names for
-them.
+number, title and the fields its type's presentation names for them, a
+user by name with their initials and a choice as a chip. They MUST show
+its state too, except on a card in a column that holds that one state of
+its type, and for a member whose outcome its verdicts give
+(`akt.field.verdict`), whose state says nothing its outcome doesn't.
 
 r[app.sections]
 An akt with a `sections` field MUST show its members in those sections,

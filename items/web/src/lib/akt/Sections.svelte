@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { judgedType } from './members';
 	// r[impl app.sections]
 	// r[impl app.verdicts]
 	import { resolve } from '$app/paths';
@@ -40,7 +41,8 @@
 			<div class="line">
 				<a href={resolve('/akt/[number]', { number })}>{m.title ?? number}</a>
 				{#if m.title}<Mono value={number} max={22} />{/if}
-				<Badge tone={m.state.tone}>{m.state.name}</Badge>
+				<!-- r[impl app.members]: a judged member's state says nothing its outcome doesn't. -->
+				{#if !judgedType(m.type)}<Badge tone={m.state.tone}>{m.state.name}</Badge>{/if}
 				{#if m.outcome}<OutcomeBadge outcome={m.outcome} />{/if}
 			</div>
 			{#if judged}

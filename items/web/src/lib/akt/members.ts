@@ -129,13 +129,36 @@ export function pictureOf(value: Value | undefined): string | null {
 export function shownFields(
 	akt: Shown,
 	where: 'card' | 'list'
-): { name: string; text: string; picture: string | null }[] {
+): { name: string; text: string; picture: string | null; as: 'person' | 'chip' | 'text' }[] {
 	return akt.type.presentation[where].flatMap((key) => {
 		const def = akt.type.fields.find((f) => f.key === key);
 		if (!def) return [];
 		const value = akt.fields.find((v) => 'field' in v && v.field === key);
-		return [{ name: def.name, text: value ? textOf(value) : '', picture: pictureOf(value) }];
+		// r[impl app.members]: a user by name with initials, a choice as a chip.
+		const as =
+			value?.__typename === 'UserValue'
+				? 'person'
+				: value?.__typename === 'ChoiceValue' || value?.__typename === 'ChoicesValue'
+					? 'chip'
+					: 'text';
+		return [{ name: def.name, text: value ? textOf(value) : '', picture: pictureOf(value), as }];
 	});
+}
+
+/** Whether a member of the type `type` in the board column `column` of a
+ * container whose type document is `document` shows its state: not when
+ * the column holds that one state of its type, which says it already. */
+// r[impl app.members]
+export function showsState(document: unknown, column: string, type: string): boolean {
+	const def = (documentOf(document).board?.columns ?? []).find((c) => c.key === column);
+	const states = def?.states?.[type];
+	return !(Array.isArray(states) && states.length === 1);
+}
+
+/** Whether an akt type's akter take their outcome from verdicts, so that
+ * their state says nothing more (`akt.field.verdict`). */
+export function judgedType(type: { fields: readonly { kind?: string }[] }): boolean {
+	return type.fields.some((f) => f.kind === 'VERDICT');
 }
 
 /** The place to move a member to so that it lands at `to` among `numbers`

@@ -348,9 +348,9 @@ Verified:
 <!-- akt: PLAN-025-T06 -->
 ---
 type: task
-revision: 1
+revision: 4
 rank: b5v
-state: todo
+state: done
 in: [PLAN-025]
 title: "Label status badges, and drop the ones a board already says"
 ---
@@ -364,6 +364,27 @@ Covers findings 2.8, 2.9, 3.6, 6.6, 6.8, 7.2 and 7.20.
 - A member whose outcome comes from verdicts hides its own state, such as "Open", which never changes.
 - Numbers on narrow cards stay on one line, with an ellipsis.
 - Rules: `app.header`, `app.members`, `app.verdicts`.
+
+## Done
+
+Changes:
+
+- The header's state and outcome are labelled: "Status: Open" and "Result: Failed" (`app.header`).
+- Board cards show a choice as a chip and a user as an avatar with their name, instead of label and value pairs (`shownFields`' `as`).
+- A card shows its state only when its column holds more than one state of its type (`showsState`).
+- Members whose outcome comes from verdicts, such as test cases, no longer show a state that never changes. That applies in sections, and in lists, where the Status column goes (`judgedType`).
+- Lists show people and chips the same way.
+- A card's footer no longer wraps its number.
+
+Spec: `app.header`, `app.members`.
+
+Not done: the state's colour by tone already existed. A status menu, with transitions moved into it, was left out: transitions stay buttons, and only one is ever primary (T03).
+
+Verified:
+
+- `members.test.ts`;
+- e2e members, test-protocols, release-flow, archive, akt-page and accessibility;
+- by eye on a backlog and a test run in the example.
 
 <!-- field: acceptance -->
 - No header shows two unlabelled pills.

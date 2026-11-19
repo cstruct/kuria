@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Avatar from '#lib/ui/Avatar.svelte';
 	// r[impl app.members]
 	import { resolve } from '$app/paths';
 	import Archive from '@lucide/svelte/icons/archive';
@@ -14,7 +15,14 @@
 	import Mono from '#lib/ui/Mono.svelte';
 	import { truncateMiddle } from '#lib/ui/text.ts';
 	import { boardLabels } from './labels';
-	import { groupMembers, mappedTypes, shownFields, transitionsInto } from './members';
+	import {
+		groupMembers,
+		mappedTypes,
+		judgedType,
+		showsState,
+		shownFields,
+		transitionsInto
+	} from './members';
 	import OutcomeBadge from './OutcomeBadge.svelte';
 	import { Reorder, type Place } from './reorder.svelte';
 	import VerdictButtons from './VerdictButtons.svelte';
@@ -195,6 +203,16 @@
 									{#each shownFields(member, 'card') as field (field.name)}
 										{#if field.picture}
 											<img class="picture" src={field.picture} alt={member.title ?? field.name} />
+										{:else if field.text && field.as === 'person'}
+											<div class="person" title="{field.name}: {field.text}">
+												<dt class="visually-hidden">{field.name}</dt>
+												<dd><Avatar name={field.text} />{field.text}</dd>
+											</div>
+										{:else if field.text && field.as === 'chip'}
+											<div class="chip">
+												<dt class="visually-hidden">{field.name}</dt>
+												<dd><Badge>{field.text}</Badge></dd>
+											</div>
 										{:else if field.text}
 											<div>
 												<dt>{field.name}</dt>
@@ -211,7 +229,9 @@
 								{#if member.archived}<span class="archived"
 										><Badge><Archive size={12} aria-hidden={true} /> Archived</Badge></span
 									>{/if}
-								<Badge tone={member.state.tone}>{member.state.name}</Badge>
+								{#if showsState(document, column.key, member.type.key) && !judgedType(member.type)}
+									<Badge tone={member.state.tone}>{member.state.name}</Badge>
+								{/if}
 								{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}
 							</div>
 						</li>
@@ -229,6 +249,8 @@
 	{@const listFields = list.akter[0].type.presentation.list.length}
 	{@const outcomes = list.akter.some((m) => m.outcome)}
 	{@const judging = list.akter.some((m) => judgedOf(m, me))}
+	<!-- r[impl app.members]: a judged member's state says nothing its outcome doesn't. -->
+	{@const judgedList = judgedType(list.akter[0].type)}
 	<section class="list" aria-label={list.name}>
 		<h3>{list.name} <span class="count">{list.akter.length}</span></h3>
 		<div class="scroll">
@@ -242,7 +264,7 @@
 								<th scope="col">{field.name}</th>
 							{/each}
 						{/if}
-						<th scope="col">State</th>
+						{#if !judgedList}<th scope="col">Status</th>{/if}
 						{#if outcomes}<th scope="col">Outcome</th>{/if}
 						{#if judging}<th scope="col">Verdicts</th>{/if}
 						<th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -273,9 +295,15 @@
 									<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge>{/if}</td
 							>
 							{#each shownFields(member, 'list') as field (field.name)}
-								<td>{field.text}</td>
+								<td
+									>{#if field.text && field.as === 'person'}<span class="person"
+											><Avatar name={field.text} />{field.text}</span
+										>{:else if field.text && field.as === 'chip'}<Badge>{field.text}</Badge
+										>{:else}{field.text}{/if}</td
+								>
 							{/each}
-							<td><Badge tone={member.state.tone}>{member.state.name}</Badge></td>
+							{#if !judgedList}<td><Badge tone={member.state.tone}>{member.state.name}</Badge></td
+								>{/if}
 							{#if outcomes}
 								<td
 									>{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}</td
@@ -444,8 +472,9 @@
 
 	.shown {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-2);
 		margin: 0;
 		color: var(--text-muted);
 		font-size: var(--text-xs);
@@ -454,6 +483,19 @@
 	.shown div {
 		display: flex;
 		gap: var(--space-2);
+		flex-basis: 100%;
+	}
+
+	.shown div.person,
+	.shown div.chip {
+		flex-basis: auto;
+	}
+
+	.shown .person dd,
+	.person {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
 	}
 
 	.picture {
@@ -472,6 +514,7 @@
 	.foot {
 		display: flex;
 		align-items: center;
+		white-space: nowrap;
 		gap: var(--space-2);
 		font-size: var(--text-xs);
 	}

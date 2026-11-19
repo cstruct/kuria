@@ -4,6 +4,7 @@ import {
 	mappedTypes,
 	pictureOf,
 	placeFor,
+	showsState,
 	shownFields,
 	sortAkter,
 	transitionsInto
@@ -97,10 +98,12 @@ describe('shownFields', () => {
 	};
 
 	it('names the fields the presentation picks, with their values', () => {
-		expect(shownFields(akt, 'card')).toEqual([{ name: 'Kind', text: 'Feature', picture: null }]);
+		expect(shownFields(akt, 'card')).toEqual([
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
+		]);
 		expect(shownFields(akt, 'list')).toEqual([
-			{ name: 'Owner', text: '', picture: null },
-			{ name: 'Kind', text: 'Feature', picture: null }
+			{ name: 'Owner', text: '', picture: null, as: 'text' },
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
 		]);
 	});
 
@@ -186,5 +189,23 @@ describe('transitionsInto', () => {
 		expect(transitionsInto(board, 'gone', story('open'))).toEqual([]);
 		expect(transitionsInto({}, 'done', story('open'))).toEqual([]);
 		expect(transitionsInto(board, 'todo', story('doing'))).toEqual([]);
+	});
+});
+
+// r[verify app.members]
+describe('showsState', () => {
+	const document = {
+		board: {
+			columns: [
+				{ key: 'todo', states: { task: ['open'] } },
+				{ key: 'done', states: { task: ['done', 'dropped'] } }
+			]
+		}
+	};
+
+	it('leaves out a state its column already says', () => {
+		expect(showsState(document, 'todo', 'task')).toBe(false);
+		expect(showsState(document, 'done', 'task')).toBe(true);
+		expect(showsState(document, 'unmapped', 'task')).toBe(true);
 	});
 });

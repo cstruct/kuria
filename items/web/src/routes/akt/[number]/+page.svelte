@@ -712,12 +712,24 @@
 					<span data-testid="number"><Mono value={akt.number} max={40} copy /></span>
 				</p>
 				<h1>{headingOf(akt)}</h1>
-				<div class="badges">
-					<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
-					{#if akt.archived}<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge>{/if}
-					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
-						>{/if}
-				</div>
+				<!-- r[impl app.header]: its status and its result, each labelled. -->
+				<dl class="badges">
+					<div>
+						<dt>Status</dt>
+						<dd>
+							<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
+						</dd>
+					</div>
+					{#if akt.outcome}
+						<div>
+							<dt>Result</dt>
+							<dd><span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span></dd>
+						</div>
+					{/if}
+					{#if akt.archived}<div>
+							<dd><Badge><Archive size={12} aria-hidden={true} /> Archived</Badge></dd>
+						</div>{/if}
+				</dl>
 				{#if live}
 					<LivePresence {live} />
 				{/if}
@@ -1238,7 +1250,25 @@
 
 	.badges {
 		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		margin: 0;
+	}
+
+	.badges div {
+		display: flex;
+		align-items: center;
 		gap: var(--space-2);
+	}
+
+	.badges dt {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+
+	.badges dd {
+		display: flex;
+		margin: 0;
 	}
 
 	.origin {
