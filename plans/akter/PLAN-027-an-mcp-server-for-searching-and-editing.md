@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 25
+revision: 26
 rank: b5k
 state: active
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -69,13 +69,17 @@ Through the above, people see the agent's changes but not the agent. A later tas
 <!-- akt: PLAN-027-T01 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b5l
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocks PLAN-027-T02, Blocks PLAN-027-T03]
 title: "Spec replaceInAkt, text search and kuria mcp"
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+Rules: `akt.replace`, `akt.replace.match`, `akt.search.text`, `akt.search.text.match`, `akt.revision.actor` (docs/spec/akter.md), `auth.actor` (authentication.md), and docs/spec/mcp.md (`mcp.stdio`, `mcp.tools`, `mcp.errors`, `mcp.search`, `mcp.read`, `mcp.edit`, `mcp.types`, `mcp.presence`). Terms: actor, replacement, text search, agent, MCP server. Architecture: agents, text search, actors, pg_search. Text search became its own query (PLAN-027-D07). Checked with `mise run lint` (tracey validates).
 
 <!-- field: acceptance -->
 Rules in docs/spec (akter.md or live-drafts.md for replaceInAkt, akt.search extended, cli.md or a new mcp.md for the tools), terms in docs/nomenclature.md, the design in docs/architecture.md; PLAN-027-G02 and PLAN-027-G03 closed.
@@ -97,7 +101,7 @@ replaceInAkt applies replacements under the row lock as the least Yjs change for
 <!-- akt: PLAN-027-T03 -->
 ---
 type: task
-revision: 5
+revision: 6
 rank: b5n
 state: todo
 in: [PLAN-027]
@@ -106,7 +110,7 @@ title: Search akter by what their text says
 ---
 
 <!-- field: acceptance -->
-`akter(search:)` also matches text and Markdown fields through a pg_search BM25 index on `akt_search`, which the write path keeps (a live draft as it reads), ranked by relevance, with the field and a highlighted excerpt; only readable akter; store and server tests.
+`textSearch` answers matches of text and `markdown` fields through a pg_search BM25 index on `akt_search`, which the write path keeps (a live draft as it reads), ranked by relevance, with the field and a marked excerpt; only readable akter, archived as asked (`akt.search.text`, `akt.search.text.match`); store and server tests.
 
 <!-- akt: PLAN-027-T04 -->
 ---
@@ -425,3 +429,23 @@ Hosted clients, such as claude.ai in a browser, need MCP over HTTP served by Kur
 
 <!-- field: why -->
 Run by the CLI, it signs in, keeps its session and proves its key with DPoP as the CLI does, with no OAuth or client registration to build in Kuria or Konklav; local mode comes with it. Hosted clients aren't needed now.
+
+<!-- akt: PLAN-027-D07 -->
+---
+type: decision
+revision: 2
+rank: b68
+state: decided
+in: [PLAN-027]
+title: "Text search is a query of its own, textSearch"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+The plan had `akter(search:)` also match text fields. That list is paged by cursor in recency order (`akt.page`) and answers akter, while text search ranks by relevance and answers a field and excerpt per match; the app's search box relies on the quick number-and-title lookup.
+
+<!-- field: decision -->
+`textSearch(text, type, first, archived)` answers matches (akt, field, relevance, excerpt), most relevant first, at most `first` (20, at most 50), with no cursor (`akt.search.text`). `akter(search:)` stays as it is. `search_documents` answers both.
+
+<!-- field: why -->
+Relevance order and excerpts don't fit a recency-paged list of akter, and an agent wants the best matches, not every page; keeping `akter(search:)` leaves the app's lookup fast and unchanged.

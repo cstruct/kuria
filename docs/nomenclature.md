@@ -90,6 +90,9 @@ Terms are introduced in dependency order: each definition only uses terms define
   - One recorded change to an akt: who made it, in what capacity, through which transition, why, and what changed.
   - Revisions are append only. An akt's current state is always the result of its revisions.
 
+- `actor`
+  - The subject who really made a change, when it was made as another: an impersonator, or the agent a person let act for them (see Command-line client). Konklav names it in a token's actor chain (`act`); Kuria records it beside the subject the change was made as, and shows it as "Claude for Albin".
+
 - `transition`
   - A change of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
 
@@ -174,6 +177,12 @@ These name what the release-management example's problem reports and CAPAs do. K
 
 - `live draft`
   - The fields of an akt whose type says `"live_drafts": true`, edited together, live, with Yjs. Edits change the live draft only; a release records it as a revision. Not to be confused with a `draft`, which a recipe fills a field with.
+
+- `replacement`
+  - A change to a text field given as a span of its text and what that span becomes, the span occurring exactly once in the field when the change is applied. Agents edit with replacements so that what others typed elsewhere in the field since they read it is kept.
+
+- `text search`
+  - Finding akter by the words their text and `markdown` fields hold, ranked by relevance, each match naming the field and an `excerpt` of it around the words.
 
 - `page break`
   - A line holding only `<!-- pagebreak -->` in a `markdown` field: a new page in its PDF, a new sheet in the app.
@@ -346,3 +355,9 @@ What the app says to the people using a tenant is in that tenant's words: an akt
 
 - `relay`
   - Kuria's `/cli/authorized` page, which holds the authorization code Konklav redirects to it until the client that asked for it collects it.
+
+- `agent`
+  - Software, such as Claude, that reads and writes akter for a person, usually through the MCP server.
+
+- `MCP server`
+  - `kuria mcp`: the client speaking the Model Context Protocol over standard input and output, so that an agent on the person's machine searches, reads and edits akter through tools, signed in as the client is.
