@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 21
+revision: 22
 rank: b5k
 state: draft
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -48,6 +48,8 @@ A subcommand of the CLI ([items/cli](items/cli/README.md)) speaking MCP over sta
 - `list_types()` and `schema(type)`: as `kuria types` and `kuria types schema`, so the agent knows field keys.
 
 Refusals come back as MCP tool errors carrying the CLI's error code and field, so the agent can act on them.
+
+The tools live in a crate of their own, over a GraphQL executor: `kuria mcp` sends their documents over HTTP, and PLAN-028 runs the same tools in the server, in-process as the caller, for hosted clients over HTTP. Remote MCP is not part of this plan (PLAN-027-G03).
 
 ## Who made an agent's edit
 
@@ -229,9 +231,9 @@ pg_search, as PLAN-027-D05 decides: BM25 ranking over `akt_search`, a row per te
 <!-- akt: PLAN-027-G03 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b5u
-state: open
+state: closed
 in: [PLAN-027]
 title: "Where MCP runs: a local process or the server"
 ---
@@ -255,6 +257,9 @@ title: "Where MCP runs: a local process or the server"
 ## Shape in Kuria
 
 The tools defined once, in a crate both use, over a GraphQL executor: `kuria mcp` sends the documents over HTTP, the server runs them in-process as the caller, so authorization and checks are the same.
+
+<!-- field: resolution -->
+Hosted MCP over HTTP is its own plan, PLAN-028. PLAN-027 is `kuria mcp` alone, with its tools in a crate PLAN-028 can serve from the server.
 
 <!-- akt: PLAN-027-D01 -->
 ---
@@ -350,13 +355,16 @@ A spec rule says Kuria keeps a token's `act` subject beside `by` on every change
 <!-- akt: PLAN-027-T09 -->
 ---
 type: task
-revision: 2
+revision: 3
 rank: b60
 state: todo
 in: [PLAN-027]
 links: [Blocks PLAN-027-T05]
 title: "Konklav: a person delegates a session to an agent"
 ---
+
+<!-- field: description -->
+PLAN-028-G03 suggests a shape: tokens Konklav issues to an OIDC client through the code flow name the client in `act`, and `kuria mcp` signs in as a public client with a loopback redirect, so one Konklav change serves both plans.
 
 <!-- field: acceptance -->
 Konklav, in its own repository, lets a person start a child session for a service principal, scoped and time-bounded and revoked with the parent, whose tokens name the person as `sub` and the agent in `act`; the relying crates Kuria pins answer it. `kuria mcp` signs in that way.
