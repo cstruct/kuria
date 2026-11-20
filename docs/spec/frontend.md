@@ -73,7 +73,9 @@ or contact chosen by name, a checkbox that can be checked for someone else,
 a reference's URL and label, a git repository with a SHA or tag, a Docker
 repository with a digest and tag, an attachment uploaded or downloaded,
 several users or contacts for a `multiple` field, each assignee's
-verdict, and a `markdown` field in a rich-text editor (`app.editor`).
+verdict, and a `markdown` field in a rich-text editor (`app.editor`). A
+field locked in the akt's state (`akt.field.locked`) MUST be shown as
+locked, and changing a value it holds MUST ask for a reason first.
 
 r[app.create]
 The page creating an akt MUST ask for the fields its type is created

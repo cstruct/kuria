@@ -1147,6 +1147,8 @@
 										editing={editingField === field.key}
 										editable={editable && givenIn(akt.type.document, field.key, akt.state.key)}
 										drafted={drafted.includes(field.key)}
+										locked={(field.locked ?? []).includes(akt.state.key) &&
+											akt.fields.some((v) => 'field' in v && v.field === field.key)}
 										{busy}
 										error={editingField === field.key && refusal ? refusal.message : undefined}
 										onEdit={() => {

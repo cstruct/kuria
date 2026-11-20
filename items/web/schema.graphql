@@ -701,6 +701,11 @@ type Field {
 	For attachment fields: the media types it takes, any if none.
 	"""
 	mediaTypes: [String!]!
+	"""
+	The states in which a change to a value it holds needs a reason
+	(`akt.field.locked`).
+	"""
+	locked: [String!]!
 }
 
 """

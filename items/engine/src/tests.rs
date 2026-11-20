@@ -1294,3 +1294,65 @@ fn a_field_is_required_only_while_others_hold_certain_values() {
         "named once, whichever way it is required"
     );
 }
+
+// r[verify akt.field.locked]
+#[test]
+fn a_locked_field_changes_only_with_a_reason() {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "action", "name": "Action", "number": "A-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "due", "name": "Due", "kind": "date", "locked": ["doing"] }
+        ],
+        "states": [
+            { "key": "planned", "name": "Planned", "initial": true },
+            { "key": "doing", "name": "Doing" }
+        ],
+        "transitions": [{ "key": "start", "name": "Start", "from": ["planned"], "to": "doing" }]
+    }))
+    .unwrap();
+    let ty = validate(document).unwrap();
+    let akt = |state: &str, values: Json| Current {
+        state: state.to_owned(),
+        fields: fields_from_json(&ty, &input(values)).unwrap(),
+    };
+    let check = |now: &Current, given: Json, reason: Option<&str>| {
+        let outcome = edit(&ty, now, &input(given), change()).unwrap();
+        check_locked(&ty, now, &outcome, reason)
+    };
+    let doing = akt("doing", json!({ "title": "T", "due": "2026-12-01" }));
+    let refusal = Refusal::Locked {
+        fields: vec!["due".to_owned()],
+        state: "doing".to_owned(),
+    };
+    let locked = Err(refusal.clone());
+    assert_eq!(check(&doing, json!({ "due": "2027-01-15" }), None), locked);
+    assert_eq!(
+        check(&doing, json!({ "due": null }), Some("  ")),
+        locked,
+        "clearing it too"
+    );
+    assert_eq!(
+        refusal.to_string(),
+        "`due` is locked while `doing`: changing it needs a reason"
+    );
+    assert!(
+        check(
+            &doing,
+            json!({ "due": "2027-01-15" }),
+            Some("Waiting on the supplier")
+        )
+        .is_ok()
+    );
+    assert!(
+        check(&doing, json!({ "title": "U" }), None).is_ok(),
+        "another field"
+    );
+    let unset = akt("doing", json!({ "title": "T" }));
+    assert!(
+        check(&unset, json!({ "due": "2026-12-01" }), None).is_ok(),
+        "given once"
+    );
+    let planned = akt("planned", json!({ "title": "T", "due": "2026-12-01" }));
+    assert!(check(&planned, json!({ "due": "2027-01-15" }), None).is_ok());
+}

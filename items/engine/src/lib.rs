@@ -90,6 +90,16 @@ pub enum Refusal {
         outcome: Option<outcomes::Outcome>,
         allowed: Vec<String>,
     },
+    #[error(
+        "{} locked while `{state}`: changing it needs a reason",
+        .fields.iter().map(|f| format!("`{f}` is")).collect::<Vec<_>>().join(", ")
+    )]
+    Locked {
+        /// The locked fields the change changes.
+        fields: Vec<String>,
+        /// The state they are locked in.
+        state: String,
+    },
     #[error("`{transition}` waits for {}", waiting(.open, .lacking))]
     Waits {
         transition: String,
@@ -331,6 +341,36 @@ pub fn required_when(
         .filter(|rule| rule.applies(holds))
         .map(|rule| rule.field.clone())
         .collect()
+}
+
+/// Refuses `outcome`, a change of `current`, if it changes a value a field
+/// locked in `current`'s state holds, and gives no `reason`
+/// (`akt.field.locked`).
+// r[impl akt.field.locked]
+pub fn check_locked(
+    ty: &AktType,
+    current: &Current,
+    outcome: &Outcome,
+    reason: Option<&str>,
+) -> Result<(), Refusal> {
+    if reason.is_some_and(|r| !r.trim().is_empty()) {
+        return Ok(());
+    }
+    let fields: Vec<String> = ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.locked.contains(&current.state))
+        .filter(|f| current.fields.contains_key(&f.key) && outcome.changes.contains_key(&f.key))
+        .map(|f| f.key.clone())
+        .collect();
+    if fields.is_empty() {
+        return Ok(());
+    }
+    Err(Refusal::Locked {
+        fields,
+        state: current.state.clone(),
+    })
 }
 
 pub(crate) fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {

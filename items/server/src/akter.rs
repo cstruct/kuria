@@ -597,6 +597,8 @@ async fn change_in(
         },
         around,
     )?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&stored.ty, &current, &outcome, reason.as_deref())?;
     if let Some(loaded) = draft {
         if to_draft {
             return write_draft(conn, caller, &stored, akt, loaded, &outcome, now).await;

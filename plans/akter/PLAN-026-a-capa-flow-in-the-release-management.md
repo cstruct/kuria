@@ -271,12 +271,13 @@ A fixture type requiring `root_cause` when `kind` includes `corrective` refuses 
 <!-- akt: PLAN-026-T03 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6L
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T08]
 title: "Fields locked in some states, changed only with a reason"
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -286,6 +287,27 @@ Spec locked fields.
 - A locked field with no value can be given once without a reason.
 - The app shows the field as locked, and asks for a reason to change it.
 - `kuria set` and `apply` already take `--reason`.
+
+## Done
+
+- **Spec:** `akt.field.locked` in `docs/spec/akter.md`, with its validation in `akt.type.validation`. `app.fields` says how the app shows a locked field.
+  - A field is locked by the akt's state before the change. A transition into a locked state can still change the field; the next change can't without a reason.
+  - Clearing a locked value counts as changing it. A blank reason is no reason.
+- **Config:** `locked` on `FieldDef`, naming states the type defines.
+- **Engine:** `check_locked`, refusing as `Refusal::Locked`. The server's one path for edits and transitions, and local mode's `set`, `apply`, `do` and edits, each call it with the reason they were given.
+- **API:** the server answers the refusal as `LOCKED`, and so does local mode. `FieldDef.locked` is served over GraphQL.
+- **App:** a locked field that holds a value shows a lock beside its name. Its editor asks for a reason, marked as needed, and won't save without one.
+- The revision's reason is the change's reason, as for any change; nothing is recorded per field.
+
+## Verified
+
+- `items/config` test `checks_multiple_users_sections_and_verdicts`, `locked` case.
+- `items/engine` test `a_locked_field_changes_only_with_a_reason`.
+- `items/server/tests/locked.rs`.
+- `items/cli/tests/local.rs` test `a_due_date_moves_only_with_a_reason_once_work_starts`.
+- `mise run lint` and `mise run test`.
+
+The app's lock and reason are checked in a browser by T12's walk.
 
 <!-- field: acceptance -->
 Changing a locked fixture field without a reason is refused as `LOCKED`, naming the field. With a reason it succeeds, and the history shows the reason beside the change.

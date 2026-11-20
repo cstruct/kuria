@@ -30,6 +30,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
   type defines, and every field it requires is a field the type defines;
 - no transition starts from a final state;
 - every choice field has at least one option;
+- every state a field's `locked` names is one the type defines
+  (`akt.field.locked`);
 - the number pattern is valid (`akt.number.pattern`);
 - every action a transition names is valid (`authz.transition-action`);
 - the outcomes a transition allows are `pass`, `fail`, `skip` or
@@ -164,6 +166,16 @@ one. The app MUST ask for such a field only in those states, or by the
 transitions that give it, and MUST show it outside them only once it holds
 a value (`app.create`, `app.fields`). Every state it names MUST be one the
 type defines; otherwise the document MUST be refused.
+
+r[akt.field.locked]
+A field MAY name, in `locked`, states in which it is locked. While an akt
+is in one of them, an edit or a transition that changes the field's value
+MUST be refused as `LOCKED`, naming the field, unless the change gives a
+reason, which its revision records; giving a value to a locked field that
+holds none MUST NOT need one. Every state it names MUST be one the type
+defines; otherwise the document MUST be refused. The app MUST show a
+locked field as locked, and ask for the reason before changing it
+(`app.fields`).
 
 r[akt.field.sections]
 A `sections` field MUST hold a list of items, in order, each either an akt

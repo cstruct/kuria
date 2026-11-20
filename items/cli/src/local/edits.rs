@@ -30,7 +30,12 @@ fn read_file(path: &Path) -> Result<Parsed, CliError> {
 }
 
 fn refusal(r: &Refusal) -> CliError {
-    CliError::from_server("REFUSED", r.to_string(), None)
+    // r[impl akt.field.locked]
+    let code = match r {
+        Refusal::Locked { .. } => "LOCKED",
+        _ => "REFUSED",
+    };
+    CliError::from_server(code, r.to_string(), None)
 }
 
 /// The inputs the engine takes for `given` values of `shape`'s fields, for
@@ -219,6 +224,8 @@ pub fn set(
     let t = w.dir.types[&key].clone();
     let change = w.change();
     let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
@@ -302,6 +309,8 @@ pub fn perform(
     let around = kuria_engine::Around { held, waits };
     let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, around)
         .map_err(|r| refusal(&r))?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(Some(&akt), &outcome.fields, &changed, &w.ids);
@@ -351,6 +360,8 @@ pub fn verdict(
     let t = w.dir.types[&key].clone();
     let change = w.change();
     let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
     w.akt_mut(number).values = values;
@@ -485,6 +496,8 @@ pub fn apply(
             }
             Err(r) => return Err(refusal(&r)),
         };
+        // r[impl akt.field.locked]
+        kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
         w.check_sections(&t.ty, Some(&number), &outcome.changes)?;
         let changed: Vec<String> = outcome.changes.keys().cloned().collect();
         let names: Vec<&str> = changed.iter().map(|k| shape.field_name(k)).collect();

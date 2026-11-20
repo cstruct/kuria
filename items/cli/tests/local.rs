@@ -3617,3 +3617,47 @@ fn a_corrective_case_needs_its_root_cause() {
         "planned"
     );
 }
+
+// r[verify akt.field.locked]
+// r[verify cli.local.rules]
+#[test]
+fn a_due_date_moves_only_with_a_reason_once_work_starts() {
+    let dir = Dir::new();
+    let action = json!({
+        "key": "action", "name": "Action", "number": "A-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "due", "name": "Due", "kind": "date", "locked": ["doing"] }
+        ],
+        "states": [
+            { "key": "planned", "name": "Planned", "initial": true },
+            { "key": "doing", "name": "Doing" }
+        ],
+        "transitions": [{ "key": "start", "name": "Start", "from": ["planned"], "to": "doing" }]
+    });
+    std::fs::write(dir.root.join("types/action.json"), action.to_string()).unwrap();
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Assign",
+        "--set",
+        "due=2026-12-01",
+    ]);
+    dir.ok(&["set", "A-1", "due=2026-12-15"]);
+    dir.ok(&["do", "A-1", "start"]);
+    let refused = dir.refused(&["set", "A-1", "due=2027-01-15"]);
+    assert_eq!(refused.code, "LOCKED", "{}", refused.message);
+    assert_eq!(
+        refused.message,
+        "`due` is locked while `doing`: changing it needs a reason"
+    );
+    dir.ok(&[
+        "set",
+        "A-1",
+        "due=2027-01-15",
+        "--reason",
+        "Waiting on the supplier",
+    ]);
+    assert!(file(&dir, "A-1").contains("due: 2027-01-15"));
+}

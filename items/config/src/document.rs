@@ -425,6 +425,10 @@ pub struct FieldDef {
     /// The states in which it is given, if not all (`akt.field.states`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub states: Vec<String>,
+    /// The states in which it is locked: a change to a value it holds
+    /// needs a reason (`akt.field.locked`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked: Vec<String>,
     /// What a single `user` field is offered as when an akt is created
     /// (`akt.field.default`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -353,6 +353,15 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
             );
         }
     }
+    // r[impl akt.field.locked]
+    for (j, state) in field.locked.iter().enumerate() {
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(
+                &format!("{path}.locked[{j}]"),
+                format!("no state `{state}`"),
+            );
+        }
+    }
     // r[impl akt.field.default]
     if field.default.is_some() && (field.kind != FieldKind::User || field.multiple) {
         problems.add(
@@ -1056,6 +1065,11 @@ mod tests {
         assert_eq!(
             with("/fields/0/states", json!(["gone"])),
             ["fields[0].states[0]: no state `gone`"]
+        );
+        // r[verify akt.field.locked]
+        assert_eq!(
+            with("/fields/0/locked", json!(["open", "gone"])),
+            ["fields[0].locked[1]: no state `gone`"]
         );
         // r[verify akt.field.default]
         assert_eq!(

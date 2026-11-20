@@ -96,6 +96,8 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::UnreadableType(_) => coded(message, "INVALID_AKT_TYPE"),
         AktError::UnknownType(_) => coded(message, "UNKNOWN_AKT_TYPE"),
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
+        // r[impl akt.field.locked]
+        AktError::Refused(kuria_engine::Refusal::Locked { .. }) => coded(message, "LOCKED"),
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
@@ -1652,6 +1654,9 @@ pub struct Field {
     diagrams: bool,
     /// For attachment fields: the media types it takes, any if none.
     media_types: Vec<String>,
+    /// The states in which a change to a value it holds needs a reason
+    /// (`akt.field.locked`).
+    locked: Vec<String>,
 }
 
 /// What files an attachment field holds.
@@ -1681,6 +1686,7 @@ impl From<&FieldDef> for Field {
             references: def.references.clone(),
             diagrams: def.diagrams,
             media_types: def.media_types.clone(),
+            locked: def.locked.clone(),
         }
     }
 }

@@ -326,6 +326,7 @@ export const TypeShape = graphql(`
 			assignees
 			references
 			diagrams
+			locked
 			options {
 				key
 				name
