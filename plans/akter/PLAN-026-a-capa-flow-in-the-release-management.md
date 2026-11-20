@@ -1,9 +1,9 @@
 ---
 number: PLAN-026
 type: plan
-revision: 24
+revision: 25
 rank: b6I
-state: active
+state: done
 title: A CAPA flow in the release-management example
 owner: albin@mattsson.io
 ---
@@ -822,9 +822,9 @@ Decided: a `problem_report` akt type of its own, living in the backlog and ranke
 <!-- akt: PLAN-026-G02 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6W
-state: open
+state: closed
 in: [PLAN-026]
 title: Separation of duties when closing a CAPA
 ---
@@ -834,12 +834,15 @@ The CAPA procedure has QA/RA approve closure, but doesn't say the approver must 
 
 Leave it out of this plan unless the procedure, or an auditor, needs it.
 
+<!-- field: resolution -->
+Left for later: PLAN-026 is done without it, and it stays a known gap of the CAPA flow, to plan of its own when it is needed.
+
 <!-- akt: PLAN-026-G03 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6X
-state: open
+state: closed
 in: [PLAN-026]
 title: "Risk records, vigilance cases and customer communications"
 ---
@@ -849,12 +852,15 @@ A CAPA links to a risk record and, where needed, to vigilance and customer commu
 
 Turning them into links is later work, for a risk-management example.
 
+<!-- field: resolution -->
+Left for later: PLAN-026 is done without it, and it stays a known gap of the CAPA flow, to plan of its own when it is needed.
+
 <!-- akt: PLAN-026-G04 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6Y
-state: open
+state: closed
 in: [PLAN-026]
 title: Enforcing hotfix eligibility
 ---
@@ -863,6 +869,9 @@ title: Enforcing hotfix eligibility
 Problem resolution allows a hotfix only for Minor/Negligible severity, acceptable risk and P0 priority, with a documented assessment that the change is low risk to implement. Those values live on the problem report, not on the hotfix.
 
 Checking them would need a transition condition on a linked akt's field values (beyond T01), or computed fields. For now, the hotfix records the assessment as a required field and nothing is enforced. Is that enough?
+
+<!-- field: resolution -->
+Left for later: PLAN-026 is done without it, and it stays a known gap of the CAPA flow, to plan of its own when it is needed.
 
 <!-- akt: PLAN-026-D01 -->
 ---
@@ -947,12 +956,15 @@ States already show what is outstanding on boards and lists. A general obligatio
 <!-- akt: PLAN-026-G05 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b6d
-state: open
+state: closed
 in: [PLAN-026]
 title: "A second reopening keeps the first one's answers"
 ---
 
 <!-- field: description -->
 Reopening a CAPA requires the reason, remaining actions, revised target, owner confirmation and impact of the delay. On a second reopening they still hold the first one's values, so the transition doesn't make anyone give them again. A transition that clears fields as it is performed would fix it; Kuria has none. Until then, the README says to give them again.
+
+<!-- field: resolution -->
+Left for later: PLAN-026 is done without it, and it stays a known gap of the CAPA flow, to plan of its own when it is needed.
