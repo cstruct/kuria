@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 18
+revision: 19
 rank: b5k
 state: draft
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -192,7 +192,7 @@ The person, through the agent (option 3), as PLAN-027-D04 decides: Kuria reads K
 <!-- akt: PLAN-027-G02 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b5t
 state: open
 in: [PLAN-027]
@@ -200,7 +200,26 @@ title: How search ranks and which language it stems
 ---
 
 <!-- field: description -->
-Ranking (recency as today, or ts_rank), the tsvector configuration (simple, or a per-tenant language), and whether a search index lives on akt and akt_draft or a table of its own.
+Ranking (recency as today, or relevance), how text is tokenized and stemmed, and where the index lives.
+
+## pg_search (ParadeDB), proposed
+
+[pg_search](https://github.com/paradedb/paradedb/tree/main/pg_search), at 0.27.0: BM25 ranking, tokenizers per column (unicode, ICU, ngram, stemming by language), highlighting, filters on indexed columns such as `tenant_id` pushed into the index scan. What it asks of Kuria:
+
+- **Postgres 15 to 18**, a prebuilt package (Debian bookworm and trixie, Ubuntu, RHEL, macOS arm64) or the `paradedb/paradedb` image. It needs `shared_preload_libraries = 'pg_search'` and pgvector (`CREATE EXTENSION pg_search CASCADE`, as a superuser). Kuria uses no extension today.
+- **Every Postgres Kuria runs on:** `dev/compose.yaml` (`postgres:18.1`), the end-to-end and dogfooding stacks (`konklav-dev-postgres`, shared with Konklav's image), CI and every test database (`TestDatabase`). An image of Kuria's own, `postgres:18.x-trixie` with the package, would serve all of them.
+- **Managed Postgres:** ParadeDB documents only its own cloud, BYOC, CloudNativePG and a few PaaS; RDS, Cloud SQL and Azure don't list it (not verified). Operators would run Postgres themselves.
+- **Replicas:** the community edition doesn't replicate its indexes, which exist on the primary only; a failover rebuilds them. Physical replication is in ParadeDB Enterprise.
+- **Licence:** AGPL-3.0, commercial licences from ParadeDB. Kuria (MIT) doesn't link it, but whoever runs Kuria runs AGPL software as a network service, which some organisations' policies refuse.
+- One ParadeDB index per table.
+
+## The alternative
+
+Postgres's own full-text search: `tsvector` with a GIN index, `ts_rank` (not BM25), `ts_headline` for excerpts, stemming by a text search configuration. Runs on any Postgres, managed ones included; weaker ranking, no ngram or fuzzy matching.
+
+## Either way
+
+Index a table of its own, `akt_search` (tenant, akt, field key, text), that the write path keeps: each text and Markdown field of each akt as it reads, its live draft's for an akt with one. A row per field says which field matched and gives its excerpt, and akt types' differing fields need no JSON index.
 
 <!-- akt: PLAN-027-G03 -->
 ---
@@ -319,3 +338,22 @@ title: "Konklav: a person delegates a session to an agent"
 
 <!-- field: acceptance -->
 Konklav, in its own repository, lets a person start a child session for a service principal, scoped and time-bounded and revoked with the parent, whose tokens name the person as `sub` and the agent in `act`; the relying crates Kuria pins answer it. `kuria mcp` signs in that way.
+
+<!-- akt: PLAN-027-D05 -->
+---
+type: decision
+revision: 1
+rank: b61
+state: proposed
+in: [PLAN-027]
+title: Search with pg_search
+---
+
+<!-- field: context -->
+Documents are found by what they say (PLAN-027-T03), which title search can't do; PLAN-027-G02 compares pg_search with Postgres's own full-text search.
+
+<!-- field: decision -->
+Kuria requires Postgres with pg_search (ParadeDB). Its BM25 index is on `akt_search`, a row per text field of each akt as it reads, partitioned or filtered by tenant. Every Postgres Kuria runs on, development, tests, CI, end-to-end and dogfooding, is an image of Kuria's own with it. Operators run Postgres themselves or on ParadeDB's offerings.
+
+<!-- field: why -->
+BM25 ranking, tokenizers per language and ngram matching find documents by what they say far better than `ts_rank` over a `tsvector`, and are what an agent searching documents needs.
