@@ -1112,7 +1112,7 @@ Building it means turning the create page's form into a component that both the 
 <!-- akt: PLAN-025-D02 -->
 ---
 type: decision
-revision: 2
+revision: 3
 rank: b6G
 state: decided
 in: [PLAN-025]
@@ -1134,3 +1134,5 @@ Verdicts are offered only while the run takes them (`app.verdicts`).
 
 <!-- field: why -->
 It keeps what PLAN-024 was for: a fail or a skip can't be saved without saying why. It drops the dialog round trip for the common case, a pass, which is most of a run. Keyboard shortcuts on the dialog would have kept the round trip.
+
+Decided while working through the plan, then confirmed by Albin Skott on 2026-11-20.
