@@ -221,11 +221,28 @@ pub struct PresentationDef {
     /// its akter images (`akt.field.markdown.images`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+    /// The heading the app's sidebar lists the type under, beside the
+    /// others it names (`app.navigation`); none if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+    /// The type's name in the plural, as the app counts its akter; the
+    /// name and an `s` if not given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plural: Option<String>,
+    /// Per state key, the action an akt's page offers first in that
+    /// state: a transition from it, by key, or [`PRIMARY_COPY`]
+    /// (`app.header`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub primary: BTreeMap<String, String>,
     /// Whether references to its akter are shown with the akt's number
     /// first (`app.references`).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub numbered_references: bool,
 }
+
+/// A `primary` action that makes a copy of the akt (`akt.copy`), rather
+/// than performing a transition.
+pub const PRIMARY_COPY: &str = "copy";
 
 /// The media types an image's picture may have.
 pub const IMAGE_MEDIA_TYPES: [&str; 4] = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
@@ -405,6 +422,22 @@ pub struct FieldDef {
     /// rendered when it is written (`akt.field.markdown.diagrams`).
     #[serde(default, skip_serializing_if = "is_false")]
     pub diagrams: bool,
+    /// The states in which it is given, if not all (`akt.field.states`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub states: Vec<String>,
+    /// What a single `user` field is offered as when an akt is created
+    /// (`akt.field.default`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<FieldDefault>,
+}
+
+/// What a field is offered as when an akt is created (`akt.field.default`).
+// r[impl akt.field.default]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldDefault {
+    /// The one creating it.
+    Creator,
 }
 
 /// What files an `attachment` field holds.

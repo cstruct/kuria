@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { creatableIn, insideQuery, parentBoards } from './creating';
+import {
+	creatableIn,
+	insideQuery,
+	missingRequired,
+	parentBoards,
+	quickAddable,
+	titleFieldOf
+} from './creating';
 
 const candidate = {
 	contains: [{ type: 'epic' }, { type: 'task' }, { type: 'artifact' }],
@@ -62,5 +69,58 @@ describe('creating from a board', () => {
 		expect(insideQuery('RELEASE-2026-0001-RC-0001', ['BACKLOG-001'])).toBe(
 			'in=RELEASE-2026-0001-RC-0001&in=BACKLOG-001'
 		);
+	});
+});
+
+// r[verify app.create]
+describe('the create page', () => {
+	const fields = [
+		{ key: 'title', name: 'Title', required: true },
+		{ key: 'kind', name: 'Kind', required: true },
+		{ key: 'notes', name: 'Notes', required: false },
+		{ key: 'verdict', name: 'Verdict', required: true }
+	];
+
+	it('names each required field left empty, and no other', () => {
+		expect(
+			missingRequired(fields, {
+				title: { kind: 'TEXT', text: '' },
+				kind: { kind: 'CHOICE', key: 'feature' },
+				notes: { kind: 'TEXT', text: '' }
+			})
+		).toEqual({ title: 'Title is required.' });
+	});
+
+	it('names none once they are given', () => {
+		expect(
+			missingRequired(fields, {
+				title: { kind: 'TEXT', text: 'Gift cards' },
+				kind: { kind: 'CHOICE', key: 'feature' }
+			})
+		).toEqual({});
+	});
+});
+
+// r[verify app.quick-add]
+describe('quick-add', () => {
+	const task = {
+		fields: [
+			{ key: 'title', kind: 'text', required: true },
+			{ key: 'notes', kind: 'text', multiline: true }
+		]
+	};
+
+	it('titles by the presentation, else the first required line of text', () => {
+		expect(titleFieldOf(task)).toBe('title');
+		expect(titleFieldOf({ ...task, presentation: { title: 'name' } })).toBe('name');
+		expect(titleFieldOf({ fields: [{ key: 'notes', kind: 'text', multiline: true }] })).toBeNull();
+	});
+
+	it('creates from a title alone only what needs nothing else', () => {
+		expect(quickAddable(task)).toBe(true);
+		expect(
+			quickAddable({ fields: [...task.fields, { key: 'why', kind: 'text', required: true }] })
+		).toBe(false);
+		expect(quickAddable({ fields: [] })).toBe(false);
 	});
 });

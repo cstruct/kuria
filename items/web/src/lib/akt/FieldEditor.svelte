@@ -50,9 +50,19 @@
 	}
 </script>
 
-<fieldset class="field" aria-describedby={error ? `${id}-error` : undefined}>
-	<legend>{legendOf(field)}</legend>
-	{#if field.description}<p class="hint">{field.description}</p>{/if}
+<!-- r[impl app.create]: labelled once, above the control, its hint below. -->
+<fieldset
+	class="field"
+	aria-describedby={[field.description ? `${id}-hint` : '', error ? `${id}-error` : '']
+		.filter(Boolean)
+		.join(' ') || undefined}
+>
+	<!-- A checkbox is labelled by its own name, beside it. -->
+	<legend class:visually-hidden={draft.kind === 'CHECKBOX'}>
+		<span aria-hidden="true"
+			>{field.name}{#if field.required}<span class="required"> *</span>{/if}</span
+		><span class="visually-hidden">{legendOf(field)}</span>
+	</legend>
 
 	{#if draft.kind === 'TEXT'}
 		{#if field.multiline && live}
@@ -88,7 +98,13 @@
 	{:else if draft.kind === 'DATE'}
 		<input type="date" aria-label={field.name} bind:value={draft.date} />
 	{:else if draft.kind === 'USER'}
-		<SomeoneSelect label={field.name} bind:who={draft.who} {people} none="Nobody" />
+		<SomeoneSelect
+			label={field.name}
+			bind:who={draft.who}
+			{people}
+			none="Nobody"
+			labelled={false}
+		/>
 	{:else if draft.kind === 'USERS'}
 		<PeopleSelect bind:who={draft.who} {people} />
 	{:else if draft.kind === 'SECTIONS'}
@@ -133,26 +149,48 @@
 		{#if uploadError}<p role="alert">{uploadError}</p>{/if}
 	{/if}
 
-	{#if error}<p role="alert" id="{id}-error">{error}</p>{/if}
+	{#if field.description}<p class="hint" id="{id}-hint">{field.description}</p>{/if}
+	{#if error}<p class="error" role="alert" id="{id}-error">{error}</p>{/if}
 </fieldset>
 
 <style>
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
-		border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-		border-radius: 0.25rem;
+		gap: var(--space-1);
 	}
 
-	.inline {
+	legend {
+		margin-bottom: var(--space-1);
+		font-size: var(--text-sm);
+		font-weight: 500;
+	}
+
+	.required {
+		margin-left: 2px;
+		color: var(--tone-danger-fg);
+	}
+
+	.field :global(label) {
 		display: flex;
-		gap: 0.5rem;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+	}
+
+	.field :global(label.inline) {
+		flex-direction: row;
+		gap: var(--space-2);
 		align-items: center;
 	}
 
 	.hint {
-		margin: 0;
-		opacity: 0.75;
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+
+	.error {
+		font-size: var(--text-xs);
+		color: var(--tone-danger-fg);
 	}
 </style>

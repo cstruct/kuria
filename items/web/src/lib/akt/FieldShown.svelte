@@ -7,7 +7,8 @@
 	import { referenceOfHref } from './previews';
 	import { renderReferenced, type Reference } from './references';
 	import { pagesOf, sheetsOf } from './sheets';
-	import { textOf, type Value } from './values';
+	import { nameOf, textOf, type Value } from './values';
+	import Avatar from '#lib/ui/Avatar.svelte';
 
 	/** Where a reference goes in the app: the akt's page, at its version and
 	 * heading if it names them. */
@@ -69,6 +70,15 @@
 	<div class="markdown">{@html renderMarkdown(value.text)}</div>
 {:else if value.__typename === 'TextValue'}
 	<span class="text">{value.text}</span>
+{:else if value.__typename === 'UserValue'}
+	<!-- r[impl app.fields]: a user or contact by name, with their initials. -->
+	<span class="person"><Avatar name={nameOf(value.user)} />{nameOf(value.user)}</span>
+{:else if value.__typename === 'UsersValue'}
+	<span class="people">
+		{#each value.users as someone, i (i)}
+			<span class="person"><Avatar name={nameOf(someone)} />{nameOf(someone)}</span>
+		{/each}
+	</span>
 {:else}
 	<span>{textOf(value)}</span>
 {/if}
@@ -76,6 +86,18 @@
 <style>
 	.text {
 		white-space: pre-wrap;
+	}
+
+	.person {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.people {
+		display: inline-flex;
+		flex-wrap: wrap;
+		gap: var(--space-1) var(--space-3);
 	}
 
 	.markdown :global(:first-child) {

@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { counted } from './home';
 
 // r[verify app.home]
+// r[verify app.words]
 describe('counted', () => {
-	it('says how many akter, in the singular for one', () => {
-		expect(counted(1)).toBe('1 akt');
-		expect(counted(0)).toBe('0 akter');
-		expect(counted(3)).toBe('3 akter');
-		expect(counted(null)).toBe('0 akter');
+	it('says how many, in the type’s words', () => {
+		const task = { name: 'Task' };
+		expect(counted(1, task)).toBe('1 task');
+		expect(counted(0, task)).toBe('0 tasks');
+		expect(counted(3, task)).toBe('3 tasks');
+		expect(counted(null, task)).toBe('0 tasks');
+		const notes = { name: 'Release notes', presentation: { plural: 'Release notes' } };
+		expect(counted(2, notes)).toBe('2 release notes');
 	});
 });

@@ -4,9 +4,11 @@ import {
 	mappedTypes,
 	pictureOf,
 	placeFor,
+	showsState,
 	shownFields,
 	sortAkter,
-	transitionsInto
+	transitionsInto,
+	undoOf
 } from './members';
 import type { Value } from './values';
 
@@ -97,10 +99,12 @@ describe('shownFields', () => {
 	};
 
 	it('names the fields the presentation picks, with their values', () => {
-		expect(shownFields(akt, 'card')).toEqual([{ name: 'Kind', text: 'Feature', picture: null }]);
+		expect(shownFields(akt, 'card')).toEqual([
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
+		]);
 		expect(shownFields(akt, 'list')).toEqual([
-			{ name: 'Owner', text: '', picture: null },
-			{ name: 'Kind', text: 'Feature', picture: null }
+			{ name: 'Owner', text: '', picture: null, as: 'text' },
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
 		]);
 	});
 
@@ -186,5 +190,40 @@ describe('transitionsInto', () => {
 		expect(transitionsInto(board, 'gone', story('open'))).toEqual([]);
 		expect(transitionsInto({}, 'done', story('open'))).toEqual([]);
 		expect(transitionsInto(board, 'todo', story('doing'))).toEqual([]);
+	});
+});
+
+// r[verify app.members]
+describe('showsState', () => {
+	const document = {
+		board: {
+			columns: [
+				{ key: 'todo', states: { task: ['open'] } },
+				{ key: 'done', states: { task: ['done', 'dropped'] } }
+			]
+		}
+	};
+
+	it('leaves out a state its column already says', () => {
+		expect(showsState(document, 'todo', 'task')).toBe(false);
+		expect(showsState(document, 'done', 'task')).toBe(true);
+		expect(showsState(document, 'unmapped', 'task')).toBe(true);
+	});
+});
+
+// r[verify app.board-drop]
+describe('undoOf', () => {
+	const transitions = [
+		{ key: 'start', from: ['open'], to: 'doing', requires: [] },
+		{ key: 'stop', from: ['doing'], to: 'open', requires: [] },
+		{ key: 'finish', from: ['doing'], to: 'done', requires: ['resolution'] },
+		{ key: 'reopen', from: ['done'], to: 'doing', requires: ['why'] }
+	];
+
+	it('is the transition straight back, needing nothing', () => {
+		expect(undoOf(transitions, 'open', 'doing')?.key).toBe('stop');
+		// One back that needs fields can't undo it from a toast.
+		expect(undoOf(transitions, 'doing', 'done')).toBeUndefined();
+		expect(undoOf(transitions, 'open', 'done')).toBeUndefined();
 	});
 });

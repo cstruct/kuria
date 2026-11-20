@@ -85,7 +85,13 @@ pub fn text_of(value: &Value) -> String {
         Value::UsersValue { users, .. } => users.iter().map(name_of).collect::<Vec<_>>().join(", "),
         Value::VerdictValue { verdicts, .. } => verdicts
             .iter()
-            .map(|g| format!("{}: {}", name_of(&g.assignee), g.verdict.to_lowercase()))
+            .map(|g| {
+                let said = format!("{}: {}", name_of(&g.assignee), g.verdict.to_lowercase());
+                match &g.description {
+                    Some(why) => format!("{said} ({why})"),
+                    None => said,
+                }
+            })
             .collect::<Vec<_>>()
             .join(", "),
         Value::SectionsValue { value, .. } => {
@@ -236,9 +242,14 @@ pub fn file_value(value: &Value) -> Json {
         Value::VerdictValue { verdicts, .. } => verdicts
             .iter()
             .map(|g| {
+                // With a description, a mapping of the two.
+                let verdict = g.verdict.to_lowercase();
                 (
                     handle_of(&g.assignee).to_owned(),
-                    Json::from(g.verdict.to_lowercase()),
+                    match &g.description {
+                        Some(why) => json!({ "verdict": verdict, "description": why }),
+                        None => Json::from(verdict),
+                    },
                 )
             })
             .collect::<serde_json::Map<_, _>>()

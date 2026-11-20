@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Value } from './values';
-import { judgedOf, verdictInput } from './verdicts';
+import { judgedOf, judgingOpen, reportError, verdictInput } from './verdicts';
 
 const ALICE = { __typename: 'User' as const, id: 'alice', name: 'Alice' };
 const BOB = { __typename: 'Contact' as const, id: 'c-bob', displayName: 'Bob' };
@@ -19,21 +19,55 @@ describe('verdicts', () => {
 			{
 				__typename: 'VerdictValue',
 				field: 'verdict',
-				verdicts: [{ verdict: 'FAIL', assignee: BOB }]
+				verdicts: [{ verdict: 'FAIL', description: 'It broke', assignee: BOB }]
 			}
 		];
 		const judged = judgedOf({ fields, type }, 'alice');
 		expect(judged).toEqual({
 			field: 'verdict',
 			assignees: [
-				{ id: 'alice', name: 'Alice', verdict: null },
-				{ id: 'c-bob', name: 'Bob', verdict: 'FAIL' }
+				{ id: 'alice', name: 'Alice', verdict: null, description: null },
+				{ id: 'c-bob', name: 'Bob', verdict: 'FAIL', description: 'It broke' }
 			],
 			mine: null
 		});
 		expect(judgedOf({ fields, type }, 'eve')?.mine).toBeUndefined();
 		expect(judgedOf({ fields, type: { fields: [] } }, 'alice')).toBeNull();
-		expect(verdictInput('SKIP')).toBe('skip');
+		expect(judgedOf({ fields, type }, 'c-bob')?.mine).toEqual({
+			verdict: 'FAIL',
+			description: 'It broke'
+		});
+	});
+
+	// r[verify app.verdicts]
+	it('reports a verdict with its description, which a fail or a skip must have', () => {
+		expect(verdictInput({ verdict: 'PASS', description: ' ' })).toBe('pass');
+		expect(verdictInput({ verdict: 'SKIP', description: ' No device ' })).toEqual({
+			verdict: 'skip',
+			description: 'No device'
+		});
 		expect(verdictInput(null)).toEqual({ clear: true });
+		expect(reportError({ verdict: null, description: '' })).toBe('Choose a status.');
+		expect(reportError({ verdict: 'PASS', description: '' })).toBeNull();
+		expect(reportError({ verdict: 'FAIL', description: '  ' })).toBe('Say why it failed.');
+		expect(reportError({ verdict: 'SKIP', description: '' })).toBe('Say why it was skipped.');
+		expect(reportError({ verdict: 'SKIP', description: 'No device' })).toBeNull();
+	});
+});
+
+// r[verify app.verdicts]
+describe('judgingOpen', () => {
+	const protocol = {
+		transitions: [
+			{ from: ['draft'], outcomes: null },
+			{ from: ['running'], outcomes: ['PASS', 'FAIL', 'SKIP'] }
+		]
+	};
+
+	it('takes verdicts while a transition judging them may leave', () => {
+		expect(judgingOpen(protocol, 'running')).toBe(true);
+		expect(judgingOpen(protocol, 'draft')).toBe(false);
+		expect(judgingOpen(protocol, 'template')).toBe(false);
+		expect(judgingOpen({ transitions: [{ from: ['open'] }] }, 'open')).toBe(true);
 	});
 });

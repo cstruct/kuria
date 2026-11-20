@@ -15,11 +15,28 @@
 		members: readonly { number: string; title?: string | null }[];
 		busy: boolean;
 		error?: string;
-		/** Copies it, keeping only those given, or everything with `null`. */
-		onCopy: (only: string[] | null) => void;
+		/** Where else a copy may go, the most likely first: containers that
+		 * hold its type, open (`app.copy`). */
+		places?: readonly { number: string; title: string }[];
+		/** Copies it, keeping only those given, or everything with `null`,
+		 * into the container chosen, or where it is with `null`. */
+		onCopy: (only: string[] | null, into: string | null) => void;
 	}
 
-	let { open = $bindable(), number, items, members, busy, error, onCopy }: Props = $props();
+	let {
+		open = $bindable(),
+		number,
+		items,
+		members,
+		busy,
+		error,
+		places = [],
+		onCopy
+	}: Props = $props();
+	let into = $state<string | null>(null);
+	$effect(() => {
+		if (open) into = places[0]?.number ?? null;
+	});
 
 	const all = $derived(members.map((m) => m.number));
 	const placed = $derived(new Set(numbersIn(items)));
@@ -87,14 +104,26 @@
 <Dialog
 	bind:open
 	title="Copy {number}"
-	description="A new akt of the same type, in its first state, with copies of the members chosen, in the same containers."
+	description="A new one, starting over, with copies of what you keep, in the same places."
 >
+	{#if places.length > 0}
+		<!-- r[impl app.copy]: where the copy goes, the likeliest first. -->
+		<label class="into">
+			Copy into
+			<select bind:value={into}>
+				{#each places as place (place.number)}
+					<option value={place.number}>{place.title}</option>
+				{/each}
+				<option value={null}>Where it is now</option>
+			</select>
+		</label>
+	{/if}
 	{#if members.length > 0}
 		<fieldset class="keep">
 			<legend>Keep</legend>
 			<div class="all">
-				<Button size="sm" variant="ghost" onclick={() => choose(all, true)}>All</Button>
-				<Button size="sm" variant="ghost" onclick={() => choose(all, false)}>None</Button>
+				<Button size="sm" onclick={() => choose(all, true)}>Keep all</Button>
+				<Button size="sm" onclick={() => choose(all, false)}>Keep none</Button>
 			</div>
 			{@render outline(items)}
 			{#if unplaced.length > 0}
@@ -108,11 +137,19 @@
 	{/if}
 	{#if error}<p role="alert">{error}</p>{/if}
 	{#snippet footer()}
-		<Button variant="primary" {busy} onclick={() => onCopy(onlyOf(all, chosen))}>Copy</Button>
+		<Button variant="primary" {busy} onclick={() => onCopy(onlyOf(all, chosen), into)}>Copy</Button>
 	{/snippet}
 </Dialog>
 
 <style>
+	.into {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		font-size: var(--text-sm);
+		font-weight: 500;
+	}
+
 	.keep {
 		display: flex;
 		flex-direction: column;

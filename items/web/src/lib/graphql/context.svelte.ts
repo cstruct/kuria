@@ -25,7 +25,10 @@ export interface Query<Data> {
  * and asking again for it would ask forever. */
 export function query<Data, Variables extends AnyVariables>(
 	document: TypedDocumentNode<Data, Variables>,
-	variables: () => Variables
+	variables: () => Variables,
+	/** Typenames besides those it holds whose changes make it stale, such
+	 * as `Akt` for counts of akter. */
+	additionalTypenames: string[] = []
 ): Query<Data> {
 	const client = getClient();
 	const state = $state<{
@@ -37,7 +40,10 @@ export function query<Data, Variables extends AnyVariables>(
 	$effect(() => {
 		state.fetching = true;
 		const subscription = client
-			.query(document, JSON.parse(asked) as Variables, { requestPolicy: 'cache-and-network' })
+			.query(document, JSON.parse(asked) as Variables, {
+				requestPolicy: 'cache-and-network',
+				additionalTypenames
+			})
 			.subscribe((result) => {
 				// While what the cache held is refetched, after a change marked it
 				// stale, keep showing it rather than nothing.

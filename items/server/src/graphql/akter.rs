@@ -1427,6 +1427,15 @@ impl AktType {
             .collect()
     }
 
+    /// What the request's subject may do with its akter: what the app
+    /// offers by. Every write is still decided on its own.
+    // r[impl authz.viewer]
+    async fn viewer_may(&self) -> ViewerMay {
+        ViewerMay {
+            key: self.0.row.key.clone(),
+        }
+    }
+
     async fn states(&self) -> Vec<State> {
         self.0
             .ty
@@ -1457,6 +1466,8 @@ impl AktType {
             navigation: presentation.navigation.unwrap_or_default().into(),
             image: presentation.image.clone(),
             numbered_references: presentation.numbered_references,
+            plural: presentation.plural.clone(),
+            group: presentation.group.clone(),
         }
     }
 
@@ -1763,6 +1774,11 @@ pub struct Presentation {
     /// Whether references to its akter are shown with the akt's number
     /// first (`app.references`).
     numbered_references: bool,
+    /// The type's name in the plural, if it gives one.
+    plural: Option<String>,
+    /// The sidebar's heading the type is listed under, if any
+    /// (`app.navigation`).
+    group: Option<String>,
 }
 
 #[derive(SimpleObject)]
@@ -2963,9 +2979,27 @@ pub struct VerdictValue {
 pub struct GivenVerdict {
     assignee: Someone,
     verdict: VerdictKind,
+    /// What the assignee saw: a fail or a skip given since has one.
+    description: Option<String>,
     /// Who gave it: the assignee, unless given for them.
     by: User,
     at: DateTime<Utc>,
+}
+
+impl From<&kuria_engine::verdicts::Given> for GivenVerdict {
+    fn from(g: &kuria_engine::verdicts::Given) -> Self {
+        Self {
+            assignee: g.assignee.into(),
+            verdict: match g.verdict {
+                kuria_engine::verdicts::Verdict::Pass => VerdictKind::Pass,
+                kuria_engine::verdicts::Verdict::Fail => VerdictKind::Fail,
+                kuria_engine::verdicts::Verdict::Skip => VerdictKind::Skip,
+            },
+            description: g.description.clone(),
+            by: User(g.by),
+            at: g.at,
+        }
+    }
 }
 
 /// A verdict: pass, fail or skip.
@@ -3064,19 +3098,7 @@ impl FieldValue {
             }),
             Value::Verdicts(given) => Self::Verdict(VerdictValue {
                 field,
-                verdicts: given
-                    .iter()
-                    .map(|g| GivenVerdict {
-                        assignee: g.assignee.into(),
-                        verdict: match g.verdict {
-                            kuria_engine::verdicts::Verdict::Pass => VerdictKind::Pass,
-                            kuria_engine::verdicts::Verdict::Fail => VerdictKind::Fail,
-                            kuria_engine::verdicts::Verdict::Skip => VerdictKind::Skip,
-                        },
-                        by: User(g.by),
-                        at: g.at,
-                    })
-                    .collect(),
+                verdicts: given.iter().map(GivenVerdict::from).collect(),
             }),
         }
     }
@@ -3268,5 +3290,73 @@ fn archived_key(archived: ArchivedFilter) -> &'static str {
         ArchivedFilter::Live => "live",
         ArchivedFilter::Archived => "archived",
         ArchivedFilter::All => "all",
+    }
+}
+
+/// What the request's subject may do with an akt type's akter
+/// (`authz.viewer`), each decided only when asked for.
+pub struct ViewerMay {
+    key: String,
+}
+
+impl ViewerMay {
+    async fn allows(
+        &self,
+        ctx: &Context<'_>,
+        permission: Permission,
+    ) -> async_graphql::Result<bool> {
+        authorizer(ctx)?
+            .allows(&permission)
+            .await
+            .map_err(|e| error(e.into()))
+    }
+}
+
+#[Object]
+impl ViewerMay {
+    /// Whether they may create its akter.
+    async fn create(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Create {
+                key: self.key.clone(),
+            },
+        )
+        .await
+    }
+
+    /// Whether they may edit its akter.
+    async fn edit(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Edit {
+                key: self.key.clone(),
+            },
+        )
+        .await
+    }
+
+    /// Whether they may perform its transitions, those that name no
+    /// action of their own.
+    async fn transition(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Transition {
+                key: self.key.clone(),
+                action: None,
+            },
+        )
+        .await
+    }
+
+    /// Whether they may archive and unarchive its akter.
+    async fn archive(&self, ctx: &Context<'_>) -> async_graphql::Result<bool> {
+        self.allows(
+            ctx,
+            Permission::Archive {
+                key: self.key.clone(),
+            },
+        )
+        .await
     }
 }

@@ -1,7 +1,9 @@
 <script lang="ts">
 	// r[impl app.links]
 	import { resolve } from '$app/paths';
+	import Link2 from '@lucide/svelte/icons/link-2';
 	import X from '@lucide/svelte/icons/x';
+	import Button from '#lib/ui/Button.svelte';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import Combobox, { type Option } from '#lib/ui/Combobox.svelte';
@@ -44,6 +46,8 @@
 	let { links, kinds, editable, busy, search, onAdd, onRemove }: Props = $props();
 
 	let chosen = $state('');
+	/** Whether the way to add a link was asked for, when there are none. */
+	let adding = $state(false);
 	const kind = $derived(kinds.find((k) => k.key === chosen) ?? kinds[0]);
 
 	/** The links by the name this akt reads them by: outgoing first. */
@@ -58,71 +62,79 @@
 	});
 </script>
 
-<Card title="Links">
-	{#if groups.length === 0}
-		<p class="none">No links.</p>
-	{:else}
-		{#each groups as group (group.name)}
-			<h3>{group.name}</h3>
-			<ul class="links" aria-label={group.name}>
-				{#each group.links as link (`${link.kind}:${link.akt.id}`)}
-					<li>
-						<span class="what">
-							<a href={resolve('/akt/[number]', { number: link.akt.number })}>{link.akt.number}</a>
-							<span class="hint">{link.akt.title ?? ''}</span>
-							{#if link.pinned}
-								<span class="hint pinned"
-									>At revision {link.pinned.revision}: {link.pinned.title ?? link.akt.number}, {link
-										.pinned.state.name}</span
-								>
-							{/if}
-						</span>
-						<Badge tone={link.akt.state.tone}>{link.akt.state.name}</Badge>
-						{#if link.byReference}
-							<span class="hint">From the text</span>
-						{:else if editable}
-							<IconButton
-								label="Remove link {link.name} {link.akt.number}"
-								icon={X}
-								size="sm"
-								disabled={busy}
-								onclick={() => onRemove(link)}
-							/>
-						{/if}
-					</li>
-				{/each}
-			</ul>
-		{/each}
-	{/if}
+<!-- r[impl app.links]: none shown when there are none, only a way to add one. -->
+{#if groups.length === 0 && !adding}
 	{#if editable && kind}
-		<div class="add">
-			{#if kinds.length > 1}
-				<label>
-					Kind of link
-					<select bind:value={chosen}>
-						{#each kinds as option (option.key)}
-							<option value={option.key}>{option.name}</option>
-						{/each}
-					</select>
-				</label>
-			{/if}
-			{#key kind.key}
-				<Combobox
-					label="{kind.name}…"
-					placeholder="{kind.name} an akt, by number or title…"
-					search={(text) => search(text, kind)}
-					onPick={(option) => onAdd(kind.key, option.value)}
-				/>
-			{/key}
+		<div class="empty">
+			<Button size="sm" variant="ghost" onclick={() => (adding = true)}
+				><Link2 size={14} aria-hidden={true} /> Add link</Button
+			>
 		</div>
 	{/if}
-</Card>
+{:else}
+	<Card title="Links">
+		{#if groups.length > 0}
+			{#each groups as group (group.name)}
+				<h3>{group.name}</h3>
+				<ul class="links" aria-label={group.name}>
+					{#each group.links as link (`${link.kind}:${link.akt.id}`)}
+						<li>
+							<span class="what">
+								<a href={resolve('/akt/[number]', { number: link.akt.number })}>{link.akt.number}</a
+								>
+								<span class="hint">{link.akt.title ?? ''}</span>
+								{#if link.pinned}
+									<span class="hint pinned"
+										>At revision {link.pinned.revision}: {link.pinned.title ?? link.akt.number}, {link
+											.pinned.state.name}</span
+									>
+								{/if}
+							</span>
+							<Badge tone={link.akt.state.tone}>{link.akt.state.name}</Badge>
+							{#if link.byReference}
+								<span class="hint">From the text</span>
+							{:else if editable}
+								<IconButton
+									label="Remove link {link.name} {link.akt.number}"
+									icon={X}
+									size="sm"
+									disabled={busy}
+									onclick={() => onRemove(link)}
+								/>
+							{/if}
+						</li>
+					{/each}
+				</ul>
+			{/each}
+		{/if}
+		{#if editable && kind}
+			<div class="add">
+				{#if kinds.length > 1}
+					<label>
+						Kind of link
+						<select bind:value={chosen}>
+							{#each kinds as option (option.key)}
+								<option value={option.key}>{option.name}</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+				{#key kind.key}
+					<Combobox
+						label="{kind.name}…"
+						placeholder="{kind.name} an akt, by number or title…"
+						search={(text) => search(text, kind)}
+						onPick={(option) => onAdd(kind.key, option.value)}
+					/>
+				{/key}
+			</div>
+		{/if}
+	</Card>
+{/if}
 
 <style>
-	.none {
-		margin: 0 0 var(--space-3);
-		color: var(--text-muted);
-		font-size: var(--text-sm);
+	.empty {
+		display: flex;
 	}
 
 	h3 {

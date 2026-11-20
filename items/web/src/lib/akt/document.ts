@@ -3,6 +3,7 @@
  * from its document; and which transitions an akt may take. Nothing here
  * knows any akt type. */
 // r[impl app.akt-types]
+import { shownOutcome, type Outcome } from './outcomes';
 
 interface Document {
 	contains?: { type: string }[];
@@ -81,7 +82,18 @@ export function outcomeRefusal(
 ): string | null {
 	const allowed = transition.outcomes ?? [];
 	if (allowed.length === 0 || (outcome && allowed.includes(outcome))) return null;
-	const words = allowed.map((o) => o.toLowerCase());
+	const named = (o: string) => shownOutcome(o as Outcome).text.toLowerCase();
+	const words = allowed.map(named);
 	const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} or ${words.at(-1)}` : words[0];
-	return `Only when the outcome is ${list}`;
+	return `Needs the result to be ${list}; it is ${named(outcome ?? 'PENDING')}`;
+}
+
+/** Whether the field `key` of the type `document` is given in the state
+ * `state`: in every state, unless it names its `states`
+ * (`akt.field.states`). */
+// r[impl akt.field.states]
+export function givenIn(document: unknown, key: string, state: string): boolean {
+	const fields = (document as { fields?: { key?: string; states?: string[] }[] } | null)?.fields;
+	const states = fields?.find((f) => f.key === key)?.states;
+	return !Array.isArray(states) || states.length === 0 || states.includes(state);
 }

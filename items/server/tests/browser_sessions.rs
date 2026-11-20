@@ -741,6 +741,34 @@ async fn records_the_signed_in_persons_name() {
 }
 
 // r[verify person.from-sign-in]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sign_in_without_a_name_keeps_the_recorded_one() {
+    let world = World::new().await;
+    // Recorded before, as a bundle's people are.
+    let mut conn = world.db.pool().get().await.unwrap();
+    kuria_store::people::record(
+        &mut conn,
+        &kuria_store::people::Person {
+            subject_id: support::SUBJECT.parse().unwrap(),
+            name: Some("Alice From A Bundle".to_owned()),
+            email: Some("old@example.com".to_owned()),
+            updated_at: Utc::now(),
+        },
+    )
+    .await
+    .unwrap();
+    world.konklav.set_nameless(true);
+    world.sign_in().await;
+    assert_eq!(
+        person(&world).await,
+        Some((
+            Some("Alice From A Bundle".to_owned()),
+            Some("alice@example.com".to_owned())
+        ))
+    );
+}
+
+// r[verify person.from-sign-in]
 // r[verify person.tenant]
 #[tokio::test(flavor = "multi_thread")]
 async fn a_sign_in_without_a_name_still_succeeds() {

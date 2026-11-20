@@ -3,6 +3,7 @@ import {
 	availableTransitions,
 	containedTypes,
 	draftedFields,
+	givenIn,
 	linkKinds,
 	outcomeRefusal,
 	requiredFields
@@ -40,8 +41,12 @@ describe('akt type documents', () => {
 describe('outcomeRefusal', () => {
 	const finish = { outcomes: ['PASS', 'FAIL', 'SKIP'] };
 	it('says what a transition allows while the outcome is another', () => {
-		expect(outcomeRefusal(finish, 'PENDING')).toBe('Only when the outcome is pass, fail or skip');
-		expect(outcomeRefusal({ outcomes: ['PASS'] }, null)).toBe('Only when the outcome is pass');
+		expect(outcomeRefusal(finish, 'PENDING')).toBe(
+			'Needs the result to be passed, failed or skipped; it is pending'
+		);
+		expect(outcomeRefusal({ outcomes: ['PASS'] }, null)).toBe(
+			'Needs the result to be passed; it is pending'
+		);
 	});
 	it('lets the outcomes it allows, and any for a transition naming none, through', () => {
 		expect(outcomeRefusal(finish, 'FAIL')).toBeNull();
@@ -58,5 +63,18 @@ describe('linkKinds', () => {
 			links: [kind('refers_to'), kind('replaces')]
 		};
 		expect(linkKinds(document).map((k) => k.key)).toEqual(['replaces']);
+	});
+});
+
+// r[verify akt.field.states]
+describe('givenIn', () => {
+	const document = {
+		fields: [{ key: 'title' }, { key: 'released_on', states: ['released', 'closed'] }]
+	};
+
+	it('gives a field in its states only, or in all without any', () => {
+		expect(givenIn(document, 'title', 'planning')).toBe(true);
+		expect(givenIn(document, 'released_on', 'planning')).toBe(false);
+		expect(givenIn(document, 'released_on', 'released')).toBe(true);
 	});
 });

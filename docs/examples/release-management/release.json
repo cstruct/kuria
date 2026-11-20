@@ -5,9 +5,9 @@
   "fields": [
     { "key": "title", "name": "Title", "kind": "text", "required": true },
     { "key": "version", "name": "Version", "kind": "text" },
-    { "key": "released_on", "name": "Released on", "kind": "date" },
-    { "key": "release_manager", "name": "Release manager", "kind": "user" },
-    { "key": "go", "name": "Go for release", "kind": "checkbox" }
+    { "key": "released_on", "name": "Released on", "kind": "date", "states": ["released", "closed"] },
+    { "key": "release_manager", "name": "Release manager", "kind": "user", "default": "creator" },
+    { "key": "go", "name": "Go for release", "kind": "checkbox", "states": ["testing", "released", "closed"] }
   ],
   "states": [
     { "key": "planning", "name": "Planning", "initial": true },
@@ -37,6 +37,7 @@
   ] },
   "archive": { "rules": [{ "newer": 2, "in": ["closed"] }] },
   "presentation": {
+    "group": "Releasing",
     "icon": "rocket", "colour": "green",
     "card": ["version"], "list": ["version", "released_on", "release_manager"],
     "tones": { "testing": "active", "released": "success" }

@@ -24,7 +24,24 @@ export function shortcutLabel(platform: string): string {
 /** An akt type as the sidebar lists it. */
 export interface Listed {
 	key: string;
-	presentation: { navigation: 'MAIN' | 'MORE' };
+	presentation: { navigation: 'MAIN' | 'MORE'; group?: string | null };
+}
+
+/** The types under the headings their presentations' `group` names, in
+ * the order the headings first come, those naming none first, under none
+ * (`app.navigation`). */
+// r[impl app.navigation]
+export function groupTypes<T extends Listed>(
+	types: readonly T[]
+): { group: string | null; types: T[] }[] {
+	const groups = new Map<string | null, T[]>([[null, []]]);
+	for (const type of types) {
+		const group = type.presentation.group ?? null;
+		groups.set(group, [...(groups.get(group) ?? []), type]);
+	}
+	return [...groups.entries()]
+		.map(([group, listed]) => ({ group, types: listed }))
+		.filter((g) => g.types.length > 0);
 }
 
 /** The types the sidebar lists, split into those it shows and those under

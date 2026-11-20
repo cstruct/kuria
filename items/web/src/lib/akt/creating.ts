@@ -3,6 +3,7 @@
  * beside the container. Nothing here knows any akt type. */
 // r[impl app.board-create]
 // r[impl app.akt-types]
+import { isEmpty, type Draft, type FieldDef } from './values';
 
 interface Document {
 	contains?: { type?: string }[];
@@ -76,4 +77,52 @@ export function insideQuery(container: string, parents: readonly string[]): stri
 	return [container, ...parents.filter((p) => p !== container)]
 		.map((n) => `in=${encodeURIComponent(n)}`)
 		.join('&');
+}
+
+/** What the create page says on each required field left empty, by field
+ * key, so that nothing is sent until they are given (`app.create`). Fields
+ * without a draft aren't asked for there, and aren't named. */
+// r[impl app.create]
+export function missingRequired(
+	fields: readonly Pick<FieldDef, 'key' | 'name' | 'required'>[],
+	drafts: Readonly<Record<string, Draft | undefined>>
+): Record<string, string> {
+	return Object.fromEntries(
+		fields.flatMap((f) => {
+			const draft = drafts[f.key];
+			return f.required && draft && isEmpty(draft) ? [[f.key, `${f.name} is required.`]] : [];
+		})
+	);
+}
+
+interface FieldShape {
+	key?: string;
+	kind?: string;
+	required?: boolean;
+	multiline?: boolean;
+}
+
+function fieldsOf(document: unknown): FieldShape[] {
+	const fields = (document as { fields?: FieldShape[] } | null)?.fields;
+	return Array.isArray(fields) ? fields : [];
+}
+
+/** The key of the field an akt type's akter are titled by: its
+ * presentation's `title`, else its first required single-line text field
+ * (`akt.type.presentation`). */
+export function titleFieldOf(document: unknown): string | null {
+	const named = (document as { presentation?: { title?: string } } | null)?.presentation?.title;
+	if (named) return named;
+	return (
+		fieldsOf(document).find((f) => f.kind === 'text' && f.required && !f.multiline)?.key ?? null
+	);
+}
+
+/** Whether an akt of the type can be created from its title alone, as a
+ * board's quick-add does (`app.quick-add`): it has a title field, and no
+ * other field it requires. */
+// r[impl app.quick-add]
+export function quickAddable(document: unknown): boolean {
+	const title = titleFieldOf(document);
+	return Boolean(title) && !fieldsOf(document).some((f) => f.required && f.key !== title);
 }

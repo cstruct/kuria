@@ -12,7 +12,7 @@
       ] },
     { "key": "description", "name": "Description", "kind": "text", "multiline": true },
     { "key": "assignee", "name": "Assignee", "kind": "user" },
-    { "key": "change", "name": "Pull request", "kind": "reference" }
+    { "key": "change", "name": "Pull request", "kind": "reference", "states": ["in_review", "done"] }
   ],
   "states": [
     { "key": "open", "name": "Open", "initial": true },
@@ -22,6 +22,7 @@
   ],
   "transitions": [
     { "key": "start", "name": "Start", "from": ["open"], "to": "in_progress" },
+    { "key": "put_back", "name": "Put back", "from": ["in_progress"], "to": "open" },
     { "key": "review", "name": "Send to review", "from": ["in_progress"], "to": "in_review",
       "requires": ["change"] },
     { "key": "rework", "name": "Rework", "from": ["in_review"], "to": "in_progress" },
@@ -29,8 +30,10 @@
   ],
   "archive": { "rules": [{ "days_in": 90, "in": ["done"] }] },
   "presentation": {
-    "icon": "file-text", "colour": "neutral", "navigation": "more",
+    "group": "Planning",
+    "icon": "file-text", "colour": "neutral",
     "card": ["kind", "assignee"], "list": ["kind", "assignee"],
-    "tones": { "in_progress": "active", "in_review": "warning", "done": "success" }
+    "tones": { "in_progress": "active", "in_review": "warning", "done": "success" },
+    "primary": { "open": "start", "in_progress": "review", "in_review": "finish" }
   }
 }

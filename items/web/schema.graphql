@@ -180,6 +180,11 @@ type AktType {
 	"""
 	numberPattern: String!
 	fields: [Field!]!
+	"""
+	What the request's subject may do with its akter: what the app
+	offers by. Every write is still decided on its own.
+	"""
+	viewerMay: ViewerMay!
 	states: [State!]!
 	"""
 	How its akter are shown: the title field, and what cards and lists
@@ -738,6 +743,10 @@ type GivenVerdict {
 	assignee: Someone!
 	verdict: Verdict!
 	"""
+	What the assignee saw: a fail or a skip given since has one.
+	"""
+	description: String
+	"""
 	Who gave it: the assignee, unless given for them.
 	"""
 	by: User!
@@ -1189,6 +1198,15 @@ type Presentation {
 	first (`app.references`).
 	"""
 	numberedReferences: Boolean!
+	"""
+	The type's name in the plural, if it gives one.
+	"""
+	plural: String
+	"""
+	The sidebar's heading the type is listed under, if any
+	(`app.navigation`).
+	"""
+	group: String
 }
 
 """
@@ -1568,6 +1586,26 @@ type Viewer {
 	The subject, shown by name.
 	"""
 	user: User!
+}
+
+type ViewerMay {
+	"""
+	Whether they may create its akter.
+	"""
+	create: Boolean!
+	"""
+	Whether they may edit its akter.
+	"""
+	edit: Boolean!
+	"""
+	Whether they may perform its transitions, those that name no
+	action of their own.
+	"""
+	transition: Boolean!
+	"""
+	Whether they may archive and unarchive its akter.
+	"""
+	archive: Boolean!
 }
 
 """

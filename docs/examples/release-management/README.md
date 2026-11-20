@@ -1,7 +1,8 @@
 # Release management
 
-An example configuration: eight akt types for running a product's backlog
-and releases in Kuria. Nothing in Kuria knows these names; they are
+An example configuration: ten akt types for running a product's backlog
+and releases in Kuria, and the test protocols its release candidates
+are accepted on. Nothing in Kuria knows these names; they are
 ordinary akt type documents, and a tenant can change them or start from
 others.
 
@@ -11,10 +12,12 @@ others.
 | [`epic`](epic.json) | `EPIC-001` | tasks, each in one epic | |
 | [`backlog`](backlog.json) | `BACKLOG-001` | tasks, each in one backlog, and epics | |
 | [`release`](release.json) | `RELEASE-2026-0001` | backlogs, release candidates, hotfixes, one set of release notes | |
-| [`release_candidate`](release_candidate.json) | `RELEASE-2026-0001-RC-0001` | epics, tasks and artifacts | a release |
+| [`release_candidate`](release_candidate.json) | `RELEASE-2026-0001-RC-0001` | epics, tasks, artifacts and test protocols | a release |
 | [`hotfix`](hotfix.json) | `RELEASE-2026-0001-HOTFIX-0001` | tasks and artifacts | a release |
 | [`artifact`](artifact.json) | `ARTIFACT-00001` | | |
 | [`release_notes`](release_notes.json) | `RELEASE-2026-0001-NOTES-1` | | a release |
+| [`test_protocol`](test_protocol.json) | `TP-001` | test cases | |
+| [`test_case`](test_case.json) | `TP-001-C01` | | a test protocol |
 
 ## How it fits together
 
@@ -24,10 +27,12 @@ others.
   keys its own tasks `task`.) Every board it is on shows it
   in the same relative order, because they all order by rank: moving it in
   the backlog moves it in its epic too.
-- A release candidate's parent board is a backlog: link the candidate to
-  it as *Parent board*, and a task or epic created from the candidate's
-  board, with the "+" on its *To do* column, is created in the backlog
-  too ([parent boards](../../spec/boards.md)).
+- A release candidate's parent board is a backlog. The candidate links to
+  it as *Ships from*, which the form creating a candidate in a release
+  asks for, offering the release's backlog. A task or epic created from
+  the candidate's board, by its *To do* column, is created in the backlog
+  too ([parent boards](../../spec/boards.md)). *Add from* the backlog adds
+  several of its tasks to the candidate at once.
 - A release is planned, tested, released, and finally closed when it is no
   longer maintained. Its release candidates and hotfixes are created inside
   it and numbered after it. It takes candidates only while planning or
@@ -36,7 +41,14 @@ others.
 - Replanning an item into another backlog is a transfer: one step, recorded
   on the item and both backlogs.
 - Release candidates and hotfixes are accepted or deployed with evidence:
-  the build, and for a candidate its test record, as references.
+  the build, as a reference. A candidate is accepted only once its result,
+  what its test runs add up to, is Passed; its page says why Accept waits,
+  and how many runs have passed.
+- A candidate's test protocols live in it: each is a run, a copy of a
+  template made in the candidate, shown on its board from draft to done
+  beside the work it tests. A candidate takes and loses protocols only
+  while it is testing; once accepted or rejected, its runs stay as they
+  were ([test protocols](#test-protocols)).
 - An artifact is what a build produced for one component: its version, the
   git commit it was built from, its container image by digest, and its SBOM
   (SPDX or CycloneDX, uploaded to `POST /attachments`). The build pipeline
@@ -62,23 +74,144 @@ others.
 
 - Old work archives itself ([archiving](../../spec/archive.md)): a
   release once two newer releases are closed, no longer maintained, its
-  candidates, hotfixes and notes with it, and a task 90 days after it is done.
+  candidates, hotfixes and notes with it, each candidate's test protocols
+  and their test cases with the candidate, and a task 90 days after it is
+  done. Templates, in no candidate, stay.
   Archived akter are read-only and left out of lists, boards and search
   until **Show archived**; unarchiving a release brings back what it took,
   and an akt someone unarchives by hand stays until archived by hand again.
 
 - A document's `presentation` says how its akter are shown: an icon and a
   colour for the type (a rocket for a release, a flask for a candidate,
-  a wrench for a hotfix, a package for an artifact), the
+  a wrench for a hotfix, a package for an artifact, a purple clipboard
+  for a test protocol, a blue flask for a test case), the
   fields on board cards (a task's kind and assignee, a candidate's
-  build) and in lists (an artifact's change, version and image), and the
+  build) and in lists (an artifact's change, version and image, a
+  protocol's owner, a test case's testers), and the
   tone of each state (in progress is active, in review a warning, done,
   accepted, deployed and approved a success, rejected a danger). Titles
-  come from each type's first required single-line text field; a
-  candidate, a hotfix and release notes have none, and show their number.
-  Tasks, release candidates and release notes are reached from inside
-  backlogs and releases, so the sidebar lists them under **Show more**
-  (`navigation`).
+  come from each type's first required single-line text field, a
+  candidate's from its label; a hotfix and release notes have none, and
+  show their number. The sidebar lists the types by job, under Planning,
+  Releasing and Testing (`group`). Release candidates and release notes
+  are reached from inside releases, so it lists them under **Show more**
+  (`navigation`). Pages offer each state's next step first (`primary`), a
+  release's manager and a protocol's owner default to whoever creates them
+  (`default`), and fields such as a release's date or a task's pull
+  request are asked for only in the states they belong to (`states`).
+
+## Test protocols
+
+A test protocol is a set of test cases laid out in sections. It is kept as
+a template and copied into each release candidate for a run, where testers
+record their verdicts and the outcome follows. They use the `sections`,
+multiple `user` and `verdict` field kinds and copying, which any akt type
+can use ([spec](../../spec/akter.md)).
+
+- **A test case** says what to do (steps) and what should happen (expected
+  result), and who runs it (testers, any number of users or contacts).
+  Each tester gives it a verdict, `pass`, `fail` or `skip`, for
+  themselves, with a description of what they saw, which a fail or a skip
+  must have; anyone who may edit it can give one for a tester.
+- **Its outcome** follows from its testers' verdicts: it fails if any
+  tester failed it; otherwise it is pending until every tester has
+  answered (or while it has none); it is skipped if all skipped it, and
+  passes otherwise. Outcomes are worked out when read, never stored, so
+  they never make a revision.
+- **A test protocol** holds its test cases, numbered after it, and lays
+  them out in sections (its layout): each section with an optional title,
+  Markdown text, and whether it is collapsible, nested as deep as needed.
+  A section's outcome, and the protocol's, follow from the test cases
+  they hold by the same rules: fail if any fails, pending while any is
+  pending or there are none, skip if all skip, else pass.
+- **Templates:** a protocol is drafted and then kept as a template, in no
+  candidate. A run is a copy of it made in a release candidate: a new
+  protocol in draft, with copies of the test cases chosen (the sections
+  that hold them come along, and empty ones are left out), each with its
+  steps, expected result and testers, and no verdicts. The copy says what
+  it was copied from. A run is started, and finished with its conclusion
+  once its outcome is `pass`, `fail` or `skip`: while any test case is
+  pending, it can't be finished (`"outcomes"` on the `finish`
+  transition). It can be withdrawn before then.
+- **In a candidate:** a copy is made where it is told to be, else where
+  the akt copied is. Copying a template with `--in` a candidate makes the
+  run there; in the app, **Make a copy** of a template makes the run
+  outside any candidate, to be added to one as a member. A protocol can
+  also be written in a candidate from scratch, with the "+" on its
+  board's *To do* column.
+- **A tester's work:** test cases naming a tester among their testers are
+  in the tester's "My work" on Home, and `kuria ls test_case --where
+  testers=@me` lists them. The test cases still to run are those whose
+  outcome is pending: the list of test cases filters by outcome, as does
+  `kuria ls test_case --outcome pending`.
+- **Changing a run:** add a test case to it and place it in a section,
+  move test cases between sections, or remove one, as with any akt;
+  verdicts belong to the test case, not to its section.
+
+### A run, in the app
+
+1. Open the template and choose **Make a copy**, the page's first
+   action on a template. Choose the candidate it is for under **Copy
+   into**, the most recently changed open one at first. Every section and
+   test case is chosen at first; clear the ones this run leaves out, then
+   **Copy**. The copy opens, in the candidate, named after it, such as
+   "Shop acceptance test: 4.2.0-rc.1".
+2. **Start** it. Its test cases are listed in their sections, collapsible
+   ones closed until opened and saying how many they hold, each with its
+   testers, their verdicts and its outcome. A template, or a run not yet
+   started, takes no verdicts.
+3. Each tester gives their verdict in place, beside the test case:
+   **Pass** at once, or **Fail** or **Skip** with a description of what
+   they saw, which a fail or a skip needs before it is saved. Choosing
+   again changes it, and **Clear** takes it back. The outcome of the test
+   case, its sections and the protocol follow.
+4. **Finish** it with a conclusion. While a test case is pending,
+   **Finish** is unavailable, and says why beside it.
+
+A tester finds their test cases under **My work** on Home, and those
+still pending on the test cases' list, with **Outcome** set to Pending.
+
+### A run, from the command line
+
+```sh
+kuria copy TP-001 --in RELEASE-2026-0001-RC-0002 --reason "Run for 4.2.0-rc.2"
+kuria copy TP-001 --only TP-001-C01 --only TP-001-C03   # only some test cases
+kuria do TP-002 start
+kuria verdict TP-002-C01 pass                         # my own verdict
+kuria verdict TP-002-C02 fail --description "The total is wrong"
+kuria verdict TP-002-C01 skip --description "Away" --for ben@shop.example
+kuria show TP-002                                     # sections and outcomes
+kuria ls test_protocol --in RELEASE-2026-0001-RC-0002 # the candidate's runs
+kuria ls test_case --in TP-002                        # with an Outcome column
+kuria ls test_case --where testers=@me --outcome pending  # what I have left
+kuria do TP-002 finish --set conclusion=@conclusion.md
+```
+
+`--only` names the test cases to keep; the sections holding them come
+along. In a file (`kuria cat`), the layout is a section of YAML, testers a
+list, and verdicts and the outcome are read-only:
+
+```markdown
+---
+number: TP-002
+type: test_protocol
+revision: 7
+state: running
+outcome: fail
+title: Checkout regression
+---
+
+<!-- field: layout -->
+- title: Signing in
+  items:
+  - TP-002-C01
+- title: Paying
+  text: Use the test card 4242 4242 4242 4242.
+  items:
+  - TP-002-C03
+```
+
+The same works in an akt directory, without a server (`--dir`).
 
 ## Trying it in a browser
 
@@ -90,7 +223,8 @@ walks this example in Kuria's app ([`e2e/`](../../../e2e/README.md)): a
 developer and a release manager sign in, plan a release, work two
 candidates and a hotfix, give the go for a contact, and draft the notes
 and the artifacts that ship; then releases go on until the first archives
-itself with its candidates.
+itself with its candidates. Another walk copies a test protocol from its
+template, runs it as two testers and finishes it.
 
 ## Defining it
 
@@ -107,9 +241,12 @@ mutation($document: JSON!) {
 
 [`bundle/`](bundle/) is an example bundle of these akt types with akter:
 two releases of a web shop: spring's, worked through a rejected and an
-accepted candidate with the pipeline's artifacts and an SBOM, approved
-notes, the go given for the head of product and a deployed hotfix, then
-closed; and summer's, being planned, with a wish-list epic under way. Devi
+accepted candidate with the pipeline's artifacts and an SBOM, each with
+its run of the acceptance test, copied from the template, one failed and
+one passed, with verdicts from two testers, approved notes, the go given
+for the head of product and a deployed hotfix, then closed; and summer's,
+being planned, with a wish-list epic under way and a test protocol in
+draft. Devi
 Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`) and Hedda
 Lund (`hedda@shop.example`) wrote them, the people the end-to-end seed
 signs in as. To start a server with it, set
@@ -152,6 +289,16 @@ Two roles cover the usual split:
   `kuria:akter:edit`, `kuria:akter:transition`, `kuria:akter:archive`, and
   `release:approve`; and the developer's at `backlog`, `epic` and
   `backlog_item`, to plan candidates from their backlogs.
+- **Test lead**, tenant-wide: `kuria:akter:read`; and at `test_protocol`
+  and `test_case`: `kuria:akter:create`, `kuria:akter:edit` and
+  `kuria:akter:transition`, to keep templates and run them; and
+  `kuria:akter:edit` at `release_candidate`, to put runs into candidates.
+  A release manager with the test lead's at `test_protocol` and
+  `test_case` needs nothing more.
+- **Tester**: `kuria:akter:read`, and `kuria:akter:edit` at `test_case`,
+  to give verdicts. A verdict is an edit of the test case: only its
+  testers give their own, and anyone who may edit it can give one for a
+  tester.
 
 And one for software:
 

@@ -75,10 +75,9 @@ test('a release from planning to closed', async ({ browser }) => {
 	}
 
 	// Planning.
-	const release = await create(rm, 'release', {
-		Title: 'Spring',
-		'Release manager': { choose: 'Me' }
-	});
+	// The release manager is its creator unless they say otherwise
+	// (akt.field.default).
+	const release = await create(rm, 'release', { Title: 'Spring' });
 	expect(release).toMatch(/^RELEASE-\d{4}-\d{4}$/);
 	const backlog = await create(dev, 'backlog', { Title: 'Spring backlog' });
 	await open(rm, backlog);
@@ -144,12 +143,41 @@ test('a release from planning to closed', async ({ browser }) => {
 	await addMembers(rm, epic, crash, typo, backendRc2, noSearch);
 	for (const done of [passkeys, reset, typo]) await finish(done);
 	await open(rm, rc2);
+	// r[verify app.header]: Accept waits for the candidate's test run to
+	// pass, saying so beside it.
+	const admin = await api(clients.admin);
+	const made = async (type: string, fields: Record<string, unknown>, inside: string) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($t: String!, $f: JSON, $in: [String!]!) { createAkt(input: { type: $t, fields: $f, in: $in }) { number } }',
+				{ t: type, f: fields, in: [inside] }
+			)
+		).createAkt.number;
+	const run = await made('test_protocol', { title: 'Acceptance' }, rc2);
+	const check = await made('test_case', { title: 'Checkout', testers: [people.releaseManager.subject] }, run);
+	const { akt } = await admin.graphql<{ akt: { revision: number } }>(
+		'query($n: String!) { akt(number: $n) { revision } }',
+		{ n: run }
+	);
+	await admin.graphql(
+		'mutation($n: String!, $r: Int!) { performTransition(input: { number: $n, revision: $r, transition: "start" }) { revision } }',
+		{ n: run, r: akt.revision }
+	);
+	await open(rm, rc2);
+	const accept = rm.getByRole('main').getByRole('button', { name: 'Accept', exact: true });
+	await expect(accept).toBeDisabled();
+	await expect(rm.getByText('Accept: needs the result to be passed; it is pending')).toBeVisible();
+	await open(rm, check);
+	const verdict = rm.getByRole('group', { name: `Your verdict on ${check}` });
+	await verdict.getByRole('button', { name: 'Pass', exact: true }).click();
+	await expect(verdict.getByRole('button', { name: 'Pass', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await open(rm, rc2);
+	await expect(rm.getByTestId('outcome')).toHaveText('Passed');
 	await transition(rm, 'Accept');
 	await expect(rm.getByRole('alert')).toContainText('requires');
 	await rm.getByRole('button', { name: 'Cancel' }).click();
 	await moved(rm, 'Accept', 'Accepted', {
-		Build: { url: 'https://ci.example/builds/812', label: 'Build 812' },
-		'Test record': { url: 'https://kuria.example/akt/TR-17' }
+		Build: { url: 'https://ci.example/builds/812', label: 'Build 812' }
 	});
 
 	// The go comes from the head of product, who isn't a user yet: the
@@ -245,5 +273,5 @@ test('a release from planning to closed', async ({ browser }) => {
 	await rm.goto(`/types/hotfix/new?in=${release}`);
 	await rm.getByLabel("Why it can't wait", { exact: true }).fill('Too late');
 	await rm.getByRole('button', { name: 'Create', exact: true }).click();
-	await expect(rm.getByRole('alert')).toContainText('final state');
+	await expect(rm.getByRole('alert')).toContainText('is finished, so what it holds can’t change');
 });

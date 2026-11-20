@@ -84,7 +84,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 		await dev.keyboard.press('End');
 		await dev.keyboard.type(' See ');
 		await dev.getByRole('toolbar', { name: 'Format Body' }).getByRole('button', { name: 'Reference' }).click();
-		await pick(dev, 'Akt', setup);
+		await pick(dev, 'Item', setup);
 		await dev.getByRole('dialog', { name: 'Reference' }).getByLabel('Heading').selectOption({ label: 'Install' });
 		await dev.getByRole('dialog', { name: 'Reference' }).getByRole('button', { name: 'Insert' }).click();
 		await dev.keyboard.type(' first.');
@@ -125,7 +125,7 @@ test('a document is written and released at its version', async ({ browser }) =>
 	const sidebar = dev.getByRole('navigation', { name: 'Kuria' });
 	await sidebar.getByRole('button', { name: /^Show more/ }).click();
 	await expect(
-		sidebar.getByRole('list', { name: 'More akt types' }).getByRole('link', { name: /^Image( \d+)?$/ })
+		sidebar.getByRole('list', { name: 'More work' }).getByRole('link', { name: /^Image( \d+)?$/ })
 	).toBeVisible();
 
 	// The release manager may release documents; a broken link is refused.

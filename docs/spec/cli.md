@@ -145,8 +145,9 @@ r[cli.file.kinds]
 In an akt file, a `multiple` `user` field MUST be a list of users and
 contacts; a `sections` field MUST be a section of its own whose body is
 the field's value as YAML, akter by number; and a `verdict` field MUST be
-a front-matter mapping of each assignee to their verdict, read-only, given
-with `verdict`. An akt that has outcomes MUST have a read-only `outcome`
+a front-matter mapping of each assignee to their verdict, or to their
+`verdict` and its `description` when it has one, read-only, given with
+`verdict`. An akt that has outcomes MUST have a read-only `outcome`
 key after `state`. A `markdown` field MUST be a section of its own whose
 body is its value. `links` MUST leave out the links references keep
 (`link.referenced`), to or from the akt: the text says them, and they
@@ -205,8 +206,9 @@ The client MUST offer:
 - `link <source> <kind> <target> [--pin]` and `unlink <source> <kind>
   <target>`;
 - `draft <number> <field>`;
-- `verdict <number> pass|fail|skip|clear [--for <user>]`: one's own
-  verdict, or one for another assignee (`akt.field.verdict`);
+- `verdict <number> pass|fail|skip|clear [--description <text>] [--for <user>]`:
+  one's own verdict, or one for another assignee, with its description
+  (`akt.field.verdict`, `akt.field.verdict.description`);
 - `copy <number> [--only <number>…] [--in <container>…]`, answering the
   copy's number and the numbers of the copies of its members (`akt.copy`);
 - `release <number> [--label <label>] [--description <text>] [--file <pdf>]`: its current

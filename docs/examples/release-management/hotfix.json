@@ -17,5 +17,6 @@
   ],
   "contains": [{ "type": "backlog_item" }, { "type": "artifact" }],
   "archive": { "rules": [{ "with_container": "release" }] },
-  "presentation": { "icon": "wrench", "colour": "red", "card": ["build"], "list": ["build"], "tones": { "open": "warning", "deployed": "success" } }
+  "presentation": {
+    "group": "Releasing", "icon": "wrench", "colour": "red", "card": ["build"], "list": ["build"], "tones": { "open": "warning", "deployed": "success" } }
 }

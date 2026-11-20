@@ -71,8 +71,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   `Sections`, members in a `sections` field's nested sections, a
   collapsible one closed until opened and kept open while the akt
   reloads, each with its outcome worked out from its members'
-  (`sections.ts`, `outcomes.ts`); `VerdictButtons`, a member's assignees
-  and their verdicts, and an assignee's own given, changed or taken back
+  (`sections.ts`, `outcomes.ts`); `VerdictButtons`, a member's assignees,
+  their verdicts and descriptions, and an assignee's own reported, edited
+  or deleted in `VerdictDialog`, a fail or a skip saying why
   (`verdicts.ts`), in its section, in a list and on its own page;
   `CopyDialog`, copying an akt with the sections and members chosen;
   `SectionsEditor`, sections edited as an outline, placing members not in

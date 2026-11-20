@@ -167,7 +167,7 @@ impl World {
         for test in tests {
             for verdict in [
                 json!("pass"),
-                json!({ "verdict": "skip", "for": { "contact": self.other } }),
+                json!({ "verdict": "skip", "description": "Away", "for": { "contact": self.other } }),
             ] {
                 let given = self.edit(test, json!({ "verdict": verdict })).await;
                 assert!(given.get("errors").is_none(), "{given}");
@@ -299,7 +299,7 @@ async fn verdicts_make_outcomes_up_to_the_protocol() {
         let theirs = world
             .edit(
                 test,
-                json!({ "verdict": { "verdict": verdict, "for": { "contact": world.other } } }),
+                json!({ "verdict": { "verdict": verdict, "description": "As they said", "for": { "contact": world.other } } }),
             )
             .await;
         assert!(theirs.get("errors").is_none(), "{theirs}");
@@ -309,8 +309,21 @@ async fn verdicts_make_outcomes_up_to_the_protocol() {
     let sections = &field(&protocol, "sections").unwrap()["items"];
     assert_eq!(sections[0]["section"]["outcome"], "PASS");
 
-    // One failure fails its test, its sections and the protocol.
-    world.edit(&tests[3], json!({ "verdict": "fail" })).await;
+    // One failure fails its test, its sections and the protocol; it says
+    // why (`akt.field.verdict.description`).
+    let bare = world.edit(&tests[3], json!({ "verdict": "fail" })).await;
+    assert!(
+        bare["errors"][0]["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("description")),
+        "{bare}"
+    );
+    world
+        .edit(
+            &tests[3],
+            json!({ "verdict": { "verdict": "fail", "description": "It broke" } }),
+        )
+        .await;
     let protocol = world.akt(&tp).await;
     assert_eq!(protocol["outcome"], "FAIL");
     let sections = &field(&protocol, "sections").unwrap()["items"];
@@ -326,7 +339,7 @@ async fn verdicts_make_outcomes_up_to_the_protocol() {
     let stranger = world
         .edit(
             &tests[0],
-            json!({ "verdict": { "verdict": "fail", "for": SUPPORT_STRANGER } }),
+            json!({ "verdict": { "verdict": "fail", "description": "It broke", "for": SUPPORT_STRANGER } }),
         )
         .await;
     assert_eq!(code(&stranger), "REFUSED", "{stranger}");
@@ -456,7 +469,12 @@ async fn tests_and_protocols_filter_by_outcome_a_page_at_a_time() {
             .await;
     }
     world.pass_all(&tests).await;
-    world.edit(&tests[1], json!({ "verdict": "fail" })).await;
+    world
+        .edit(
+            &tests[1],
+            json!({ "verdict": { "verdict": "fail", "description": "It broke" } }),
+        )
+        .await;
     world.pass_all(&other_tests[..2]).await;
 
     // Tests, by their own verdicts, tenant-wide and as a protocol's members.

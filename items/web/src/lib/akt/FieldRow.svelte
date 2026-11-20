@@ -8,8 +8,7 @@
 	import type { Person } from './people';
 	import type { Draft, FieldDef, Value } from './values';
 	import VerdictButtons from './VerdictButtons.svelte';
-	import type { Judged } from './verdicts';
-	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
+	import type { Judged, Report } from './verdicts';
 	import type { LiveDraft } from './live.svelte';
 
 	interface Props {
@@ -32,10 +31,12 @@
 		onDraft: () => void;
 		/** The akt's members, which a sections field places. */
 		members?: readonly { number: string; title?: string | null }[];
-		/** For a verdict field: the akt's number, its verdicts, and giving one. */
+		/** For a verdict field: whether verdicts may be given now
+		 * (`app.verdicts`), the akt's number, its verdicts, and giving one. */
+		judging?: boolean;
 		number?: string;
 		judged?: Judged | null;
-		onVerdict?: (verdict: Verdict | null) => void;
+		onVerdict?: (verdict: Report | null) => void;
 		/** Whether the akt has a live draft: an edit changes it, without a
 		 * reason (`app.live`). */
 		liveDraft?: boolean;
@@ -63,6 +64,7 @@
 		number = '',
 		judged = null,
 		onVerdict = () => {},
+		judging = true,
 		liveDraft = false,
 		live = null
 	}: Props = $props();
@@ -111,7 +113,13 @@
 		<dd data-field={field.key}>
 			<div class="value">
 				{#if field.kind === 'VERDICT' && judged}
-					<VerdictButtons {number} {judged} busy={busy || !editable} onGive={onVerdict} />
+					<VerdictButtons
+						{number}
+						{judged}
+						busy={busy || !editable}
+						open={judging}
+						onGive={onVerdict}
+					/>
 				{:else if value}
 					<FieldShown {value} multiline={field.multiline} />
 				{:else}

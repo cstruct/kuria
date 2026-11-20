@@ -315,13 +315,14 @@ pub fn perform(
     ))
 }
 
-/// `kuria verdict <number> pass|fail|skip|clear [--for <user>]` in local
-/// mode: as `@me`, by the engine's rules (`akt.field.verdict`).
+/// `kuria verdict <number> pass|fail|skip|clear [--description <text>]
+/// [--for <user>]` in local mode: as `@me`, by the engine's rules (`akt.field.verdict`).
 // r[impl cli.local.rules]
 pub fn verdict(
     w: &mut Writer,
     number: &str,
     given: &str,
+    description: Option<&str>,
     for_whom: Option<&str>,
     reason: Option<&str>,
 ) -> Result<Answer, CliError> {
@@ -335,7 +336,10 @@ pub fn verdict(
         None => None,
     };
     let mut fields = Map::new();
-    fields.insert(field, crate::writes::edit::verdict_input(given, who)?);
+    fields.insert(
+        field,
+        crate::writes::edit::verdict_input(given, description, who)?,
+    );
     let current = w.current(number)?;
     let t = w.dir.types[&key].clone();
     let change = w.change();

@@ -6,11 +6,13 @@ describe('accessible names', () => {
 	it('names field groups and a board’s buttons by what they act on', () => {
 		expect(legendOf({ name: 'Title', required: true })).toBe('Title (required)');
 		expect(legendOf({ name: 'Kind', required: false })).toBe('Kind');
-		expect(boardLabels('ITEM-0003')).toEqual({
-			menu: 'Actions for ITEM-0003',
-			up: 'Move ITEM-0003 up',
-			down: 'Move ITEM-0003 down',
-			remove: 'Remove ITEM-0003'
-		});
+		const labels = boardLabels('ITEM-0003');
+		expect(labels.menu).toBe('Actions for ITEM-0003');
+		expect([labels.up, labels.down, labels.remove]).toEqual([
+			'Move up',
+			'Move down',
+			'Remove from here'
+		]);
+		expect(labels.into('In progress')).toBe('Move to In progress');
 	});
 });

@@ -6,7 +6,9 @@ in, and shows them wherever a `user` field or a revision names a subject.
 r[person.from-sign-in]
 A browser sign-in MUST ask Konklav for the `profile` and `email` scopes, and
 MUST record the subject's name and email from the claims it receives, or
-update them if they changed.
+update them if they changed. A claim it doesn't receive, such as the name
+Konklav keeps none of, MUST leave what was recorded, such as the name a
+bundle's people gave (`bundle.import`).
 
 r[person.tenant]
 A browser sign-in MUST record that the subject signed in to the tenant, so

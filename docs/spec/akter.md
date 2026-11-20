@@ -79,6 +79,9 @@ An akt type MAY say how its akter are shown, in `presentation`:
 | `colour` | The colour the type is shown in: `neutral`, `blue`, `green`, `amber`, `red`, `purple`, `teal` or `pink`. |
 | `navigation` | Where the app's sidebar lists the type: `main`, the default, or `more`, under "Show more" (`app.navigation`). |
 | `image` | The key of an `attachment` field whose `media_types` are all images: an akt of the type is an image, and that field's value is its picture (`akt.field.markdown.images`). |
+| `group` | The heading the app's sidebar lists the type under, with the other types naming the same (`app.navigation`). One line, not empty. |
+| `plural` | The type's name in the plural, as the app counts its akter ("6 test cases"); its `name` and an `s` if not given. One line, not empty. |
+| `primary` | Per state key, the action an akt's page offers first in that state (`app.header`): the key of a transition from that state, or `copy`, to make a copy (`akt.copy`). |
 | `numbered_references` | `true` to show each reference to its akter with the akt's number first, as `DOCS-1-D04 Installing` for `[Installing](kuria:DOCS-1-D04)`, unless its text already starts with it (`app.references`, `pdf.render`); `false`, the default, to show the text alone. |
 
 Every key MUST name a field or state the type defines, each at most once
@@ -88,9 +91,10 @@ value of the type's first required single-line `text` field, if it has
 one. A state without a tone MUST be shown as `neutral`. An icon or colour
 not in its list MUST be refused; without one, a type MUST be shown without
 an icon, in `neutral`. A `navigation` other than `main` or `more` MUST be
-refused, and an `image` naming a field that isn't an `attachment` field,
-or one that doesn't list media types, or lists one that isn't `image/png`,
-`image/jpeg`, `image/svg+xml` or `image/webp`.
+refused, as MUST a `primary` naming a state the type lacks or a transition
+that doesn't leave that state, and an `image` naming a field that isn't an
+`attachment` field, or one that doesn't list media types, or lists one that
+isn't `image/png`, `image/jpeg`, `image/svg+xml` or `image/webp`.
 
 ## Fields
 
@@ -111,7 +115,7 @@ fits the field's kind:
 | `docker` | A container image: its repository, such as `registry.example/team/backend`, its digest (`sha256:` and 64 lowercase hexadecimal digits), and optionally a tag. |
 | `attachment` | A file uploaded to Kuria, by its identifier; see `akt.field.attachment`. |
 | `sections` | The akt's members laid out in nested sections; see `akt.field.sections`. |
-| `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`; see `akt.field.verdict`. |
+| `verdict` | Each assignee's verdict, `pass`, `fail` or `skip`, with a description; see `akt.field.verdict`. |
 | `markdown` | Markdown whose headings keep ids and whose links may name akter; see `akt.field.markdown`. |
 
 r[akt.field.checkbox]
@@ -138,6 +142,22 @@ r[akt.field.multiple]
 A `user` field that says `multiple` MUST hold a list of distinct users and
 contacts, in the order given, and is without a value when the list is
 empty. `multiple` MUST be refused on any other kind of field.
+
+r[akt.field.default]
+A single `user` field MAY say `"default": "creator"`: the one creating an
+akt is offered as its value, to keep or change (`app.create`). A `default`
+of anything else, or on a field of another kind or one that is `multiple`,
+MUST be refused.
+
+r[akt.field.states]
+A field MAY name, in `states`, the states in which it is given: it MUST
+then be refused when an akt is created, unless the initial state is one
+of them, and when it is edited in any other state. A transition MAY give
+it if it requires it, or if it leads to one of those states or leaves
+one. The app MUST ask for such a field only in those states, or by the
+transitions that give it, and MUST show it outside them only once it holds
+a value (`app.create`, `app.fields`). Every state it names MUST be one the
+type defines; otherwise the document MUST be refused.
 
 r[akt.field.sections]
 A `sections` field MUST hold a list of items, in order, each either an akt
@@ -214,14 +234,22 @@ r[akt.field.verdict]
 A `verdict` field MUST name, as `assignees`, a `multiple` `user` field of
 its type, and MUST hold at most one verdict, `pass`, `fail` or `skip`, per
 assignee. Giving one MUST take the verdict, or `{"verdict": <verdict>,
-"for": <user>}` to give it for another assignee, `<user>` being a value a
-`user` field takes, and `{"clear": true}` or `{"clear": true, "for":
-<user>}` to take one back. It MUST record who gave it and when, taken from
-the change, never from the input, and for whom when that is someone else.
+"description": <text>, "for": <user>}` to give it with a description, or
+for another assignee, `<user>` being a value a `user` field takes, and
+`{"clear": true}` or `{"clear": true, "for": <user>}` to take one back. It
+MUST record who gave it and when, taken from the change, never from the
+input, and for whom when that is someone else.
 A verdict MUST be refused unless it is for an assignee: one's own only if
 one is an assignee, and anyone's, with `for`, only for an assignee. An
 assignee removed from the `user` field MUST lose their verdict in the same
 change. An akt type MUST have at most one `verdict` field.
+
+r[akt.field.verdict.description]
+A verdict MAY have a description, text saying what the assignee saw.
+Giving `fail` or `skip` MUST be refused without one that isn't blank.
+Giving a verdict replaces the assignee's, description and all: one given
+without a description has none. Giving the same verdict with the same
+description again MUST change nothing.
 
 r[akt.field.required]
 A field marked `required` MUST hold a value from the moment the akt is

@@ -7,13 +7,16 @@
 		/** Shows the type's name beside its mark. */
 		named?: boolean;
 		size?: 'sm' | 'md';
+		/** Whether a long name wraps onto a second line, rather than being
+		 * cut short. */
+		wrap?: boolean;
 	}
 
-	let { type, named = false, size = 'sm' }: Props = $props();
+	let { type, named = false, size = 'sm', wrap = false }: Props = $props();
 	const mark = $derived(markOf(type));
 </script>
 
-<span class="type-mark {size}">
+<span class="type-mark {size}" class:wrap>
 	<!-- A class per colour, not an inline style, which the CSP forbids. -->
 	<span class="square {mark.colour}" aria-hidden="true">
 		{#if mark.icon}<mark.icon size={size === 'sm' ? 12 : 16} aria-hidden={true} />{:else}<span
@@ -103,5 +106,10 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.wrap .name {
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 </style>

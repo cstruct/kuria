@@ -110,7 +110,8 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   the field's recipe, as an ordinary edit.
 - Sections, verdicts and outcomes: a `sections` field lays out an akt's
   members, checked against them on every write and losing one that leaves
-  in the same revision; a `verdict` field takes each assignee's verdict;
+  in the same revision; a `verdict` field takes each assignee's verdict, with a
+  description that a fail or a skip must have;
   `Akt.outcome` and each `Section.outcome` are derived on read from
   verdicts and members ([`src/akter/outcomes.rs`](src/akter/outcomes.rs)),
   never stored. `SectionsValue.value` gives the value as `editAkt` takes

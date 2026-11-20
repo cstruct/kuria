@@ -30,6 +30,9 @@ export interface Seeded {
 	/** A service principal's secret key, `<key id>.<secret>`, allowed
 	 * everything: for checking what a start loaded. */
 	admin: { key: string };
+	/** seed.ts's `FINGERPRINT` when it seeded; absent from older
+	 * seedings. */
+	fingerprint?: string;
 }
 
 export function seeded(): Seeded | null {

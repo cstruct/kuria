@@ -157,7 +157,6 @@
 			{#snippet children({ id })}<input {id} />{/snippet}
 		</Field>
 		{#snippet footer()}
-			<Button variant="ghost" onclick={() => (dialog = false)}>Cancel</Button>
 			<Button variant="primary" onclick={() => (dialog = false)}>Release</Button>
 		{/snippet}
 	</Dialog>

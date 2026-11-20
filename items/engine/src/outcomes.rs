@@ -142,6 +142,7 @@ mod tests {
         Given {
             assignee: person(n),
             verdict,
+            description: None,
             by: Uuid::from_u128(n),
             at: DateTime::<Utc>::UNIX_EPOCH,
         }

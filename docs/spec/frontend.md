@@ -43,12 +43,23 @@ way to create one.
 
 r[app.header]
 An akt's page MUST show first its akt type, number, title and state, the
-state in its tone (`akt.type.presentation`), and the transitions its state
-allows as actions there.
+state in its tone (`akt.type.presentation`) and labelled as its status, its
+outcome, if it has one, labelled as its result, with how many of its
+members with outcomes passed, of how many, and the transitions its state
+allows as actions there, each one its outcome doesn't allow saying why
+beside it. It MUST offer one action as the primary one: the
+one its type's presentation names for its state (`primary`), else, on a
+container the viewer may add to, creating an akt of the first akt type its
+board's first column offers (`app.board-create`), else none. No other
+transition MUST be shown as primary. A transition to a final state MUST be
+confirmed, saying the state it leads to.
 
 r[app.trail]
-The top bar MUST show where the page is as a trail: on an akt's page, its
-akt type, then its number with its title under it in smaller text.
+The top bar MUST show where the page is as a trail: on an akt's page, the
+container it is in and that container's own, outermost first, each a link,
+else its akt type; then the akt. Each akt on the trail MUST be named by its
+title with its number under it in smaller text, or by its number if it has
+no title.
 Following a reference in a shown `markdown` field MUST add the akt it
 goes to after the trail it was followed from, each earlier akt a link back
 to it, at the version it was read at, with the trail it had; reaching an
@@ -64,9 +75,37 @@ repository with a digest and tag, an attachment uploaded or downloaded,
 several users or contacts for a `multiple` field, each assignee's
 verdict, and a `markdown` field in a rich-text editor (`app.editor`).
 
+r[app.create]
+The page creating an akt MUST ask for the fields its type is created
+with, each labelled once, above its control, with its description as a
+hint below it, and the required ones marked. It MUST refuse to send while
+a required field is empty, saying so on that field, and MUST offer to
+cancel, going back to the container it was opened from, if any, else to
+its akt type. A note for the history MAY be given, under a disclosure
+closed until opened. A refusal MUST be shown as an alert, naming its field
+(`app.errors`). Opened from a container's page, it MUST go back there once
+the akt is made, saying it was added; otherwise it MUST show the akt made.
+
+r[app.permitted]
+The app MUST NOT offer an action the viewer's akt type permissions
+(`authz.viewer`) don't allow: creating an akt of a type they may not
+create, in a container they may not edit, editing or adding to an akt
+they may not edit, performing a transition of a type whose transitions
+they may not perform, or archiving one they may not archive. A refusal
+the server answers all the same MUST still be shown (`app.errors`).
+
+r[app.words]
+The app's text MUST name things in the tenant's words: an akt type's name
+and plural (`akt.type.presentation`), and its states', transitions' and
+fields' names. Where it must name them generically, it MUST use the
+everyday words docs/nomenclature.md gives the app, never "akt", "akter",
+"member", "container" or "transition".
+
 r[app.inline-edit]
 The app MUST let a person edit one field of an akt at a time, in place,
-saving only that field.
+saving only that field. When its details would show nothing but its
+title, they MUST NOT be shown, and the title MUST be edited in its
+heading.
 
 r[app.markdown]
 The app MUST render multiline text as Markdown, as sanitized HTML: no
@@ -163,32 +202,69 @@ r[app.members]
 A container's page MUST show its members of the akt types its board names
 on the board, and its members of every other akt type as a list per akt
 type, not as one unmapped column. Cards and lists MUST show each member's
-number, title, state and the fields its type's presentation names for
-them.
+number, title and the fields its type's presentation names for them, a
+user by name with their initials and a choice as a chip. They MUST show
+its state too, except on a card in a column that holds that one state of
+its type, and for a member whose outcome its verdicts give
+(`akt.field.verdict`), whose state says nothing its outcome doesn't.
 
 r[app.sections]
 An akt with a `sections` field MUST show its members in those sections,
 nested as the field nests them: each section with its title, if any, its
 text as Markdown, and its outcome, and one that is `collapsible` closed
-until opened. Members no section names MUST follow, as `app.members`
+until opened, saying how many members it holds. Members no section names MUST follow, as `app.members`
 shows them.
 
 r[app.verdicts]
 Each member with a `verdict` field MUST show, where its sections or its
-container list it, its assignees, each one's verdict, and its outcome, and
-MUST let an assignee give, change or take back their own verdict there.
+container list it, its assignees, each one by name with their verdict and
+its description, and its outcome, and MUST let an assignee give their own
+verdict there, in place: `pass` at once, `fail` or `skip` with a
+description, which it MUST require before saving
+(`akt.field.verdict.description`). Once given, it MUST let them change it,
+or clear it. Verdicts MUST be offered only while the container is in a
+state that a transition naming the outcomes it allows
+(`akt.transition.outcomes`) leaves, if its type has such a transition, so
+that none is given on a template or a run not yet started.
 An akt's page MUST show its outcome, if it has outcomes (`akt.outcome`).
 
 r[app.copy]
 The app MUST let a person copy an akt (`akt.copy`), choosing the sections
-and members to keep, all of them at first, and showing the copy once it is
-made.
+and members to keep, all of them at first, and where it goes: into an open
+akt of a type that holds its type, the most recently changed first chosen,
+or where it is. A copy made into one MUST be titled after it, as "Shop
+acceptance test: 4.2.0-rc.1". The app MUST show the copy once it is made.
+
+r[app.quick-add]
+Each column of a board that offers creating an akt type
+(`app.board-create`) whose akter need nothing but their title MUST offer
+adding one by typing its title: Enter MUST create it, in the column and
+its parent boards as `app.board-create` does, without leaving the board,
+and keep the input ready for the next. Asking for more, by Shift+Enter,
+MUST open the page creating it with the title typed. A column offering
+several such types MUST let the person choose which.
+
+r[app.pull]
+A container that links to a parent board (`board.parent`) MUST offer, to
+one who may edit it, adding several of that board's members at once:
+the members of the akt types it holds, by the parent's columns, those
+already in it shown and not offered again, and those in another container
+of its type marked as such; the ones chosen added together, all or none.
+The page creating an akt of such a type in a container MUST ask for its
+parent board, offering what that container holds that the link may lead
+to, the first of them chosen.
 
 r[app.board-drop]
-Dropping a card on another column of a board MUST offer the transitions
-from the member's state to a state that column names for its akt type,
-and perform the one chosen as `app.transitions` does, asking for the fields
-it requires. A column no such transition leads to MUST refuse the drop.
+Dropping a card on another column of a board MUST, when one transition
+from the member's state leads to a state that column names for its akt
+type and it requires no fields, perform it at once, saying so as
+`app.toasts` does, with an offer to undo it when a transition from the new
+state back to the former one requires no fields either. Otherwise it MUST
+offer the transitions that lead there, and perform the one chosen as
+`app.transitions` does, asking for the fields it requires. A column no
+such transition leads to MUST refuse the drop, saying why while the card
+is over it. A card's menu MUST offer the same moves, each by the column it
+goes to, so that a card can be moved without a pointer.
 
 r[app.board-create]
 Each column of a container's board MUST offer, to one who may edit the
@@ -199,10 +275,11 @@ create it in each of the container's parent boards (`board.parent`) whose
 akt type contains the akt's type, the container first.
 
 r[app.navigation]
-The sidebar MUST list the akt types whose `navigation` is `more`
-(`akt.type.presentation`) after the others, under a "Show more"
-disclosure saying how many there are, closed until opened, remembering in
-the browser whether it was. Every other place that lists akt types MUST
+The sidebar MUST list the akt types under the headings their presentations
+name as their `group`, those naming none first, under none, and those
+whose `navigation` is `more` (`akt.type.presentation`) after the others,
+under a "Show more" disclosure saying how many there are, closed until
+opened, remembering in the browser whether it was. Every other place that lists akt types MUST
 list them as before.
 
 r[app.images]
@@ -228,7 +305,16 @@ r[app.links]
 An akt's page MUST show its links (`link.read`), from it by kind and to it
 by inverse name, each with the other akt's number, title and state, and
 let a person add a link of a kind its type declares, to an akt found by
-number or title (`app.pickers`), and remove one.
+number or title (`app.pickers`), and remove one. An akt with no links
+MUST show none, only, to one who may add one, a way to.
+
+r[app.side]
+An akt's page MUST show its links, versions and history beside its fields,
+and, on a container whose board shows its members, under the board, so
+that the board has the page's width. It MUST show the containers it is in
+there, except when it is in one only and the trail names it
+(`app.trail`); moving it to another container, and removing it from one,
+MUST be offered among its actions either way.
 
 r[app.filters]
 A type's list MUST let a person filter it by the values of its filterable
@@ -244,7 +330,9 @@ such fields.
 r[app.pickers]
 Wherever the app asks for an akt, such as a container to add an akt to, or
 a member to add, it MUST let the person find it by number or title
-(`akt.search`), rather than only type its number.
+(`akt.search`), rather than only type its number. In a dialog, what it
+finds MUST show inside the dialog. Once one is picked, its search MUST be
+emptied.
 
 r[app.search]
 The app MUST offer search (`akt.search`) on every page, from the keyboard
@@ -262,8 +350,13 @@ The sidebar's counts MUST count live akter.
 r[app.history]
 An akt's history MUST say, for each revision, who made it and when, its
 transition, the fields it changed with their new values, the users and
-contacts those values name by their names (`contact.show`), and the
-containers or members it added or removed, by number.
+contacts those values name by their names (`contact.show`), a choice by
+its option's name, the fields in the order the page shows them, and the
+containers or members it added or removed, by number. Consecutive
+revisions of one person only adding members, within a minute, MUST be
+said once, by how many were added. The latest five MUST be shown, and the
+others when asked for. Until a person opens it, an akt's page MUST show
+its history only as who changed it last and when.
 
 r[app.stale]
 When an edit, transition or draft is refused as `STALE`, the app MUST show
@@ -284,7 +377,16 @@ Every control MUST have an accessible role and name.
 r[app.dialog-focus]
 A dialog that asks for something, such as a container to attach an akt to,
 MUST put focus in its first field when it opens, so the person can type at
-once. One with no field MUST put focus inside it.
+once. One with no field MUST put focus inside it. Every dialog MUST end
+alike: Cancel, or Close where there is nothing to do, then its action, on
+the right, with an action that deletes apart at the start. Opening one
+MUST NOT shift the page behind it.
+
+r[app.toasts]
+What a change did MUST be said the same way wherever it is made, by what
+was changed and where it went: "Gift cards at checkout moved to In
+progress", "Copied to Shop acceptance test", never by its number and a
+transition's name alone.
 
 r[app.themes]
 The app MUST follow the system's light or dark appearance, with text and
@@ -292,4 +394,6 @@ controls contrasting with their background as WCAG 2.2 level AA requires.
 
 r[app.narrow]
 Every page MUST be usable at 390 pixels wide, without scrolling sideways
-except inside boards and tables.
+except inside tables. There, a board's columns MUST be shown one under
+another, each with its name and count, and a container's page MUST show
+what it holds before its details.

@@ -2003,7 +2003,7 @@ fn a_protocol_finishes_only_with_an_outcome_it_allows() {
         "`finish` requires the outcome to be pass, fail or skip, and it is pending"
     );
     for test in ["PROT-001-T2", "PROT-001-T3"] {
-        dir.ok(&["verdict", test, "fail"]);
+        dir.ok(&["verdict", test, "fail", "--description", "It broke"]);
     }
     // Bo hasn't answered T1, but a failure is an outcome.
     let done = dir.ok(&["do", "PROT-001", "finish"]);
@@ -2035,7 +2035,13 @@ fn tests_and_protocols_filter_by_outcome() {
     dir.ok(&["new", "suite", "--set", "title=Nightly"]);
     dir.ok(&["new", "protocol", "--in", "S-1", "--set", "title=Smoke"]);
     dir.ok(&["members", "add", "S-1", "PROT-001"]);
-    dir.ok(&["verdict", "PROT-001-T2", "fail"]);
+    dir.ok(&[
+        "verdict",
+        "PROT-001-T2",
+        "fail",
+        "--description",
+        "It broke",
+    ]);
     let ls = |args: &[&str]| {
         let mut all = vec!["ls"];
         all.extend_from_slice(args);
@@ -2118,6 +2124,7 @@ fn released(dir: &Dir) {
 // r[verify akt.field.sections]
 // r[verify akt.field.verdict]
 #[test]
+#[expect(clippy::too_many_lines, reason = "one test taking verdicts in turn")]
 fn tests_in_sections_take_verdicts_and_add_up() {
     let dir = Dir::new();
     released(&dir);
@@ -2171,6 +2178,8 @@ fn tests_in_sections_take_verdicts_and_add_up() {
         "verdict",
         "PROT-001-T1",
         "skip",
+        "--description",
+        "Bo is away",
         "--for",
         "bo@kuria.example",
     ]);
@@ -2187,6 +2196,11 @@ fn tests_in_sections_take_verdicts_and_add_up() {
         "REFUSED",
         "not an assignee"
     );
+    // A fail or a skip says why (`akt.field.verdict.description`).
+    assert_eq!(
+        dir.refused(&["verdict", "PROT-001-T1", "fail"]).code,
+        "REFUSED"
+    );
     assert_eq!(
         dir.refused(&["verdict", "PROT-001-T1", "maybe"]).code,
         "BAD_REQUEST"
@@ -2199,10 +2213,22 @@ fn tests_in_sections_take_verdicts_and_add_up() {
         dir.refused(&["set", "PROT-001-T1", "verdict=pass"]).code,
         "READ_ONLY"
     );
-    dir.ok(&["verdict", "PROT-001-T2", "fail"]);
+    dir.ok(&[
+        "verdict",
+        "PROT-001-T2",
+        "fail",
+        "--description",
+        "It broke",
+    ]);
     assert_eq!(outcome(&dir, "PROT-001"), json!("fail"));
     dir.ok(&["verdict", "PROT-001-T2", "clear"]);
-    dir.ok(&["verdict", "PROT-001-T2", "skip"]);
+    dir.ok(&[
+        "verdict",
+        "PROT-001-T2",
+        "skip",
+        "--description",
+        "No device",
+    ]);
     assert_eq!(outcome(&dir, "PROT-001"), json!("pending"), "T3 is open");
     dir.ok(&["verdict", "PROT-001-T3", "pass"]);
     assert_eq!(outcome(&dir, "PROT-001"), json!("pass"));
@@ -2239,6 +2265,8 @@ fn protocol_files_apply_and_a_test_leaves_its_section() {
         "verdict",
         "PROT-001-T1",
         "skip",
+        "--description",
+        "Bo is away",
         "--for",
         "bo@kuria.example",
     ]);

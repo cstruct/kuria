@@ -4,8 +4,9 @@
   "number": "{parent}-RC-{seq:4}",
   "created_in": ["release"],
   "fields": [
-    { "key": "build", "name": "Build", "kind": "reference" },
-    { "key": "test_record", "name": "Test record", "kind": "reference" }
+    { "key": "label", "name": "Label", "kind": "text",
+      "description": "What people call it, such as 4.2.0-rc.1." },
+    { "key": "build", "name": "Build", "kind": "reference" }
   ],
   "states": [
     { "key": "testing", "name": "Testing", "initial": true },
@@ -14,24 +15,27 @@
   ],
   "transitions": [
     { "key": "accept", "name": "Accept", "from": ["testing"], "to": "accepted",
-      "requires": ["build", "test_record"] },
+      "requires": ["build"], "outcomes": ["pass"] },
     { "key": "reject", "name": "Reject", "from": ["testing"], "to": "rejected" }
   ],
-  "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" }],
-  "links": [{ "key": "parent_board", "name": "Parent board", "inverse": "Parent board of",
+  "contains": [{ "type": "epic" }, { "type": "backlog_item" }, { "type": "artifact" },
+               { "type": "test_protocol" }],
+  "links": [{ "key": "parent_board", "name": "Ships from", "inverse": "Shipped in",
               "to": ["backlog"] }],
   "board": { "parent": "parent_board", "columns": [
     { "key": "todo", "name": "To do",
-      "states": { "backlog_item": ["open"], "epic": ["open"] } },
+      "states": { "backlog_item": ["open"], "epic": ["open"], "test_protocol": ["draft"] } },
     { "key": "doing", "name": "In progress",
-      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"] } },
+      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"],
+                  "test_protocol": ["running"] } },
     { "key": "done", "name": "Done",
-      "states": { "backlog_item": ["done"], "epic": ["done"] } }
+      "states": { "backlog_item": ["done"], "epic": ["done"], "test_protocol": ["done"] } }
   ] },
   "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {
+    "group": "Releasing",
     "icon": "flask-conical", "colour": "teal", "navigation": "more",
-    "card": ["build"], "list": ["build", "test_record"],
+    "title": "label", "card": ["build"], "list": ["build"],
     "tones": { "testing": "active", "accepted": "success", "rejected": "danger" }
   }
 }

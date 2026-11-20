@@ -304,10 +304,21 @@ async fn record_person(
         return;
     }
     let email = info.email.filter(|e| !e.trim().is_empty());
+    // A claim Konklav doesn't give, such as a name, which it keeps none
+    // of, leaves what was recorded, such as a bundle's (`bundle.import`).
+    let recorded = kuria_store::people::find(conn, &[signed_in.subject])
+        .await
+        .ok()
+        .and_then(|people| people.into_iter().next());
     let person = kuria_store::people::Person {
         subject_id: signed_in.subject,
-        name: info.name.filter(|n| !n.trim().is_empty()),
-        email: email.clone(),
+        name: info
+            .name
+            .filter(|n| !n.trim().is_empty())
+            .or_else(|| recorded.as_ref().and_then(|p| p.name.clone())),
+        email: email
+            .clone()
+            .or_else(|| recorded.as_ref().and_then(|p| p.email.clone())),
         updated_at: Utc::now(),
     };
     if let Err(e) = kuria_store::people::record(conn, &person).await {

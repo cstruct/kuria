@@ -33,3 +33,14 @@ export function shownOutcome(outcome: Outcome): {
 			return { tone: 'NEUTRAL', text: 'Pending' };
 	}
 }
+
+/** How many of a container's members with outcomes have passed, of how
+ * many: what it is ready for (`app.header`). None if it holds none. */
+// r[impl app.header]
+export function readiness(
+	members: readonly { outcome?: Outcome | null }[]
+): { passed: number; of: number } | null {
+	const judged = members.filter((m) => m.outcome);
+	if (judged.length === 0) return null;
+	return { passed: judged.filter((m) => m.outcome === 'PASS').length, of: judged.length };
+}

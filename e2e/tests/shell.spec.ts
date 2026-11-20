@@ -72,7 +72,7 @@ test('akt types that say so are listed under Show more, which stays as left', as
 	await expect(sidebar.getByRole('link', { name: /^Image( \d+)?$/ })).toBeHidden();
 	await more.click();
 	await expect(more).toHaveAttribute('aria-expanded', 'true');
-	const image = sidebar.getByRole('list', { name: 'More akt types' }).getByRole('link', { name: /^Image( \d+)?$/ });
+	const image = sidebar.getByRole('list', { name: 'More work' }).getByRole('link', { name: /^Image( \d+)?$/ });
 	await expect(image).toBeVisible();
 	expect(
 		(await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations,

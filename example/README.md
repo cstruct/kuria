@@ -11,7 +11,7 @@ don't clash with the end-to-end stack's (`e2e/`) or the dogfooding stack's
 ## Running it
 
 ```sh
-mise run example planning     # or release-management, documents, test-protocols
+mise run example planning     # or release-management, documents
 mise run example:down         # stops Konklav, keeping it
 mise run example:reset        # forgets it all
 ```
@@ -30,7 +30,9 @@ Every checkout and worktree shares Konklav's compose project, ports and
 data, but keeps its own `.state/`. A start that finds a Konklav not seeded
 by this checkout (another checkout's, or one this checkout's `.state/`
 doesn't name) throws its data away and seeds it again, which takes about
-ten seconds.
+ten seconds. So does a start after the roles, grants or people in
+[`scripts/seed.ts`](scripts/seed.ts) change: `.state/seeded.json` records
+their fingerprint.
 
 | What | Where |
 |---|---|
@@ -63,7 +65,10 @@ ten seconds.
   secrets, made once into `.state/` (never committed).
 - [`scripts/up.ts`](scripts/up.ts): starts Konklav's containers unless
   this checkout's Konklav already answers, and starts it afresh if the one
-  found holds another checkout's data.
+  found holds another checkout's data or an older seeding.
+- [`scripts/seed.ts`](scripts/seed.ts): what setup seeds Konklav with
+  (actions, roles, who holds them, the examples' people) and its
+  fingerprint.
 - [`scripts/setup.ts`](scripts/setup.ts): seeds Konklav once and writes
   `.state/kuria.env` (Kuria's configuration) and `.state/seeded.json` (who
   can sign in, and an admin's secret key for the check).

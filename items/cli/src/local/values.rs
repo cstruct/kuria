@@ -211,10 +211,19 @@ pub fn current(
                 let mut verdicts = Vec::new();
                 for (who, verdict) in given {
                     let id = ids.id(who);
+                    // `pass`, or `{verdict, description}`.
+                    let (verdict, description) = match verdict {
+                        Json::Object(o) => (
+                            o.get("verdict").unwrap_or(&Json::Null),
+                            o.get("description").and_then(Json::as_str),
+                        ),
+                        other => (other, None),
+                    };
                     verdicts.push(Given {
                         assignee: Someone::User(id),
                         verdict: Verdict::read(verdict.as_str().unwrap_or_default())
                             .map_err(|e| bad(key, e))?,
+                        description: description.map(str::to_owned),
                         by: id,
                         at: DateTime::<Utc>::UNIX_EPOCH,
                     });
@@ -271,7 +280,15 @@ pub fn file_form(value: &Value, ids: &Ids) -> Json {
         Value::Users(people) => people.iter().map(|s| Json::from(someone(s))).collect(),
         Value::Verdicts(given) => given
             .iter()
-            .map(|g| (someone(&g.assignee), Json::from(g.verdict.as_str())))
+            .map(|g| {
+                let verdict = match &g.description {
+                    Some(why) => {
+                        serde_json::json!({ "verdict": g.verdict.as_str(), "description": why })
+                    }
+                    None => Json::from(g.verdict.as_str()),
+                };
+                (someone(&g.assignee), verdict)
+            })
             .collect::<Map<_, _>>()
             .into(),
         other => other.to_json(),

@@ -157,7 +157,7 @@
 	</div>
 	{#if unplaced.length > 0}
 		<div class="unplaced">
-			<p>Members not in the sections</p>
+			<p>Not in a section</p>
 			<ul>
 				{#each unplaced as member (member.number)}
 					<li>

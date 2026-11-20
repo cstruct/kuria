@@ -344,6 +344,22 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
     if field.multiple && field.kind != FieldKind::User {
         problems.add(&format!("{path}.multiple"), "only user fields are multiple");
     }
+    // r[impl akt.field.states]
+    for (j, state) in field.states.iter().enumerate() {
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(
+                &format!("{path}.states[{j}]"),
+                format!("no state `{state}`"),
+            );
+        }
+    }
+    // r[impl akt.field.default]
+    if field.default.is_some() && (field.kind != FieldKind::User || field.multiple) {
+        problems.add(
+            &format!("{path}.default"),
+            "only a single user field defaults to its creator",
+        );
+    }
     if field.kind == FieldKind::Sections {
         for (j, key) in field.of.iter().enumerate() {
             if !document.contains.iter().any(|c| &c.akt_type == key) {
@@ -604,6 +620,36 @@ fn presentation(problems: &mut Problems, document: &AktTypeDocument) {
             problems.add(
                 &format!("presentation.tones.{state}"),
                 format!("no state `{state}`"),
+            );
+        }
+    }
+    for (key, text) in [
+        ("plural", &presentation.plural),
+        ("group", &presentation.group),
+    ] {
+        if text
+            .as_ref()
+            .is_some_and(|p| p.trim().is_empty() || p.contains('\n'))
+        {
+            problems.add(
+                &format!("presentation.{key}"),
+                format!("the {key} is one line, not empty"),
+            );
+        }
+    }
+    for (state, action) in &presentation.primary {
+        let path = format!("presentation.primary.{state}");
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(&path, format!("no state `{state}`"));
+        } else if action != crate::PRIMARY_COPY
+            && !document
+                .transitions
+                .iter()
+                .any(|t| &t.key == action && t.from.contains(state))
+        {
+            problems.add(
+                &path,
+                format!("no transition `{action}` from `{state}`, nor `copy`"),
             );
         }
     }
@@ -913,6 +959,20 @@ mod tests {
         assert_eq!(
             with("/fields/0/multiple", json!(true)),
             ["fields[0].multiple: only user fields are multiple"]
+        );
+        // r[verify akt.field.states]
+        assert_eq!(
+            with("/fields/0/states", json!(["gone"])),
+            ["fields[0].states[0]: no state `gone`"]
+        );
+        // r[verify akt.field.default]
+        assert_eq!(
+            with("/fields/0/default", json!("creator")),
+            ["fields[0].default: only a single user field defaults to its creator"]
+        );
+        assert_eq!(
+            with("/fields/1/default", json!("creator")),
+            ["fields[1].default: only a single user field defaults to its creator"]
         );
         assert_eq!(
             with("/fields/1/multiple", json!(false)),
@@ -1421,6 +1481,25 @@ mod tests {
             "presentation.card: a card shows at most 4 fields",
             "presentation.list[0]: no field `nope`",
             "presentation.tones.gone: no state `gone`",
+        ] {
+            assert!(
+                found.iter().any(|p| p == expected),
+                "{expected} not in {found:?}"
+            );
+        }
+        document["presentation"] = json!({ "plural": " " });
+        assert_eq!(
+            problems(document.clone()),
+            ["presentation.plural: the plural is one line, not empty"]
+        );
+        // The primary action: a transition leaving the state, or a copy.
+        document["presentation"] = json!({ "primary": { "open": "close", "closed": "copy" } });
+        validate(serde_json::from_value(document.clone()).unwrap()).unwrap();
+        document["presentation"] = json!({ "primary": { "gone": "close", "closed": "close" } });
+        let found = problems(document.clone());
+        for expected in [
+            "presentation.primary.gone: no state `gone`",
+            "presentation.primary.closed: no transition `close` from `closed`, nor `copy`",
         ] {
             assert!(
                 found.iter().any(|p| p == expected),

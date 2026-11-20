@@ -43,7 +43,7 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	// The release's board maps candidates and hotfixes; its backlog is
 	// listed by type, not in an "Unmapped" column.
 	await open(page, release);
-	const members = page.getByRole('region', { name: 'Members', exact: true });
+	const members = page.getByRole('region', { name: 'Contents', exact: true });
 	await expect(members.getByRole('region', { name: 'Testing', exact: true })).toBeVisible();
 	await expect(members.getByRole('region', { name: 'Unmapped' })).toHaveCount(0);
 	expect(await column(page, 'Backlog')).toEqual([backlog]);
@@ -66,19 +66,26 @@ test('members are on the board or listed by type, and reorder', async ({ browser
 	// The menu does the same from the keyboard.
 	await page.getByRole('button', { name: `Actions for ${third}` }).focus();
 	await page.keyboard.press('Enter');
-	await page.getByRole('menuitem', { name: `Move ${third} down` }).press('Enter');
+	await page.getByRole('menuitem', { name: 'Move down' }).press('Enter');
 	await expect.poll(() => column(page, 'To do')).toEqual([first, third]);
 	// Dropped on a column no transition leads to, it stays where it is.
 	await drag(page, first, done);
 	await page.waitForTimeout(300);
 	expect(await column(page, 'To do')).toEqual([first, third]);
 	await expect(page.getByRole('dialog')).toHaveCount(0);
-	// Dropped on one a transition leads to, it asks, and moves.
+	// Dropped on one a transition needing nothing leads to, it moves at
+	// once, with a way back.
 	await drag(page, first, second);
-	const move = page.getByRole('dialog', { name: 'Move First to In progress' });
-	await move.getByRole('button', { name: 'Start' }).click();
-	await expect(move).toBeHidden();
 	await expect.poll(() => column(page, 'In progress')).toEqual([first, second]);
+	expect(await column(page, 'To do')).toEqual([third]);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	const moved = page.getByRole('status').filter({ hasText: 'First moved to In progress' });
+	await moved.getByRole('button', { name: 'Undo' }).click();
+	await expect.poll(() => column(page, 'To do')).toEqual(expect.arrayContaining([first, third]));
+	// The card's menu makes the same move, by the column it goes to.
+	await page.getByRole('button', { name: `Actions for ${first}` }).click();
+	await page.getByRole('menuitem', { name: 'Move to In progress' }).click();
+	await expect.poll(() => column(page, 'In progress')).toEqual(expect.arrayContaining([first, second]));
 	expect(await column(page, 'To do')).toEqual([third]);
 	await memberAction(page, third, 'remove');
 	await expect.poll(() => column(page, 'To do')).toEqual([]);
@@ -178,7 +185,7 @@ test('a column creates its types, in the board and its parent boards', async ({ 
 
 	const page = await signIn(browser, seeded().people.releaseManager);
 	await open(page, candidate);
-	const members = page.getByRole('region', { name: 'Members', exact: true });
+	const members = page.getByRole('region', { name: 'Contents', exact: true });
 	// Only the column holding the initial states offers to create.
 	await expect(members.getByRole('button', { name: 'New in In progress' })).toHaveCount(0);
 	await members.getByRole('button', { name: 'New in To do' }).click();
@@ -187,12 +194,91 @@ test('a column creates its types, in the board and its parent boards', async ({ 
 	await expect(page.getByText(`In ${candidate}, ${backlog}`)).toBeVisible();
 	await page.getByRole('group', { name: /^Title/ }).getByLabel('Title', { exact: true }).fill('Winter tyres');
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
-	await expect(page).toHaveURL(/\/akt\//);
-	const task = (await page.getByTestId('number').textContent())!.trim();
+	// r[verify app.create]: back on the board it was made from.
+	await expect(page.getByTestId('number')).toHaveText(candidate);
+	await expect(page.getByText('Added Winter tyres').first()).toBeVisible();
+	const tyres = page.getByRole('region', { name: 'To do', exact: true }).locator('[data-number]').filter({ hasText: 'Winter tyres' });
+	const task = (await tyres.getAttribute('data-number'))!;
 	expect(task).toMatch(/^TASK-\d{4}$/);
 
-	await open(page, candidate);
 	expect(await column(page, 'To do')).toEqual([task]);
 	await open(page, backlog);
 	expect(await column(page, 'To do')).toEqual([task]);
+});
+
+// r[verify app.quick-add]
+test('a column adds tasks by their titles, staying on the board', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	const { createAkt } = await admin.graphql<{ createAkt: { number: string } }>(
+		'mutation { createAkt(input: { type: "backlog", fields: { title: "Quick backlog" } }) { number } }'
+	);
+	const page = await signIn(browser, seeded().people.developer);
+	await open(page, createAkt.number);
+	const input = page.getByRole('textbox', { name: 'Add a task to To do' });
+	const titles = ['One', 'Two', 'Three', 'Four', 'Five'];
+	for (const title of titles) {
+		await input.fill(title);
+		await input.press('Enter');
+		await expect(input).toHaveValue('');
+		await expect(input).toBeFocused();
+	}
+	await expect(page).toHaveURL(new RegExp(`/akt/${createAkt.number}$`));
+	const todo = page.getByRole('region', { name: 'To do', exact: true });
+	await expect(todo.locator('[data-number]')).toHaveText(titles.map((t) => new RegExp(t)));
+
+	// Shift+Enter opens the whole form, with the title typed.
+	await input.fill('Six, with more');
+	await input.press('Shift+Enter');
+	await expect(page.getByRole('heading', { name: 'New Task' })).toBeVisible();
+	await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Six, with more');
+});
+
+// r[verify app.pull]
+test('a candidate takes several tasks from its backlog at once', async ({ browser }) => {
+	await defineExample();
+	const admin = await api(seeded().clients.admin);
+	const create = async (type: string, fields: Record<string, unknown>, inside: string[] = []) =>
+		(
+			await admin.graphql<{ createAkt: { number: string } }>(
+				'mutation($t: String!, $f: JSON, $in: [String!]!) { createAkt(input: { type: $t, fields: $f, in: $in }) { number } }',
+				{ t: type, f: fields, in: inside }
+			)
+		).createAkt.number;
+	const release = await create('release', { title: 'Pulling' });
+	const backlog = await create('backlog', { title: 'Pulling backlog' }, [release]);
+	const tasks = [];
+	for (const title of ['Pull one', 'Pull two', 'Pull three', 'Pull four']) {
+		tasks.push(await create('backlog_item', { title }, [backlog]));
+	}
+	const other = await create('release_candidate', {}, [release]);
+	await admin.graphql('mutation($i: MembershipInput!) { addToContainer(input: $i) { number } }', {
+		i: { container: other, member: tasks[3] }
+	});
+
+	// A candidate made in the release asks what it ships from, offering the
+	// release's backlog.
+	const rm = await signIn(browser, seeded().people.releaseManager);
+	await rm.goto(`/types/release_candidate/new?in=${release}`);
+	await expect(rm.getByLabel('Ships from')).toHaveValue(backlog);
+	await rm.getByRole('button', { name: 'Create', exact: true }).click();
+	await expect(rm).toHaveURL(/\/akt\//);
+	const candidate = (await rm.getByTestId('number').textContent())!.trim();
+
+	await rm.getByRole('button', { name: 'Add from Pulling backlog' }).click();
+	const dialog = rm.getByRole('dialog', { name: 'Add from Pulling backlog' });
+	await expect(dialog.getByRole('checkbox', { name: /Pull four/ })).toBeVisible();
+	await expect(dialog.getByText(`In ${other}`)).toBeVisible();
+	for (const title of ['Pull one', 'Pull two', 'Pull three']) {
+		await dialog.getByRole('checkbox', { name: new RegExp(title) }).check();
+	}
+	await dialog.getByRole('button', { name: 'Add 3' }).click();
+	await expect(dialog).toBeHidden();
+	await expect(rm.getByText('Added 3 from Pulling backlog').first()).toBeVisible();
+	await expect.poll(() => column(rm, 'To do')).toEqual(tasks.slice(0, 3));
+
+	// Those now here are shown, and not offered again.
+	await rm.getByRole('button', { name: 'Add from Pulling backlog' }).click();
+	await expect(dialog.getByRole('checkbox', { name: /Pull one/ })).toBeDisabled();
+	expect(candidate).toMatch(/-RC-\d{4}$/);
 });

@@ -67,15 +67,17 @@ export async function moved(page: Page, name: string, to: string, fields: Record
 	// The change feed may show the state before the dialog has its answer.
 	await expect(page.getByRole('dialog', { name })).toBeHidden();
 	await expect(page.getByTestId('state')).toHaveText(to);
+	// r[verify app.toasts]: said by what moved and where to.
+	await expect(page.getByText(new RegExp(` moved to ${escape(to)}$`)).first()).toBeVisible();
 }
 
 /** Adds `members` to the open container. */
 export async function addMembers(page: Page, ...members: string[]) {
 	for (const member of members) {
-		await page.getByRole('button', { name: 'Add a member' }).click();
-		await page.getByRole('menuitem', { name: 'An existing akt…' }).click();
-		await pick(page, 'Member to add', member);
-		await expect(page.getByRole('dialog', { name: 'Add a member' })).toBeHidden();
+		await page.getByRole('button', { name: 'Add items' }).click();
+		await page.getByRole('menuitem', { name: /^Existing .+…$/ }).click();
+		await pick(page, 'Item to add', member);
+		await expect(page.getByRole('dialog', { name: /^Add existing / })).toBeHidden();
 		await expect(membersOf(page).locator(`[data-number="${member}"]`)).toBeVisible();
 	}
 }
@@ -84,22 +86,42 @@ export async function addMembers(page: Page, ...members: string[]) {
 export async function addTo(page: Page, container: string) {
 	// The akt's own menu, in its header, before any member's.
 	await page.getByRole('button', { name: /^More actions for / }).first().click();
-	await page.getByRole('menuitem', { name: 'Attach to…' }).click();
+	await page.getByRole('menuitem', { name: 'Add to…' }).click();
 	// r[verify app.dialog-focus]: its search takes what is typed at once.
-	await expect(page.getByRole('combobox', { name: 'Container', exact: true })).toBeFocused();
-	await pick(page, 'Container', container);
-	await expect(page.getByRole('dialog', { name: 'Attach to a container' })).toBeHidden();
-	await expect(page.getByRole('list', { name: 'Containers' }).getByRole('link', { name: container })).toBeVisible();
+	await expect(page.getByRole('combobox', { name: 'Add to', exact: true })).toBeFocused();
+	await pick(page, 'Add to', container);
+	await expect(page.getByRole('dialog', { name: 'Add to…' })).toBeHidden();
+	await placedIn(page, container);
+}
+
+/** Expects the open akt in `container`: named by the trail, or, when the
+ * trail doesn't, under Part of (`app.side`). */
+export async function placedIn(page: Page, container: string) {
+	await expect(
+		page
+			.locator('nav[aria-label="You are here"], ul[aria-label="Part of"]')
+			.filter({ hasText: container })
+			.first()
+	).toBeVisible();
+}
+
+/** The open akt's history, opened (`app.history`). */
+export async function history(page: Page) {
+	const show = page.getByRole('button', { name: 'Show history' });
+	if (await show.isVisible()) await show.click();
+	return page.getByRole('list', { name: 'Revisions' });
 }
 
 /** Moves the open akt from `from` to `to`. */
 export async function transfer(page: Page, from: string, to: string) {
-	await page.getByRole('button', { name: 'Move to another container' }).click();
-	const dialog = page.getByRole('dialog', { name: 'Move to another container' });
+	// r[verify app.side]: moving it is among its actions.
+	await page.getByRole('button', { name: /^More actions for / }).first().click();
+	await page.getByRole('menuitem', { name: /^Move to another / }).click();
+	const dialog = page.getByRole('dialog', { name: /^Move to another / });
 	await dialog.getByLabel('From').selectOption(from);
 	await pick(page, 'To', to);
 	await expect(dialog).toBeHidden();
-	await expect(page.getByRole('list', { name: 'Containers' }).getByRole('link', { name: to })).toBeVisible();
+	await placedIn(page, to);
 }
 
 /** The text of the headings and list items a field's Markdown renders to. */
@@ -110,7 +132,7 @@ export async function rendered(page: Page, key: string): Promise<string[]> {
 
 /** The open container's members: its board and its lists by akt type. */
 function membersOf(page: Page) {
-	return page.getByRole('region', { name: 'Members', exact: true });
+	return page.getByRole('region', { name: 'Contents', exact: true });
 }
 
 /** The numbers in a column of the open container's board, or in its list
@@ -122,7 +144,7 @@ export async function column(page: Page, name: string): Promise<string[]> {
 
 /** Does `action` (`up`, `down` or `remove`) from a member's menu. */
 export async function memberAction(page: Page, number: string, action: 'up' | 'down' | 'remove') {
-	const name = { up: `Move ${number} up`, down: `Move ${number} down`, remove: `Remove ${number}` }[action];
+	const name = { up: 'Move up', down: 'Move down', remove: 'Remove from here' }[action];
 	await page.getByRole('button', { name: `Actions for ${number}` }).click();
 	await page.getByRole('menuitem', { name }).click();
 }

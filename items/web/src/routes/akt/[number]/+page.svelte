@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import { orList } from '#lib/ui/text.ts';
 	import TypeMark from '#lib/akt/TypeMark.svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
@@ -22,7 +24,7 @@
 	import OutcomeBadge from '#lib/akt/OutcomeBadge.svelte';
 	import Sections from '#lib/akt/Sections.svelte';
 	import { numbersIn, readSections } from '#lib/akt/sections.ts';
-	import { judgedOf, verdictInput } from '#lib/akt/verdicts.ts';
+	import { judgedOf, judgingOpen, verdictInput, type Report } from '#lib/akt/verdicts.ts';
 	import LinksCard, { type ShownLink } from '#lib/akt/LinksCard.svelte';
 	import TransitionDialog from '#lib/akt/TransitionDialog.svelte';
 	import {
@@ -32,7 +34,8 @@
 		linkKinds,
 		draftedFields,
 		releasedFile,
-		requiredFields
+		requiredFields,
+		givenIn
 	} from '#lib/akt/document.ts';
 	import ReleasedPdf from '#lib/akt/ReleasedPdf.svelte';
 	import { upload } from '#lib/akt/upload.ts';
@@ -45,15 +48,25 @@
 		showsArchived,
 		withArchived
 	} from '#lib/akt/archive.ts';
-	import { actionsOf, headingOf } from '#lib/akt/header.ts';
+	import { actionsOf, confirmationOf, headingOf } from '#lib/akt/header.ts';
 	import { peopleOf, type Person } from '#lib/akt/people.ts';
 	import { pickable } from '#lib/akt/pickers.ts';
-	import { creatableIn, insideQuery, parentBoards } from '#lib/akt/creating.ts';
+	import { undoOf } from '#lib/akt/members.ts';
+	import { readiness } from '#lib/akt/outcomes.ts';
+	import { parentOf } from '#lib/akt/pulling.ts';
+	import PullDialog from '#lib/akt/PullDialog.svelte';
+	import {
+		creatableIn,
+		insideQuery,
+		parentBoards,
+		quickAddable,
+		titleFieldOf
+	} from '#lib/akt/creating.ts';
 	import { changes, draftOf, inputOf, type Draft, type FieldDef } from '#lib/akt/values.ts';
 	import { LiveDraft } from '#lib/akt/live.svelte.ts';
 	import LivePresence from '#lib/akt/LivePresence.svelte';
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
-	import type { AktPageQuery, Verdict } from '#lib/graphql/generated/graphql.ts';
+	import type { AktPageQuery } from '#lib/graphql/generated/graphql.ts';
 	import {
 		AddLink,
 		AddToContainer,
@@ -61,8 +74,11 @@
 		UnarchiveAkt,
 		RemoveLink,
 		AktPage,
+		Batch,
 		Contacts,
+		CopyPlaces,
 		CopyAkt,
+		CreateAkt,
 		Users,
 		DraftField,
 		EditAkt,
@@ -118,6 +134,16 @@
 	// r[impl app.trail]: the type, then the akter followed here, and this
 	// one, each with its title.
 	const trail = $derived(page.state.trail ?? []);
+	// r[impl app.trail]: where it is, its first container's own first.
+	const places = $derived(
+		akt?.containers[0]
+			? [...akt.containers[0].containers.slice(0, 1), akt.containers[0]].map((c) => ({
+					number: c.number,
+					title: c.title ?? null,
+					href: resolve('/akt/[number]', { number: c.number })
+				}))
+			: []
+	);
 	setCrumbs(() =>
 		akt
 			? crumbsOf(
@@ -127,7 +153,8 @@
 						title: akt.title ?? null,
 						type: { key: akt.type.key, name: akt.type.name }
 					},
-					(key) => resolve('/types/[key]', { key })
+					(key) => resolve('/types/[key]', { key }),
+					places
 				)
 			: [{ label: number }]
 	);
@@ -140,7 +167,9 @@
 						number: akt.number,
 						title: akt.title ?? null,
 						type: { key: akt.type.key, name: akt.type.name },
-						href: `${page.url.pathname}${page.url.search}`
+						href: `${page.url.pathname}${page.url.search}`,
+						// The trail's start, carried on from its first page.
+						...(before(trail, akt.number).length === 0 ? { places } : {})
 					}
 				]
 			: null
@@ -152,37 +181,140 @@
 		Object.fromEntries((akt?.type.transitions ?? []).map((t) => [t.key, t.name]))
 	);
 	const people = $derived<Person[]>(
-		peopleOf(view.data?.viewer.subject, users.data?.users, contacts.data?.contacts)
+		peopleOf(
+			view.data?.viewer.subject,
+			users.data?.users,
+			contacts.data?.contacts,
+			view.data?.viewer.user
+		)
 	);
 	const typeNames = $derived(
 		Object.fromEntries((view.data?.aktTypes ?? []).map((t) => [t.key, t.name]))
 	);
 	const contained = $derived(akt ? containedTypes(akt.type.document) : []);
+	/** The parent board it pulls members from, if it links to one. */
+	const parent = $derived(akt ? parentOf(akt.type.document, akt.links) : null);
+	let pullOpen = $state(false);
+	/** The types the viewer may create, by key. */
+	const creatableKeys = $derived(
+		new Set((view.data?.aktTypes ?? []).filter((t) => t.viewerMay.create).map((t) => t.key))
+	);
+	/** The contained types, as people name them: "task or epic". */
+	const containedWords = $derived(
+		orList(contained.map((key) => (typeNames[key] ?? key).toLowerCase()))
+	);
+	// r[impl app.side]: the containers it is in, unless the trail names its
+	// only one.
+	const showsPlaces = $derived.by(() => {
+		if (!akt || akt.containers.length === 0) return false;
+		if (akt.containers.length > 1) return true;
+		const earlier = before(trail, akt.number);
+		const only = akt.containers[0].number;
+		return !(earlier.length === 0 || earlier.some((s) => s.number === only));
+	});
+	/** The containers it may be moved from or removed from. */
+	const leavable = $derived(
+		akt && !akt.archived ? akt.containers.filter((c) => c.type.viewerMay.edit) : []
+	);
+	/** What moving it elsewhere is called: "Move to another release". */
+	const moveWords = $derived(
+		`Move to another ${akt?.containers[0]?.type.name.toLowerCase() ?? 'place'}`
+	);
 	/** The new-akt page that creates an akt of the type `key` in this
 	 * container and in its parent boards that take it (`app.board-create`). */
 	// r[impl app.board-create]
+	const parentsFor = (key: string) =>
+		akt ? parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? []) : [];
+	// r[impl app.create]: made from here, it comes back here.
 	const newMemberHref = (key: string) =>
 		akt
-			? `${resolve('/types/[key]/new', { key })}?${insideQuery(
-					akt.number,
-					parentBoards(akt.type.document, akt.links, key, view.data?.aktTypes ?? [])
-				)}`
+			? `${resolve('/types/[key]/new', { key })}?${insideQuery(akt.number, parentsFor(key))}&return=1`
 			: resolve('/types/[key]/new', { key });
+
+	/** Creates an akt of the type `key` titled `title` in this container
+	 * and its parent boards that take it, staying on the board
+	 * (`app.quick-add`). */
+	// r[impl app.quick-add]
+	async function quickAdd(key: string, title: string): Promise<boolean> {
+		const type = view.data?.aktTypes.find((t) => t.key === key);
+		const field = type ? titleFieldOf(type.document) : null;
+		if (!akt || !field) return false;
+		const into = [akt.number, ...parentsFor(key).filter((p) => p !== akt.number)];
+		const created = await run(() =>
+			mutate(client, CreateAkt, {
+				input: { type: key, fields: { [field]: title }, in: into, reason: null }
+			})
+		);
+		if (created) toast(`Added ${title}`, 'success');
+		return created;
+	}
+	// r[impl app.permitted]: only the types the viewer may create.
 	const creatable = (column: string) =>
 		akt && editable
-			? creatableIn(akt.type.document, column, view.data?.aktTypes ?? []).map((t) => ({
+			? creatableIn(
+					akt.type.document,
+					column,
+					(view.data?.aktTypes ?? []).filter((t) => t.viewerMay.create)
+				).map((t) => ({
+					key: t.key,
 					name: t.name,
-					href: newMemberHref(t.key)
+					href: newMemberHref(t.key),
+					quick: quickAddable(t.document)
 				}))
 			: [];
 	const drafted = $derived(akt ? draftedFields(akt.type.document) : []);
 	// A version never changes: read at one, nothing is offered to change.
+	/** The key of the first column of the akt's board, if it has one. */
+	const firstColumn = $derived(
+		(akt?.type.document as { board?: { columns?: { key?: string }[] } } | null)?.board?.columns?.[0]
+			?.key
+	);
+	// r[impl app.header]: the action offered first, by the presentation,
+	// else creating a member; never a transition by default.
 	const actions = $derived(
 		actionsOf(
-			akt && !atVersion && !akt.archived
+			// r[impl app.permitted]: transitions only to one who may perform them.
+			akt && !atVersion && !akt.archived && akt.type.viewerMay.transition
 				? availableTransitions(akt.type.transitions, akt.state)
-				: []
+				: [],
+			{
+				document: akt?.type.document,
+				state: akt?.state.key,
+				copyable: Boolean(akt?.type.viewerMay.create && !atVersion),
+				creatable: firstColumn ? creatable(firstColumn) : []
+			}
 		)
+	);
+	// r[impl app.verdicts]: verdicts only while their run takes them: its
+	// members' while it is in such a state, its own while its container is.
+	const judgingHere = $derived(akt ? judgingOpen(akt.type, akt.state.key) : true);
+	const judgingOwn = $derived.by(() => {
+		const container = akt?.containers[0];
+		if (!container) return true;
+		const document = view.data?.aktTypes.find((t) => t.key === container.type.key)?.document as {
+			transitions?: { from: string[]; outcomes?: string[] }[];
+		} | null;
+		return judgingOpen({ transitions: document?.transitions ?? [] }, container.state.key);
+	});
+	/** The field its title is, and whether its details would show nothing
+	 * else: then the heading is edited, and the details aren't shown. */
+	const titleKey = $derived(akt ? titleFieldOf(akt.type.document) : null);
+	const titleOnly = $derived(
+		Boolean(
+			akt &&
+			titleKey &&
+			akt.type.fields.every(
+				(f) =>
+					f.key === titleKey ||
+					(!givenIn(akt.type.document, f.key, akt.state.key) &&
+						!akt.fields.some((v) => 'field' in v && v.field === f.key))
+			)
+		)
+	);
+	/** Of its members with outcomes, how many passed (`app.header`). */
+	const ready = $derived(akt ? readiness(akt.board.columns.flatMap((c) => c.akter)) : null);
+	const primaryTransition = $derived(
+		actions.primary?.kind === 'transition' ? actions.primary.transition : undefined
 	);
 	// r[impl app.live]: an akt with a live draft is its live draft, edited
 	// together with everyone else who has it open.
@@ -209,6 +341,8 @@
 		// A live draft is edited once it is in hand, by those who may.
 		Boolean(
 			akt &&
+			// r[impl app.permitted]: edits only to one who may make them.
+			akt.type.viewerMay.edit &&
 			!akt.state.final &&
 			!atVersion &&
 			// r[impl app.archive]: an archived akt offers no edit.
@@ -289,7 +423,7 @@
 		};
 		if (together.length === 0) {
 			const released = await run(() => mutate(client, ReleaseVersion, { input }));
-			if (released) toast(`${akt.number}: released`, 'success');
+			if (released) toast(`${headingOf(akt)} released`, 'success');
 			return released;
 		}
 		// r[impl app.versions]: released together, each at the revision read now.
@@ -313,7 +447,7 @@
 		const released = await run(() =>
 			mutate(client, ReleaseVersions, { input: { akter: [input, ...others] } })
 		);
-		if (released) toast(`${[akt.number, ...together].join(', ')}: released together`, 'success');
+		if (released) toast(`${headingOf(akt)} released, with ${together.length} more`, 'success');
 		return released;
 	}
 	const me = $derived(view.data?.viewer.subject);
@@ -336,6 +470,26 @@
 	);
 	const ownVerdicts = $derived(akt ? judgedOf(akt, me) : null);
 	let copyOpen = $state(false);
+	/** Where a copy may go: the open akter of the types that hold this
+	 * one's, the most recently changed first (`app.copy`). */
+	let copyPlaces = $state<{ number: string; title: string }[]>([]);
+	$effect(() => {
+		if (!copyOpen || !akt) return;
+		const key = akt.type.key;
+		// r[impl app.permitted]: only into what the viewer may add to.
+		const holders = (view.data?.aktTypes ?? []).filter(
+			(t) => t.viewerMay.edit && containedTypes(t.document).includes(key)
+		);
+		void Promise.all(
+			holders.map((t) => client.query(CopyPlaces, { type: t.key }).toPromise())
+		).then((answers) => {
+			copyPlaces = answers
+				.flatMap((a) => a.data?.akter.nodes ?? [])
+				.filter((n) => !n.state.final)
+				.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+				.map((n) => ({ number: n.number, title: n.title ?? n.number }));
+		});
+	});
 	// The collapsible sections opened, kept while the akt reloads.
 	const opened = new SvelteSet<string>();
 
@@ -492,13 +646,33 @@
 			transitionOpen = false;
 			pending = null;
 			reason = '';
-			toast(`${transition.name}: done`, 'success');
+			// r[impl app.toasts]: what changed, and where it went.
+			const to = akt.type.states.find((s) => s.key === transition.to);
+			toast(`${headingOf(akt)} moved to ${to?.name ?? transition.name}`, 'success');
 		}
 	}
 
+	// r[impl app.board-drop]: one move that needs nothing is made at once;
+	// otherwise the choice of transitions, or their fields, is asked for.
 	function into(member: Member, transitions: MemberTransition[], column: string) {
 		moving = { member, transitions, column };
+		const only = transitions.length === 1 ? transitions[0] : null;
+		if (only && only.requires.length === 0) {
+			void moveInto(only);
+			return;
+		}
 		movingOpen = true;
+	}
+
+	/** Moves a member back the way it came (`app.board-drop`). */
+	async function undoMove(number: string, title: string, transition: MemberTransition) {
+		const fresh = await refetch();
+		const member = fresh?.board.columns.flatMap((c) => c.akter).find((m) => m.number === number);
+		if (!member) return;
+		const input = { number, revision: member.revision, transition: transition.key };
+		if (await run(() => mutate(client, PerformTransition, { input }))) {
+			toast(`${title} moved back`, 'success');
+		}
 	}
 
 	/** Performs a transition on the member being moved, or, when it needs
@@ -515,12 +689,19 @@
 		const input = { number: member.number, revision: member.revision, transition: transition.key };
 		if (await run(() => mutate(client, PerformTransition, { input }))) {
 			movingOpen = false;
-			toast(`${member.number}: ${transition.name}`, 'success');
+			const title = member.title ?? member.number;
+			const back = undoOf(member.type.transitions, member.state.key, transition.to);
+			toast(
+				`${title} moved to ${moving.column}`,
+				'success',
+				5000,
+				back ? { label: 'Undo', run: () => void undoMove(member.number, title, back) } : undefined
+			);
 		}
 	}
 
-	/** Gives the viewer's verdict on `of`, this akt or a member, or takes
-	 * it back. */
+	/** Reports the viewer's verdict on `of`, this akt or a member, or
+	 * deletes it. */
 	// r[impl app.verdicts]
 	async function giveVerdict(
 		of: {
@@ -529,7 +710,7 @@
 			fields: Akt['fields'];
 			type: Akt['type'] | Member['type'];
 		},
-		verdict: Verdict | null
+		verdict: Report | null
 	) {
 		const judged = judgedOf(of, me);
 		if (!judged) return;
@@ -543,17 +724,33 @@
 
 	/** Copies the akt, keeping `only` of its members, and opens the copy. */
 	// r[impl app.copy]
-	async function copy(only: string[] | null) {
+	async function copy(only: string[] | null, into: string | null) {
 		busy = true;
 		refusal = null;
-		const { data, error } = await mutate(client, CopyAkt, { input: { number, only } });
-		busy = false;
+		const { data, error } = await mutate(client, CopyAkt, {
+			input: { number, only, ...(into ? { in: [into] } : {}) }
+		});
 		if (error || !data) {
+			busy = false;
 			refusal = refusalOf(error!, fieldNames);
 			return;
 		}
+		// r[impl app.copy]: a copy made for a container is named after it.
+		const place = copyPlaces.find((p) => p.number === into);
+		const titled = akt ? titleFieldOf(akt.type.document) : null;
+		if (place && titled && akt?.title) {
+			await mutate(client, EditAkt, {
+				input: {
+					number: data.copyAkt.number,
+					revision: data.copyAkt.revision,
+					fields: { [titled]: `${akt.title}: ${place.title}` },
+					reason: `Run for ${place.title}`
+				}
+			});
+		}
+		busy = false;
 		copyOpen = false;
-		toast(`Copied to ${data.copyAkt.number}`, 'success');
+		toast(`Copied to ${data.copyAkt.title ?? data.copyAkt.number}`, 'success');
 		await goto(resolve('/akt/[number]', { number: data.copyAkt.number }));
 	}
 
@@ -593,6 +790,20 @@
 		}
 	}
 
+	/** Adds members of the parent board here, all or none (`app.pull`). */
+	// r[impl app.pull]
+	async function pull(numbers: string[]) {
+		if (!parent || numbers.length === 0) return;
+		const from = parent.title;
+		const operations = numbers.map((member) => ({
+			addToContainer: { container: number, member }
+		}));
+		if (await run(() => mutate(client, Batch, { input: { operations } }))) {
+			pullOpen = false;
+			toast(`Added ${numbers.length} from ${from}`, 'success');
+		}
+	}
+
 	async function addMember(member: string) {
 		addOpen = false;
 		await run(() => mutate(client, AddToContainer, { input: { container: number, member } }));
@@ -624,6 +835,7 @@
 		if (!akt || !archiving) return;
 		const kind = archiving;
 		const target = akt.number;
+		const heading = headingOf(akt);
 		busy = true;
 		archiveRefusal = null;
 		const input = { number: target, reason: archiveReason.trim() || null };
@@ -639,7 +851,7 @@
 		await refetch();
 		busy = false;
 		archiveOpen = false;
-		toast(`${target}: ${kind === 'archive' ? 'archived' : 'unarchived'}`, 'success');
+		toast(`${heading} ${kind === 'archive' ? 'archived' : 'unarchived'}`, 'success');
 	}
 
 	function toggleArchivedMembers(on: boolean) {
@@ -669,13 +881,75 @@
 					>
 					<span data-testid="number"><Mono value={akt.number} max={40} copy /></span>
 				</p>
-				<h1>{headingOf(akt)}</h1>
-				<div class="badges">
-					<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
-					{#if akt.archived}<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge>{/if}
-					{#if akt.outcome}<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span
-						>{/if}
-				</div>
+				<!-- r[impl app.inline-edit]: the title edited in its heading, when
+				     the details would only repeat it. -->
+				{#if titleOnly && titleKey && editingField === titleKey && drafts[titleKey]?.kind === 'TEXT'}
+					{@const draft = drafts[titleKey]}
+					<form
+						class="title-edit"
+						aria-label="Edit {akt.type.fields.find((f) => f.key === titleKey)?.name ?? 'title'}"
+						onsubmit={(e) => {
+							e.preventDefault();
+							if (titleKey) void save(titleKey);
+						}}
+					>
+						{#if draft.kind === 'TEXT'}
+							<input
+								class="title-input"
+								aria-label={akt.type.fields.find((f) => f.key === titleKey)?.name ?? 'Title'}
+								bind:value={draft.text}
+							/>
+						{/if}
+						{#if !live}
+							<input
+								class="title-reason"
+								aria-label="Reason (optional)"
+								placeholder="Reason (optional)"
+								bind:value={reason}
+							/>
+						{/if}
+						<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
+						<Button variant="ghost" size="sm" onclick={() => titleKey && cancelEdit(titleKey)}
+							>Cancel</Button
+						>
+					</form>
+				{:else}
+					<div class="heading">
+						<h1>{headingOf(akt)}</h1>
+						{#if titleOnly && titleKey && editable}
+							<IconButton
+								label="Edit {akt.type.fields.find((f) => f.key === titleKey)?.name ?? 'title'}"
+								icon={Pencil}
+								size="sm"
+								onclick={() => {
+									if (editingField) cancelEdit(editingField);
+									editingField = titleKey;
+								}}
+							/>
+						{/if}
+					</div>
+				{/if}
+				<!-- r[impl app.header]: its status and its result, each labelled. -->
+				<dl class="badges">
+					<div>
+						<dt>Status</dt>
+						<dd>
+							<Badge tone={akt.state.tone}><span data-testid="state">{akt.state.name}</span></Badge>
+						</dd>
+					</div>
+					{#if akt.outcome}
+						<div>
+							<dt>Result</dt>
+							<dd>
+								<span data-testid="outcome"><OutcomeBadge outcome={akt.outcome} /></span>
+								{#if ready}<span class="ready">{ready.passed} of {ready.of} passed</span>{/if}
+							</dd>
+						</div>
+					{/if}
+					{#if akt.archived}<div>
+							<dd><Badge><Archive size={12} aria-hidden={true} /> Archived</Badge></dd>
+						</div>{/if}
+				</dl>
 				{#if live}
 					<LivePresence {live} />
 				{/if}
@@ -699,54 +973,88 @@
 					<!-- The server's PDF route, not a page of the app. -->
 					<Button href={pdf.href} download="">{pdf.label}</Button>
 				{/each}
-				<Button
-					disabled={busy || atVersion !== null}
-					onclick={() => {
-						refusal = null;
-						copyOpen = true;
-					}}><Copy size={14} aria-hidden={true} /> Make a copy</Button
-				>
-				{#if actions.primary}
-					{@const primary = actions.primary}
-					{#each actions.others as transition (transition.key)}
-						{@const blocked = outcomeRefusal(transition, akt.outcome)}
-						<Button
-							disabled={busy || blocked !== null}
-							aria-describedby={blocked ? `blocked-${transition.key}` : undefined}
-							onclick={() => begin(transition)}>{transition.name}</Button
-						>
-					{/each}
-					{@const blocked = outcomeRefusal(primary, akt.outcome)}
+				{#if akt.type.viewerMay.create}
+					<Button
+						variant={actions.primary?.kind === 'copy' ? 'primary' : 'secondary'}
+						disabled={busy || atVersion !== null}
+						onclick={() => {
+							refusal = null;
+							copyOpen = true;
+						}}><Copy size={14} aria-hidden={true} /> Make a copy</Button
+					>
+				{/if}
+				{#each actions.others as transition (transition.key)}
+					{@const blocked = outcomeRefusal(transition, akt.outcome)}
+					<Button
+						disabled={busy || blocked !== null}
+						aria-describedby={blocked ? `blocked-${transition.key}` : undefined}
+						onclick={() => begin(transition)}>{transition.name}</Button
+					>
+				{/each}
+				{#if primaryTransition}
+					{@const blocked = outcomeRefusal(primaryTransition, akt.outcome)}
 					<Button
 						variant="primary"
 						disabled={busy || blocked !== null}
-						aria-describedby={blocked ? `blocked-${primary.key}` : undefined}
-						onclick={() => begin(primary)}>{primary.name}</Button
+						aria-describedby={blocked ? `blocked-${primaryTransition.key}` : undefined}
+						onclick={() => begin(primaryTransition)}>{primaryTransition.name}</Button
 					>
+				{:else if actions.primary?.kind === 'create'}
+					<Button variant="primary" href={actions.primary.href}>
+						<Plus size={14} aria-hidden={true} /> New {actions.primary.name}
+					</Button>
 				{/if}
-				{#if !akt.archived && !atVersion}
+				{#if !akt.archived && !atVersion && (akt.type.viewerMay.edit || akt.type.viewerMay.archive || leavable.length > 0)}
 					<!-- r[impl app.archive]: Archive, in the akt's menu. -->
 					<Menu
 						label="More actions for {akt.number}"
 						items={[
-							{
-								label: 'Attach to…',
-								icon: Link2,
-								disabled: busy,
-								onSelect: () => (attachOpen = true)
-							},
-							{
-								separated: true,
-								label: 'Archive…',
-								icon: Archive,
-								disabled: busy,
-								onSelect: () => beginArchiving('archive')
-							}
+							...(akt.type.viewerMay.edit
+								? [
+										{
+											label: 'Add to…',
+											icon: Link2,
+											disabled: busy,
+											onSelect: () => (attachOpen = true)
+										}
+									]
+								: []),
+							// r[impl app.side]: moving and removing it among its actions.
+							...(leavable.length > 0
+								? [
+										{
+											label: `${moveWords}…`,
+											icon: ArrowRightLeft,
+											disabled: busy,
+											onSelect: () => {
+												transferFrom = leavable[0].number;
+												transferOpen = true;
+											}
+										},
+										...leavable.map((c) => ({
+											label: `Remove from ${c.title ?? c.number}`,
+											icon: X,
+											disabled: busy,
+											onSelect: () => leave(c.number)
+										}))
+									]
+								: []),
+							...(akt.type.viewerMay.archive
+								? [
+										{
+											separated: akt.type.viewerMay.edit || leavable.length > 0,
+											label: 'Archive…',
+											icon: Archive,
+											disabled: busy,
+											onSelect: () => beginArchiving('archive')
+										}
+									]
+								: [])
 						]}
 					/>
 				{/if}
 				<!-- r[impl app.transitions]: a transition the outcome doesn't allow, unavailable, saying what it allows. -->
-				{#each [...actions.others, ...(actions.primary ? [actions.primary] : [])] as transition (transition.key)}
+				{#each [...actions.others, ...(primaryTransition ? [primaryTransition] : [])] as transition (transition.key)}
 					{@const blocked = outcomeRefusal(transition, akt.outcome)}
 					{#if blocked}
 						<p class="blocked" id="blocked-{transition.key}">
@@ -766,7 +1074,7 @@
 					{#if archived.reason}<p class="archived-reason">“{archived.reason}”</p>{/if}
 					<p class="archived-hint">It is read-only until it is unarchived.</p>
 				</div>
-				{#if !atVersion}
+				{#if !atVersion && akt.type.viewerMay.archive}
 					<Button disabled={busy} onclick={() => beginArchiving('unarchive')}
 						><ArchiveRestore size={14} aria-hidden={true} /> Unarchive</Button
 					>
@@ -774,57 +1082,61 @@
 			</section>
 		{/if}
 
-		<div class="columns">
+		<!-- r[impl app.side]: a board across the page, the side cards under it. -->
+		<div class="columns" class:boarded={contained.length > 0}>
 			<div class="main">
-				<Card title="Details">
-					<dl class="fields">
-						{#each akt.type.fields as field (field.key)}
-							{#if field.key === fileField}
-								{#if showsFile}
-									<ReleasedPdf
+				{#if !titleOnly}<Card title="Details">
+						<dl class="fields">
+							{#each akt.type.fields as field (field.key)}
+								{#if field.key === fileField}
+									{#if showsFile}
+										<ReleasedPdf
+											number={akt.number}
+											name={field.name}
+											title={akt.title ?? akt.number}
+											version={shownVersion}
+										/>
+									{/if}
+								{:else if showsFile && field.kind === 'MARKDOWN'}
+									<!-- The version is its PDF, not its text. -->
+								{:else if !givenIn(akt.type.document, field.key, akt.state.key) && !akt.fields.some((v) => 'field' in v && v.field === field.key)}
+									<!-- r[impl akt.field.states]: not yet given, and not in its states. -->
+								{:else}
+									<FieldRow
+										{field}
+										value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
+										bind:draft={drafts[field.key]}
+										bind:reason
+										{people}
+										editing={editingField === field.key}
+										editable={editable && givenIn(akt.type.document, field.key, akt.state.key)}
+										drafted={drafted.includes(field.key)}
+										{busy}
+										error={editingField === field.key && refusal ? refusal.message : undefined}
+										onEdit={() => {
+											if (editingField) cancelEdit(editingField);
+											editingField = field.key;
+										}}
+										onSave={() => save(field.key)}
+										onCancel={() => cancelEdit(field.key)}
+										onDraft={() => draft(field.key)}
+										members={memberNames}
 										number={akt.number}
-										name={field.name}
-										title={akt.title ?? akt.number}
-										version={shownVersion}
+										judged={ownVerdicts}
+										judging={judgingOwn}
+										onVerdict={(verdict) => giveVerdict(akt, verdict)}
+										liveDraft={Boolean(live)}
+										live={live && isLiveText(field) ? live : null}
 									/>
 								{/if}
-							{:else if showsFile && field.kind === 'MARKDOWN'}
-								<!-- The version is its PDF, not its text. -->
-							{:else}
-								<FieldRow
-									{field}
-									value={akt.fields.find((v) => 'field' in v && v.field === field.key)}
-									bind:draft={drafts[field.key]}
-									bind:reason
-									{people}
-									editing={editingField === field.key}
-									{editable}
-									drafted={drafted.includes(field.key)}
-									{busy}
-									error={editingField === field.key && refusal ? refusal.message : undefined}
-									onEdit={() => {
-										if (editingField) cancelEdit(editingField);
-										editingField = field.key;
-									}}
-									onSave={() => save(field.key)}
-									onCancel={() => cancelEdit(field.key)}
-									onDraft={() => draft(field.key)}
-									members={memberNames}
-									number={akt.number}
-									judged={ownVerdicts}
-									onVerdict={(verdict) => giveVerdict(akt, verdict)}
-									liveDraft={Boolean(live)}
-									live={live && isLiveText(field) ? live : null}
-								/>
-							{/if}
-						{/each}
-					</dl>
-				</Card>
+							{/each}
+						</dl>
+					</Card>{/if}
 
 				{#if contained.length > 0}
 					<section class="members" aria-labelledby="members-title">
 						<header>
-							<h2 id="members-title">Members</h2>
+							<h2 id="members-title">Contents</h2>
 							<!-- r[impl app.archive]: how many members are archived, and showing them. -->
 							{#if akt.archivedMemberCount > 0 || showArchived}
 								<div class="archived-members">
@@ -843,20 +1155,27 @@
 									{/if}
 								</div>
 							{/if}
+							{#if editable && parent}
+								<!-- r[impl app.pull]: several at once, from its parent board. -->
+								<Button size="sm" onclick={() => (pullOpen = true)}>Add from {parent.title}</Button>
+							{/if}
 							{#if editable}
 								<Menu
-									label="Add a member"
+									label="Add items"
 									text="Add"
 									items={[
-										...contained.map((key) => ({
-											label: `New ${typeNames[key] ?? key}`,
-											icon: Plus,
-											onSelect: () => {
-												location.assign(newMemberHref(key));
-											}
-										})),
+										// r[impl app.permitted]: new only of the types the viewer may create.
+										...contained
+											.filter((key) => creatableKeys.has(key))
+											.map((key) => ({
+												label: `New ${typeNames[key] ?? key}`,
+												icon: Plus,
+												onSelect: () => {
+													location.assign(newMemberHref(key));
+												}
+											})),
 										{
-											label: 'An existing akt…',
+											label: `Existing ${containedWords}…`,
 											icon: Search,
 											separated: true,
 											onSelect: () => (addOpen = true)
@@ -872,6 +1191,7 @@
 								{me}
 								{busy}
 								{opened}
+								judging={judgingHere}
 								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
 							/>
 						{/if}
@@ -879,6 +1199,7 @@
 							{#if sectionItems.length > 0}<h3 class="others">Not in a section</h3>{/if}
 							<Members
 								columns={unplacedColumns}
+								judging={judgingHere}
 								document={akt.type.document}
 								{contained}
 								{editable}
@@ -890,6 +1211,7 @@
 								{me}
 								onVerdict={(member, verdict) => giveVerdict(member, verdict)}
 								{creatable}
+								onQuickAdd={quickAdd}
 							/>
 						{/if}
 					</section>
@@ -897,20 +1219,23 @@
 			</div>
 
 			<aside class="side">
-				<Card title="In">
-					{#if akt.containers.length === 0}
-						<p class="none">Not in any container.</p>
-					{:else}
-						<ul class="containers" aria-label="Containers">
+				<!-- r[impl app.members]: where it is, only when it is somewhere. -->
+				{#if showsPlaces}<Card title="Part of">
+						<ul class="containers" aria-label="Part of">
 							{#each akt.containers as container (container.id)}
 								<li>
 									<span>
 										<a href={resolve('/akt/[number]', { number: container.number })}
-											>{container.number}</a
+											>{container.title ?? container.number}</a
 										>
-										<span class="hint">{container.title ?? container.type.name}</span>
+										<span class="hint"
+											>{container.title
+												? `${container.type.name} · ${container.number}`
+												: container.type.name}</span
+										>
 									</span>
-									{#if !akt.archived}
+									<!-- r[impl app.permitted]: only from a container they may edit. -->
+									{#if !akt.archived && container.type.viewerMay.edit}
 										<IconButton
 											label="Remove from {container.number}"
 											icon={X}
@@ -922,19 +1247,21 @@
 								</li>
 							{/each}
 						</ul>
-					{/if}
-					{#if !akt.archived && akt.containers.length > 0}<div class="container-tools">
-							<Button
-								size="sm"
-								onclick={() => {
-									transferFrom = akt.containers[0].number;
-									transferOpen = true;
-								}}
+						{#if !akt.archived && akt.containers.some((c) => c.type.viewerMay.edit)}<div
+								class="container-tools"
 							>
-								<ArrowRightLeft size={14} aria-hidden={true} /> Move to another container
-							</Button>
-						</div>{/if}
-				</Card>
+								<Button
+									size="sm"
+									onclick={() => {
+										transferFrom = akt.containers[0].number;
+										transferOpen = true;
+									}}
+								>
+									<ArrowRightLeft size={14} aria-hidden={true} />
+									{moveWords}
+								</Button>
+							</div>{/if}
+					</Card>{/if}
 
 				{#if versioned}
 					<VersionsCard
@@ -980,6 +1307,12 @@
 						{fieldNames}
 						{transitionNames}
 						fieldKinds={Object.fromEntries(akt.type.fields.map((f) => [f.key, f.kind]))}
+						optionNames={Object.fromEntries(
+							akt.type.fields.map((f) => [
+								f.key,
+								Object.fromEntries((f.options ?? []).map((o) => [o.key, o.name]))
+							])
+						)}
 						versions={akt.versions}
 					/>
 				</Card>
@@ -999,6 +1332,10 @@
 			<TransitionDialog
 				bind:open={transitionOpen}
 				name={pending.name}
+				confirm={confirmationOf(
+					headingOf(akt),
+					akt.type.states.find((s) => s.key === pending?.to)
+				)}
 				fields={required(pending)}
 				bind:drafts
 				bind:reason
@@ -1016,6 +1353,7 @@
 			members={memberNames}
 			{busy}
 			error={copyOpen && refusal ? refusal.message : undefined}
+			places={copyPlaces}
 			onCopy={copy}
 		/>
 
@@ -1042,7 +1380,6 @@
 				{#if archiveRefusal}<p role="alert">{archiveRefusal.message}</p>{/if}
 			</form>
 			{#snippet footer()}
-				<Button variant="ghost" onclick={() => (archiveOpen = false)}>Cancel</Button>
 				<Button variant="primary" type="submit" form="archive-form" {busy}
 					>{archiving === 'unarchive' ? 'Unarchive' : 'Archive'}</Button
 				>
@@ -1051,11 +1388,12 @@
 
 		<Dialog
 			bind:open={attachOpen}
-			title="Attach to a container"
-			description="Makes it a member of a container, such as a backlog, an epic or a release."
+			title="Add to…"
+			description="Find what to add it to, by number or title."
 		>
 			<Combobox
-				label="Container"
+				inline
+				label="Add to"
 				placeholder="Number or title…"
 				search={(text) =>
 					pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
@@ -1065,8 +1403,8 @@
 
 		<Dialog
 			bind:open={transferOpen}
-			title="Move to another container"
-			description="One change, recorded on this akt and on both containers."
+			title={moveWords}
+			description="Moves it in one change, recorded here and on both."
 		>
 			<label class="from">
 				From
@@ -1077,8 +1415,9 @@
 				</select>
 			</label>
 			<Combobox
+				inline
 				label="To"
-				placeholder="The container to move it to…"
+				placeholder="Where to move it…"
 				search={(text) =>
 					pickable(client, text, [akt.number, ...akt.containers.map((c) => c.number)])}
 				onPick={(option) => transfer(option.value)}
@@ -1090,7 +1429,6 @@
 			<Dialog
 				bind:open={movingOpen}
 				title="Move {target.member.title ?? target.member.number} to {target.column}"
-				description="Its state changes by a transition. One that needs fields opens on its page."
 			>
 				<div class="choices">
 					{#each target.transitions as transition (transition.key)}
@@ -1106,13 +1444,27 @@
 			</Dialog>
 		{/if}
 
+		{#if parent && editable && pullOpen}
+			<!-- Mounted only while open: its board is read when asked for. -->
+			<PullDialog
+				bind:open={pullOpen}
+				{parent}
+				here={akt.number}
+				type={akt.type.key}
+				{contained}
+				{busy}
+				onPull={pull}
+			/>
+		{/if}
+
 		<Dialog
 			bind:open={addOpen}
-			title="Add a member"
-			description="An akt of a type this {akt.type.name} holds, found by number or title."
+			title="Add existing {containedWords}"
+			description="Find it by number or title."
 		>
 			<Combobox
-				label="Member to add"
+				inline
+				label="Item to add"
 				placeholder="Number or title…"
 				search={(text) =>
 					pickable(
@@ -1125,7 +1477,7 @@
 			/>
 		</Dialog>
 	{:else if view.data && !view.fetching}
-		<p role="alert">There is no akt {number}, or you can’t see it.</p>
+		<p role="alert">There is no {number}, or you can’t see it.</p>
 	{:else}
 		<p>Loading…</p>
 	{/if}
@@ -1175,7 +1527,32 @@
 
 	.badges {
 		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-4);
+		margin: 0;
+	}
+
+	.badges div {
+		display: flex;
+		align-items: center;
 		gap: var(--space-2);
+	}
+
+	.badges dt {
+		font-size: var(--text-xs);
+		color: var(--text-muted);
+	}
+
+	.badges dd {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin: 0;
+	}
+
+	.ready {
+		color: var(--text-muted);
+		font-size: var(--text-xs);
 	}
 
 	.origin {
@@ -1292,6 +1669,23 @@
 		}
 	}
 
+	.columns.boarded {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.columns.boarded .side {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		align-items: start;
+	}
+
+	/* r[impl app.narrow]: on a phone, what it holds before its details. */
+	@media (max-width: 599px) {
+		.main > .members {
+			order: -1;
+		}
+	}
+
 	.main,
 	.side {
 		display: flex;
@@ -1345,12 +1739,6 @@
 		color: var(--text-muted);
 	}
 
-	.none {
-		margin-bottom: var(--space-3);
-		color: var(--text-muted);
-		font-size: var(--text-sm);
-	}
-
 	.container-tools {
 		display: flex;
 		flex-direction: column;
@@ -1364,5 +1752,31 @@
 		gap: var(--space-1);
 		font-size: var(--text-sm);
 		font-weight: 500;
+	}
+
+	.heading {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.title-edit {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.title-edit {
+		flex-wrap: wrap;
+	}
+
+	.title-input {
+		flex: 1 1 16rem;
+		font-size: var(--text-xl);
+		font-weight: 600;
+	}
+
+	.title-reason {
+		flex: 0 1 14rem;
 	}
 </style>

@@ -22,7 +22,10 @@ function said(ran: Ran): Said {
 		const code = ran.stderr.trim().match(/\(([A-Z_]+)\)$/);
 		return { code: ran.code, error: code ? code[1] : ran.stderr.trim() };
 	}
-	return { code: 0, markdown: ran.stdout.replace(/\n\nCommit with: .*$/s, '').trim() };
+	return {
+		code: 0,
+		markdown: ran.stdout.replace(/\n\nCommit with: .*$/s, '').trim()
+	};
 }
 
 // r[verify cli.local.rules]
@@ -80,7 +83,13 @@ test('local mode answers a sequence of commands as the server does', async () =>
 				],
 				transitions: [
 					{ key: 'start', name: 'Start', from: ['todo'], to: 'doing' },
-					{ key: 'finish', name: 'Finish', from: ['doing'], to: 'done', requires: ['checked'] }
+					{
+						key: 'finish',
+						name: 'Finish',
+						from: ['doing'],
+						to: 'done',
+						requires: ['checked']
+					}
 				],
 				links: [{ key: 'blocks', name: 'Blocks', inverse: 'Blocked by', to: [item] }]
 			}
@@ -272,7 +281,13 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 				number: `PP${stamp}-{seq}`,
 				states: [...states, { key: 'done', name: 'Done', final: true }],
 				transitions: [
-					{ key: 'finish', name: 'Finish', from: ['open'], to: 'done', outcomes: ['pass', 'fail', 'skip'] }
+					{
+						key: 'finish',
+						name: 'Finish',
+						from: ['open'],
+						to: 'done',
+						outcomes: ['pass', 'fail', 'skip']
+					}
 				],
 				fields: [
 					{ key: 'title', name: 'Title', kind: 'text', required: true },
@@ -289,7 +304,12 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 				fields: [
 					{ key: 'title', name: 'Title', kind: 'text', required: true },
 					{ key: 'testers', name: 'Testers', kind: 'user', multiple: true },
-					{ key: 'verdict', name: 'Verdict', kind: 'verdict', assignees: 'testers' }
+					{
+						key: 'verdict',
+						name: 'Verdict',
+						kind: 'verdict',
+						assignees: 'testers'
+					}
 				]
 			}
 		])
@@ -333,14 +353,15 @@ test('local mode lays out tests, takes verdicts, filters, copies and finishes as
 		[['verdict', one, 'maybe'], 1],
 		[['verdict', p, 'pass'], 1],
 		[['set', one, 'verdict=pass'], 1],
-		[['verdict', two, 'fail'], 0],
+		[['verdict', two, 'fail'], 1],
+		[['verdict', two, 'fail', '--description', 'It broke'], 0],
 		[['ls', check, '--in', p, '--where', 'testers=@me'], 0],
 		[['ls', check, '--outcome', 'fail'], 0],
 		[['ls', check, '--in', p, '--outcome', 'pending'], 0],
 		[['ls', protocol, '--outcome', 'fail'], 1],
 		[['cat', p], 0],
 		[['verdict', two, 'clear'], 0],
-		[['verdict', two, 'skip'], 0],
+		[['verdict', two, 'skip', '--description', 'No device'], 0],
 		[['ls', check, '--in', p], 0],
 		[['verdict', three, 'pass'], 0],
 		[['cat', p, '--all-members'], 0],
@@ -414,10 +435,22 @@ test('local mode writes documents, releases and reads versions as the server doe
 				created_in: [index],
 				fields: [
 					{ key: 'title', name: 'Title', kind: 'text', required: true },
-					{ key: 'body', name: 'Body', kind: 'markdown', references: 'refers_to' }
+					{
+						key: 'body',
+						name: 'Body',
+						kind: 'markdown',
+						references: 'refers_to'
+					}
 				],
 				states: [{ key: 'draft', name: 'Draft', initial: true }],
-				links: [{ key: 'refers_to', name: 'Refers to', inverse: 'Referred to by', to: [doc] }],
+				links: [
+					{
+						key: 'refers_to',
+						name: 'Refers to',
+						inverse: 'Referred to by',
+						to: [doc]
+					}
+				],
 				versions: {}
 			}
 		])

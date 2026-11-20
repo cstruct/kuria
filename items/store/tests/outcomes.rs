@@ -16,6 +16,7 @@ const SUBJECT: Uuid = Uuid::from_u128(3);
 
 fn gave(assignee: Someone, verdict: Verdict) -> Given {
     Given {
+        description: None,
         assignee,
         verdict,
         by: SUBJECT,

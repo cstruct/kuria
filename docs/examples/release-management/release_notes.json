@@ -32,5 +32,6 @@
       "requires": ["text"], "action": "release:approve" }
   ],
   "archive": { "rules": [{ "with_container": "release" }] },
-  "presentation": { "icon": "notebook-pen", "colour": "pink", "navigation": "more", "tones": { "draft": "warning", "approved": "success" } }
+  "presentation": {
+    "group": "Releasing", "icon": "notebook-pen", "colour": "pink", "navigation": "more", "plural": "Release notes", "tones": { "draft": "warning", "approved": "success" } }
 }

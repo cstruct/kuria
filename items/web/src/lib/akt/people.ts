@@ -25,10 +25,14 @@ export function whoOfKey(key: string): Who | null {
 export function peopleOf(
 	me: string | undefined,
 	users: readonly { id: string; name: string }[] = [],
-	contacts: readonly { id: string; displayName: string; user?: { id: string } | null }[] = []
+	contacts: readonly { id: string; displayName: string; user?: { id: string } | null }[] = [],
+	/** The viewer, as recorded: named "Me (their name)" when Kuria knows
+	 * a name other than their email. */
+	viewer?: { name: string; email?: string | null }
 ): Person[] {
+	const myName = viewer && viewer.name !== viewer.email ? viewer.name : undefined;
 	const people: Person[] = [
-		...(me ? [{ who: { user: me }, name: 'Me' }] : []),
+		...(me ? [{ who: { user: me }, name: myName ? `Me (${myName})` : 'Me' }] : []),
 		...users.map((u) => ({ who: { user: u.id }, name: u.name })),
 		...contacts.map((c) => ({
 			who: c.user ? { user: c.user.id } : { contact: c.id },
@@ -42,4 +46,25 @@ export function peopleOf(
 		seen.add(key);
 		return true;
 	});
+}
+
+/** The keys of a type document's `user` fields that default to the one
+ * creating an akt (`akt.field.default`). */
+// r[impl akt.field.default]
+export function creatorDefaults(document: unknown): string[] {
+	const fields = (document as { fields?: { key?: string; default?: string }[] } | null)?.fields;
+	return (fields ?? []).flatMap((f) => (f.default === 'creator' && f.key ? [f.key] : []));
+}
+
+/** Initials for an avatar: the first letters of a name's first two words,
+ * or of an email's name. */
+export function initialsOf(name: string): string {
+	const words = name
+		.split('@')[0]
+		.split(/[\s._-]+/)
+		.filter(Boolean);
+	return words
+		.slice(0, 2)
+		.map((w) => w[0].toUpperCase())
+		.join('');
 }

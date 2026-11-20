@@ -21,6 +21,9 @@ export const Home = graphql(`
 		aktTypes {
 			...TypeMark
 			akterCount
+			viewerMay {
+				create
+			}
 			fields {
 				key
 				kind
@@ -56,6 +59,9 @@ export const AkterOfType = graphql(`
 	) {
 		aktType(key: $type) {
 			...ShownType
+			viewerMay {
+				create
+			}
 			states {
 				key
 				name
@@ -212,6 +218,7 @@ export const FieldValues = graphql(`
 			field
 			verdicts {
 				verdict
+				description
 				assignee {
 					...SomeoneShown
 				}
@@ -259,6 +266,7 @@ export const TypeMark = graphql(`
 		presentation {
 			icon
 			colour
+			plural
 		}
 	}
 `);
@@ -293,6 +301,12 @@ export const TypeShape = graphql(`
 		...TypeMark
 		document
 		liveDrafts
+		viewerMay {
+			create
+			edit
+			transition
+			archive
+		}
 		fields {
 			key
 			name
@@ -332,6 +346,10 @@ export const AktPage = graphql(`
 	query AktPage($number: String!, $version: Int, $boardArchived: ArchivedFilter) {
 		viewer {
 			subject
+			user {
+				name
+				email
+			}
 		}
 		aktTypes {
 			key
@@ -342,6 +360,10 @@ export const AktPage = graphql(`
 				initial
 			}
 			document
+			viewerMay {
+				create
+				edit
+			}
 		}
 		akt(number: $number, version: $version) {
 			id
@@ -384,6 +406,17 @@ export const AktPage = graphql(`
 					key
 					version
 					name
+					viewerMay {
+						edit
+					}
+				}
+				containers {
+					id
+					number
+					title
+				}
+				state {
+					key
 				}
 			}
 			board(first: 500, archived: $boardArchived) {
@@ -468,6 +501,10 @@ export const NewAkt = graphql(`
 	query NewAkt($type: String!) {
 		viewer {
 			subject
+			user {
+				name
+				email
+			}
 		}
 		aktType(key: $type) {
 			...TypeShape
@@ -570,6 +607,7 @@ export const CreateAkt = graphql(`
 		createAkt(input: $input) {
 			id
 			number
+			title
 		}
 	}
 `);
@@ -588,6 +626,8 @@ export const CopyAkt = graphql(`
 		copyAkt(input: $input) {
 			id
 			number
+			title
+			revision
 		}
 	}
 `);
@@ -706,6 +746,7 @@ export const Shell = graphql(`
 			akterCount
 			presentation {
 				navigation
+				group
 			}
 		}
 	}
@@ -931,6 +972,72 @@ export const RenderDiagram = graphql(`
 		renderDiagram(source: $source) {
 			svg
 			error
+		}
+	}
+`);
+
+/** A parent board's members, to pull from (`app.pull`). */
+export const ParentBoard = graphql(`
+	query ParentBoard($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			board(first: 500) {
+				columns {
+					key
+					name
+					akter {
+						id
+						number
+						title
+						state {
+							key
+							name
+							final
+						}
+						type {
+							key
+						}
+						containers {
+							id
+							number
+							type {
+								key
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+`);
+
+/** Several akt writes, all or none. */
+export const Batch = graphql(`
+	mutation Batch($input: BatchInput!) {
+		batch(input: $input) {
+			id
+			number
+		}
+	}
+`);
+
+/** An akt type's akter, the most recently changed first: where a copy may
+ * go (`app.copy`). */
+export const CopyPlaces = graphql(`
+	query CopyPlaces($type: String!) {
+		akter(type: $type, first: 20) {
+			nodes {
+				id
+				number
+				title
+				updatedAt
+				state {
+					key
+					final
+				}
+			}
 		}
 	}
 `);

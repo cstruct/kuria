@@ -7,7 +7,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { column, open } from '../support/app.ts';
+import { column, history, open } from '../support/app.ts';
 import { defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -58,12 +58,12 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(main.getByRole('button', { name: 'Accept', exact: true })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: `More actions for ${gone}` })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: `Remove from ${release}` })).toHaveCount(0);
-	await expect(rm.getByRole('list', { name: 'Revisions' })).toContainText('archived it');
+	await expect(await history(rm)).toContainText('archived it');
 	expect(await violations(rm), 'an archived akt’s page').toEqual([]);
 
 	// Its release's board shows the live candidate only, and says one is archived.
 	await open(rm, release);
-	const members = rm.getByRole('region', { name: 'Members', exact: true });
+	const members = rm.getByRole('region', { name: 'Contents', exact: true });
 	await expect(members.getByTestId('archived-members')).toHaveText('1 archived');
 	expect(await column(rm, 'Testing')).toEqual([kept]);
 	// Show archived adds it, marked, and is kept in the address.
@@ -96,14 +96,11 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(row).toContainText('Archived');
 	expect(await violations(rm), 'a list showing archived akter').toEqual([]);
 
-	// A developer, who may read it but not archive, is told so.
+	// A developer, who may read it but not archive or edit it, is offered
+	// neither (app.permitted).
 	const dev = await signIn(browser, seeded().people.developer);
 	await open(dev, kept);
-	await dev.getByRole('button', { name: `More actions for ${kept}` }).click();
-	await dev.getByRole('menuitem', { name: 'Archive…' }).click();
-	const refused = dev.getByRole('dialog', { name: `Archive ${kept}` });
-	await refused.getByRole('button', { name: 'Archive', exact: true }).click();
-	await expect(refused.getByRole('alert')).toContainText('aren’t allowed');
+	await expect(dev.getByRole('button', { name: `More actions for ${kept}` })).toHaveCount(0);
 
 	// Unarchived, it is live again: editable, in the list and on the board.
 	await open(rm, gone);
@@ -113,7 +110,7 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(unarchive).toBeHidden();
 	await expect(rm.getByRole('region', { name: 'Archived' })).toHaveCount(0);
 	await expect(rm.getByRole('main').getByRole('button', { name: 'Reject', exact: true })).toBeVisible();
-	await expect(rm.getByRole('list', { name: 'Revisions' })).toContainText('unarchived it');
+	await expect(await history(rm)).toContainText('unarchived it');
 	await rm.goto('/types/release_candidate');
 	await expect(rm.getByRole('table', { name: 'Release candidate' }).getByRole('link', { name: gone })).toBeVisible();
 	await open(rm, release);

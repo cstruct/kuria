@@ -301,7 +301,10 @@ impl Value {
             }
             Self::Verdicts(given) => given
                 .iter()
-                .map(|g| format!("{}: {}", person(&g.assignee), g.verdict.as_str()))
+                .map(|g| match &g.description {
+                    Some(why) => format!("{}: {} ({why})", person(&g.assignee), g.verdict.as_str()),
+                    None => format!("{}: {}", person(&g.assignee), g.verdict.as_str()),
+                })
                 .collect::<Vec<_>>()
                 .join(", "),
             Self::Attachment(id) => id.to_string(),

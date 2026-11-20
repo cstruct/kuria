@@ -8,9 +8,9 @@
       "description": "What it tests, and against what build or system." },
     { "key": "layout", "name": "Layout", "kind": "sections", "of": ["test_case"],
       "description": "Its test cases in sections." },
-    { "key": "owner", "name": "Owner", "kind": "user" },
+    { "key": "owner", "name": "Owner", "kind": "user", "default": "creator" },
     { "key": "conclusion", "name": "Conclusion", "kind": "text", "multiline": true,
-      "description": "What the run showed, and what follows from it." }
+      "description": "What the run showed, and what follows from it.", "states": ["done"] }
   ],
   "states": [
     { "key": "draft", "name": "Draft", "initial": true },
@@ -28,9 +28,12 @@
     { "key": "withdraw", "name": "Withdraw", "from": ["draft", "template", "running"], "to": "withdrawn" }
   ],
   "contains": [{ "type": "test_case" }],
+  "archive": { "rules": [{ "with_container": "release_candidate" }] },
   "presentation": {
+    "group": "Testing",
     "icon": "clipboard-check", "colour": "purple",
     "list": ["owner"],
-    "tones": { "template": "neutral", "running": "active", "done": "success", "withdrawn": "neutral" }
+    "tones": { "template": "neutral", "running": "active", "done": "success", "withdrawn": "neutral" },
+    "primary": { "draft": "start", "template": "copy", "running": "finish" }
   }
 }

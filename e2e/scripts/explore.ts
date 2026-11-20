@@ -1,10 +1,10 @@
 // Runs Kuria against the seeded end-to-end Konklav for clicking around in
 // by hand: starts the server (scripts/serve.ts, on a fresh database),
-// defines the release-management and test-protocols examples' akt types
+// defines the release-management and documents examples' akt types
 // once it answers, and prints who can sign in. Runs until Ctrl-C.
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { defineDocuments, defineExample, defineTestProtocols } from '../support/example.ts';
+import { defineDocuments, defineExample } from '../support/example.ts';
 import { KURIA, seeded } from '../support/stack.ts';
 
 async function healthy(): Promise<boolean> {
@@ -31,14 +31,13 @@ for (let i = 0; !(await healthy()); i++) {
 	await new Promise((resolve) => setTimeout(resolve, 1000));
 }
 await defineExample();
-await defineTestProtocols();
 await defineDocuments();
 
 const { people } = seeded();
 const rows = Object.entries(people).map(([who, p]) => `  ${who.padEnd(15)} ${p.email.padEnd(20)} ${p.password}`);
 console.log(`
 Kuria is at ${KURIA} (use localhost, not 127.0.0.1), with the
-release-management and test-protocols examples' akt types. Sign in as:
+release-management and documents examples' akt types. Sign in as:
 
 ${rows.join('\n')}
 

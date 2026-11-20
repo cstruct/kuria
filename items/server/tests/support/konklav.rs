@@ -36,6 +36,8 @@ pub struct ProviderState {
     pub failing: bool,
     /// Answer userinfo requests with 500.
     pub userinfo_failing: bool,
+    /// Whether userinfo leaves the name out, as Konklav does.
+    pub nameless: bool,
     /// The email userinfo answers, if not `alice@example.com`, and whether
     /// it says it is verified.
     pub email: Option<String>,
@@ -105,6 +107,11 @@ impl FakeProvider {
 
     pub fn set_failing(&self, failing: bool) {
         self.state.lock().unwrap().failing = failing;
+    }
+
+    /// Has userinfo leave the name out, as Konklav, which keeps none, does.
+    pub fn set_nameless(&self, nameless: bool) {
+        self.state.lock().unwrap().nameless = nameless;
     }
 
     pub fn set_userinfo_failing(&self, failing: bool) {
@@ -223,7 +230,7 @@ async fn revoke(
 
 /// Answers for any bearer token: the test subject, Alice.
 async fn userinfo(State(state): State<Arc<Mutex<ProviderState>>>, headers: HeaderMap) -> Response {
-    let (email, verified) = {
+    let (email, verified, nameless) = {
         let state = state.lock().unwrap();
         if state.userinfo_failing {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -234,6 +241,7 @@ async fn userinfo(State(state): State<Arc<Mutex<ProviderState>>>, headers: Heade
                 .clone()
                 .unwrap_or_else(|| "alice@example.com".to_owned()),
             state.email_verified,
+            state.nameless,
         )
     };
     if !headers
@@ -250,6 +258,9 @@ async fn userinfo(State(state): State<Arc<Mutex<ProviderState>>>, headers: Heade
     });
     if let Some(verified) = verified {
         info["email_verified"] = json!(verified);
+    }
+    if nameless {
+        info.as_object_mut().unwrap().remove("name");
     }
     Json(info).into_response()
 }

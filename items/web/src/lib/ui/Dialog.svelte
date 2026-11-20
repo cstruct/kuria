@@ -2,14 +2,22 @@
 	import { Dialog } from 'bits-ui';
 	import X from '@lucide/svelte/icons/x';
 	import type { Snippet } from 'svelte';
+	import Button from './Button.svelte';
 
 	interface Props {
 		open: boolean;
 		title: string;
 		description?: string;
 		children: Snippet;
-		/** The dialog's actions, at its foot. */
+		/** The dialog's actions, at its foot, after Cancel: its primary one
+		 * last. */
 		footer?: Snippet;
+		/** Actions at the foot's start, apart from the others, such as
+		 * deleting. */
+		start?: Snippet;
+		/** What closing it without acting is called: "Cancel", or "Close"
+		 * where there is nothing to act on. */
+		cancel?: string;
 		onOpenChange?: (open: boolean) => void;
 		/** Where focus goes when it closes, instead of what opened it: call
 		 * `preventDefault` on the event and focus it. */
@@ -22,6 +30,8 @@
 		description,
 		children,
 		footer,
+		start,
+		cancel = 'Cancel',
 		onOpenChange,
 		onCloseAutoFocus
 	}: Props = $props();
@@ -55,7 +65,12 @@
 				<Dialog.Description class="dialog-description">{description}</Dialog.Description>
 			{/if}
 			<div class="dialog-body" bind:this={body}>{@render children()}</div>
-			{#if footer}<footer>{@render footer()}</footer>{/if}
+			<!-- r[impl app.dialog-focus]: every dialog's foot alike: Cancel, then its action. -->
+			<footer>
+				{#if start}<div class="start">{@render start()}</div>{/if}
+				<Button variant="ghost" onclick={() => (open = false)}>{cancel}</Button>
+				{#if footer}{@render footer()}{/if}
+			</footer>
 		</Dialog.Content>
 	</Dialog.Portal>
 </Dialog.Root>
@@ -98,6 +113,10 @@
 	footer {
 		justify-content: flex-end;
 		border-top: 1px solid var(--border);
+	}
+
+	.start {
+		margin-right: auto;
 	}
 
 	:global(.dialog-title) {

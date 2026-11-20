@@ -42,6 +42,8 @@ impl Verdict {
 pub struct Given {
     pub assignee: Someone,
     pub verdict: Verdict,
+    /// What the assignee saw (`akt.field.verdict.description`).
+    pub description: Option<String>,
     pub by: Uuid,
     pub at: DateTime<Utc>,
 }
@@ -54,16 +56,22 @@ impl Given {
     }
 
     pub(crate) fn to_json(&self) -> Json {
-        json!({
+        let mut json = json!({
             "assignee": self.assignee.to_json(),
             "verdict": self.verdict.as_str(),
             "by": self.by.to_string(),
             "at": self.at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
-        })
+        });
+        // Only when there is one, so a verdict without reads as before.
+        if let Some(description) = &self.description {
+            json["description"] = json!(description);
+        }
+        json
     }
 
     pub(crate) fn from_json(json: &Json) -> Result<Self, String> {
-        let object = crate::value::members(json, &["assignee", "verdict", "by", "at"])?;
+        let object =
+            crate::value::members(json, &["assignee", "verdict", "description", "by", "at"])?;
         let assignee = Someone::from_json(
             object
                 .get("assignee")
@@ -85,9 +93,15 @@ impl Given {
             .and_then(Json::as_str)
             .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
             .ok_or("a verdict says when it was given")?;
+        let description = match object.get("description") {
+            None | Some(Json::Null) => None,
+            Some(Json::String(text)) => Some(text.clone()),
+            Some(_) => return Err("a verdict's description is text".to_owned()),
+        };
         Ok(Self {
             assignee,
             verdict,
+            description,
             by,
             at: at.with_timezone(&Utc),
         })
@@ -109,28 +123,34 @@ pub(crate) fn all_from_json(json: &Json) -> Result<Vec<Given>, String> {
 }
 
 /// What a request does to a `verdict` field: give `verdict` for `assignee`,
-/// or take theirs back if `None`.
+/// with `description` if any, or take theirs back if `None`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Giving {
     pub assignee: Someone,
     pub verdict: Option<Verdict>,
+    pub description: Option<String>,
 }
 
 impl Giving {
     /// Reads a request's input: `pass`, `fail` or `skip` for oneself,
-    /// `{"verdict": …, "for": <user>}` for another assignee, and
-    /// `{"clear": true}`, with `for` if for another, to take one back.
+    /// `{"verdict": …, "description": …, "for": <user>}` with a description
+    /// or for another assignee, and `{"clear": true}`, with `for` if for
+    /// another, to take one back. A fail or a skip without a description is
+    /// refused.
     // r[impl akt.field.verdict]
+    // r[impl akt.field.verdict.description]
     pub fn from_input(json: &Json, change: Change) -> Result<Self, String> {
         let me = Someone::User(change.by);
         if let Some(text) = json.as_str() {
-            return Ok(Self {
+            return Self {
                 assignee: me,
                 verdict: Some(Verdict::read(text)?),
-            });
+                description: None,
+            }
+            .described();
         }
-        let object = crate::value::members(json, &["verdict", "for", "clear"]).map_err(|_| {
-            "expected pass, fail or skip, {\"verdict\": …, \"for\": <user>} or {\"clear\": true}".to_owned()
+        let object = crate::value::members(json, &["verdict", "description", "for", "clear"]).map_err(|_| {
+            "expected pass, fail or skip, {\"verdict\": …, \"description\": …, \"for\": <user>} or {\"clear\": true}".to_owned()
         })?;
         let assignee = object
             .get("for")
@@ -144,13 +164,39 @@ impl Giving {
             (None, Some(Json::Bool(true))) => None,
             _ => return Err("give a `verdict` or `clear: true`".to_owned()),
         };
-        Ok(Self { assignee, verdict })
+        let description = match object.get("description") {
+            None | Some(Json::Null) => None,
+            Some(Json::String(text)) if verdict.is_some() => {
+                Some(text.trim().to_owned()).filter(|t| !t.is_empty())
+            }
+            Some(Json::String(_)) => {
+                return Err("a verdict taken back has no description".to_owned());
+            }
+            Some(_) => return Err("a verdict's description is text".to_owned()),
+        };
+        Self {
+            assignee,
+            verdict,
+            description,
+        }
+        .described()
+    }
+
+    /// This, unless it gives a fail or a skip without saying why.
+    fn described(self) -> Result<Self, String> {
+        match self.verdict {
+            Some(v @ (Verdict::Fail | Verdict::Skip)) if self.description.is_none() => Err(
+                format!("a `{}` says why: give it a `description`", v.as_str()),
+            ),
+            _ => Ok(self),
+        }
     }
 
     /// `given` with this applied, among `assignees`, by `change`: a verdict
-    /// from or for anyone else is refused, and giving the same verdict again
-    /// keeps who gave it first.
+    /// from or for anyone else is refused, and giving the same verdict with
+    /// the same description again keeps who gave it first.
     // r[impl akt.field.verdict]
+    // r[impl akt.field.verdict.description]
     pub fn apply(
         &self,
         given: &[Given],
@@ -171,11 +217,13 @@ impl Giving {
                 given.remove(i);
             }
             (None, None) => {}
-            (Some(v), Some(i)) if given[i].verdict == v => {}
+            (Some(v), Some(i))
+                if given[i].verdict == v && given[i].description == self.description => {}
             (Some(verdict), at) => {
                 let one = Given {
                     assignee: self.assignee,
                     verdict,
+                    description: self.description.clone(),
                     by: change.by,
                     at: change.at,
                 };

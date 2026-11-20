@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Avatar from '#lib/ui/Avatar.svelte';
 	// r[impl app.members]
 	import { resolve } from '$app/paths';
 	import Archive from '@lucide/svelte/icons/archive';
@@ -12,14 +14,20 @@
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import Menu, { type MenuItem } from '#lib/ui/Menu.svelte';
 	import Mono from '#lib/ui/Mono.svelte';
-	import { truncateMiddle } from '#lib/ui/text.ts';
+	import { articled, truncateMiddle } from '#lib/ui/text.ts';
 	import { boardLabels } from './labels';
-	import { groupMembers, mappedTypes, shownFields, transitionsInto } from './members';
+	import {
+		groupMembers,
+		mappedTypes,
+		judgedType,
+		showsState,
+		shownFields,
+		transitionsInto
+	} from './members';
 	import OutcomeBadge from './OutcomeBadge.svelte';
 	import { Reorder, type Place } from './reorder.svelte';
 	import VerdictButtons from './VerdictButtons.svelte';
-	import { judgedOf } from './verdicts';
-	import type { Verdict } from '#lib/graphql/generated/graphql.ts';
+	import { judgedOf, type Report } from './verdicts';
 
 	type Columns = NonNullable<AktPageQuery['akt']>['board']['columns'];
 	type Member = Columns[number]['akter'][number];
@@ -42,10 +50,16 @@
 		/** The viewer's subject, for their own verdicts. */
 		me?: string;
 		/** Gives the viewer's verdict on a member, or takes it back. */
-		onVerdict?: (member: Member, verdict: Verdict | null) => void;
-		/** The akter a column offers to create, each with its type's name
-		 * and the new-akt page that creates it (`app.board-create`). */
-		creatable?: (column: string) => { name: string; href: string }[];
+		onVerdict?: (member: Member, verdict: Report | null) => void;
+		/** The akter a column offers to create, each with its type's key
+		 * and name, the new-akt page that creates it (`app.board-create`),
+		 * and whether a title alone makes one (`app.quick-add`). */
+		creatable?: (column: string) => { key?: string; name: string; href: string; quick?: boolean }[];
+		/** Whether verdicts on members may be given now (`app.verdicts`). */
+		judging?: boolean;
+		/** Creates an akt of a type, by key, from its title, on the board;
+		 * answers whether it was made. */
+		onQuickAdd?: (type: string, title: string) => Promise<boolean>;
 	}
 
 	type Transition = Member['type']['transitions'][number];
@@ -62,8 +76,37 @@
 		onInto,
 		me,
 		onVerdict = () => {},
-		creatable = () => []
+		creatable = () => [],
+		onQuickAdd,
+		judging = true
 	}: Props = $props();
+
+	/** What each column's quick-add has typed, and the type it adds. */
+	let typed = $state<Record<string, string>>({});
+	let adding = $state<Record<string, string>>({});
+	let quickBusy = $state(false);
+
+	/** Enter adds what was typed and stays for the next; Shift+Enter opens
+	 * the whole form with it, to give more (`app.quick-add`). */
+	// r[impl app.quick-add]
+	async function quickKey(
+		event: KeyboardEvent,
+		column: string,
+		offered: { key?: string; href: string }[]
+	) {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		const title = (typed[column] ?? '').trim();
+		const type = offered.find((o) => o.key === adding[column]) ?? offered[0];
+		if (event.shiftKey) {
+			location.assign(`${type.href}${title ? `&title=${encodeURIComponent(title)}` : ''}`);
+			return;
+		}
+		if (!title || !type.key || !onQuickAdd || quickBusy) return;
+		quickBusy = true;
+		if (await onQuickAdd(type.key, title)) typed[column] = '';
+		quickBusy = false;
+	}
 
 	const grouped = $derived(groupMembers(columns, mappedTypes(document), contained));
 	const memberOf = (number: string) =>
@@ -85,6 +128,22 @@
 	function itemsFor(group: readonly Member[], i: number): MenuItem[] {
 		const member = group[i];
 		const labels = boardLabels(member.number);
+		// r[impl app.board-drop]: the moves a drop makes, by the column they go to.
+		const moves: MenuItem[] = grouped.columns
+			.filter((c) => c.key !== 'unmapped' && !c.akter.some((m) => m.number === member.number))
+			.flatMap((c) => {
+				const transitions = into(member.number, c.key);
+				return transitions.length > 0
+					? [
+							{
+								label: labels.into(c.name),
+								icon: ArrowRight,
+								disabled: busy || !editable,
+								onSelect: () => onInto(member, transitions, c.name)
+							}
+						]
+					: [];
+			});
 		return [
 			{
 				label: labels.up,
@@ -98,10 +157,10 @@
 				disabled: busy || !movable || i === group.length - 1,
 				onSelect: () => onMove(member.number, { after: group[i + 1].number })
 			},
+			...moves.map((m, k) => (k === 0 ? { ...m, separated: true } : m)),
 			{
 				label: labels.remove,
 				icon: X,
-				danger: true,
 				separated: true,
 				disabled: busy || !editable,
 				onSelect: () => onRemove(member.number)
@@ -119,8 +178,10 @@
 {/snippet}
 
 {#if grouped.columns.length === 0 && grouped.lists.length === 0}
-	<EmptyState title="No members yet" description="Add an existing akt, or create one here." />
+	<EmptyState title="Nothing here yet" description="Add an existing item, or create one here." />
 {/if}
+
+<p id="quick-hint" class="visually-hidden">Enter adds it; Shift+Enter opens the form for more.</p>
 
 {#if grouped.columns.length > 0}
 	<!-- Focusable, so a keyboard can scroll it sideways when its columns
@@ -130,13 +191,13 @@
 		{#each grouped.columns as column (column.key)}
 			{@const numbers = column.akter.map((m) => m.number)}
 			{@const offered = column.key === 'unmapped' ? [] : creatable(column.key)}
+			{@const quick = offered.filter((o) => o.quick && o.key)}
 			<section
 				class="column"
 				class:refuses={reorder.refuses(column.key)}
 				class:takes={reorder.takes(column.key)}
 				class:over={reorder.into === column.key}
 				aria-label={column.name}
-				title={reorder.refuses(column.key) ? 'No transition leads here from its state' : undefined}
 			>
 				<header class="column-head">
 					<h3>{column.name} <span class="count">{column.akter.length}</span></h3>
@@ -186,13 +247,26 @@
 									title={member.title ? undefined : member.number}
 									>{member.title ?? truncateMiddle(member.number, 26)}</a
 								>
-								<Menu label={boardLabels(member.number).menu} items={itemsFor(column.akter, i)} />
+								<!-- r[impl app.permitted]: nothing to do with it unless they may edit the container. -->
+								{#if editable}
+									<Menu label={boardLabels(member.number).menu} items={itemsFor(column.akter, i)} />
+								{/if}
 							</div>
-							{#if member.type.presentation.card.length > 0}
+							{#if shownFields(member, 'card').some((f) => f.text || f.picture)}
 								<dl class="shown">
 									{#each shownFields(member, 'card') as field (field.name)}
 										{#if field.picture}
 											<img class="picture" src={field.picture} alt={member.title ?? field.name} />
+										{:else if field.text && field.as === 'person'}
+											<div class="person" title="{field.name}: {field.text}">
+												<dt class="visually-hidden">{field.name}</dt>
+												<dd><Avatar name={field.text} />{field.text}</dd>
+											</div>
+										{:else if field.text && field.as === 'chip'}
+											<div class="chip">
+												<dt class="visually-hidden">{field.name}</dt>
+												<dd><Badge>{field.text}</Badge></dd>
+											</div>
 										{:else if field.text}
 											<div>
 												<dt>{field.name}</dt>
@@ -209,13 +283,44 @@
 								{#if member.archived}<span class="archived"
 										><Badge><Archive size={12} aria-hidden={true} /> Archived</Badge></span
 									>{/if}
-								<Badge tone={member.state.tone}>{member.state.name}</Badge>
+								{#if showsState(document, column.key, member.type.key) && !judgedType(member.type)}
+									<Badge tone={member.state.tone}>{member.state.name}</Badge>
+								{/if}
 								{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}
 							</div>
 						</li>
 					{/each}
 					{@render dropLine(column.key, column.akter.length)}
 				</ol>
+				<!-- r[impl app.board-drop]: why a column refuses the card dragged over it. -->
+				{#if reorder.refuses(column.key) && reorder.dragging}
+					{@const dragged = memberOf(reorder.dragging.number)}
+					<p class="refused" role="status">
+						Can’t move here from {dragged?.state.name ?? 'its status'}
+					</p>
+				{/if}
+				{#if editable && onQuickAdd && quick.length > 0}
+					{@const chosen = quick.find((o) => o.key === adding[column.key]) ?? quick[0]}
+					<div class="quick-add">
+						{#if quick.length > 1}
+							<select
+								aria-label="What to add to {column.name}"
+								value={chosen.key}
+								onchange={(e) => (adding[column.key] = e.currentTarget.value)}
+							>
+								{#each quick as o (o.key)}<option value={o.key}>{o.name}</option>{/each}
+							</select>
+						{/if}
+						<input
+							aria-label="Add {articled(chosen.name.toLowerCase())} to {column.name}"
+							aria-describedby="quick-hint"
+							placeholder="Add {articled(chosen.name.toLowerCase())}…"
+							bind:value={typed[column.key]}
+							aria-busy={quickBusy || undefined}
+							onkeydown={(e) => quickKey(e, column.key, [chosen, ...quick])}
+						/>
+					</div>
+				{/if}
 			</section>
 		{/each}
 	</div>
@@ -226,7 +331,9 @@
 	{@const numbers = list.akter.map((m) => m.number)}
 	{@const listFields = list.akter[0].type.presentation.list.length}
 	{@const outcomes = list.akter.some((m) => m.outcome)}
-	{@const judging = list.akter.some((m) => judgedOf(m, me))}
+	{@const withVerdicts = list.akter.some((m) => judgedOf(m, me))}
+	<!-- r[impl app.members]: a judged member's state says nothing its outcome doesn't. -->
+	{@const judgedList = judgedType(list.akter[0].type)}
 	<section class="list" aria-label={list.name}>
 		<h3>{list.name} <span class="count">{list.akter.length}</span></h3>
 		<div class="scroll">
@@ -240,9 +347,9 @@
 								<th scope="col">{field.name}</th>
 							{/each}
 						{/if}
-						<th scope="col">State</th>
+						{#if !judgedList}<th scope="col">Status</th>{/if}
 						{#if outcomes}<th scope="col">Outcome</th>{/if}
-						{#if judging}<th scope="col">Verdicts</th>{/if}
+						{#if withVerdicts}<th scope="col">Verdicts</th>{/if}
 						<th scope="col"><span class="visually-hidden">Actions</span></th>
 					</tr>
 				</thead>
@@ -271,30 +378,37 @@
 									<Badge><Archive size={12} aria-hidden={true} /> Archived</Badge>{/if}</td
 							>
 							{#each shownFields(member, 'list') as field (field.name)}
-								<td>{field.text}</td>
+								<td
+									>{#if field.text && field.as === 'person'}<span class="person"
+											><Avatar name={field.text} />{field.text}</span
+										>{:else if field.text && field.as === 'chip'}<Badge>{field.text}</Badge
+										>{:else}{field.text}{/if}</td
+								>
 							{/each}
-							<td><Badge tone={member.state.tone}>{member.state.name}</Badge></td>
+							{#if !judgedList}<td><Badge tone={member.state.tone}>{member.state.name}</Badge></td
+								>{/if}
 							{#if outcomes}
 								<td
 									>{#if member.outcome}<OutcomeBadge outcome={member.outcome} />{/if}</td
 								>
 							{/if}
-							{#if judging}
+							{#if withVerdicts}
 								{@const judged = judgedOf(member, me)}
 								<td
 									>{#if judged}<VerdictButtons
 											number={member.number}
 											{judged}
+											open={judging}
 											busy={busy || member.state.final === true}
 											onGive={(verdict) => onVerdict(member, verdict)}
 										/>{/if}</td
 								>
 							{/if}
 							<td class="menu"
-								><Menu
-									label={boardLabels(member.number).menu}
-									items={itemsFor(list.akter, i)}
-								/></td
+								>{#if editable}<Menu
+										label={boardLabels(member.number).menu}
+										items={itemsFor(list.akter, i)}
+									/>{/if}</td
 							>
 						</tr>
 					{/each}
@@ -442,8 +556,9 @@
 
 	.shown {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-1);
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-2);
 		margin: 0;
 		color: var(--text-muted);
 		font-size: var(--text-xs);
@@ -452,6 +567,19 @@
 	.shown div {
 		display: flex;
 		gap: var(--space-2);
+		flex-basis: 100%;
+	}
+
+	.shown div.person,
+	.shown div.chip {
+		flex-basis: auto;
+	}
+
+	.shown .person dd,
+	.person {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
 	}
 
 	.picture {
@@ -470,6 +598,7 @@
 	.foot {
 		display: flex;
 		align-items: center;
+		white-space: nowrap;
 		gap: var(--space-2);
 		font-size: var(--text-xs);
 	}
@@ -543,5 +672,47 @@
 	td.menu {
 		width: 1%;
 		text-align: right;
+	}
+
+	.quick-add {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-1);
+		margin-top: var(--space-2);
+	}
+
+	.quick-add input,
+	.quick-add select {
+		min-height: 2rem;
+		background: var(--surface);
+		font-size: var(--text-sm);
+	}
+
+	.quick-add input:not(:focus) {
+		border-style: dashed;
+	}
+
+	.refused {
+		margin-top: var(--space-2);
+		padding: var(--space-2);
+		border-radius: var(--radius-md);
+		background: var(--bg-muted);
+		color: var(--text-muted);
+		font-size: var(--text-xs);
+		text-align: center;
+	}
+
+	/* r[impl app.narrow]: on a phone, a board's columns one under another,
+	   each with its name and count, rather than cut off to the side. */
+	@media (max-width: 599px) {
+		.board {
+			flex-direction: column;
+			overflow-x: visible;
+		}
+
+		.column {
+			flex: 0 0 auto;
+			max-width: none;
+		}
 	}
 </style>
