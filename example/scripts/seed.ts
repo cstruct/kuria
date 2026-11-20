@@ -79,7 +79,11 @@ export const GRANTS: Record<string, Grant[]> = {
 		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'problem_report', 'test_protocol', 'test_case', 'document_index', 'image'] },
 		{ role: 'document-release', at: ['document', 'external_document'] }
 	],
-	'hedda@shop.example': ['reader']
+	'hedda@shop.example': ['reader'],
+	'qa@shop.example': [
+		'reader',
+		{ role: 'quality-work', at: ['capa', 'capa_action', 'problem_report', 'test_case'] }
+	]
 };
 
 /** The examples' people who sign in: every bundle's, once each, as the

@@ -56,12 +56,14 @@ const DEV: &str = "01900000-0000-7000-8000-00000000d001";
 const RM: &str = "01900000-0000-7000-8000-00000000d002";
 const HEDDA: &str = "01900000-0000-7000-8000-00000000d003";
 const CI: &str = "01900000-0000-7000-8000-00000000d004";
+const QA: &str = "01900000-0000-7000-8000-00000000d005";
 
-const PEOPLE: [(&str, &str, Option<&str>); 4] = [
+const PEOPLE: [(&str, &str, Option<&str>); 5] = [
     (DEV, "Devi Larsen", Some("dev@shop.example")),
     (RM, "Rami Moberg", Some("rm@shop.example")),
     (HEDDA, "Hedda Lund", Some("hedda@shop.example")),
     (CI, "Build pipeline", None),
+    (QA, "Ines Berg", Some("qa@shop.example")),
 ];
 
 /// The token of `subject` (`as-<subject>`, which the fake host accepts).
@@ -660,6 +662,16 @@ async fn release_management(w: &World) {
     w.transition(&dev, &wishlist, "start", None, "Work started")
         .await;
     w.transition(&dev, &save, "start", None, "Picked up").await;
+    capas(
+        w,
+        &Spring {
+            summer_backlog: &summer_backlog,
+            hotfix: &hotfix,
+            lost: &lost,
+            acceptance: &acceptance,
+        },
+    )
+    .await;
 
     // Summer's own protocol, in draft until it has a candidate to run in.
     let wishes = w
@@ -677,6 +689,288 @@ async fn release_management(w: &World) {
         &[&wishes],
         json!({ "title": "Save a product for later", "steps": "1. Open a product.\n2. Tap the heart.", "expected": "It is in the wish list.", "testers": [DEV] }),
         "First case",
+    )
+    .await;
+}
+
+/// What the spring release left that its CAPAs refer to.
+struct Spring<'a> {
+    summer_backlog: &'a str,
+    hotfix: &'a str,
+    lost: &'a str,
+    acceptance: &'a str,
+}
+
+/// A reference to the shop's QMS.
+fn qms(path: &str) -> Value {
+    json!({ "url": format!("https://qms.shop.example/{path}") })
+}
+
+/// Two CAPAs from spring's problems, worked by QA/RA. The lost sessions:
+/// a problem report escalated to a CAPA whose correction is spring's
+/// hotfix, whose corrective action is a summer task, and whose
+/// verification is a new acceptance test case, still being implemented.
+/// The slow search: closed once, found ineffective, and reopened.
+// r[verify link.create]
+#[expect(clippy::too_many_lines, reason = "two CAPAs told from start to end")]
+async fn capas(w: &World, spring: &Spring<'_>) {
+    let (dev, qa) = (t(DEV), t(QA));
+    let report = w
+        .create(
+            &dev,
+            "problem_report",
+            &[spring.summer_backlog],
+            json!({ "title": "Sign-in: customers are signed out when the backend restarts",
+                    "description": "Restart the backend while signed in: the next page asks to sign in again. It should keep the session.",
+                    "reporter": DEV, "assignee": DEV }),
+            "Reported by support after the release",
+        )
+        .await;
+    w.transition(
+        &dev,
+        &report,
+        "classify",
+        Some(json!({ "screening": "no", "severity": "major", "priority": "p0" })),
+        "Every customer, at every deploy",
+    )
+    .await;
+    w.link(&dev, &report, "fixed_by", spring.lost, "The fix")
+        .await;
+    w.transition(&dev, &report, "fixed", None, "Fixed by 4.2.1")
+        .await;
+
+    let capa = w
+        .ok(
+            &qa,
+            "mutation($f: JSON, $l: [NewLinkInput!]) { createAkt(input: { type: \"capa\", fields: $f, links: $l, reason: \"Escalated: it recurs at every deploy\" }) { number } }",
+            json!({
+                "f": { "title": "Sessions lost at every deploy", "owner": QA,
+                       "problem": "Customers are signed out whenever the backend restarts, as at every deploy (PR-0001)." },
+                "l": [{ "kind": "originated_from", "to": report }]
+            }),
+        )
+        .await["createAkt"]["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    w.transition(
+        &qa,
+        &capa,
+        "confirm",
+        Some(json!({ "severity": "major",
+                     "impact": "No safety impact; every customer signs in again at every deploy.",
+                     "risk_record": qms("risks/RA-12") })),
+        "Recurring, and it affects everyone",
+    )
+    .await;
+    w.transition(
+        &qa,
+        &capa,
+        "plan",
+        Some(json!({
+            "kind": ["correction", "corrective"],
+            "affected": "Every customer, on 4.0 to 4.2.0.",
+            "root_cause": "Sessions are kept in the backend's memory, so a restart loses them (5 Whys).",
+            "vigilance": "not_required",
+            "communication": "required",
+            "communication_record": qms("notices/CN-3"),
+        })),
+        "Root cause found",
+    )
+    .await;
+    w.transition(
+        &qa,
+        &capa,
+        "implement",
+        Some(json!({
+            "effectiveness_method": "The acceptance test restarts the backend while signed in, in every candidate.",
+            "effectiveness_criteria": "Two releases in a row pass it, and support hears of no lost sessions.",
+        })),
+        "Planned",
+    )
+    .await;
+    let action = |title: &str, kind: &str, due: &str, needs: &str| {
+        let qa = &qa;
+        let capa = &capa;
+        let fields = json!({ "title": title, "kind": kind, "owner": QA, "due": due, "evidence_required": needs });
+        async move {
+            w.create(qa, "capa_action", &[capa], fields, "Planned")
+                .await
+        }
+    };
+    let correction = action(
+        "Hotfix 4.2.1",
+        "correction",
+        "2026-04-15",
+        "The hotfix, deployed and reviewed.",
+    )
+    .await;
+    w.link(
+        &qa,
+        &correction,
+        "implemented_by",
+        spring.hotfix,
+        "The hotfix",
+    )
+    .await;
+    w.transition(&qa, &correction, "start", None, "Under way")
+        .await;
+    w.transition(
+        &qa,
+        &correction,
+        "finish",
+        Some(json!({ "evidence": { "url": "https://ci.example/shop/builds/815", "label": "Build 815" } })),
+        "Deployed and reviewed",
+    )
+    .await;
+    let redis = w
+        .create(
+            &dev,
+            "backlog_item",
+            &[spring.summer_backlog],
+            json!({ "title": "Keep sessions in Redis", "kind": "chore", "assignee": DEV,
+                    "description": "So a restart keeps them." }),
+            "The corrective action's change",
+        )
+        .await;
+    let corrective = action(
+        "Keep sessions outside the backend",
+        "corrective",
+        "2026-06-30",
+        "The change, merged and shipped.",
+    )
+    .await;
+    w.link(&qa, &corrective, "implemented_by", &redis, "The change")
+        .await;
+    w.transition(&qa, &corrective, "start", None, "In summer's backlog")
+        .await;
+    action(
+        "Test sign-in across a restart",
+        "verification",
+        "2026-07-31",
+        "A test case in the acceptance test.",
+    )
+    .await;
+    let case = w
+        .create(
+            &qa,
+            "test_case",
+            &[spring.acceptance],
+            json!({ "title": "Stay signed in across a restart",
+                    "steps": "1. Sign in.\n2. Restart the backend.\n3. Open your orders.",
+                    "expected": "Your orders, without signing in again.", "testers": [DEV] }),
+            "The CAPA's check",
+        )
+        .await;
+    w.link(&qa, &capa, "verified_by", &case, "Shows it works")
+        .await;
+
+    // The slow search: closed, found ineffective, reopened.
+    let slow = w
+        .create(
+            &dev,
+            "problem_report",
+            &[spring.summer_backlog],
+            json!({ "title": "Search: the product list takes 5 s with the new ranking",
+                    "reporter": DEV, "assignee": DEV }),
+            "From the first candidate's acceptance run",
+        )
+        .await;
+    w.transition(
+        &dev,
+        &slow,
+        "classify",
+        Some(json!({ "screening": "no", "severity": "minor", "priority": "p1" })),
+        "Slow, not wrong",
+    )
+    .await;
+    let search = w
+        .ok(
+            &qa,
+            "mutation($f: JSON, $l: [NewLinkInput!]) { createAkt(input: { type: \"capa\", fields: $f, links: $l, reason: \"Escalated: performance regressions keep reaching candidates\" }) { number } }",
+            json!({
+                "f": { "title": "Slow searches reach candidates", "owner": QA,
+                       "problem": "A ranking change slowed the product list fivefold, and only the acceptance run found it." },
+                "l": [{ "kind": "originated_from", "to": slow }]
+            }),
+        )
+        .await["createAkt"]["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    w.transition(
+        &qa,
+        &search,
+        "confirm",
+        Some(json!({ "severity": "major", "impact": "Customers wait; no safety impact.", "risk_record": qms("risks/RA-20") })),
+        "Found too late",
+    )
+    .await;
+    w.transition(
+        &qa,
+        &search,
+        "plan",
+        Some(json!({
+            "kind": ["preventive"], "affected": "Every candidate's search.",
+            "causal_hypothesis": "Nothing measures search speed before a candidate is built.",
+            "trigger": "Two candidates in a row were slow before acceptance.",
+            "vigilance": "not_required", "communication": "not_required",
+        })),
+        "Planned",
+    )
+    .await;
+    w.transition(
+        &qa,
+        &search,
+        "implement",
+        Some(json!({ "effectiveness_method": "The pipeline times searches.",
+                     "effectiveness_criteria": "No candidate's product list takes over a second." })),
+        "Started",
+    )
+    .await;
+    let timing = w
+        .create(
+            &qa,
+            "capa_action",
+            &[&search],
+            json!({ "title": "Time searches in the pipeline", "kind": "preventive", "owner": QA, "due": "2026-05-01" }),
+            "Planned",
+        )
+        .await;
+    w.transition(&qa, &timing, "start", None, "Started").await;
+    w.transition(
+        &qa,
+        &timing,
+        "finish",
+        Some(json!({ "evidence": pr("backend", 340) })),
+        "Merged",
+    )
+    .await;
+    w.transition(&qa, &search, "verify", None, "Checking").await;
+    w.transition(
+        &qa,
+        &search,
+        "close",
+        Some(json!({
+            "effectiveness_results": "4.2.1 passed, but a summer build's list took 3 s: the timing ran on empty data.",
+            "adverse_impact": "None.",
+            "closure_outcome": "ineffective",
+        })),
+        "Ineffective: the check misses real data",
+    )
+    .await;
+    w.transition(
+        &qa,
+        &search,
+        "reopen",
+        Some(json!({
+            "reopen_reason": "The timing ran on an empty catalogue.",
+            "remaining_actions": "Time searches on a copy of the real catalogue.",
+            "revised_target": "2026-09-30",
+            "owner_confirmed": true,
+            "delay_impact": "One more release unchecked; no escalation needed.",
+        })),
+        "Reopened as ineffective",
     )
     .await;
 }

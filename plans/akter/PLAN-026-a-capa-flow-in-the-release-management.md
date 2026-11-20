@@ -631,12 +631,13 @@ A hotfix deploys without approval and shows that it waits for review. Reviewing 
 <!-- akt: PLAN-026-T10 -->
 ---
 type: task
-revision: 7
+revision: 11
 rank: b6S
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocked by PLAN-026-T06, Blocked by PLAN-026-T07, Blocked by PLAN-026-T08, Blocked by PLAN-026-T09, Blocks PLAN-026-T11, Blocks PLAN-026-T12]
 title: The CAPA story in the example bundle
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -649,6 +650,43 @@ Extend `docs/examples/release-management/bundle/` with the plan's CAPA story:
 5. Its verification is a new test case.
 
 A second CAPA was closed as ineffective and reopened. Regenerate the bundle as `docs/examples/README.md` says.
+
+## Done
+
+`items/server/tests/examples.rs` tells the story in `capas`, after summer is planned. The examples have a fifth person, Ines Berg (`qa@shop.example`), QA/RA.
+
+### Lost sessions
+
+1. Devi reports *PR-0001*, "customers are signed out when the backend restarts", in summer's backlog: spring's is closed by then. It is classified major, P0, screening no. It is fixed by spring's existing "Sessions lost on restart" task, and marked fixed.
+2. Ines creates *CAPA-2026-0001* from it with `createAkt`'s `links` (T06), linked *Originated from*. She confirms it and plans a correction and a corrective action, with:
+   - the root cause;
+   - customer communication required, with its notice;
+   - the effectiveness check, which is locked once implementing starts.
+3. Its actions:
+   - *A01*, the correction, is *Implemented by* spring's hotfix, which is deployed and reviewed (T09), and so is done;
+   - *A02*, the corrective action, is *Implemented by* a new summer task, "Keep sessions in Redis". It is in progress and due 2026-06-30, so it reads as overdue;
+   - *A03* is a planned verification.
+4. A new test case in the acceptance template, "Stay signed in across a restart", *Verifies* the CAPA. The CAPA stays *Implementing*, waiting for its actions.
+
+### Slow search
+
+*PR-0002*, from the first candidate's failed run, leads to *CAPA-2026-0002*, a preventive one with its causal hypothesis and trigger.
+
+- Its one action is done, and the CAPA is closed as *Ineffective*: the timing ran on empty data.
+- It is then reopened, with the reason, remaining actions, revised target, the owner's confirmation and the delay's impact (T04).
+
+### Elsewhere
+
+- The example stack's seed grants `qa@shop.example` the `quality-work` role at `capa`, `capa_action`, `problem_report` and `test_case`. Its people come from the bundle, so Ines signs in there.
+- Making the bundles again also rewrites the documents and planning bundles' ids and times, as each time before; nothing else in them changed.
+
+## Verified
+
+- `mise run examples:bundles`, through the API against a fresh database.
+- `items/server/tests/examples.rs`: the bundle imports into a fresh database with all its akter.
+- `mise run lint` and `mise run test`.
+
+Not seen in the app: the example stack running here is the main checkout's, so `mise run example release-management` wasn't started from this worktree.
 
 <!-- field: acceptance -->
 `KURIA_BOOTSTRAP_BUNDLE` imports it. `mise run example release-management` shows both CAPAs with their links, and an action that is overdue.
