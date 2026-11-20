@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 14
+revision: 18
 rank: b5k
 state: draft
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -46,6 +46,10 @@ A subcommand of the CLI ([items/cli](items/cli/README.md)) speaking MCP over sta
 - `list_types()` and `schema(type)`: as `kuria types` and `kuria types schema`, so the agent knows field keys.
 
 Refusals come back as MCP tool errors carrying the CLI's error code and field, so the agent can act on them.
+
+## Who made an agent's edit
+
+A change made through an agent is the person's, their access applying, and also names the agent (PLAN-027-D04). Kuria takes the agent from the token's actor chain (`act`), verified by Konklav's relying crates, and keeps it beside `by` on every change: revisions, draft updates and pushes, so that history, `draftChanges` and awareness read "Claude for Albin" (PLAN-027-T08). That also shows who impersonated someone, which Kuria hides today. Konklav issues such tokens by a delegation it doesn't have yet: a person starting a scoped, time-bounded child session for an agent's service principal (PLAN-027-T09). Until then, edits through `kuria mcp` are the person's alone; Kuria records nothing the client merely declares.
 
 ## Later: a visible agent
 
@@ -117,16 +121,16 @@ search_documents, read_document (with heading), edit_document, list_types and sc
 <!-- akt: PLAN-027-T05 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5p
 state: todo
 in: [PLAN-027]
-links: [Blocked by PLAN-027-T04]
+links: [Blocked by PLAN-027-T04, Blocked by PLAN-027-T08, Blocked by PLAN-027-T09]
 title: Name the agent in history and presence
 ---
 
 <!-- field: acceptance -->
-Edits through kuria mcp are attributed as PLAN-027-G01 settles; draftChanges and awareness say so.
+Edits through `kuria mcp` on a delegated session (PLAN-027-T09) are the person's and name the agent, as PLAN-027-D04 decides: in history, `draftChanges` and awareness.
 
 <!-- akt: PLAN-027-T06 -->
 ---
@@ -159,9 +163,9 @@ In mise run example documents, a person typing and an agent editing through kuri
 <!-- akt: PLAN-027-G01 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b5s
-state: open
+state: closed
 in: [PLAN-027]
 title: "Who an agent's edits are attributed to"
 ---
@@ -181,6 +185,9 @@ With a person's CLI session, draft history and awareness (`live/presence.rs` sta
 2. **A service principal of its own.** Verified and works today, but it acts with its own memberships, not the person's, says nothing of whom it worked for, and one shared by everyone using a hosted MCP (PLAN-027-G03) is wrong.
 3. **The person, through the agent, verified.** The change is the person's (their access, their accountability) and records the agent from `act`. Kuria reads `act` and keeps it on each change, `draftChanges` and awareness; Konklav needs a delegation it doesn't have: a person starting a child session for an agent's service principal, scoped and time-bounded, revoked with the parent.
 4. **The person, with a label the client declares.** `kuria mcp` says it is an agent, and Kuria keeps that beside `by`. Cheap, and the access stays the person's, but it isn't verified: anything with the session may claim it or leave it out.
+
+<!-- field: resolution -->
+The person, through the agent (option 3), as PLAN-027-D04 decides: Kuria reads Konklav's actor chain (PLAN-027-T08), Konklav delegates a session to an agent (PLAN-027-T09), then PLAN-027-T05.
 
 <!-- akt: PLAN-027-G02 -->
 ---
@@ -264,3 +271,51 @@ kuria mcp, in items/cli, with rmcp, reusing the CLI's session and commands.
 
 <!-- field: why -->
 Nothing is duplicated, local mode comes free, and it ships with the CLI people already install.
+
+<!-- akt: PLAN-027-D04 -->
+---
+type: decision
+revision: 2
+rank: b5y
+state: decided
+in: [PLAN-027]
+title: "An agent's edits are the person's, through the agent, from Konklav's actor chain"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+An agent edits with a person's session, so every change and its presence show the person alone (PLAN-027-G01). A service principal of its own acts with its own access and hides whom it worked for; a label the client declares isn't verified.
+
+<!-- field: decision -->
+A change made through an agent is the person's: their access applies and they are its author. Kuria also records the agent, taken from the token's actor chain (`act`), on the change, in `draftChanges` and in awareness. Konklav issues such a session by a delegation: a person starting a scoped, time-bounded child session for an agent's service principal, revoked with the parent. Until it can, edits through `kuria mcp` are the person's alone; Kuria records no agent the client merely declares.
+
+<!-- field: why -->
+The person is accountable for what they let an agent write, so access and authorship stay theirs, while the record still says truthfully that an agent wrote it. The actor chain is Konklav's way of naming the subject really acting, so Kuria verifies it through the relying crates instead of trusting the client, and reading it also stops Kuria hiding who impersonated someone.
+
+<!-- akt: PLAN-027-T08 -->
+---
+type: task
+revision: 2
+rank: b5z
+state: todo
+in: [PLAN-027]
+links: [Blocks PLAN-027-T05]
+title: "Record who really acted, from Konklav's actor chain"
+---
+
+<!-- field: acceptance -->
+A spec rule says Kuria keeps a token's `act` subject beside `by` on every change it records (revisions, draft updates, pushes); history, `draftChanges` and awareness show it as "<actor> for <person>". A test with an impersonation token shows the impersonator. Needs nothing from Konklav.
+
+<!-- akt: PLAN-027-T09 -->
+---
+type: task
+revision: 2
+rank: b60
+state: todo
+in: [PLAN-027]
+links: [Blocks PLAN-027-T05]
+title: "Konklav: a person delegates a session to an agent"
+---
+
+<!-- field: acceptance -->
+Konklav, in its own repository, lets a person start a child session for a service principal, scoped and time-bounded and revoked with the parent, whose tokens name the person as `sub` and the agent in `act`; the relying crates Kuria pins answer it. `kuria mcp` signs in that way.
