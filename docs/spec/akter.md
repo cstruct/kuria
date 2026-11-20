@@ -32,7 +32,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
   that `reopens` starts only from final states (`akt.transition.reopens`);
 - every choice field has at least one option;
 - every state a field's `locked` names is one the type defines
-  (`akt.field.locked`);
+  (`akt.field.locked`), and only `date` fields say `due`
+  (`akt.field.due`);
 - the number pattern is valid (`akt.number.pattern`);
 - every action a transition names is valid (`authz.transition-action`);
 - the outcomes a transition allows are `pass`, `fail`, `skip` or
@@ -167,6 +168,15 @@ one. The app MUST ask for such a field only in those states, or by the
 transitions that give it, and MUST show it outside them only once it holds
 a value (`app.create`, `app.fields`). Every state it names MUST be one the
 type defines; otherwise the document MUST be refused.
+
+r[akt.field.due]
+A `date` field MAY say `"due": true`; `due` on a field of another kind
+MUST be refused. An akt is overdue on such a field while it is in a state
+that isn't final and the field holds a date before today, in UTC. Whether
+it is MUST be worked out when it is read, never stored, so that it makes
+no revision, and an akt MUST be served with the due fields it is overdue
+on. The app MUST show an overdue date as overdue wherever it shows the
+field: on cards, in lists and on the akt's page.
 
 r[akt.field.locked]
 A field MAY name, in `locked`, states in which it is locked. While an akt
@@ -437,6 +447,12 @@ was checked for, or `me`; a date, by the date; a single-line `text` field,
 by the whole text. A condition on a field of any other kind, on a field
 the type lacks, or without one akt type to filter, MUST be refused as
 `BAD_REQUEST`.
+
+r[akt.filter.overdue]
+A list of akter of one akt type MAY be filtered to those overdue on any of
+its due fields (`akt.field.due`), as they are when the list is answered,
+a page at a time (`akt.page`). Filtering a type without due fields this way
+MUST be refused as `BAD_REQUEST`.
 
 r[akt.filter.outcome]
 A list of akter of one akt type MAY be filtered by outcome if the type has

@@ -1409,3 +1409,40 @@ fn a_closed_akt_reopens_only_by_a_transition_that_reopens() {
     .unwrap();
     assert_eq!(reopened.state, "open");
 }
+
+// r[verify akt.field.due]
+#[test]
+fn an_akt_is_overdue_once_its_due_date_passes_while_open() {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "action", "name": "Action", "number": "A-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "due", "name": "Due", "kind": "date", "due": true },
+            { "key": "noticed", "name": "Noticed", "kind": "date" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ]
+    }))
+    .unwrap();
+    let ty = validate(document).unwrap();
+    let akt = |state: &str, values: Json| Current {
+        state: state.to_owned(),
+        fields: fields_from_json(&ty, &input(values)).unwrap(),
+    };
+    let today = chrono::NaiveDate::from_ymd_opt(2026, 11, 20).unwrap();
+    let late = json!({ "title": "T", "due": "2026-11-19", "noticed": "2026-01-01" });
+    assert_eq!(overdue(&ty, &akt("open", late.clone()), today), ["due"]);
+    assert!(overdue(&ty, &akt("done", late), today).is_empty(), "final");
+    let today_due = json!({ "title": "T", "due": "2026-11-20" });
+    assert_eq!(
+        overdue(&ty, &akt("open", today_due), today),
+        Vec::<String>::new(),
+        "due today"
+    );
+    assert_eq!(
+        overdue(&ty, &akt("open", json!({ "title": "T" })), today),
+        Vec::<String>::new()
+    );
+}

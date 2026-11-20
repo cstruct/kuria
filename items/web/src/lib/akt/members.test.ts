@@ -100,11 +100,23 @@ describe('shownFields', () => {
 
 	it('names the fields the presentation picks, with their values', () => {
 		expect(shownFields(akt, 'card')).toEqual([
-			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text', overdue: false }
 		]);
 		expect(shownFields(akt, 'list')).toEqual([
-			{ name: 'Owner', text: '', picture: null, as: 'text' },
-			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
+			{ name: 'Owner', text: '', picture: null, as: 'text', overdue: false },
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text', overdue: false }
+		]);
+	});
+
+	// r[verify akt.field.due]
+	it('shows an overdue date as overdue', () => {
+		const late = {
+			fields: [{ __typename: 'DateValue', field: 'due', date: '2026-01-01' }] as unknown as Value[],
+			overdue: ['due'],
+			type: { fields: [{ key: 'due', name: 'Due' }], presentation: { card: ['due'], list: [] } }
+		};
+		expect(shownFields(late, 'card')).toEqual([
+			{ name: 'Due', text: '2026-01-01', picture: null, as: 'chip', overdue: true }
 		]);
 	});
 

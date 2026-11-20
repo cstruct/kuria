@@ -420,6 +420,10 @@ pub enum Match {
         assignees: Option<String>,
         outcome: String,
     },
+    /// The date `field` holds is before `date`, `YYYY-MM-DD`.
+    DateBefore { field: String, date: String },
+    /// The akt is in one of these states.
+    StateIn(Vec<String>),
 }
 
 type AktFilter =
@@ -473,6 +477,16 @@ fn matched(m: &Match) -> AktFilter {
                 .sql(")"),
             )
         }
+        // r[impl akt.filter.overdue]
+        // Dates are stored as `YYYY-MM-DD` text, which orders as they do.
+        Match::DateBefore { field, date } => Box::new(
+            sql::<diesel::sql_types::Bool>("((akt.fields ->> ")
+                .bind::<Text, _>(field.clone())
+                .sql(") < ")
+                .bind::<Text, _>(date.clone())
+                .sql(")"),
+        ),
+        Match::StateIn(states) => Box::new(akt::state.eq_any(states.clone())),
     }
 }
 

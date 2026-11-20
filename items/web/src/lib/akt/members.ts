@@ -110,6 +110,8 @@ export function groupMembers<C extends ColumnShape>(
 
 interface Shown {
 	fields: readonly Value[];
+	/** The due fields it is overdue on (`akt.field.due`). */
+	overdue?: readonly string[] | null;
 	type: {
 		fields: readonly { key: string; name: string }[];
 		presentation: { card: readonly string[]; list: readonly string[] };
@@ -133,7 +135,13 @@ export function pictureOf(value: Value | undefined): string | null {
 export function shownFields(
 	akt: Shown,
 	where: 'card' | 'list'
-): { name: string; text: string; picture: string | null; as: 'person' | 'chip' | 'text' }[] {
+): {
+	name: string;
+	text: string;
+	picture: string | null;
+	as: 'person' | 'chip' | 'text';
+	overdue: boolean;
+}[] {
 	return akt.type.presentation[where].flatMap((key) => {
 		const def = akt.type.fields.find((f) => f.key === key);
 		if (!def) return [];
@@ -145,7 +153,17 @@ export function shownFields(
 				: value?.__typename === 'ChoiceValue' || value?.__typename === 'ChoicesValue'
 					? 'chip'
 					: 'text';
-		return [{ name: def.name, text: value ? textOf(value) : '', picture: pictureOf(value), as }];
+		// r[impl akt.field.due]: an overdue date, as overdue.
+		const overdue = Boolean(akt.overdue?.includes(key));
+		return [
+			{
+				name: def.name,
+				text: value ? textOf(value) : '',
+				picture: pictureOf(value),
+				as: overdue ? 'chip' : as,
+				overdue
+			}
+		];
 	});
 }
 

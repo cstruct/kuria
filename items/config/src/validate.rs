@@ -353,6 +353,10 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
             );
         }
     }
+    // r[impl akt.field.due]
+    if field.due && field.kind != FieldKind::Date {
+        problems.add(&format!("{path}.due"), "only date fields are due");
+    }
     // r[impl akt.field.locked]
     for (j, state) in field.locked.iter().enumerate() {
         if !document.states.iter().any(|s| &s.key == state) {
@@ -1072,6 +1076,11 @@ mod tests {
         assert_eq!(
             with("/fields/0/states", json!(["gone"])),
             ["fields[0].states[0]: no state `gone`"]
+        );
+        // r[verify akt.field.due]
+        assert_eq!(
+            with("/fields/0/due", json!(true)),
+            ["fields[0].due: only date fields are due"]
         );
         // r[verify akt.field.locked]
         assert_eq!(

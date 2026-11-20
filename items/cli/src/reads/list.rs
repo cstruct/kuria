@@ -26,6 +26,8 @@ pub struct Listing {
     pub conditions: Vec<String>,
     /// An outcome, `pass`, `fail`, `skip` or `pending` (`akt.filter.outcome`).
     pub outcome: Option<String>,
+    /// Only those overdue on a due field (`akt.filter.overdue`).
+    pub overdue: bool,
     pub search: Option<String>,
     pub limit: u32,
     /// The cursor a previous page ended at.
@@ -223,13 +225,14 @@ async fn page(
     let data = session
         .graphql(
             &format!(
-                "query($type: String, $state: String, $first: Int, $after: String, $search: String, $where: [FieldCondition!], $outcome: Outcome, $archived: ArchivedFilter) {{
-                  akter(type: $type, state: $state, first: $first, after: $after, search: $search, where: $where, outcome: $outcome, archived: $archived) {{
+                "query($type: String, $state: String, $first: Int, $after: String, $search: String, $where: [FieldCondition!], $outcome: Outcome, $overdue: Boolean, $archived: ArchivedFilter) {{
+                  akter(type: $type, state: $state, first: $first, after: $after, search: $search, where: $where, outcome: $outcome, overdue: $overdue, archived: $archived) {{
                     nodes {{ ...Row }} pageInfo {{ endCursor hasNextPage }} }} }} {fragments}"
             ),
             json!({
                 "type": listing.akt_type, "state": state, "first": first, "after": after,
                 "search": listing.search, "where": wheres, "outcome": outcome,
+                "overdue": listing.overdue.then_some(true),
                 "archived": listing.archived.filter(),
             }),
         )
@@ -303,6 +306,10 @@ fn local_page(
             all
         }
     };
+    // r[impl akt.filter.overdue]
+    if listing.overdue {
+        keep_overdue(dir, listing, &mut akter)?;
+    }
     let wanted = local_outcome(local, listing)?;
     let mut outcomes = Ok(());
     akter.retain(|a| match wanted {
@@ -490,4 +497,43 @@ fn row_json(row: &Row) -> Json {
         "updatedAt": row.updated_at,
         "fields": fields,
     })
+}
+
+/// Keeps of `akter` those overdue on a due field today, refusing as a
+/// server refuses (`akt.filter.overdue`): only for one type, with due
+/// fields.
+// r[impl akt.filter.overdue]
+fn keep_overdue(
+    dir: &crate::local::dir::AktDir,
+    listing: &Listing,
+    akter: &mut Vec<&crate::local::dir::LocalAkt>,
+) -> Result<(), CliError> {
+    let refused = |message: String| CliError::from_server("BAD_REQUEST", message, None);
+    let ty = listing
+        .akt_type
+        .as_ref()
+        .and_then(|key| dir.types.get(key))
+        .ok_or_else(|| refused("filtering by overdue needs a type".to_owned()))?;
+    if !ty.ty.document().fields.iter().any(|f| f.due) {
+        return Err(refused(format!("`{}` has no due fields", ty.ty.key())));
+    }
+    let today = chrono::Utc::now().date_naive();
+    let mut read = Ok(());
+    akter.retain(|a| {
+        let ty = &dir.type_of(a).ty;
+        match crate::local::values::current(ty, a, &mut crate::local::values::Ids::default()) {
+            Ok(fields) => {
+                let now = kuria_engine::Current {
+                    state: a.state.clone(),
+                    fields,
+                };
+                !kuria_engine::overdue(ty, &now, today).is_empty()
+            }
+            Err(e) => {
+                read = Err(e);
+                false
+            }
+        }
+    });
+    read
 }

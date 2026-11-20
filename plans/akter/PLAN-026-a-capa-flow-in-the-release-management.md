@@ -360,12 +360,13 @@ A fixture akt is closed, reopened with the transition's required fields, and clo
 <!-- akt: PLAN-026-T05 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6N
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T08]
 title: Due dates that read as overdue
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -374,6 +375,34 @@ Spec due dates. A `date` field can say `"due": true`.
 - Once the date has passed while the akt isn't in a final state, cards, lists and its page show the field as overdue, in a danger tone.
 - `kuria ls --overdue` and the list's filter find overdue akter.
 - Nothing is stored: overdue is worked out when read, as outcomes are.
+
+## Done
+
+- **Spec:** `akt.field.due` and `akt.filter.overdue` in `docs/spec/akter.md`; `akt.type.validation` and `cli.read` (`--overdue`) say what they add.
+  - "Today" is today in UTC, and a date due today isn't overdue yet.
+  - The filter is for a list of one type only, not for a container's members.
+- **Config:** `due` on `FieldDef`, refused on anything but a `date` field.
+- **Engine:** `overdue(ty, current, today)`.
+- **Store:** `Match::DateBefore` and `Match::StateIn`.
+- **Server:**
+  - `Akt.overdue`, the due fields it is overdue on;
+  - `akter(overdue: true)`, which filters by the type's latest version: its due fields before today, in a state that isn't final;
+  - `FieldDef.due`.
+- **CLI:** `ls <type> --overdue`, against a server and in local mode, refused without a type or due fields.
+- **App:**
+  - an overdue date shows as a danger badge, "…, overdue", on cards, in member lists, in the type's list and on the akt's page;
+  - the type's list has an *Overdue only* filter where the type has a due field.
+
+## Verified
+
+- `items/config` field validation, `due` case.
+- `items/engine` test `an_akt_is_overdue_once_its_due_date_passes_while_open`.
+- `items/server/tests/due.rs`.
+- `items/cli/tests/local.rs` test `lists_the_actions_overdue`.
+- `items/web` test `shownFields`, overdue case.
+- `mise run lint` and `mise run test`.
+
+The badge and the filter are seen in a browser by T10 and T12.
 
 <!-- field: acceptance -->
 A fixture akt with a past due date reads as overdue on its card, in the list and on its page, and `--overdue` lists it. Once it is final, it is no longer overdue.

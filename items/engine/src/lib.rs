@@ -346,6 +346,24 @@ pub fn required_when(
         .collect()
 }
 
+/// The due fields (`akt.field.due`) an akt of `ty` in `current` is overdue
+/// on, `today`: those holding a date before it, while its state isn't
+/// final. Worked out when read, never stored.
+// r[impl akt.field.due]
+#[must_use]
+pub fn overdue(ty: &AktType, current: &Current, today: chrono::NaiveDate) -> Vec<String> {
+    if ty.state(&current.state).is_none_or(|s| s.is_final) {
+        return Vec::new();
+    }
+    ty.document()
+        .fields
+        .iter()
+        .filter(|f| f.due)
+        .filter(|f| matches!(current.fields.get(&f.key), Some(Value::Date(d)) if *d < today))
+        .map(|f| f.key.clone())
+        .collect()
+}
+
 /// Refuses `outcome`, a change of `current`, if it changes a value a field
 /// locked in `current`'s state holds, and gives no `reason`
 /// (`akt.field.locked`).

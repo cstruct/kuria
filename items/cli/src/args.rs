@@ -71,6 +71,9 @@ pub enum Command {
         /// or `--in` for a type whose outcome comes from its members.
         #[arg(long, value_parser = ["pass", "fail", "skip", "pending"], ignore_case = true)]
         outcome: Option<String>,
+        /// Only those overdue on one of their due fields. Needs TYPE.
+        #[arg(long)]
+        overdue: bool,
         /// Only those whose number starts with this, or whose title holds
         /// each of its words.
         #[arg(long)]

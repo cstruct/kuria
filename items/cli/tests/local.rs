@@ -3707,3 +3707,60 @@ fn a_closed_case_reopens() {
     dir.ok(&["set", "CASE-1", "title=Late reviews, again"]);
     assert!(file(&dir, "CASE-1").contains("state: open"));
 }
+
+// r[verify akt.filter.overdue]
+// r[verify akt.field.due]
+#[test]
+fn lists_the_actions_overdue() {
+    let dir = Dir::new();
+    let action = json!({
+        "key": "action", "name": "Action", "number": "A-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "due", "name": "Due", "kind": "date", "due": true }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ],
+        "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done" }]
+    });
+    std::fs::write(dir.root.join("types/action.json"), action.to_string()).unwrap();
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Late",
+        "--set",
+        "due=2020-01-01",
+    ]);
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Later",
+        "--set",
+        "due=2999-01-01",
+    ]);
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Late, done",
+        "--set",
+        "due=2020-01-01",
+    ]);
+    dir.ok(&["do", "A-3", "finish"]);
+    let overdue = |args: &[&str]| {
+        let mut all = vec!["ls"];
+        all.extend_from_slice(args);
+        all.extend(["--overdue", "--format", "json"]);
+        numbers(&dir.ok(&all))
+    };
+    assert_eq!(overdue(&["action"]), ["A-1"]);
+    assert_eq!(dir.refused(&["ls", "--overdue"]).code, "BAD_REQUEST");
+    assert_eq!(
+        dir.refused(&["ls", "plan", "--overdue"]).code,
+        "BAD_REQUEST"
+    );
+}

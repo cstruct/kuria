@@ -341,6 +341,10 @@ impl AkterQuery {
             desc = "Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field."
         )]
         outcome: Option<OutcomeKind>,
+        #[graphql(
+            desc = "Only akter overdue on one of their due fields, as they are now; `type` must be given, and have one."
+        )]
+        overdue: Option<bool>,
         #[graphql(desc = "Live akter (the default), archived ones, or both.")] archived: Option<
             ArchivedFilter,
         >,
@@ -358,6 +362,7 @@ impl AkterQuery {
                 search.as_deref(),
                 Some(&where_key),
                 outcome.map(OutcomeKind::key),
+                overdue.filter(|o| *o).map(|_| "overdue"),
                 Some(archived_key(archived)),
             ],
         );
@@ -400,6 +405,9 @@ impl AkterQuery {
                 }
             }
         }
+        if overdue == Some(true) {
+            conditions.extend(overdue_conditions(&mut conn, tenant, key.as_deref()).await?);
+        }
         let listing = store::Listing {
             keys: &readable,
             archived: archived.into(),
@@ -428,6 +436,49 @@ impl AkterQuery {
             page_info,
         })
     }
+}
+
+/// The store's conditions for akter of the type `key` overdue on one of its
+/// due fields today, by its latest version (`akt.filter.overdue`).
+// r[impl akt.filter.overdue]
+async fn overdue_conditions(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    key: Option<&str>,
+) -> async_graphql::Result<Vec<store::Condition>> {
+    let refused = |message: &str| coded(message.to_owned(), "BAD_REQUEST");
+    let key = key.ok_or_else(|| refused("filtering by overdue needs `type`"))?;
+    let row = store::latest_type_versions(conn, tenant)
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .find(|row| row.key == key)
+        .ok_or_else(|| refused(&format!("there is no akt type `{key}`")))?;
+    let ty = StoredType::read(row).map_err(error)?;
+    let document = ty.ty.document();
+    let today = Utc::now().date_naive().format("%Y-%m-%d").to_string();
+    let due: Vec<store::Match> = document
+        .fields
+        .iter()
+        .filter(|f| f.due)
+        .map(|f| store::Match::DateBefore {
+            field: f.key.clone(),
+            date: today.clone(),
+        })
+        .collect();
+    if due.is_empty() {
+        return Err(refused(&format!("`{key}` has no due fields")));
+    }
+    let open = document
+        .states
+        .iter()
+        .filter(|s| !s.is_final)
+        .map(|s| s.key.clone())
+        .collect();
+    Ok(vec![
+        store::Condition(due),
+        store::Condition(vec![store::Match::StateIn(open)]),
+    ])
 }
 
 /// The store's conditions for `conditions` on fields of the akt type `key`,
@@ -1658,6 +1709,9 @@ pub struct Field {
     /// The states in which a change to a value it holds needs a reason
     /// (`akt.field.locked`).
     locked: Vec<String>,
+    /// For a date field: whether an akt is overdue once it passes
+    /// (`akt.field.due`).
+    due: bool,
 }
 
 /// What files an attachment field holds.
@@ -1688,6 +1742,7 @@ impl From<&FieldDef> for Field {
             diagrams: def.diagrams,
             media_types: def.media_types.clone(),
             locked: def.locked.clone(),
+            due: def.due,
         }
     }
 }
@@ -2415,6 +2470,31 @@ impl Akt {
             .await
             .map_err(error)?
             .map(Into::into))
+    }
+
+    /// The due fields it is overdue on today (`akt.field.due`); none if it
+    /// is read at a version or revision.
+    // r[impl akt.field.due]
+    async fn overdue(&self) -> async_graphql::Result<Vec<String>> {
+        if self.is_past() {
+            return Ok(Vec::new());
+        }
+        let ty = &self.ty.ty;
+        if !ty.document().fields.iter().any(|f| f.due) {
+            return Ok(Vec::new());
+        }
+        let current = kuria_engine::Current {
+            state: self.row.state.clone(),
+            fields: kuria_engine::fields_from_json(
+                ty,
+                self.row
+                    .fields
+                    .as_object()
+                    .unwrap_or(&serde_json::Map::new()),
+            )
+            .map_err(internal)?,
+        };
+        Ok(kuria_engine::overdue(ty, &current, Utc::now().date_naive()))
     }
 
     /// For each transition its state allows that would be refused now for

@@ -2,6 +2,7 @@
 	import Lock from '@lucide/svelte/icons/lock';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import FieldEditor from './FieldEditor.svelte';
@@ -27,6 +28,8 @@
 		/** Whether it is locked in the akt's state and holds a value, so
 		 * that changing it needs a reason (`akt.field.locked`). */
 		locked?: boolean;
+		/** Whether the akt is overdue on it (`akt.field.due`). */
+		overdue?: boolean;
 		busy: boolean;
 		error?: string;
 		onEdit: () => void;
@@ -59,6 +62,7 @@
 		editable,
 		drafted,
 		locked = false,
+		overdue = false,
 		busy,
 		error,
 		onEdit,
@@ -141,6 +145,9 @@
 						open={judging}
 						onGive={onVerdict}
 					/>
+				{:else if value && overdue}
+					<!-- r[impl akt.field.due]: an overdue date, as overdue. -->
+					<Badge tone="DANGER"><FieldShown {value} multiline={field.multiline} />, overdue</Badge>
 				{:else if value}
 					<FieldShown {value} multiline={field.multiline} />
 				{:else}

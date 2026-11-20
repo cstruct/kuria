@@ -425,6 +425,10 @@ pub struct FieldDef {
     /// The states in which it is given, if not all (`akt.field.states`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub states: Vec<String>,
+    /// For a `date` field: whether an akt is overdue once it passes, while
+    /// not final (`akt.field.due`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub due: bool,
     /// The states in which it is locked: a change to a value it holds
     /// needs a reason (`akt.field.locked`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

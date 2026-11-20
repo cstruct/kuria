@@ -98,6 +98,11 @@ type Akt {
 	"""
 	outcome: Outcome
 	"""
+	The due fields it is overdue on today (`akt.field.due`); none if it
+	is read at a version or revision.
+	"""
+	overdue: [String!]!
+	"""
 	For each transition its state allows that would be refused now for
 	what it waits for, what that is (`akt.transition.waits`). None for
 	an akt read at a version or revision, or in a final state.
@@ -706,6 +711,11 @@ type Field {
 	(`akt.field.locked`).
 	"""
 	locked: [String!]!
+	"""
+	For a date field: whether an akt is overdue once it passes
+	(`akt.field.due`).
+	"""
+	due: Boolean!
 }
 
 """
@@ -1312,6 +1322,10 @@ type Query {
 		Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field.
 		"""
 		outcome: Outcome,
+		"""
+		Only akter overdue on one of their due fields, as they are now; `type` must be given, and have one.
+		"""
+		overdue: Boolean,
 		"""
 		Live akter (the default), archived ones, or both.
 		"""

@@ -265,7 +265,11 @@
 										{:else if field.text && field.as === 'chip'}
 											<div class="chip">
 												<dt class="visually-hidden">{field.name}</dt>
-												<dd><Badge>{field.text}</Badge></dd>
+												<dd>
+													<Badge tone={field.overdue ? 'DANGER' : 'NEUTRAL'}
+														>{field.text}{field.overdue ? ', overdue' : ''}</Badge
+													>
+												</dd>
 											</div>
 										{:else if field.text}
 											<div>
@@ -381,7 +385,9 @@
 								<td
 									>{#if field.text && field.as === 'person'}<span class="person"
 											><Avatar name={field.text} />{field.text}</span
-										>{:else if field.text && field.as === 'chip'}<Badge>{field.text}</Badge
+										>{:else if field.text && field.as === 'chip'}<Badge
+											tone={field.overdue ? 'DANGER' : 'NEUTRAL'}
+											>{field.text}{field.overdue ? ', overdue' : ''}</Badge
 										>{:else}{field.text}{/if}</td
 								>
 							{/each}

@@ -102,7 +102,8 @@ The client MUST offer:
 - `ls [<type>]`: akter as a table of number, title, state, outcome where
   they have one, and the presentation's list fields, filtered by
   `--state`, `--in <container>`, `--where <field>=<value>` (`akt.filter`,
-  `@me` for oneself), `--outcome <outcome>` (`akt.filter.outcome`) and
+  `@me` for oneself), `--outcome <outcome>` (`akt.filter.outcome`), `--overdue`
+  (`akt.filter.overdue`) and
   `--search`, a page at a time, or every page with `--all` (`akt.page`);
 - `find <text>`: a search (`akt.search`);
 - `cat <number>…`: each akt as an akt file (`cli.file`), several as one

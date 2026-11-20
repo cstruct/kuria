@@ -55,6 +55,7 @@ export const AkterOfType = graphql(`
 		$after: String
 		$where: [FieldCondition!]
 		$outcome: Outcome
+		$overdue: Boolean
 		$archived: ArchivedFilter
 	) {
 		aktType(key: $type) {
@@ -74,6 +75,7 @@ export const AkterOfType = graphql(`
 			after: $after
 			where: $where
 			outcome: $outcome
+			overdue: $overdue
 			archived: $archived
 		) {
 			nodes {
@@ -83,6 +85,7 @@ export const AkterOfType = graphql(`
 				rank
 				updatedAt
 				outcome
+				overdue
 				archived {
 					at
 				}
@@ -388,6 +391,7 @@ export const AktPage = graphql(`
 			title
 			revision
 			outcome
+			overdue
 			waits {
 				transition
 				open
@@ -451,6 +455,7 @@ export const AktPage = graphql(`
 						title
 						revision
 						outcome
+						overdue
 						archived {
 							at
 						}
@@ -566,6 +571,7 @@ export const ListFilters = graphql(`
 				key
 				name
 				kind
+				due
 				multiline
 				multiple
 				options {
