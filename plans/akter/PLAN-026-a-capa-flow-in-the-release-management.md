@@ -1,7 +1,7 @@
 ---
 number: PLAN-026
 type: plan
-revision: 23
+revision: 24
 rank: b6I
 state: active
 title: A CAPA flow in the release-management example
@@ -505,12 +505,13 @@ A problem report can be created on a backlog's board and classified. It closes a
 <!-- akt: PLAN-026-T08 -->
 ---
 type: task
-revision: 7
+revision: 11
 rank: b6Q
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocked by PLAN-026-T01, Blocked by PLAN-026-T02, Blocked by PLAN-026-T03, Blocked by PLAN-026-T04, Blocked by PLAN-026-T05, Blocks PLAN-026-T10]
 title: CAPA and CAPA action akt types
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -519,6 +520,64 @@ Add `capa` and `capa_action` to `docs/examples/release-management/`, as the plan
 - Add a *Quality* sidebar group and presentation: an icon and the states' tones.
 - Add the link kinds *Originated from*, *Superseded by*, *Verified by* and *Implemented by*.
 - Add `capa:confirm` and `capa:approve_closure` to the Konklav catalog of the example and of the end-to-end seed.
+
+## Done
+
+### `capa.json`
+
+Numbered `CAPA-2026-0001`, in the *Quality* group, with a shield icon, in teal.
+
+- **States:** *Open*, *Investigating*, *Planning*, *Implementing*, *Verifying*, *Closed*, *Superseded* and *Not required*; the last three are final.
+- **Confirm CAPA** (`capa:confirm`) needs severity, impact and the risk record. **No CAPA needed** (`capa:confirm`) needs the reason why.
+- **Plan actions** needs the kinds of action, what is affected, and the vigilance and communication decisions. With `requires_when` (T02), it also needs:
+  - the root cause, for a corrective CAPA;
+  - the causal hypothesis and trigger, for a preventive one;
+  - each record, where reporting or communication is required.
+- **Start implementing** needs the effectiveness check and its acceptance criteria, both locked from then on (T03).
+- **Verify effectiveness** waits for every action (T01). **Back to implementing** returns from verifying.
+- **Close** (`capa:approve_closure`) waits for every action too, and needs the results, the adverse-impact check and the closure outcome (D02).
+- **Supersede** (`capa:approve_closure`) needs a *Superseded by* link (T01's `requires_links`), and leads to its own final state rather than to a closure outcome.
+- **Reopen** (`capa:confirm`, T04) needs:
+  - the reason;
+  - the remaining actions;
+  - a revised target, a due date (T05);
+  - the owner's confirmation;
+  - the impact of the delay.
+- **Links:** *Originated from* a problem report (inverse *Led to*), *Superseded by* a CAPA, and *Verified by* test cases and protocols.
+- **Board:** it contains its actions, exclusively: *Planned*, *In progress* and *Done*.
+
+### `capa_action.json`
+
+Numbered `CAPA-2026-0001-A01`, created in its CAPA, under *Show more*.
+
+- **Kinds:** correction, corrective, preventive or verification.
+- **Fields:** an owner, the creator by default; a due date, due (T05) and locked once started (T03); the evidence it must leave, and the evidence it left.
+- **States:** *Planned*, *In progress*, *Done* and *Dropped*, which needs a reason.
+- **Finish** needs the evidence, and waits for what it is *Implemented by*: tasks, hotfixes or release candidates (T01).
+- It archives with its CAPA.
+
+### Konklav
+
+- The e2e seed's catalog has `capa:confirm` and `capa:approve_closure`; the example stack's seed takes them from the documents, as it does `release:approve`.
+- Both seeds have a `quality-work` role: create, edit, transition and archive, and both CAPA actions.
+- The QA/RA person who holds it comes with T10 and T12.
+
+### Found while building it
+
+- `default: "creator"` is the app's offer only, so an action created through the API names its owner.
+- A second reopening still needs the reopen fields, but they still hold the first reopening's values, so nothing makes them be given again. A reopen that clears them first would need a transition to clear fields, which Kuria lacks.
+
+## Verified
+
+- `items/server/tests/capa_flow.rs`, against the example's documents:
+  - the developer can't confirm or close;
+  - planning a corrective CAPA needs its root cause;
+  - an overdue action reads as overdue, and its due date is locked once started;
+  - verifying waits for the action, and the action for its task;
+  - QA/RA closes, reopens with the procedure's fields, and closes again, with both closures in the history;
+  - superseding needs a *Superseded by* link, and a CAPA can be declined with its reason.
+- `items/server/tests/examples.rs`; the bundle was made again with both types, still without CAPAs (T10).
+- `mise run lint` and `mise run test`.
 
 <!-- field: acceptance -->
 `items/server/tests/examples.rs` defines the types. A new `capa_flow.rs` checks each refusal the plan's verification lists, then works a CAPA to *Closed*, reopens it, and closes it again.
@@ -766,3 +825,16 @@ A hotfix gets a *Reviewed* state after *Deployed*. *Deployed* is the visible "re
 
 <!-- field: why -->
 States already show what is outstanding on boards and lists. A general obligations feature is bigger, and isn't needed for this flow.
+
+<!-- akt: PLAN-026-G05 -->
+---
+type: gap
+revision: 1
+rank: b6d
+state: open
+in: [PLAN-026]
+title: "A second reopening keeps the first one's answers"
+---
+
+<!-- field: description -->
+Reopening a CAPA requires the reason, remaining actions, revised target, owner confirmation and impact of the delay. On a second reopening they still hold the first one's values, so the transition doesn't make anyone give them again. A transition that clears fields as it is performed would fix it; Kuria has none. Until then, the README says to give them again.

@@ -4,7 +4,7 @@
       "key": "decision",
       "versions": [
         {
-          "createdAt": "2026-11-20T11:35:12.837496Z",
+          "createdAt": "2026-11-20T11:38:47.086135Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "archive": {
@@ -114,7 +114,7 @@
               }
             ]
           },
-          "id": "01a1f8bd-38c6-740e-a2d4-373a487262bd",
+          "id": "01a1f8c0-7daf-76ff-8602-ea874258ad14",
           "version": 1
         }
       ]
@@ -123,7 +123,7 @@
       "key": "gap",
       "versions": [
         {
-          "createdAt": "2026-11-20T11:35:12.832726Z",
+          "createdAt": "2026-11-20T11:38:47.079597Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "archive": {
@@ -205,7 +205,7 @@
               }
             ]
           },
-          "id": "01a1f8bd-38c1-765c-913d-7db13a0e51a2",
+          "id": "01a1f8c0-7da8-7379-9843-4861b96bb737",
           "version": 1
         }
       ]
@@ -214,7 +214,7 @@
       "key": "plan",
       "versions": [
         {
-          "createdAt": "2026-11-20T11:35:12.823064Z",
+          "createdAt": "2026-11-20T11:38:47.065990Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "board": {
@@ -373,7 +373,7 @@
               }
             ]
           },
-          "id": "01a1f8bd-38b7-7545-8838-4bd83ca08246",
+          "id": "01a1f8c0-7d9a-708b-8d8c-df7d9c2d653f",
           "version": 1
         }
       ]
@@ -382,7 +382,7 @@
       "key": "task",
       "versions": [
         {
-          "createdAt": "2026-11-20T11:35:12.828302Z",
+          "createdAt": "2026-11-20T11:38:47.072516Z",
           "createdBy": "01900000-0000-7000-8000-00000000d002",
           "definition": {
             "archive": {
@@ -527,7 +527,7 @@
               }
             ]
           },
-          "id": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
+          "id": "01a1f8c0-7da1-7095-b451-92b2203d5417",
           "version": 1
         }
       ]
@@ -536,7 +536,7 @@
   "akter": [
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:12.843042Z",
+      "createdAt": "2026-11-20T11:38:47.094604Z",
       "fields": {
         "design": "## Constraints\n\n- A reset link is valid once, for 30 minutes.\n- Nothing tells whether an email has an account.\n\n## Design\n\nA signed, single-use token in the link; the new password is checked against the breached-password list.",
         "goal": "Customers reset a forgotten password themselves, by email, without calling support.\n\nSuccess: support's password tickets drop by half within a month of the release.",
@@ -544,7 +544,7 @@
         "title": "Self-service password reset",
         "verification": "- The backend's tests cover expiry and reuse.\n- The acceptance protocol has a case for each step."
       },
-      "id": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+      "id": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
       "number": "PLAN-001",
       "rank": "a0",
       "revisions": [
@@ -557,7 +557,7 @@
             "title": "Self-service password reset",
             "verification": "- The backend's tests cover expiry and reuse.\n- The acceptance protocol has a case for each step."
           },
-          "createdAt": "2026-11-20T11:35:12.843042Z",
+          "createdAt": "2026-11-20T11:38:47.094604Z",
           "hash": "7b9ca686f9e6e86f13c869655bc5b88af27cfb1d468de5e8e1a414248d1b3f7a",
           "membership": null,
           "reason": "Plan the password reset",
@@ -568,7 +568,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.854433Z",
+          "createdAt": "2026-11-20T11:38:47.113175Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": null,
           "reason": "Agreed in planning",
@@ -579,12 +579,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.861871Z",
+          "createdAt": "2026-11-20T11:38:47.123408Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-38de-7690-a050-2b3d7e8feff8",
+                "akt": "01a1f8c0-7dd4-723b-aa64-508e03d3890d",
                 "number": "PLAN-001-T01"
               }
             ]
@@ -597,12 +597,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.872879Z",
+          "createdAt": "2026-11-20T11:38:47.138079Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-38e9-77e6-b333-f7e7b4e32527",
+                "akt": "01a1f8c0-7de2-741d-ad57-f37d35e453b8",
                 "number": "PLAN-001-T02"
               }
             ]
@@ -615,12 +615,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.883878Z",
+          "createdAt": "2026-11-20T11:38:47.153642Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-38f4-7484-8c29-8672a8394afb",
+                "akt": "01a1f8c0-7df2-716e-a302-3ce08004ddaf",
                 "number": "PLAN-001-T03"
               }
             ]
@@ -633,12 +633,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.894451Z",
+          "createdAt": "2026-11-20T11:38:47.169274Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-38ff-756d-9a05-9592449d2931",
+                "akt": "01a1f8c0-7e01-72c6-b6a1-9edb2c202d26",
                 "number": "PLAN-001-T04"
               }
             ]
@@ -651,12 +651,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.906756Z",
+          "createdAt": "2026-11-20T11:38:47.185120Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-390b-711f-96ac-61c6c7566d68",
+                "akt": "01a1f8c0-7e12-75d9-a809-72a661f243e4",
                 "number": "PLAN-001-T05"
               }
             ]
@@ -669,12 +669,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.003776Z",
+          "createdAt": "2026-11-20T11:38:47.346272Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-396c-7553-b527-56911fe7447a",
+                "akt": "01a1f8c0-7eb3-7037-b890-87e772938cdc",
                 "number": "PLAN-001-G01"
               }
             ]
@@ -687,12 +687,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.013982Z",
+          "createdAt": "2026-11-20T11:38:47.366373Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-3976-7772-9a25-c6ed7a451da3",
+                "akt": "01a1f8c0-7ec7-72d5-90e0-b511aebf1e92",
                 "number": "PLAN-001-G02"
               }
             ]
@@ -705,12 +705,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.024507Z",
+          "createdAt": "2026-11-20T11:38:47.381844Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-3981-7159-91fd-217dc43e3fd6",
+                "akt": "01a1f8c0-7ed6-7533-b09a-02d0811c0e9a",
                 "number": "PLAN-001-D01"
               }
             ]
@@ -723,12 +723,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.042520Z",
+          "createdAt": "2026-11-20T11:38:47.409063Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-3993-7753-bfe9-92f09c8d63b4",
+                "akt": "01a1f8c0-7ef1-75c5-ad8f-9fc5d03d61b0",
                 "number": "PLAN-001-D02"
               }
             ]
@@ -741,12 +741,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.090447Z",
+          "createdAt": "2026-11-20T11:38:47.474493Z",
           "hash": "a358f6f6ff40af44211eb1ee90bc7a9f12168d69525aa156af82ed019af3e70e",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-39c4-7387-8a94-0f7c0ef6f647",
+                "akt": "01a1f8c0-7f33-7537-b5ba-8a6925017b3b",
                 "number": "PLAN-001-D03"
               }
             ]
@@ -759,12 +759,12 @@
       ],
       "state": "active",
       "title": "Self-service password reset",
-      "typeVersion": "01a1f8bd-38b7-7545-8838-4bd83ca08246",
-      "updatedAt": "2026-11-20T11:35:13.090447Z"
+      "typeVersion": "01a1f8c0-7d9a-708b-8d8c-df7d9c2d653f",
+      "updatedAt": "2026-11-20T11:38:47.474493Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:12.861871Z",
+      "createdAt": "2026-11-20T11:38:47.123408Z",
       "fields": {
         "acceptance": "The spec names each step and its failure cases.",
         "assignee": "01900000-0000-7000-8000-00000000d002",
@@ -775,7 +775,7 @@
         "description": "Write the requirements: request, email, link, new password.",
         "title": "Spec the reset flow"
       },
-      "id": "01a1f8bd-38de-7690-a050-2b3d7e8feff8",
+      "id": "01a1f8c0-7dd4-723b-aa64-508e03d3890d",
       "number": "PLAN-001-T01",
       "rank": "a1",
       "revisions": [
@@ -787,12 +787,12 @@
             "description": "Write the requirements: request, email, link, new password.",
             "title": "Spec the reset flow"
           },
-          "createdAt": "2026-11-20T11:35:12.861871Z",
+          "createdAt": "2026-11-20T11:38:47.123408Z",
           "hash": "de2562e920d6640f711e1ccf455b912403fd5aefccbf79af55135f3bd392f769",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -805,7 +805,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.936573Z",
+          "createdAt": "2026-11-20T11:38:47.229044Z",
           "hash": "ce8e0a7182ed76a0649972726102d33a1184070fdaa4a1f3acf969bd1081b848",
           "membership": null,
           "reason": "Taken",
@@ -821,7 +821,7 @@
               "url": "https://git.example/shop/docs/pulls/41"
             }
           },
-          "createdAt": "2026-11-20T11:35:12.944032Z",
+          "createdAt": "2026-11-20T11:38:47.241405Z",
           "hash": "83e4d55c85bdd02b0b7840838f7f00974d5ddc9fa4915c040f2ada23d0a960c8",
           "membership": null,
           "reason": "Spec merged",
@@ -832,12 +832,12 @@
       ],
       "state": "done",
       "title": "Spec the reset flow",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:12.944032Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.241405Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:12.872879Z",
+      "createdAt": "2026-11-20T11:38:47.138079Z",
       "fields": {
         "acceptance": "A spent or expired token is refused; tests cover both.",
         "assignee": "01900000-0000-7000-8000-00000000d001",
@@ -848,7 +848,7 @@
         "description": "Signed tokens with an expiry, stored hashed and spent on use.",
         "title": "Single-use reset tokens"
       },
-      "id": "01a1f8bd-38e9-77e6-b333-f7e7b4e32527",
+      "id": "01a1f8c0-7de2-741d-ad57-f37d35e453b8",
       "number": "PLAN-001-T02",
       "rank": "a2",
       "revisions": [
@@ -860,12 +860,12 @@
             "description": "Signed tokens with an expiry, stored hashed and spent on use.",
             "title": "Single-use reset tokens"
           },
-          "createdAt": "2026-11-20T11:35:12.872879Z",
+          "createdAt": "2026-11-20T11:38:47.138079Z",
           "hash": "8fd163cc50b1de60f4f35978d7dfe911affa9c917e73f750bdb1fae69832b7e0",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -878,12 +878,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.917743Z",
+          "createdAt": "2026-11-20T11:38:47.200667Z",
           "hash": "8fd163cc50b1de60f4f35978d7dfe911affa9c917e73f750bdb1fae69832b7e0",
           "membership": {
             "linked": [
               {
-                "akt": "01a1f8bd-38f4-7484-8c29-8672a8394afb",
+                "akt": "01a1f8c0-7df2-716e-a302-3ce08004ddaf",
                 "kind": "blocks",
                 "name": "Blocks",
                 "number": "PLAN-001-T03"
@@ -898,7 +898,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.951484Z",
+          "createdAt": "2026-11-20T11:38:47.254Z",
           "hash": "c44f5614be4bc16639bf3fd80381408009cebf4e00bfb9f8c3b0e0dcaaf2ebc1",
           "membership": null,
           "reason": "Taken",
@@ -914,7 +914,7 @@
               "url": "https://git.example/shop/backend/pulls/320"
             }
           },
-          "createdAt": "2026-11-20T11:35:12.958978Z",
+          "createdAt": "2026-11-20T11:38:47.267952Z",
           "hash": "37ac459040ebb09af67c8aeab1651cd9200620ae22fbf13c2fdff52ab8068c3d",
           "membership": null,
           "reason": "Opened the pull request",
@@ -925,7 +925,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.965966Z",
+          "createdAt": "2026-11-20T11:38:47.280990Z",
           "hash": "9abc965a27dea6a89faa223eb2e667e76ff0d7a3646ecc09faedf89080e74014",
           "membership": null,
           "reason": "Ready for review",
@@ -936,7 +936,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.973300Z",
+          "createdAt": "2026-11-20T11:38:47.296904Z",
           "hash": "37ac459040ebb09af67c8aeab1651cd9200620ae22fbf13c2fdff52ab8068c3d",
           "membership": null,
           "reason": "Store the tokens hashed, not in clear",
@@ -947,7 +947,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.981346Z",
+          "createdAt": "2026-11-20T11:38:47.308308Z",
           "hash": "9abc965a27dea6a89faa223eb2e667e76ff0d7a3646ecc09faedf89080e74014",
           "membership": null,
           "reason": "Hashed now",
@@ -958,19 +958,19 @@
       ],
       "state": "review",
       "title": "Single-use reset tokens",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:12.981346Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.308308Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:12.883878Z",
+      "createdAt": "2026-11-20T11:38:47.153642Z",
       "fields": {
         "acceptance": "Sent within a minute; the link opens the new-password form.",
         "assignee": "01900000-0000-7000-8000-00000000d001",
         "description": "Plain text and HTML, in the shop's languages.",
         "title": "The reset email"
       },
-      "id": "01a1f8bd-38f4-7484-8c29-8672a8394afb",
+      "id": "01a1f8c0-7df2-716e-a302-3ce08004ddaf",
       "number": "PLAN-001-T03",
       "rank": "a3",
       "revisions": [
@@ -982,12 +982,12 @@
             "description": "Plain text and HTML, in the shop's languages.",
             "title": "The reset email"
           },
-          "createdAt": "2026-11-20T11:35:12.883878Z",
+          "createdAt": "2026-11-20T11:38:47.153642Z",
           "hash": "1014a9140688770d69742dd8e4abd77af5e1a43bf1e1c8e5909925c32bd18c23",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1000,12 +1000,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.917743Z",
+          "createdAt": "2026-11-20T11:38:47.200667Z",
           "hash": "1014a9140688770d69742dd8e4abd77af5e1a43bf1e1c8e5909925c32bd18c23",
           "membership": {
             "linked_from": [
               {
-                "akt": "01a1f8bd-38e9-77e6-b333-f7e7b4e32527",
+                "akt": "01a1f8c0-7de2-741d-ad57-f37d35e453b8",
                 "kind": "blocks",
                 "name": "Blocked by",
                 "number": "PLAN-001-T02"
@@ -1020,12 +1020,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.927033Z",
+          "createdAt": "2026-11-20T11:38:47.213579Z",
           "hash": "1014a9140688770d69742dd8e4abd77af5e1a43bf1e1c8e5909925c32bd18c23",
           "membership": {
             "linked": [
               {
-                "akt": "01a1f8bd-38ff-756d-9a05-9592449d2931",
+                "akt": "01a1f8c0-7e01-72c6-b6a1-9edb2c202d26",
                 "kind": "blocks",
                 "name": "Blocks",
                 "number": "PLAN-001-T04"
@@ -1040,7 +1040,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.989015Z",
+          "createdAt": "2026-11-20T11:38:47.320499Z",
           "hash": "97003779cb1311b9db6d1d75228c49953e106fb7d6171acbcab010902e13b246",
           "membership": null,
           "reason": "Taken",
@@ -1051,19 +1051,19 @@
       ],
       "state": "doing",
       "title": "The reset email",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:12.989015Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.320499Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:12.894451Z",
+      "createdAt": "2026-11-20T11:38:47.169274Z",
       "fields": {
         "acceptance": "A breached password is refused with a reason.",
         "assignee": "01900000-0000-7000-8000-00000000d001",
         "description": "Checks the password against the breached list as you type.",
         "title": "New-password form"
       },
-      "id": "01a1f8bd-38ff-756d-9a05-9592449d2931",
+      "id": "01a1f8c0-7e01-72c6-b6a1-9edb2c202d26",
       "number": "PLAN-001-T04",
       "rank": "a4",
       "revisions": [
@@ -1075,12 +1075,12 @@
             "description": "Checks the password against the breached list as you type.",
             "title": "New-password form"
           },
-          "createdAt": "2026-11-20T11:35:12.894451Z",
+          "createdAt": "2026-11-20T11:38:47.169274Z",
           "hash": "e36a51bc5765fb7fc2b317124ac578951a34d0b815398b24e0ec574ba7f2bfbf",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1093,12 +1093,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.927033Z",
+          "createdAt": "2026-11-20T11:38:47.213579Z",
           "hash": "e36a51bc5765fb7fc2b317124ac578951a34d0b815398b24e0ec574ba7f2bfbf",
           "membership": {
             "linked_from": [
               {
-                "akt": "01a1f8bd-38f4-7484-8c29-8672a8394afb",
+                "akt": "01a1f8c0-7df2-716e-a302-3ce08004ddaf",
                 "kind": "blocks",
                 "name": "Blocked by",
                 "number": "PLAN-001-T03"
@@ -1113,19 +1113,19 @@
       ],
       "state": "todo",
       "title": "New-password form",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:12.927033Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.213579Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:12.906756Z",
+      "createdAt": "2026-11-20T11:38:47.185120Z",
       "fields": {
         "acceptance": "",
         "assignee": "01900000-0000-7000-8000-00000000d001",
         "description": "A code by text message, for customers without email.",
         "title": "Reset by SMS"
       },
-      "id": "01a1f8bd-390b-711f-96ac-61c6c7566d68",
+      "id": "01a1f8c0-7e12-75d9-a809-72a661f243e4",
       "number": "PLAN-001-T05",
       "rank": "a5",
       "revisions": [
@@ -1137,12 +1137,12 @@
             "description": "A code by text message, for customers without email.",
             "title": "Reset by SMS"
           },
-          "createdAt": "2026-11-20T11:35:12.906756Z",
+          "createdAt": "2026-11-20T11:38:47.185120Z",
           "hash": "4ddcf3182feb18d032894e8d4a17bd32850f3544ed9a237986ded5ca5170a308",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1155,7 +1155,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:12.996671Z",
+          "createdAt": "2026-11-20T11:38:47.333726Z",
           "hash": "c4eae3c4e69280fa93439e6921760b17354781b170fc4fb45455c433220b674b",
           "membership": null,
           "reason": "Out of scope: every account has an email",
@@ -1166,17 +1166,17 @@
       ],
       "state": "dropped",
       "title": "Reset by SMS",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:12.996671Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.333726Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.003776Z",
+      "createdAt": "2026-11-20T11:38:47.346272Z",
       "fields": {
         "description": "The shop sells in five countries; the templates exist in two languages.",
         "title": "Which languages does the email need?"
       },
-      "id": "01a1f8bd-396c-7553-b527-56911fe7447a",
+      "id": "01a1f8c0-7eb3-7037-b890-87e772938cdc",
       "number": "PLAN-001-G01",
       "rank": "a6",
       "revisions": [
@@ -1186,12 +1186,12 @@
             "description": "The shop sells in five countries; the templates exist in two languages.",
             "title": "Which languages does the email need?"
           },
-          "createdAt": "2026-11-20T11:35:13.003776Z",
+          "createdAt": "2026-11-20T11:38:47.346272Z",
           "hash": "17cd8ef335e960072e839811479a49ffd842cbaa4dadc21f9d2482d5a9e07b8c",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1204,18 +1204,18 @@
       ],
       "state": "open",
       "title": "Which languages does the email need?",
-      "typeVersion": "01a1f8bd-38c1-765c-913d-7db13a0e51a2",
-      "updatedAt": "2026-11-20T11:35:13.003776Z"
+      "typeVersion": "01a1f8c0-7da8-7379-9843-4861b96bb737",
+      "updatedAt": "2026-11-20T11:38:47.346272Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.013982Z",
+      "createdAt": "2026-11-20T11:38:47.366373Z",
       "fields": {
         "description": "Nothing stops a script asking for thousands of resets.",
         "resolution": "Limited as the decision says.",
         "title": "Limit reset requests"
       },
-      "id": "01a1f8bd-3976-7772-9a25-c6ed7a451da3",
+      "id": "01a1f8c0-7ec7-72d5-90e0-b511aebf1e92",
       "number": "PLAN-001-G02",
       "rank": "a7",
       "revisions": [
@@ -1225,12 +1225,12 @@
             "description": "Nothing stops a script asking for thousands of resets.",
             "title": "Limit reset requests"
           },
-          "createdAt": "2026-11-20T11:35:13.013982Z",
+          "createdAt": "2026-11-20T11:38:47.366373Z",
           "hash": "b8e6361ac88de4c61989c957d66868d27a3b9355451f1e0fdc27b267d787ea57",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1243,12 +1243,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.061458Z",
+          "createdAt": "2026-11-20T11:38:47.439027Z",
           "hash": "b8e6361ac88de4c61989c957d66868d27a3b9355451f1e0fdc27b267d787ea57",
           "membership": {
             "linked": [
               {
-                "akt": "01a1f8bd-3993-7753-bfe9-92f09c8d63b4",
+                "akt": "01a1f8c0-7ef1-75c5-ad8f-9fc5d03d61b0",
                 "kind": "resolved_by",
                 "name": "Resolved by",
                 "number": "PLAN-001-D02"
@@ -1265,7 +1265,7 @@
           "changes": {
             "resolution": "Limited as the decision says."
           },
-          "createdAt": "2026-11-20T11:35:13.077303Z",
+          "createdAt": "2026-11-20T11:38:47.457732Z",
           "hash": "772fbc405d5b63c9140ec2ced2e25665e47fedcecab5e9475b301b4a3f5a7c5e",
           "membership": null,
           "reason": "Resolved",
@@ -1276,12 +1276,12 @@
       ],
       "state": "closed",
       "title": "Limit reset requests",
-      "typeVersion": "01a1f8bd-38c1-765c-913d-7db13a0e51a2",
-      "updatedAt": "2026-11-20T11:35:13.077303Z"
+      "typeVersion": "01a1f8c0-7da8-7379-9843-4861b96bb737",
+      "updatedAt": "2026-11-20T11:38:47.457732Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.024507Z",
+      "createdAt": "2026-11-20T11:38:47.381844Z",
       "fields": {
         "context": "Longer links are easier on customers; shorter ones leak less.",
         "decided_by": "01900000-0000-7000-8000-00000000d002",
@@ -1289,7 +1289,7 @@
         "title": "Tokens expire after 30 minutes",
         "why": "What the bank's and the mail provider's own resets do; support saw no complaints there."
       },
-      "id": "01a1f8bd-3981-7159-91fd-217dc43e3fd6",
+      "id": "01a1f8c0-7ed6-7533-b09a-02d0811c0e9a",
       "number": "PLAN-001-D01",
       "rank": "a8",
       "revisions": [
@@ -1298,12 +1298,12 @@
           "changes": {
             "title": "Tokens expire after 30 minutes"
           },
-          "createdAt": "2026-11-20T11:35:13.024507Z",
+          "createdAt": "2026-11-20T11:38:47.381844Z",
           "hash": "db7837c31305945c92c3d902c4e55c9c7bd728b8aece73ab40c8a3f28b880f87",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1321,7 +1321,7 @@
             "decision": "A reset token expires 30 minutes after it is sent, and on first use.",
             "why": "What the bank's and the mail provider's own resets do; support saw no complaints there."
           },
-          "createdAt": "2026-11-20T11:35:13.034827Z",
+          "createdAt": "2026-11-20T11:38:47.397778Z",
           "hash": "1fec498c6ca09236ba742eb42d106a0c46379bf5ac9a8ae0f503b95a67630825",
           "membership": null,
           "reason": "Decided in planning",
@@ -1332,12 +1332,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.113675Z",
+          "createdAt": "2026-11-20T11:38:47.503519Z",
           "hash": "1fec498c6ca09236ba742eb42d106a0c46379bf5ac9a8ae0f503b95a67630825",
           "membership": {
             "linked_from": [
               {
-                "akt": "01a1f8bd-39c4-7387-8a94-0f7c0ef6f647",
+                "akt": "01a1f8c0-7f33-7537-b5ba-8a6925017b3b",
                 "kind": "supersedes",
                 "name": "Superseded by",
                 "number": "PLAN-001-D03"
@@ -1352,7 +1352,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.125148Z",
+          "createdAt": "2026-11-20T11:38:47.518033Z",
           "hash": "d4545dd659cc4cefc160d825c8489bb03162043fc2144c2ec40290ee04f647a3",
           "membership": null,
           "reason": "Superseded by the hour",
@@ -1363,12 +1363,12 @@
       ],
       "state": "superseded",
       "title": "Tokens expire after 30 minutes",
-      "typeVersion": "01a1f8bd-38c6-740e-a2d4-373a487262bd",
-      "updatedAt": "2026-11-20T11:35:13.125148Z"
+      "typeVersion": "01a1f8c0-7daf-76ff-8602-ea874258ad14",
+      "updatedAt": "2026-11-20T11:38:47.518033Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.042520Z",
+      "createdAt": "2026-11-20T11:38:47.409063Z",
       "fields": {
         "context": "Reset requests send email, which costs money and can be abused.",
         "decided_by": "01900000-0000-7000-8000-00000000d002",
@@ -1376,7 +1376,7 @@
         "title": "Five reset requests an hour per email",
         "why": "No real customer needs more; the limit is the sign-in limit's."
       },
-      "id": "01a1f8bd-3993-7753-bfe9-92f09c8d63b4",
+      "id": "01a1f8c0-7ef1-75c5-ad8f-9fc5d03d61b0",
       "number": "PLAN-001-D02",
       "rank": "a9",
       "revisions": [
@@ -1385,12 +1385,12 @@
           "changes": {
             "title": "Five reset requests an hour per email"
           },
-          "createdAt": "2026-11-20T11:35:13.042520Z",
+          "createdAt": "2026-11-20T11:38:47.409063Z",
           "hash": "473446a7ef47ec2f25b781b7e053160246de6ee20a85b94e240fda4703a7beec",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1408,7 +1408,7 @@
             "decision": "At most five reset requests an hour for one email, and fifty for one address.",
             "why": "No real customer needs more; the limit is the sign-in limit's."
           },
-          "createdAt": "2026-11-20T11:35:13.054296Z",
+          "createdAt": "2026-11-20T11:38:47.426019Z",
           "hash": "b4746a5f0999dc376a032560da38246b8fd2fe3076de5a3eacbab1119e37e278",
           "membership": null,
           "reason": "Decided with security",
@@ -1419,12 +1419,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.061458Z",
+          "createdAt": "2026-11-20T11:38:47.439027Z",
           "hash": "b4746a5f0999dc376a032560da38246b8fd2fe3076de5a3eacbab1119e37e278",
           "membership": {
             "linked_from": [
               {
-                "akt": "01a1f8bd-3976-7772-9a25-c6ed7a451da3",
+                "akt": "01a1f8c0-7ec7-72d5-90e0-b511aebf1e92",
                 "kind": "resolved_by",
                 "name": "Resolves",
                 "number": "PLAN-001-G02"
@@ -1439,12 +1439,12 @@
       ],
       "state": "decided",
       "title": "Five reset requests an hour per email",
-      "typeVersion": "01a1f8bd-38c6-740e-a2d4-373a487262bd",
-      "updatedAt": "2026-11-20T11:35:13.061458Z"
+      "typeVersion": "01a1f8c0-7daf-76ff-8602-ea874258ad14",
+      "updatedAt": "2026-11-20T11:38:47.439027Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.090447Z",
+      "createdAt": "2026-11-20T11:38:47.474493Z",
       "fields": {
         "context": "Customers on slow email providers got links that had already expired.",
         "decided_by": "01900000-0000-7000-8000-00000000d003",
@@ -1452,7 +1452,7 @@
         "title": "Tokens expire after an hour",
         "why": "Support saw expired links daily at 30 minutes; an hour covers the slowest provider."
       },
-      "id": "01a1f8bd-39c4-7387-8a94-0f7c0ef6f647",
+      "id": "01a1f8c0-7f33-7537-b5ba-8a6925017b3b",
       "number": "PLAN-001-D03",
       "rank": "aA",
       "revisions": [
@@ -1461,12 +1461,12 @@
           "changes": {
             "title": "Tokens expire after an hour"
           },
-          "createdAt": "2026-11-20T11:35:13.090447Z",
+          "createdAt": "2026-11-20T11:38:47.474493Z",
           "hash": "557884a62a3f27a874b2accb5ac30ac6e26152992a213ae82f9ff43f26600e01",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
+                "akt": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
                 "number": "PLAN-001"
               }
             ]
@@ -1484,7 +1484,7 @@
             "decision": "A reset token expires an hour after it is sent, and on first use.",
             "why": "Support saw expired links daily at 30 minutes; an hour covers the slowest provider."
           },
-          "createdAt": "2026-11-20T11:35:13.106436Z",
+          "createdAt": "2026-11-20T11:38:47.493290Z",
           "hash": "ed7ab98d72f2f2d413bda6aceeeb0ec76434045441fb8b724563c144044544f1",
           "membership": null,
           "reason": "Decided with the head of product",
@@ -1495,12 +1495,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d002",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.113675Z",
+          "createdAt": "2026-11-20T11:38:47.503519Z",
           "hash": "ed7ab98d72f2f2d413bda6aceeeb0ec76434045441fb8b724563c144044544f1",
           "membership": {
             "linked": [
               {
-                "akt": "01a1f8bd-3981-7159-91fd-217dc43e3fd6",
+                "akt": "01a1f8c0-7ed6-7533-b09a-02d0811c0e9a",
                 "kind": "supersedes",
                 "name": "Supersedes",
                 "number": "PLAN-001-D01"
@@ -1515,18 +1515,18 @@
       ],
       "state": "decided",
       "title": "Tokens expire after an hour",
-      "typeVersion": "01a1f8bd-38c6-740e-a2d4-373a487262bd",
-      "updatedAt": "2026-11-20T11:35:13.113675Z"
+      "typeVersion": "01a1f8c0-7daf-76ff-8602-ea874258ad14",
+      "updatedAt": "2026-11-20T11:38:47.503519Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.135785Z",
+      "createdAt": "2026-11-20T11:38:47.528150Z",
       "fields": {
         "goal": "Every order confirmation is in the language the customer shopped in.",
         "owner": "01900000-0000-7000-8000-00000000d003",
         "title": "Order confirmation emails in the customer's language"
       },
-      "id": "01a1f8bd-39f0-778a-9424-48b124e5c634",
+      "id": "01a1f8c0-7f68-7058-8c01-d4c22af97c67",
       "number": "PLAN-002",
       "rank": "aB",
       "revisions": [
@@ -1537,7 +1537,7 @@
             "owner": "01900000-0000-7000-8000-00000000d003",
             "title": "Order confirmation emails in the customer's language"
           },
-          "createdAt": "2026-11-20T11:35:13.135785Z",
+          "createdAt": "2026-11-20T11:38:47.528150Z",
           "hash": "828b6645ab0f8597bbc7f6f3b9601d0c9eab28f9f6cb89ef37382c20638f1068",
           "membership": null,
           "reason": "Plan the translated confirmations",
@@ -1548,7 +1548,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.146636Z",
+          "createdAt": "2026-11-20T11:38:47.538122Z",
           "hash": "f6b94b8aa1b58bfefb492f2d5433e68a8da1d7d672c44c455202ebdcbab66064",
           "membership": null,
           "reason": "Agreed",
@@ -1559,12 +1559,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.156226Z",
+          "createdAt": "2026-11-20T11:38:47.550380Z",
           "hash": "f6b94b8aa1b58bfefb492f2d5433e68a8da1d7d672c44c455202ebdcbab66064",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-3a05-7460-ac17-598000df2b2b",
+                "akt": "01a1f8c0-7f7f-772f-98d3-7ca210862800",
                 "number": "PLAN-002-T01"
               }
             ]
@@ -1577,12 +1577,12 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.186434Z",
+          "createdAt": "2026-11-20T11:38:47.610274Z",
           "hash": "f6b94b8aa1b58bfefb492f2d5433e68a8da1d7d672c44c455202ebdcbab66064",
           "membership": {
             "added_member": [
               {
-                "akt": "01a1f8bd-3a23-74c0-9f01-712876c821a6",
+                "akt": "01a1f8c0-7fbe-7224-8a3b-6d7f5ab87435",
                 "number": "PLAN-002-T02"
               }
             ]
@@ -1595,7 +1595,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.214143Z",
+          "createdAt": "2026-11-20T11:38:47.700504Z",
           "hash": "c9d8dc261b6659c717f6d6232dc0de21d7f7ac3dca77d2362c99ca2a1a8db120",
           "membership": null,
           "reason": "Shipped in 4.1",
@@ -1606,12 +1606,12 @@
       ],
       "state": "done",
       "title": "Order confirmation emails in the customer's language",
-      "typeVersion": "01a1f8bd-38b7-7545-8838-4bd83ca08246",
-      "updatedAt": "2026-11-20T11:35:13.214143Z"
+      "typeVersion": "01a1f8c0-7d9a-708b-8d8c-df7d9c2d653f",
+      "updatedAt": "2026-11-20T11:38:47.700504Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.156226Z",
+      "createdAt": "2026-11-20T11:38:47.550380Z",
       "fields": {
         "assignee": "01900000-0000-7000-8000-00000000d001",
         "change": {
@@ -1620,7 +1620,7 @@
         },
         "title": "Store the shop language with the order"
       },
-      "id": "01a1f8bd-3a05-7460-ac17-598000df2b2b",
+      "id": "01a1f8c0-7f7f-772f-98d3-7ca210862800",
       "number": "PLAN-002-T01",
       "rank": "aC",
       "revisions": [
@@ -1630,12 +1630,12 @@
             "assignee": "01900000-0000-7000-8000-00000000d001",
             "title": "Store the shop language with the order"
           },
-          "createdAt": "2026-11-20T11:35:13.156226Z",
+          "createdAt": "2026-11-20T11:38:47.550380Z",
           "hash": "bb631f6a099ddae030fc21c097d933886b880df49bc6b76e9646420bbf62262d",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-39f0-778a-9424-48b124e5c634",
+                "akt": "01a1f8c0-7f68-7058-8c01-d4c22af97c67",
                 "number": "PLAN-002"
               }
             ]
@@ -1648,7 +1648,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.170573Z",
+          "createdAt": "2026-11-20T11:38:47.568162Z",
           "hash": "85fc0f1a6d6467c73a0a4c726287db0bf15abfc75f4298a17839cd58a757f584",
           "membership": null,
           "reason": "Taken",
@@ -1664,7 +1664,7 @@
               "url": "https://git.example/shop/backend/pulls/290"
             }
           },
-          "createdAt": "2026-11-20T11:35:13.178821Z",
+          "createdAt": "2026-11-20T11:38:47.581343Z",
           "hash": "e05e857aa4ee87929dbc8bd35568f4ab78d6cea3d3c73181480c1d171b76d945",
           "membership": null,
           "reason": "Merged",
@@ -1675,12 +1675,12 @@
       ],
       "state": "done",
       "title": "Store the shop language with the order",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:13.178821Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.581343Z"
     },
     {
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.186434Z",
+      "createdAt": "2026-11-20T11:38:47.610274Z",
       "fields": {
         "assignee": "01900000-0000-7000-8000-00000000d001",
         "change": {
@@ -1689,7 +1689,7 @@
         },
         "title": "Translate the confirmation templates"
       },
-      "id": "01a1f8bd-3a23-74c0-9f01-712876c821a6",
+      "id": "01a1f8c0-7fbe-7224-8a3b-6d7f5ab87435",
       "number": "PLAN-002-T02",
       "rank": "aD",
       "revisions": [
@@ -1699,12 +1699,12 @@
             "assignee": "01900000-0000-7000-8000-00000000d001",
             "title": "Translate the confirmation templates"
           },
-          "createdAt": "2026-11-20T11:35:13.186434Z",
+          "createdAt": "2026-11-20T11:38:47.610274Z",
           "hash": "436189711770cdf67fa017dc2c3a3c70af6e4356c4f887ba5cc3f69544b9537b",
           "membership": {
             "added": [
               {
-                "akt": "01a1f8bd-39f0-778a-9424-48b124e5c634",
+                "akt": "01a1f8c0-7f68-7058-8c01-d4c22af97c67",
                 "number": "PLAN-002"
               }
             ]
@@ -1717,7 +1717,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d001",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.197258Z",
+          "createdAt": "2026-11-20T11:38:47.653403Z",
           "hash": "d747970468082fadd88a46bccc761688aefc72324908b79496a371ccbf497919",
           "membership": null,
           "reason": "Taken",
@@ -1733,7 +1733,7 @@
               "url": "https://git.example/shop/backend/pulls/291"
             }
           },
-          "createdAt": "2026-11-20T11:35:13.205437Z",
+          "createdAt": "2026-11-20T11:38:47.679302Z",
           "hash": "8176be51c9b44754a1a58a305c63e06a5d84dbd4e2ee257e2a2f3ec4371a5ebe",
           "membership": null,
           "reason": "Merged",
@@ -1744,24 +1744,24 @@
       ],
       "state": "done",
       "title": "Translate the confirmation templates",
-      "typeVersion": "01a1f8bd-38bc-7618-a22d-3529eb0aaa94",
-      "updatedAt": "2026-11-20T11:35:13.205437Z"
+      "typeVersion": "01a1f8c0-7da1-7095-b451-92b2203d5417",
+      "updatedAt": "2026-11-20T11:38:47.679302Z"
     },
     {
       "archived": {
-        "at": "2026-11-20T11:35:13.236208Z",
+        "at": "2026-11-20T11:38:47.745813Z",
         "by": {
           "subject": "01900000-0000-7000-8000-00000000d003"
         },
         "reason": "Out of the way of the plans being worked"
       },
       "attachments": [],
-      "createdAt": "2026-11-20T11:35:13.221683Z",
+      "createdAt": "2026-11-20T11:38:47.723672Z",
       "fields": {
         "owner": "01900000-0000-7000-8000-00000000d001",
         "title": "A native mobile app"
       },
-      "id": "01a1f8bd-3a46-77e6-816c-73c9e4f0313f",
+      "id": "01a1f8c0-802c-7775-9f42-5635108097cf",
       "number": "PLAN-003",
       "rank": "aE",
       "revisions": [
@@ -1771,7 +1771,7 @@
             "owner": "01900000-0000-7000-8000-00000000d001",
             "title": "A native mobile app"
           },
-          "createdAt": "2026-11-20T11:35:13.221683Z",
+          "createdAt": "2026-11-20T11:38:47.723672Z",
           "hash": "a00616cd63514eb9c0a6558b20239f0835bd12c63caaebfe251ec9f7c08ad312",
           "membership": null,
           "reason": "An idea",
@@ -1782,7 +1782,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.229717Z",
+          "createdAt": "2026-11-20T11:38:47.735469Z",
           "hash": "6baf329ef4ea04a078d7f66f2d092826b913c7b291b614de91b3997a30d618f7",
           "membership": null,
           "reason": "The web shop works well on phones",
@@ -1793,7 +1793,7 @@
         {
           "author": "01900000-0000-7000-8000-00000000d003",
           "changes": {},
-          "createdAt": "2026-11-20T11:35:13.236208Z",
+          "createdAt": "2026-11-20T11:38:47.745813Z",
           "hash": "6baf329ef4ea04a078d7f66f2d092826b913c7b291b614de91b3997a30d618f7",
           "membership": null,
           "reason": "Out of the way of the plans being worked",
@@ -1804,122 +1804,122 @@
       ],
       "state": "dropped",
       "title": "A native mobile app",
-      "typeVersion": "01a1f8bd-38b7-7545-8838-4bd83ca08246",
-      "updatedAt": "2026-11-20T11:35:13.236208Z"
+      "typeVersion": "01a1f8c0-7d9a-708b-8d8c-df7d9c2d653f",
+      "updatedAt": "2026-11-20T11:38:47.745813Z"
     }
   ],
   "attachments": [],
   "contacts": [],
   "counters": [],
-  "exportedAt": "2026-11-20T11:35:13.246156Z",
+  "exportedAt": "2026-11-20T11:38:47.760250Z",
   "format": 4,
   "holdsAkter": true,
   "links": [
     {
-      "addedAt": "2026-11-20T11:35:12.917743Z",
+      "addedAt": "2026-11-20T11:38:47.200667Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
       "kind": "blocks",
       "pinnedRevision": null,
-      "source": "01a1f8bd-38e9-77e6-b333-f7e7b4e32527",
-      "target": "01a1f8bd-38f4-7484-8c29-8672a8394afb"
+      "source": "01a1f8c0-7de2-741d-ad57-f37d35e453b8",
+      "target": "01a1f8c0-7df2-716e-a302-3ce08004ddaf"
     },
     {
-      "addedAt": "2026-11-20T11:35:12.927033Z",
+      "addedAt": "2026-11-20T11:38:47.213579Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
       "kind": "blocks",
       "pinnedRevision": null,
-      "source": "01a1f8bd-38f4-7484-8c29-8672a8394afb",
-      "target": "01a1f8bd-38ff-756d-9a05-9592449d2931"
+      "source": "01a1f8c0-7df2-716e-a302-3ce08004ddaf",
+      "target": "01a1f8c0-7e01-72c6-b6a1-9edb2c202d26"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.061458Z",
+      "addedAt": "2026-11-20T11:38:47.439027Z",
       "addedBy": "01900000-0000-7000-8000-00000000d001",
       "kind": "resolved_by",
       "pinnedRevision": null,
-      "source": "01a1f8bd-3976-7772-9a25-c6ed7a451da3",
-      "target": "01a1f8bd-3993-7753-bfe9-92f09c8d63b4"
+      "source": "01a1f8c0-7ec7-72d5-90e0-b511aebf1e92",
+      "target": "01a1f8c0-7ef1-75c5-ad8f-9fc5d03d61b0"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.113675Z",
+      "addedAt": "2026-11-20T11:38:47.503519Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
       "kind": "supersedes",
       "pinnedRevision": null,
-      "source": "01a1f8bd-39c4-7387-8a94-0f7c0ef6f647",
-      "target": "01a1f8bd-3981-7159-91fd-217dc43e3fd6"
+      "source": "01a1f8c0-7f33-7537-b5ba-8a6925017b3b",
+      "target": "01a1f8c0-7ed6-7533-b09a-02d0811c0e9a"
     }
   ],
   "memberships": [
     {
-      "addedAt": "2026-11-20T11:35:12.861871Z",
+      "addedAt": "2026-11-20T11:38:47.123408Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-38de-7690-a050-2b3d7e8feff8"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7dd4-723b-aa64-508e03d3890d"
     },
     {
-      "addedAt": "2026-11-20T11:35:12.872879Z",
+      "addedAt": "2026-11-20T11:38:47.138079Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-38e9-77e6-b333-f7e7b4e32527"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7de2-741d-ad57-f37d35e453b8"
     },
     {
-      "addedAt": "2026-11-20T11:35:12.883878Z",
+      "addedAt": "2026-11-20T11:38:47.153642Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-38f4-7484-8c29-8672a8394afb"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7df2-716e-a302-3ce08004ddaf"
     },
     {
-      "addedAt": "2026-11-20T11:35:12.894451Z",
+      "addedAt": "2026-11-20T11:38:47.169274Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-38ff-756d-9a05-9592449d2931"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7e01-72c6-b6a1-9edb2c202d26"
     },
     {
-      "addedAt": "2026-11-20T11:35:12.906756Z",
+      "addedAt": "2026-11-20T11:38:47.185120Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-390b-711f-96ac-61c6c7566d68"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7e12-75d9-a809-72a661f243e4"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.003776Z",
+      "addedAt": "2026-11-20T11:38:47.346272Z",
       "addedBy": "01900000-0000-7000-8000-00000000d001",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-396c-7553-b527-56911fe7447a"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7eb3-7037-b890-87e772938cdc"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.013982Z",
+      "addedAt": "2026-11-20T11:38:47.366373Z",
       "addedBy": "01900000-0000-7000-8000-00000000d001",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-3976-7772-9a25-c6ed7a451da3"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7ec7-72d5-90e0-b511aebf1e92"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.024507Z",
+      "addedAt": "2026-11-20T11:38:47.381844Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-3981-7159-91fd-217dc43e3fd6"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7ed6-7533-b09a-02d0811c0e9a"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.042520Z",
+      "addedAt": "2026-11-20T11:38:47.409063Z",
       "addedBy": "01900000-0000-7000-8000-00000000d001",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-3993-7753-bfe9-92f09c8d63b4"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7ef1-75c5-ad8f-9fc5d03d61b0"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.090447Z",
+      "addedAt": "2026-11-20T11:38:47.474493Z",
       "addedBy": "01900000-0000-7000-8000-00000000d002",
-      "container": "01a1f8bd-38cb-7611-872b-67b851a62cb3",
-      "member": "01a1f8bd-39c4-7387-8a94-0f7c0ef6f647"
+      "container": "01a1f8c0-7db7-73a3-9e68-71c3dd3abfab",
+      "member": "01a1f8c0-7f33-7537-b5ba-8a6925017b3b"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.156226Z",
+      "addedAt": "2026-11-20T11:38:47.550380Z",
       "addedBy": "01900000-0000-7000-8000-00000000d003",
-      "container": "01a1f8bd-39f0-778a-9424-48b124e5c634",
-      "member": "01a1f8bd-3a05-7460-ac17-598000df2b2b"
+      "container": "01a1f8c0-7f68-7058-8c01-d4c22af97c67",
+      "member": "01a1f8c0-7f7f-772f-98d3-7ca210862800"
     },
     {
-      "addedAt": "2026-11-20T11:35:13.186434Z",
+      "addedAt": "2026-11-20T11:38:47.610274Z",
       "addedBy": "01900000-0000-7000-8000-00000000d003",
-      "container": "01a1f8bd-39f0-778a-9424-48b124e5c634",
-      "member": "01a1f8bd-3a23-74c0-9f01-712876c821a6"
+      "container": "01a1f8c0-7f68-7058-8c01-d4c22af97c67",
+      "member": "01a1f8c0-7fbe-7224-8a3b-6d7f5ab87435"
     }
   ],
   "people": [

@@ -38,6 +38,8 @@ const EXAMPLES: [(&str, &[&str]); 3] = [
             "test_case",
             "test_protocol",
             "problem_report",
+            "capa",
+            "capa_action",
         ],
     ),
     (

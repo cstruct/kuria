@@ -54,6 +54,10 @@ export const ROLES: Record<string, ReturnType<typeof allow>> = {
 	'document-release': allow(
 		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', ...exampleActions],
 		true
+	),
+	'quality-work': allow(
+		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'kuria:akter:archive', ...exampleActions],
+		true
 	)
 };
 

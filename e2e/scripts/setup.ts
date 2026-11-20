@@ -58,6 +58,8 @@ const ACTIONS = {
 	'kuria:tenant:export': "Export the tenant's akt types and akter as bundles",
 	'kuria:tenant:import': 'Import bundles into the tenant',
 	'release:approve': 'Release, deploy hotfixes and approve release notes',
+	'capa:confirm': 'Confirm a CAPA is needed, or that none is, and reopen one',
+	'capa:approve_closure': 'Approve closing or superseding a CAPA',
 	'documents:release': "Release a document's version"
 };
 
@@ -79,7 +81,18 @@ const ROLES: Record<string, ReturnType<typeof allow>> = {
 		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'documents:release'],
 		true
 	),
-	'pipeline-work': allow(['kuria:akter:read', 'kuria:akter:create'], true)
+	'pipeline-work': allow(['kuria:akter:read', 'kuria:akter:create'], true),
+	'quality-work': allow(
+		[
+			'kuria:akter:create',
+			'kuria:akter:edit',
+			'kuria:akter:transition',
+			'kuria:akter:archive',
+			'capa:confirm',
+			'capa:approve_closure'
+		],
+		true
+	)
 };
 
 type Grant = string | { role: string; at: string[] };
