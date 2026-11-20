@@ -1,9 +1,9 @@
 ---
 number: PLAN-027
 type: plan
-revision: 24
+revision: 25
 rank: b5k
-state: draft
+state: active
 title: "An MCP server for searching and editing documents, alongside live typing"
 owner: albin@mattsson.io
 ---
@@ -264,11 +264,12 @@ Hosted MCP over HTTP is its own plan, PLAN-028. PLAN-027 is `kuria mcp` alone, w
 <!-- akt: PLAN-027-D01 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b5v
-state: proposed
+state: decided
 in: [PLAN-027]
 title: "Agents edit by replacing spans of text, resolved on the server"
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
@@ -283,11 +284,12 @@ Anchoring by text instead of offsets or whole values survives edits elsewhere an
 <!-- akt: PLAN-027-D02 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b5w
-state: proposed
+state: decided
 in: [PLAN-027]
 title: "Start with GraphQL; join the live socket only to show the agent"
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
@@ -302,11 +304,12 @@ Correctness comes from replaceInAkt either way; a peer needs a socket per open d
 <!-- akt: PLAN-027-D03 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b5x
-state: proposed
+state: decided
 in: [PLAN-027]
 title: The MCP server is a subcommand of the CLI
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
