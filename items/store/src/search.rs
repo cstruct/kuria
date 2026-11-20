@@ -63,6 +63,37 @@ pub async fn search_text(
     .bind::<Int8, _>(limit)
     .bind::<Text, _>(MARKS.0)
     .bind::<Text, _>(MARKS.1)
-    .load(conn)
+    .load::<TextMatch>(conn)
     .await
+    .map(|matches| {
+        matches
+            .into_iter()
+            .map(|m| TextMatch {
+                excerpt: unescaped(&m.excerpt),
+                ..m
+            })
+            .collect()
+    })
+}
+
+/// `text` without the HTML escapes `pdb.snippet` writes, so that an
+/// excerpt reads as the field does: `<!-- pagebreak -->`, not `&lt;!--`.
+fn unescaped(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&#x27;", "'")
+        .replace("&amp;", "&")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn excerpts_read_as_the_field_does() {
+        assert_eq!(
+            super::unescaped("a &lt;!-- pagebreak --&gt; &amp;lt; &quot;b&quot;"),
+            "a <!-- pagebreak --> &lt; \"b\""
+        );
+    }
 }

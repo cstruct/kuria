@@ -551,16 +551,20 @@ pub(crate) fn replaced(
     let mut around = Vec::new();
     for r in replacements {
         let text = now.get(&r.field).and_then(Json::as_str).unwrap_or_default();
+        // The lines around what the span became, whole.
         let shown = match (r.text.is_empty(), text.find(&r.text)) {
             (false, Some(at)) => {
-                let start = (0..=at.saturating_sub(AROUND))
+                let after = at + r.text.len();
+                let from = (0..=at.saturating_sub(AROUND))
                     .rev()
                     .find(|&i| text.is_char_boundary(i))
                     .unwrap_or(0);
-                let end = ((at + r.text.len() + AROUND).min(text.len())..=text.len())
+                let to = ((after + AROUND).min(text.len())..=text.len())
                     .find(|&i| text.is_char_boundary(i))
                     .unwrap_or(text.len());
-                text[start..end].to_owned()
+                let start = text[..from].rfind('\n').map_or(0, |i| i + 1);
+                let end = text[to..].find('\n').map_or(text.len(), |i| to + i);
+                text[start..end].trim_matches('\n').to_owned()
             }
             _ => String::new(),
         };

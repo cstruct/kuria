@@ -173,13 +173,17 @@ While editing, kuria mcp joins /akter/{number}/live, applies its replacements th
 <!-- akt: PLAN-027-T07 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b5r
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T04]
 title: Walk the documents example with an agent
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+Walked on `mise run example documents` with the shared dev Postgres on the pg_search image, Devi signed in to the app (built-in browser) and the CLI (`kuria login`, profile `t07-example`), and an MCP client driving `kuria mcp` over stdio: search found DOCS-1-D04 by its body with stemmed, marked excerpts; read_document gave one section and said it has a live draft; the person typed " (ask Hedda for access)" in the app after the agent's read; the agent replaced a span of what it read; the app showed the agent's cursor, then its change, both kept, the cursor gone after ten seconds; `draftChanges` has both, by Devi, with no actor (PLAN-027-T09). Written up in docs/examples/documents/README.md. Fixed on the way: excerpts were HTML-escaped by `pdb.snippet`; `edit_document`'s answer now shows whole lines. Found, not fixed: the app's history lists revisions only, not draft changes.
 
 <!-- field: acceptance -->
 In mise run example documents, a person typing and an agent editing through kuria mcp end with both changes, as the plan's goal says; written up in docs/examples/documents.

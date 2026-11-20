@@ -206,6 +206,40 @@ file as `attachments/IMG-1/<name>`, its `file` naming that path, and
 tenant. There, `kuria --dir handbook set IMG-1 file=@flow.png` copies a
 new picture in, and a release finds the pictures it embeds.
 
+## With an agent
+
+`kuria mcp` lets an agent on your machine, such as Claude Code, search,
+read and edit the documents while people type in them
+([MCP server](../../spec/mcp.md)):
+
+```sh
+kuria login --url http://localhost:18290      # as one of the example's people
+claude mcp add kuria -- kuria mcp
+```
+
+Walked through on this example (PLAN-027-T07), with Devi signed in to both
+the app and the CLI:
+
+1. The agent searches for "backlog item reviewed": Developer onboarding
+   (`DOCS-1-D04`) comes first, its body's excerpt marking each word
+   found, stemmed ("«reviewed»"), then Quality policy.
+2. It reads that document's section `developer-onboarding` and is told the
+   document has a live draft.
+3. Meanwhile someone types in the app, at the end of the first checklist
+   item: " (ask Hedda for access)".
+4. The agent replaces "take a small backlog item" with "take a small
+   backlog item from the team's board", a span of the text it read before
+   that typing. The app shows the agent's cursor at the span, then its
+   change within a second, and the cursor goes ten seconds later.
+5. Both changes are in the live draft, as two draft changes
+   (`Akt.draftChanges`), and nothing the person typed is lost.
+
+Had the person changed the agent's span instead, the agent would have
+been told `NO_MATCH` and read again.
+
+Until Konklav can delegate a session to an agent (PLAN-027-T09), the agent
+signs in as the person, so its changes and its cursor are shown as theirs.
+
 ## With example data
 
 [`bundle/`](bundle/) is an example bundle of these akt types with akter: a
