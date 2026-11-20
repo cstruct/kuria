@@ -103,6 +103,7 @@ diesel::table! {
         created_at -> Timestamptz,
         membership -> Nullable<Jsonb>,
         akt_archived -> Bool,
+        actor -> Nullable<Uuid>,
     }
 }
 
@@ -233,6 +234,7 @@ diesel::table! {
         fields -> Jsonb,
         message -> Nullable<Text>,
         akt_archived -> Bool,
+        actor -> Nullable<Uuid>,
     }
 }
 

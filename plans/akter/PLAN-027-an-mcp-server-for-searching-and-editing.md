@@ -356,13 +356,17 @@ The person is accountable for what they let an agent write, so access and author
 <!-- akt: PLAN-027-T08 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b5z
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocks PLAN-027-T05]
 title: "Record who really acted, from Konklav's actor chain"
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+`Principal` and `Actor` carry `acting`, the token's `act` subject as konklav-axum verified it (`auth.actor`); migration `000029_actors` adds `actor` to `akt_revision` and `akt_draft_update`, set by every revision (edits, transitions, memberships, archiving) and draft update (writes, live typing, pushes); bundles carry it; GraphQL `Revision.actor` and `DraftChange.actor`; awareness names "<actor> for <subject>" (`live.presence` extended). Verified: `tests/live_drafts.rs` (an agent token's replacement and release name the agent and are the person's), `tests/live_sync.rs` ("Claude for Ada"), every Rust test on a pg_search Postgres, `mise run lint`.
 
 <!-- field: acceptance -->
 A spec rule says Kuria keeps a token's `act` subject beside `by` on every change it records (revisions, draft updates, pushes); history, `draftChanges` and awareness show it as "<actor> for <person>". A test with an impersonation token shows the impersonator. Needs nothing from Konklav.

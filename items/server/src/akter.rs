@@ -61,6 +61,16 @@ use uuid::Uuid;
 pub struct Actor {
     pub subject: SubjectId,
     pub tenant: TenantId,
+    /// The subject really acting as `subject`, from the token's actor
+    /// chain, if any (`auth.actor`).
+    pub acting: Option<SubjectId>,
+}
+
+impl Actor {
+    /// Who made a change, and who really did if another (`akt.revision.actor`).
+    pub fn by(self) -> (Uuid, Option<Uuid>) {
+        (self.subject.into(), self.acting.map(Into::into))
+    }
 }
 
 /// Who is acting, with what decides their permissions.
@@ -746,7 +756,7 @@ async fn write_draft(
         &akt,
         loaded,
         &outcome.fields,
-        caller.actor.subject.into(),
+        caller.actor.by(),
         now,
     )
     .await?;
@@ -844,6 +854,8 @@ fn revision(
         hash: outcome.hash.to_vec(),
         created_at: now,
         membership: None,
+        // r[impl akt.revision.actor]
+        actor: actor.acting.map(Into::into),
     }
 }
 
@@ -1184,6 +1196,7 @@ async fn record_membership_changing(
             hash: hash.to_vec(),
             created_at: now,
             membership: Some(membership),
+            actor: actor.acting.map(Into::into),
         },
     )
     .await?;

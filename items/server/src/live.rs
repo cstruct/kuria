@@ -39,7 +39,7 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 
 use crate::akter::live::Opened;
-use crate::akter::{Actor, AktError, Akter, Caller};
+use crate::akter::{AktError, Akter, Caller};
 use crate::authorize::Decider;
 use room::{Outgoing, Room};
 
@@ -296,10 +296,7 @@ async fn route(
     };
     let rooms = state.rooms;
     let caller = Caller {
-        actor: Actor {
-            subject: principal.subject,
-            tenant: principal.tenant,
-        },
+        actor: principal.actor(),
         auth: &auth,
         storage: None,
         renderer: None,
@@ -314,7 +311,14 @@ async fn route(
         Err(e) => return unavailable(e),
     };
     let tenant: Uuid = principal.tenant.into();
-    let name = match presence::name_of(rooms.akter(), tenant, principal.subject.into()).await {
+    let name = match presence::name_of(
+        rooms.akter(),
+        tenant,
+        principal.subject.into(),
+        principal.acting.map(Into::into),
+    )
+    .await
+    {
         Ok(name) => name,
         Err(e) => return unavailable(e),
     };

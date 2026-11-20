@@ -282,9 +282,13 @@ pub(crate) fn caller(
         tracing::error!("a tenant token without a tenant");
         return Err(Box::new(StatusCode::INTERNAL_SERVER_ERROR.into_response()));
     };
+    // r[impl auth.actor]
+    // The actor comes from the token the relying SDK verified, never from
+    // the request otherwise.
     let principal = Principal {
         subject: token.sub,
         tenant,
+        acting: token.act.as_ref().map(|act| act.sub),
         expires_at: token.exp,
     };
     Ok((principal, Arc::new(authorizer)))

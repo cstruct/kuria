@@ -284,6 +284,8 @@ pub struct RevisionRow {
     pub created_at: DateTime<Utc>,
     /// For a membership revision, the membership it added or removed.
     pub membership: Option<Json>,
+    /// Who really made it, when it was made as `author` (`akt.revision.actor`).
+    pub actor: Option<Uuid>,
 }
 
 /// Stores a new akt.

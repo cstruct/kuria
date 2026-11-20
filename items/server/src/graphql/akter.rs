@@ -2754,6 +2754,7 @@ impl Akt {
                 .map(|row| DraftChange {
                     seq: row.seq,
                     by: User(row.by),
+                    actor: row.actor.map(User),
                     at: row.at,
                     fields: serde_json::from_value(row.fields).unwrap_or_default(),
                     message: row.message,
@@ -2809,6 +2810,8 @@ pub struct DraftChange {
     seq: i64,
     /// Who made it.
     by: User,
+    /// Who really made it, when it was made as `by` (`akt.revision.actor`).
+    actor: Option<User>,
     at: DateTime<Utc>,
     /// The keys of the fields it changed.
     fields: Vec<String>,
@@ -3591,6 +3594,14 @@ impl AktRevision {
     /// Who made the change, shown by name.
     async fn by(&self) -> User {
         User(self.row.author)
+    }
+
+    /// Who really made the change, when it was made as `by`: an
+    /// impersonator, or an agent `by` let act for them, from the token's
+    /// actor chain (`akt.revision.actor`).
+    // r[impl akt.revision.actor]
+    async fn actor(&self) -> Option<User> {
+        self.row.actor.map(User)
     }
 
     async fn transition(&self) -> Option<&str> {

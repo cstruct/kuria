@@ -88,4 +88,6 @@ of Kuria's servers each is connected to.
 
 r[live.presence]
 Awareness MUST say who each client is, as Kuria names them
-(`person.name`), and where their cursor is.
+(`person.name`), and where their cursor is; a client whose token names an
+actor (`auth.actor`) MUST be named as the actor for the subject, such as
+"Claude for Albin".

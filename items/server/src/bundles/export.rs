@@ -217,6 +217,7 @@ async fn history_of(
             .collect();
     for r in store::revisions_of(conn, ids).await? {
         named.subjects.insert(r.author);
+        named.subjects.extend(r.actor);
         revisions.entry(r.akt_id).or_default().push(BundleRevision {
             revision: r.revision,
             author: r.author,
@@ -227,6 +228,7 @@ async fn history_of(
             hash: hex(&r.hash),
             created_at: r.created_at,
             membership: r.membership,
+            actor: r.actor,
             commit: commits.remove(&(r.akt_id, r.revision)),
         });
     }

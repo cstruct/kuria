@@ -132,7 +132,10 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   it; transitions and membership changes record the latest revision's
   fields, refusing a transition that sets fields. `Akt.draftChanges` lists
   the draft's changes by author since the latest release, or all of them,
-  each with a push's message. `Akt.liveState` answers the draft's Yjs state,
+  each with a push's message. A revision and a draft change also answer
+  their `actor`, the subject a token's actor chain named as really making
+  it (`auth.actor`), and awareness names a client with one as "<actor> for
+  <subject>". `Akt.liveState` answers the draft's Yjs state,
   state vector and base (its Yjs snapshot, which also moves with a change
   that only deletes), base64-encoded, for clones (`live.state`).
 - Editing live drafts together ([`src/live.rs`](src/live.rs),

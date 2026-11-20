@@ -125,7 +125,7 @@ pub(crate) async fn write(
     akt: &AktRow,
     mut loaded: Loaded,
     fields: &BTreeMap<String, Value>,
-    by: Uuid,
+    by: (Uuid, Option<Uuid>),
     now: DateTime<Utc>,
 ) -> Result<BTreeMap<String, Value>, AktError> {
     if !loaded.stored {
@@ -255,7 +255,7 @@ pub(crate) async fn take_in(
     }
     super::archive::writable(&akt)?;
     let now = Utc::now();
-    let by: Uuid = caller.actor.subject.into();
+    let by = caller.actor.by();
     let mut loaded = load(conn, &ty, &akt).await?;
     if !loaded.stored {
         store_new(conn, &ty, &akt, &loaded.draft, now).await?;
@@ -406,7 +406,7 @@ pub(crate) async fn push_in(
         tenant,
         akt.id,
         &kept,
-        caller.actor.subject.into(),
+        caller.actor.by(),
         now,
         &keys,
         &Json::Object(kuria_engine::fields_to_json(&after)),
@@ -512,7 +512,7 @@ pub(crate) async fn leave_sections(
     ty: &StoredType,
     akt: &AktRow,
     member: &str,
-    by: Uuid,
+    by: (Uuid, Option<Uuid>),
     now: DateTime<Utc>,
 ) -> Result<(), AktError> {
     let loaded = load(conn, ty, akt).await?;

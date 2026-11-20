@@ -70,6 +70,7 @@ impl World {
         let db = TestDatabase::new().await;
         let decider: Arc<FakeDecider> = FakeDecider::allowing_tenant();
         decider.allow_everything("colleague");
+        decider.allow_everything("agent");
         let router = router_with(&FakeHost::new(), db.pool().clone(), decider);
         let world = Self { _db: db, router };
         world
@@ -533,5 +534,55 @@ async fn a_replacement_keeps_what_others_typed_since_it_was_read() {
     assert_eq!(
         text(&world.akt(&guide).await, "body"),
         Some("Run `setup`.\n\nThen restart, twice.\n")
+    );
+}
+
+// r[verify auth.actor]
+// r[verify akt.revision.actor]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_through_an_agent_names_the_agent_and_is_the_persons() {
+    let world = World::new().await;
+    let guide = world
+        .create(json!({ "title": "Guide", "body": "One.\n" }))
+        .await;
+    let through = world
+        .run_as(
+            "agent",
+            "mutation($n: String!) { replaceInAkt(input: { number: $n, replacements: [
+                { field: \"body\", span: \"One.\", text: \"Two.\" } ] }) { number } }",
+            json!({ "n": guide }),
+        )
+        .await;
+    assert!(through.get("errors").is_none(), "{through}");
+    let changes = world
+        .ok(
+            "query($n: String!) { akt(number: $n) { draftChanges { by { id } actor { id } } } }",
+            json!({ "n": guide }),
+        )
+        .await["akt"]["draftChanges"]
+        .clone();
+    assert_eq!(
+        changes,
+        json!([{ "by": { "id": SUBJECT }, "actor": { "id": support::AGENT } }])
+    );
+    // A revision it makes names it too; one the person makes, nobody else.
+    let revision = world.akt(&guide).await["revision"].clone();
+    let released = world
+        .run_as("agent", RELEASE, json!({ "n": guide, "v": revision }))
+        .await;
+    assert!(released.get("errors").is_none(), "{released}");
+    let revisions = world
+        .ok(
+            "query($n: String!) { akt(number: $n) { revisions { by { id } actor { id } } } }",
+            json!({ "n": guide }),
+        )
+        .await["akt"]["revisions"]
+        .clone();
+    assert_eq!(
+        revisions,
+        json!([
+            { "by": { "id": SUBJECT }, "actor": null },
+            { "by": { "id": SUBJECT }, "actor": { "id": support::AGENT } }
+        ])
     );
 }

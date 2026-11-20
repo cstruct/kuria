@@ -66,6 +66,9 @@ pub fn schema_sdl() -> String {
 pub(crate) struct Principal {
     pub subject: SubjectId,
     pub tenant: TenantId,
+    /// The subject really acting, from the token's actor chain (`act`),
+    /// if it names one (`auth.actor`).
+    pub acting: Option<SubjectId>,
     /// When the access token expires, in Unix seconds.
     pub expires_at: i64,
 }
@@ -75,6 +78,7 @@ impl Principal {
         Actor {
             subject: self.subject,
             tenant: self.tenant,
+            acting: self.acting,
         }
     }
 }

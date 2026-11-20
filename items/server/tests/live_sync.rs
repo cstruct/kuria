@@ -258,11 +258,16 @@ impl World {
         let db = TestDatabase::new().await;
         let decider = FakeDecider::allowing_tenant();
         decider.allow_everything("colleague");
+        decider.allow_everything("agent");
         decider.grant("colleague-reader", &[READ]);
         let first = Instance::start(&db, decider.clone()).await;
         let second = Instance::start(&db, decider).await;
         let mut conn = db.pool().get().await.unwrap();
-        for (subject, name) in [(SUBJECT, "Ada"), (COLLEAGUE, "Grace")] {
+        for (subject, name) in [
+            (SUBJECT, "Ada"),
+            (COLLEAGUE, "Grace"),
+            (support::AGENT, "Claude"),
+        ] {
             kuria_store::people::record(
                 &mut conn,
                 &kuria_store::people::Person {
@@ -572,5 +577,35 @@ async fn an_akt_without_a_live_draft_is_not_found() {
             .await
             .err(),
         Some(404)
+    );
+}
+
+// r[verify live.presence]
+// r[verify auth.actor]
+#[tokio::test(flavor = "multi_thread")]
+async fn awareness_names_an_agent_for_whom_it_acts() {
+    let world = World::new().await;
+    let mut agent = world.first.connect("agent", &world.number).await.unwrap();
+    let mut grace = world
+        .first
+        .connect("colleague", &world.number)
+        .await
+        .unwrap();
+    let id = agent.doc.client_id();
+    agent
+        .send(&Message::Awareness(AwarenessUpdate {
+            clients: HashMap::from([(
+                id,
+                AwarenessUpdateEntry {
+                    clock: 1,
+                    json: Arc::from(r#"{"cursor":{"anchor":0,"head":1}}"#),
+                },
+            )]),
+        }))
+        .await;
+    grace.until(|c| c.presence.contains_key(&id.get())).await;
+    assert_eq!(
+        grace.presence[&id.get()]["user"],
+        json!({ "id": SUBJECT, "name": "Claude for Ada" })
     );
 }

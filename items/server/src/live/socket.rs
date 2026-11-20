@@ -21,7 +21,7 @@ use yrs::updates::encoder::Encode;
 use super::room::{Outgoing, Room};
 use super::{Rooms, presence};
 use crate::akter::live::Taken;
-use crate::akter::{Actor, AktError, Caller};
+use crate::akter::{AktError, Caller};
 use crate::authorize::Authorizer;
 use crate::graphql::Principal;
 
@@ -193,10 +193,7 @@ impl Client {
             return Handled::Reply(vec![denied(READ_ONLY)]);
         }
         let caller = Caller {
-            actor: Actor {
-                subject: self.principal.subject,
-                tenant: self.principal.tenant,
-            },
+            actor: self.principal.actor(),
             auth: &self.auth,
             storage: self.rooms.akter().storage(),
             renderer: self.rooms.akter().renderer(),
