@@ -382,6 +382,20 @@ pub async fn akt_by_number(
         .optional()
 }
 
+/// The tenant's akter with the identifiers `ids`, in no order.
+pub async fn akter_by_ids(
+    conn: &mut Connection,
+    tenant: Uuid,
+    ids: &[Uuid],
+) -> QueryResult<Vec<AktRow>> {
+    akt::table
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::id.eq_any(ids))
+        .select(AktRow::as_select())
+        .load(conn)
+        .await
+}
+
 /// The akt numbered `number`, locked until the transaction ends.
 pub async fn lock_akt_by_number(
     conn: &mut Connection,

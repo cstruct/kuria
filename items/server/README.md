@@ -245,7 +245,9 @@ Not yet: signatures.
   revision's `named` lists the users and contacts its values name.
   An akt has its `title`, an akt type its `presentation` (title field,
   card and list fields, icon and colour) and each state its `tone`; `akter(search:)` finds
-  akter by a number's beginning or a title's words; `AktType.akterCount`
+  akter by a number's beginning or a title's words, and `textSearch` by
+  the words their text fields hold, ranked by pg_search's BM25, each match
+  its field and an excerpt marked with « and »; `AktType.akterCount`
   counts a type's akter for those who may read them; `viewer.user` names
   the viewer.
   A revision's `by` is `User { id name email }`; `user` fields are
@@ -490,6 +492,9 @@ mise run test
 - [`tests/links.rs`](tests/links.rs): links both ways with revisions on
   both akter, the kinds and targets they allow, pinned targets as they
   were, and linking needing edit at the source and read at the target.
+- [`tests/text_search.rs`](tests/text_search.rs): text search by stemmed
+  words, ranked, with excerpts, a live draft as it reads once written,
+  of one type, only readable types, and archived akter only as asked.
 - [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation,
   tones, icons and colours (unknown ones refused), titles by the
   presentation or by default and kept through edits and transitions,

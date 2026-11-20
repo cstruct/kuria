@@ -1357,6 +1357,19 @@ type Query {
 		archived: ArchivedFilter
 	): AktConnection!
 	"""
+	Fields of akter that hold every word of `text`, as text search
+	splits and stems them, the most relevant first: at most `first` (20
+	by default, 50 at most), of one akt type if given, each with its
+	field and an excerpt marking the words found with « and »
+	(`akt.search.text`). A live draft is searched as it reads.
+	"""
+	textSearch(		text: String!,		type: String,		first: Int,
+		"""
+		Live akter (the default), archived ones, or both.
+		"""
+		archived: ArchivedFilter
+	): [TextMatch!]!
+	"""
 	The tenant's contacts, by name.
 	"""
 	contacts: [Contact!]!
@@ -1519,6 +1532,25 @@ type State {
 	How the state is shown, as the akt type's presentation says.
 	"""
 	tone: Tone!
+}
+
+"""
+A field of an akt that a text search matched (`akt.search.text.match`).
+"""
+type TextMatch {
+	akt: Akt!
+	"""
+	The field's key.
+	"""
+	field: String!
+	"""
+	How relevant the match is, by BM25: higher is more.
+	"""
+	relevance: Float!
+	"""
+	A part of the field around the words found, each marked with « and ».
+	"""
+	excerpt: String!
 }
 
 type TextValue {

@@ -17,6 +17,7 @@ mod migrate;
 pub mod people;
 mod pool;
 pub mod schema;
+pub mod search;
 pub mod sessions;
 pub mod versions;
 

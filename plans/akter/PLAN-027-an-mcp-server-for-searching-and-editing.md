@@ -105,13 +105,17 @@ replaceInAkt applies replacements under the row lock as the least Yjs change for
 <!-- akt: PLAN-027-T03 -->
 ---
 type: task
-revision: 6
+revision: 10
 rank: b5n
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T01, Blocks PLAN-027-T04, Blocked by PLAN-027-T10]
 title: Search akter by what their text says
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+Migration `000028_akt_search`: `akt_search` (a row per text and markdown field, as the akt reads, its stored live draft's if any) under a pg_search index (`pdb.simple('stemmer=english')` on the text; tenant, literal type key and archived as filter terms, pushed into the scan), kept by triggers on `akt` and `akt_draft` calling `akt_search_refresh`, and backfilled. `kuria_store::search::search_text` (`&&&`: every word; `pdb.score`, `pdb.snippet` marked « »); GraphQL `textSearch` as PLAN-027-D07 decides. Verified: `tests/text_search.rs` (stemming, ranking, excerpts, a replacement searchable once committed, one type, readable types only, archived as asked) and every Rust test on a pg_search Postgres; `mise run lint`.
 
 <!-- field: acceptance -->
 `textSearch` answers matches of text and `markdown` fields through a pg_search BM25 index on `akt_search`, which the write path keeps (a live draft as it reads), ranked by relevance, with the field and a marked excerpt; only readable akter, archived as asked (`akt.search.text`, `akt.search.text.match`); store and server tests.

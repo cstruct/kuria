@@ -461,6 +461,82 @@ impl AkterQuery {
             page_info,
         })
     }
+
+    /// Fields of akter that hold every word of `text`, as text search
+    /// splits and stems them, the most relevant first: at most `first` (20
+    /// by default, 50 at most), of one akt type if given, each with its
+    /// field and an excerpt marking the words found with « and »
+    /// (`akt.search.text`). A live draft is searched as it reads.
+    // r[impl akt.search.text]
+    // r[impl akt.search.text.match]
+    // r[impl authz.read]
+    async fn text_search(
+        &self,
+        ctx: &Context<'_>,
+        text: String,
+        #[graphql(name = "type")] key: Option<String>,
+        first: Option<i32>,
+        #[graphql(desc = "Live akter (the default), archived ones, or both.")] archived: Option<
+            ArchivedFilter,
+        >,
+    ) -> async_graphql::Result<Vec<TextMatch>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let limit = i64::from(first.unwrap_or(20).clamp(1, 50));
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut readable = Vec::new();
+        for ty in store::latest_type_versions(&mut conn, tenant)
+            .await
+            .map_err(internal)?
+        {
+            if key.as_ref().is_none_or(|k| *k == ty.key) && reads(ctx, &ty.key).await? {
+                readable.push(ty.key);
+            }
+        }
+        let matches = kuria_store::search::search_text(
+            &mut conn,
+            tenant,
+            &text,
+            &readable,
+            archived.unwrap_or_default().into(),
+            limit,
+        )
+        .await
+        .map_err(internal)?;
+        let mut ids: Vec<Uuid> = matches.iter().map(|m| m.akt_id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        let rows = store::akter_by_ids(&mut conn, tenant, &ids)
+            .await
+            .map_err(internal)?;
+        let akter: HashMap<Uuid, Akt> = with_types(&mut conn, tenant, rows)
+            .await?
+            .into_iter()
+            .map(|akt| (akt.row.id, akt))
+            .collect();
+        Ok(matches
+            .into_iter()
+            .filter_map(|m| {
+                Some(TextMatch {
+                    akt: akter.get(&m.akt_id)?.clone(),
+                    field: m.field,
+                    relevance: m.relevance,
+                    excerpt: m.excerpt,
+                })
+            })
+            .collect())
+    }
+}
+
+/// A field of an akt that a text search matched (`akt.search.text.match`).
+#[derive(SimpleObject)]
+pub struct TextMatch {
+    akt: Akt,
+    /// The field's key.
+    field: String,
+    /// How relevant the match is, by BM25: higher is more.
+    relevance: f64,
+    /// A part of the field around the words found, each marked with « and ».
+    excerpt: String,
 }
 
 /// The store's conditions for akter of the type `key` overdue on one of its
@@ -2188,6 +2264,7 @@ impl Akt {
 
 /// An akt, with the akt type version it was created with; read at one of
 /// its versions, if `version` says so.
+#[derive(Clone)]
 pub struct Akt {
     row: AktRow,
     ty: StoredType,

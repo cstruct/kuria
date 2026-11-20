@@ -236,6 +236,18 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    akt_search (id) {
+        id -> Int8,
+        tenant_id -> Uuid,
+        akt_id -> Uuid,
+        type_key -> Text,
+        field -> Text,
+        archived -> Bool,
+        text -> Text,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     akt,
     akt_number,
