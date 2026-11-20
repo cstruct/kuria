@@ -135,7 +135,12 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   each with a push's message. A revision and a draft change also answer
   their `actor`, the subject a token's actor chain named as really making
   it (`auth.actor`), and awareness names a client with one as "<actor> for
-  <subject>". `Akt.liveState` answers the draft's Yjs state,
+  <subject>".
+  `showCursor` puts the caller's cursor at a span of a live draft's field
+  into its room, and other instances' through Valkey, without a connection
+  of theirs, saying they left ten seconds later unless shown again
+  (`live::Rooms::show_cursor`, `live.presence.shown`): how `kuria mcp`,
+  whose DPoP-bound sessions the WebSocket refuses, shows an agent. `Akt.liveState` answers the draft's Yjs state,
   state vector and base (its Yjs snapshot, which also moves with a change
   that only deletes), base64-encoded, for clones (`live.state`).
 - Editing live drafts together ([`src/live.rs`](src/live.rs),

@@ -448,7 +448,7 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 - [`src/mcp.rs`](src/mcp.rs): `kuria mcp`, an MCP server over standard
   input and output with `rmcp` (its `local` feature, for the
   single-threaded runtime), each tool answered by the command it stands
-  for (`search`, `cat`, `replace`, `types`, `types schema`) on the same
+  for (`search`, `cat`, `replace --show-cursor`, `types`, `types schema`) on the same
   `--url`, `--tenant`, `--profile` or `--dir`, a refusal as a tool error
   with its code, message and field ([spec](../../docs/spec/mcp.md)).
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),

@@ -183,12 +183,9 @@ pub fn app(host: Arc<dyn RelyingHost>, options: Options) -> Result<Router, AppEr
     let akter = Akter::new(pool.clone(), changes.as_ref().map(|c| c.waker.clone()))
         .with_storage(storage.clone())
         .with_renderer(renderer);
-    let live_routes = crate::live::router(
-        &api,
-        crate::live::Rooms::new(akter.clone(), changes.as_ref().map(|c| c.hub.valkey())),
-        decider.clone(),
-    )?;
-    let schema = schema(akter.clone(), changes.map(|c| c.hub));
+    let rooms = crate::live::Rooms::new(akter.clone(), changes.as_ref().map(|c| c.hub.valkey()));
+    let live_routes = crate::live::router(&api, rooms.clone(), decider.clone())?;
+    let schema = schema(akter.clone(), changes.map(|c| c.hub), Some(rooms));
 
     let mut router = Router::new()
         // r[impl auth.health]

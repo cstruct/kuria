@@ -1074,6 +1074,15 @@ type Mutation {
 	"""
 	replaceInAkt(input: ReplaceInAktInput!): Akt!
 	"""
+	Shows the caller's cursor at a span of a field of an akt's live
+	draft, to everyone editing it, for ten seconds, without a
+	connection of theirs: how an agent says where it is about to edit
+	(`live.presence.shown`). An akt without a live draft, or that the
+	caller may not read, is `NOT_FOUND`; a span as `replaceInAkt` refuses
+	it.
+	"""
+	showCursor(input: ShowCursorInput!): Boolean!
+	"""
 	Releases the akt's current revision as its next version
 	(`version.release`).
 	"""
@@ -1526,6 +1535,22 @@ type SectionsValue {
 	numbers and `{title, text, collapsible, items}`.
 	"""
 	value: JSON!
+}
+
+"""
+Where to show the caller's cursor in a live draft
+(`live.presence.shown`).
+"""
+input ShowCursorInput {
+	number: String!
+	"""
+	The text or `markdown` field.
+	"""
+	field: String!
+	"""
+	The span of it, found once in the draft as it reads now.
+	"""
+	span: String!
 }
 
 """

@@ -91,3 +91,15 @@ Awareness MUST say who each client is, as Kuria names them
 (`person.name`), and where their cursor is; a client whose token names an
 actor (`auth.actor`) MUST be named as the actor for the subject, such as
 "Claude for Albin".
+
+r[live.presence.shown]
+`showCursor`, given an akt, a text field and a span of it, MUST put an
+awareness state for the caller into the akt's live draft, without a
+connection of theirs: a cursor at the span as the draft reads now, from
+its start to its end, as Yjs relative positions in the field's `Y.Text`,
+named as `live.presence` says. It MUST reach every client of the draft,
+whichever instance each is connected to (`live.instances`), and MUST say
+the caller left ten seconds after, unless they were shown again since.
+An akt without a live draft, or one the subject may not read, MUST be
+refused as `NOT_FOUND`, and a span as a replacement's is
+(`akt.replace.match`).

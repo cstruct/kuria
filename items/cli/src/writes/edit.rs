@@ -573,6 +573,32 @@ pub(crate) fn replaced(
     }
 }
 
+/// Shows the caller's cursor at the first of `replacements` that the akt's
+/// live draft holds, to those editing it (`live.presence.shown`); quietly
+/// nothing if it has none, or no span is there.
+// r[impl mcp.presence]
+pub async fn show_cursor(
+    session: &Session,
+    number: &str,
+    replacements: &[kuria_engine::replace::Replacement],
+) {
+    for r in replacements {
+        let shown = session
+            .graphql(
+                "mutation($n: String!, $f: String!, $s: String!) {
+                   showCursor(input: { number: $n, field: $f, span: $s }) }",
+                json!({ "n": number, "f": r.field, "s": r.span }),
+            )
+            .await;
+        match shown {
+            Ok(_) => return,
+            // No live draft, or Kuria can't show it: the edit goes ahead.
+            Err(e) if e.code != "NO_MATCH" && e.code != "AMBIGUOUS" => return,
+            Err(_) => {}
+        }
+    }
+}
+
 /// `kuria replace <number>`: spans of text fields replaced, each found in
 /// the field as it is when Kuria applies it (`akt.replace`).
 // r[impl cli.write]

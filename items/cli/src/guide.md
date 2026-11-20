@@ -202,7 +202,8 @@ kuria new <type> --number FOOID-1234 …  # its number, if its pattern gives it 
 kuria set <number> assignee=@me
 kuria replace <number> --field body --span "old text" --text "new text"
                          # a span found once in the field as it is now; others'
-                         # typing elsewhere is kept (NO_MATCH, AMBIGUOUS: read again)
+                         # typing elsewhere is kept (NO_MATCH, AMBIGUOUS: read again);
+                         # --show-cursor shows where to those in its live draft
 kuria do <number> <transition> --set field=value --reason "…"
 kuria members add <container> <member>…
 kuria members remove <container> <member>…

@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 27
+revision: 28
 rank: b5k
 state: active
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -155,9 +155,9 @@ Edits through `kuria mcp` on a delegated session (PLAN-027-T09) are the person's
 <!-- akt: PLAN-027-T06 -->
 ---
 type: task
-revision: 5
+revision: 7
 rank: b5q
-state: doing
+state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T04]
 title: "Show the agent's cursor as a Yjs peer"
@@ -165,7 +165,7 @@ assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
-Blocked by PLAN-027-G04: the live route refuses the CLI's DPoP-bound sessions, so `kuria mcp` can't join a draft as planned.
+As PLAN-027-D08 decides: `LiveDraft::cursor` (engine) makes a span's cursor, Yjs relative positions from yrs' sticky indexes; `showCursor` (`live::Rooms::show_cursor`) puts the caller's awareness, stamped as `live.presence` says, into the draft's room and other instances' through Valkey, and says they left after ten seconds unless shown again (`live.presence.shown`); `kuria replace --show-cursor` calls it first, and `edit_document` always does (`mcp.presence`). Verified: engine unit test (positions as Yjs JSON), `tests/live_sync.rs` (shown on one instance, seen on the other as "Claude for Ada"; NO_MATCH, NOT_FOUND), `tests/mcp.rs` still passing with it, every Rust test, `mise run lint`. Not checked: the cursor drawn in the app's editor, and its leaving after ten seconds.
 
 <!-- field: acceptance -->
 While editing, kuria mcp joins /akter/{number}/live, applies its replacements there and sets its awareness to the span it changes; the editor shows it.
@@ -477,9 +477,9 @@ Relevance order and excerpts don't fit a recency-paged list of akter, and an age
 <!-- akt: PLAN-027-G04 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b69
-state: open
+state: closed
 in: [PLAN-027]
 title: "How kuria mcp shows its cursor, when live drafts refuse DPoP tokens"
 ---
@@ -494,3 +494,26 @@ Options:
 1. **Presence through GraphQL.** A mutation, such as `showCursor(number, field, span)`, by which the server itself puts an awareness state for the caller into the draft's room, stamped as `live.presence` says, for some seconds; `edit_document` calls it before `replaceInAkt`. Works with DPoP, needs the rooms reachable from GraphQL and a rule for how long it stays.
 2. **Let the live route take a DPoP token for reading and awareness only.** Decide read once, at the upgrade, with the accepted presentation, and refuse that client's updates: an agent shown, never editing over the socket. Changes `authz.sender-constrained` for this route.
 3. **Drop the cursor.** Agents' changes still reach people within a second, named "Claude for Albin" once PLAN-027-T05 is done; people just don't see where it works beforehand.
+
+<!-- field: resolution -->
+Presence through GraphQL (option 1), as PLAN-027-D08 decides.
+
+<!-- akt: PLAN-027-D08 -->
+---
+type: decision
+revision: 2
+rank: b6A
+state: decided
+in: [PLAN-027]
+title: "The server shows an agent's cursor, asked through GraphQL"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+kuria mcp can't join a live draft's WebSocket: the route refuses DPoP-bound tokens (`authz.sender-constrained`), and every CLI session is one (PLAN-027-G04).
+
+<!-- field: decision -->
+A mutation, `showCursor(number, field, span)`, has the server put an awareness state for the caller into the draft's room, a cursor at the span as the draft reads now, stamped as `live.presence` says and sent to other instances as any awareness is; it says the caller left after ten seconds unless shown again (`live.presence.shown`). `edit_document` calls it before replacing. The WebSocket keeps refusing DPoP tokens.
+
+<!-- field: why -->
+It needs nothing of the WebSocket's authorization to change, works with every CLI session, and puts the cursor where the server already has the draft; the server knows the draft's items, so the client sends text, not Yjs positions.

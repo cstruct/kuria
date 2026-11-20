@@ -118,7 +118,7 @@ pub fn replace(
 }
 
 /// Where `span` starts in `text`, every time, overlapping ones included.
-fn occurrences(text: &str, span: &str) -> Vec<usize> {
+pub(crate) fn occurrences(text: &str, span: &str) -> Vec<usize> {
     let mut found = Vec::new();
     let mut from = 0;
     while let Some(offset) = text[from..].find(span) {

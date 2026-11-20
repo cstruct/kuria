@@ -232,6 +232,8 @@ impl Kuria {
                     fields,
                     spans,
                     texts,
+                    // r[impl mcp.presence]
+                    show_cursor: true,
                     reason: given.text("reason"),
                 };
                 Ok(self.run(command).await?.markdown)

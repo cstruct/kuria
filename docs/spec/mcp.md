@@ -61,7 +61,8 @@ schema` does.
 ## Presence
 
 r[mcp.presence]
-While `edit_document` changes an akt with a live draft through a server,
-`kuria mcp` SHOULD join its live draft (`live.sync`) and set its awareness
-to where each span it replaces is, so that the people editing see where the
-agent works; the change itself MUST still be made by `akt.replace`.
+Before `edit_document` changes an akt with a live draft through a server,
+`kuria mcp` SHOULD show the agent where the first span it replaces is
+(`live.presence.shown`), so that the people editing see where it works; a
+cursor that can't be shown MUST NOT stop the change, which is still made by
+`akt.replace`.

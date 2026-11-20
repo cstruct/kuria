@@ -34,7 +34,7 @@ use konklav_axum::{Policy, RoutePolicyError, RouterPolicy, TenantToken};
 use redis::aio::ConnectionManager;
 use tokio::sync::broadcast;
 use uuid::Uuid;
-use yrs::sync::AwarenessUpdate;
+use yrs::sync::{AwarenessUpdate, Message};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 
@@ -70,6 +70,9 @@ struct Inner {
     instance: Uuid,
     listening: std::sync::atomic::AtomicBool,
     next_client: std::sync::atomic::AtomicU64,
+    /// The cursors shown without a connection (`live.presence.shown`), by
+    /// draft and awareness client: the clock each was last shown at.
+    shown: Mutex<HashMap<(Uuid, u64), u32>>,
 }
 
 impl Rooms {
@@ -86,6 +89,7 @@ impl Rooms {
                 instance: Uuid::now_v7(),
                 listening: std::sync::atomic::AtomicBool::new(false),
                 next_client: std::sync::atomic::AtomicU64::new(1),
+                shown: Mutex::new(HashMap::new()),
             }),
         }
     }
@@ -159,6 +163,10 @@ impl Rooms {
 
     // r[impl live.instances]
     async fn publish(&self, room: &Room, tag: u8, body: &[u8]) {
+        self.publish_on(room.tenant, room.akt, tag, body).await;
+    }
+
+    async fn publish_on(&self, tenant: Uuid, akt: Uuid, tag: u8, body: &[u8]) {
         let Some(client) = &self.inner.valkey else {
             return;
         };
@@ -180,13 +188,90 @@ impl Rooms {
         message.extend_from_slice(self.inner.instance.as_bytes());
         message.extend_from_slice(body);
         let sent: redis::RedisResult<()> = redis::cmd("PUBLISH")
-            .arg(channel(room.tenant, room.akt))
+            .arg(channel(tenant, akt))
             .arg(message)
             .query_async(conn)
             .await;
         if let Err(e) = sent {
             tracing::warn!("publishing to a live draft's channel: {e}");
         }
+    }
+
+    /// Shows the caller's cursor at `span` of `field` in the live draft of
+    /// the akt `number`, without a connection of theirs, and says they left
+    /// [`SHOWN_FOR`] after unless shown again (`live.presence.shown`).
+    // r[impl live.presence.shown]
+    pub async fn show_cursor(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+        field: &str,
+        span: &str,
+    ) -> Result<(), AktError> {
+        let opened = self.akter().open_live(caller, number).await?;
+        let tenant: Uuid = caller.actor.tenant.into();
+        let draft = self.akter().live_draft(tenant, number).await?;
+        let cursor = draft.cursor(field, span).map_err(AktError::Refused)?;
+        let (subject, acting) = caller.actor.by();
+        let name = presence::name_of(self.akter(), tenant, subject, acting).await?;
+        // One awareness client per person, and agent, in each draft, so
+        // that showing again moves their cursor.
+        let who = {
+            use sha2::Digest as _;
+            let mut hash = sha2::Sha256::new();
+            hash.update(opened.akt.as_bytes());
+            hash.update(subject.as_bytes());
+            hash.update(acting.unwrap_or_default().as_bytes());
+            hash.finalize()
+        };
+        let client =
+            u64::from_le_bytes(who[..8].try_into().unwrap_or_default()) & 0x001f_ffff_ffff_ffff;
+        let clock = shown_clock();
+        let state = serde_json::json!({ "cursor": cursor }).to_string();
+        let update = presence::stamp(awareness(client, clock, &state), subject, &name);
+        self.inner
+            .shown
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert((opened.akt, client), clock);
+        self.present(tenant, opened.akt, &update).await;
+        let rooms = self.clone();
+        let akt = opened.akt;
+        tokio::spawn(async move {
+            tokio::time::sleep(SHOWN_FOR).await;
+            let still = {
+                let mut shown = rooms
+                    .inner
+                    .shown
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let still = shown.get(&(akt, client)) == Some(&clock);
+                if still {
+                    shown.remove(&(akt, client));
+                }
+                still
+            };
+            if still {
+                rooms
+                    .present(tenant, akt, &awareness(client, clock + 1, "null"))
+                    .await;
+            }
+        });
+        Ok(())
+    }
+
+    /// Sends `update`, awareness from no connection, to the draft's clients
+    /// here and on the other instances (`live.instances`).
+    async fn present(&self, tenant: Uuid, akt: Uuid, update: &AwarenessUpdate) {
+        let room = self.rooms().get(&akt).cloned();
+        if let Some(room) = room {
+            let taken = room.take_presence(None, update.clone());
+            if !taken.clients.is_empty() {
+                room.broadcast(None, Message::Awareness(taken).encode_v1());
+            }
+        }
+        self.publish_on(tenant, akt, AWARENESS, &update.encode_v1())
+            .await;
     }
 
     /// Listens to the other instances' channels, once.
@@ -251,6 +336,30 @@ impl Rooms {
             }
         }
         Ok(())
+    }
+}
+
+/// How long a cursor shown without a connection stays
+/// (`live.presence.shown`).
+const SHOWN_FOR: Duration = Duration::from_secs(10);
+
+/// An awareness clock that grows with time, a tenth of a second at a time,
+/// so that a cursor shown again, by any instance, is newer.
+fn shown_clock() -> u32 {
+    let since = chrono::Utc::now().timestamp_millis() - 1_767_225_600_000;
+    u32::try_from(since.max(0) / 100).unwrap_or(u32::MAX - 1)
+}
+
+/// An awareness update of `client` at `clock`, saying `state`.
+fn awareness(client: u64, clock: u32, state: &str) -> AwarenessUpdate {
+    AwarenessUpdate {
+        clients: HashMap::from([(
+            yrs::block::ClientID::new(client),
+            yrs::sync::awareness::AwarenessUpdateEntry {
+                clock,
+                json: Arc::from(state),
+            },
+        )]),
     }
 }
 

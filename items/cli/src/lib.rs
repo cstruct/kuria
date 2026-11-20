@@ -569,6 +569,7 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             spans,
             texts,
             reason,
+            ..
         } => {
             let replacements = writes::replacements(&fields, &spans, &texts)?;
             edits::replace(&mut w, &number, &replacements, reason.as_deref())
@@ -759,9 +760,13 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             fields,
             spans,
             texts,
+            show_cursor,
             reason,
         } => {
             let replacements = writes::replacements(&fields, &spans, &texts)?;
+            if show_cursor {
+                writes::show_cursor(session, &number, &replacements).await;
+            }
             writes::replace(session, &number, &replacements, reason.as_deref()).await
         }
         Command::Do {

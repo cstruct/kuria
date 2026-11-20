@@ -270,6 +270,10 @@ pub enum Command {
             allow_hyphen_values = true
         )]
         texts: Vec<String>,
+        /// First show your cursor at the first span to those editing the
+        /// akt's live draft, if it has one (`live.presence.shown`).
+        #[arg(long)]
+        show_cursor: bool,
         #[arg(long)]
         reason: Option<String>,
     },

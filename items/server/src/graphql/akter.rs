@@ -861,6 +861,17 @@ pub struct ReplacementInput {
     text: String,
 }
 
+/// Where to show the caller's cursor in a live draft
+/// (`live.presence.shown`).
+#[derive(InputObject)]
+pub struct ShowCursorInput {
+    number: String,
+    /// The text or `markdown` field.
+    field: String,
+    /// The span of it, found once in the draft as it reads now.
+    span: String,
+}
+
 /// What copying an akt takes (`akt.copy`).
 #[derive(InputObject)]
 pub struct CopyAktInput {
@@ -1281,6 +1292,36 @@ impl AkterMutation {
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
+    }
+
+    /// Shows the caller's cursor at a span of a field of an akt's live
+    /// draft, to everyone editing it, for ten seconds, without a
+    /// connection of theirs: how an agent says where it is about to edit
+    /// (`live.presence.shown`). An akt without a live draft, or that the
+    /// caller may not read, is `NOT_FOUND`; a span as `replaceInAkt` refuses
+    /// it.
+    // r[impl live.presence.shown]
+    async fn show_cursor(
+        &self,
+        ctx: &Context<'_>,
+        input: ShowCursorInput,
+    ) -> async_graphql::Result<bool> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: None,
+            renderer: None,
+        };
+        let Some(rooms) = ctx.data::<Option<crate::live::Rooms>>()?.as_ref() else {
+            return Err(error(AktError::Internal(
+                "live drafts aren't served here".to_owned(),
+            )));
+        };
+        rooms
+            .show_cursor(caller, &input.number, &input.field, &input.span)
+            .await
+            .map_err(error)?;
+        Ok(true)
     }
 
     /// Releases the akt's current revision as its next version

@@ -609,3 +609,62 @@ async fn awareness_names_an_agent_for_whom_it_acts() {
         json!({ "id": SUBJECT, "name": "Claude for Ada" })
     );
 }
+
+// r[verify live.presence.shown]
+// r[verify live.instances]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_cursor_shown_through_graphql_reaches_everyone_in_the_draft() {
+    let world = World::new().await;
+    let mut grace = world
+        .second
+        .connect("colleague", &world.number)
+        .await
+        .unwrap();
+    let show = "mutation($n: String!, $f: String!, $s: String!) {
+        showCursor(input: { number: $n, field: $f, span: $s }) }";
+    let shown = send(
+        &world.first.router,
+        graphql_with(
+            "agent",
+            show,
+            &json!({ "n": world.number, "f": "body", "s": "llo" }),
+        ),
+    )
+    .await
+    .json();
+    assert_eq!(shown["data"]["showCursor"], true, "{shown}");
+    grace
+        .until(|c| c.presence.values().any(|s| s["cursor"].is_object()))
+        .await;
+    let state = grace
+        .presence
+        .values()
+        .find(|s| s["cursor"].is_object())
+        .unwrap()
+        .clone();
+    assert_eq!(
+        state["user"],
+        json!({ "id": SUBJECT, "name": "Claude for Ada" })
+    );
+    assert_eq!(state["cursor"]["field"], "body");
+    assert!(state["cursor"]["anchor"]["item"].is_object(), "{state}");
+    assert!(state["cursor"]["head"]["item"].is_object(), "{state}");
+
+    let refused = |variables: Value| {
+        let router = world.first.router.clone();
+        async move {
+            let answer = send(&router, graphql_with("agent", show, &variables))
+                .await
+                .json();
+            answer["errors"][0]["extensions"]["code"].clone()
+        }
+    };
+    assert_eq!(
+        refused(json!({ "n": world.number, "f": "body", "s": "nowhere" })).await,
+        "NO_MATCH"
+    );
+    assert_eq!(
+        refused(json!({ "n": "D-404", "f": "body", "s": "llo" })).await,
+        "NOT_FOUND"
+    );
+}
