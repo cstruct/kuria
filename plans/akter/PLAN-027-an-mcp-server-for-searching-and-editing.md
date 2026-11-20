@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 22
+revision: 24
 rank: b5k
 state: draft
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -49,7 +49,7 @@ A subcommand of the CLI ([items/cli](items/cli/README.md)) speaking MCP over sta
 
 Refusals come back as MCP tool errors carrying the CLI's error code and field, so the agent can act on them.
 
-The tools live in a crate of their own, over a GraphQL executor: `kuria mcp` sends their documents over HTTP, and PLAN-028 runs the same tools in the server, in-process as the caller, for hosted clients over HTTP. Remote MCP is not part of this plan (PLAN-027-G03).
+Kuria's MCP runs only locally, in the CLI, so that it signs in and proves its key (DPoP) as the CLI does; Kuria serves no MCP over HTTP, and hosted clients that can't start a local process aren't served (PLAN-027-G03, PLAN-027-D06).
 
 ## Who made an agent's edit
 
@@ -355,7 +355,7 @@ A spec rule says Kuria keeps a token's `act` subject beside `by` on every change
 <!-- akt: PLAN-027-T09 -->
 ---
 type: task
-revision: 3
+revision: 4
 rank: b60
 state: todo
 in: [PLAN-027]
@@ -364,7 +364,7 @@ title: "Konklav: a person delegates a session to an agent"
 ---
 
 <!-- field: description -->
-PLAN-028-G03 suggests a shape: tokens Konklav issues to an OIDC client through the code flow name the client in `act`, and `kuria mcp` signs in as a public client with a loopback redirect, so one Konklav change serves both plans.
+A possible shape: tokens Konklav issues to an OIDC client through the code flow name the client in `act`, and `kuria mcp` signs in as a public client with a loopback redirect, so that authorizing the client is delegating to it.
 
 <!-- field: acceptance -->
 Konklav, in its own repository, lets a person start a child session for a service principal, scoped and time-bounded and revoked with the parent, whose tokens name the person as `sub` and the agent in `act`; the relying crates Kuria pins answer it. `kuria mcp` signs in that way.
@@ -402,3 +402,23 @@ title: "Kuria's own Postgres image, with pg_search"
 
 <!-- field: acceptance -->
 An image built from `postgres:18.x-trixie` with ParadeDB's pg_search package (pinned, 0.27.0 or later) and pgvector, `shared_preload_libraries = 'pg_search'`, runs Kuria's development, test, CI, end-to-end and dogfooding Postgres; a migration creates or requires the extension; CONTRIBUTING.md and docs/architecture.md say Kuria needs Postgres with pg_search, and why.
+
+<!-- akt: PLAN-027-D06 -->
+---
+type: decision
+revision: 2
+rank: b67
+state: decided
+in: [PLAN-027]
+title: "Kuria's MCP runs only locally, in the CLI"
+decided_by: albin@mattsson.io
+---
+
+<!-- field: context -->
+Hosted clients, such as claude.ai in a browser, need MCP over HTTP served by Kuria, with OAuth through Konklav and client registration it lacks (PLAN-027-G03); clients on the person's machine, such as Claude Code and the desktop apps, start a local process.
+
+<!-- field: decision -->
+`kuria mcp` over standard input and output is Kuria's only MCP server; Kuria serves none over HTTP. PLAN-028, which planned one, is dropped.
+
+<!-- field: why -->
+Run by the CLI, it signs in, keeps its session and proves its key with DPoP as the CLI does, with no OAuth or client registration to build in Kuria or Konklav; local mode comes with it. Hosted clients aren't needed now.

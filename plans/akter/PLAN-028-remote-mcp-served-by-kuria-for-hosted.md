@@ -1,9 +1,9 @@
 ---
 number: PLAN-028
 type: plan
-revision: 4
+revision: 5
 rank: b63
-state: draft
+state: dropped
 title: "Remote MCP served by Kuria, for hosted agents such as claude.ai"
 owner: albin@mattsson.io
 ---
