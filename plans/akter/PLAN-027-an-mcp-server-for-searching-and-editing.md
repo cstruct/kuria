@@ -2,7 +2,7 @@
 number: PLAN-027
 type: plan
 revision: 28
-rank: b5k
+rank: b6e
 state: active
 title: "An MCP server for searching and editing documents, alongside live typing"
 owner: albin@mattsson.io
@@ -70,7 +70,7 @@ Through the above, people see the agent's changes but not the agent. A later tas
 ---
 type: task
 revision: 8
-rank: b5l
+rank: b6f
 state: done
 in: [PLAN-027]
 links: [Blocks PLAN-027-T02, Blocks PLAN-027-T03]
@@ -88,7 +88,7 @@ Rules in docs/spec (akter.md or live-drafts.md for replaceInAkt, akt.search exte
 ---
 type: task
 revision: 7
-rank: b5m
+rank: b6g
 state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T01, Blocks PLAN-027-T04]
@@ -106,7 +106,7 @@ replaceInAkt applies replacements under the row lock as the least Yjs change for
 ---
 type: task
 revision: 10
-rank: b5n
+rank: b6h
 state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T01, Blocks PLAN-027-T04, Blocked by PLAN-027-T10]
@@ -124,7 +124,7 @@ Migration `000028_akt_search`: `akt_search` (a row per text and markdown field, 
 ---
 type: task
 revision: 10
-rank: b5o
+rank: b6i
 state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T02, Blocked by PLAN-027-T03, Blocks PLAN-027-T05, Blocks PLAN-027-T06, Blocks PLAN-027-T07]
@@ -142,7 +142,7 @@ search_documents, read_document (with heading), edit_document, list_types and sc
 ---
 type: task
 revision: 5
-rank: b5p
+rank: b6j
 state: todo
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T04, Blocked by PLAN-027-T08, Blocked by PLAN-027-T09]
@@ -156,7 +156,7 @@ Edits through `kuria mcp` on a delegated session (PLAN-027-T09) are the person's
 ---
 type: task
 revision: 7
-rank: b5q
+rank: b6k
 state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T04]
@@ -174,7 +174,7 @@ While editing, kuria mcp joins /akter/{number}/live, applies its replacements th
 ---
 type: task
 revision: 6
-rank: b5r
+rank: b6l
 state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T04]
@@ -192,7 +192,7 @@ In mise run example documents, a person typing and an agent editing through kuri
 ---
 type: gap
 revision: 3
-rank: b5s
+rank: b6m
 state: closed
 in: [PLAN-027]
 title: "Who an agent's edits are attributed to"
@@ -221,7 +221,7 @@ The person, through the agent (option 3), as PLAN-027-D04 decides: Kuria reads K
 ---
 type: gap
 revision: 3
-rank: b5t
+rank: b6n
 state: closed
 in: [PLAN-027]
 title: How search ranks and which language it stems
@@ -256,7 +256,7 @@ pg_search, as PLAN-027-D05 decides: BM25 ranking over `akt_search`, a row per te
 ---
 type: gap
 revision: 3
-rank: b5u
+rank: b6o
 state: closed
 in: [PLAN-027]
 title: "Where MCP runs: a local process or the server"
@@ -289,7 +289,7 @@ Hosted MCP over HTTP is its own plan, PLAN-028. PLAN-027 is `kuria mcp` alone, w
 ---
 type: decision
 revision: 3
-rank: b5v
+rank: b6p
 state: decided
 in: [PLAN-027]
 title: "Agents edit by replacing spans of text, resolved on the server"
@@ -309,7 +309,7 @@ Anchoring by text instead of offsets or whole values survives edits elsewhere an
 ---
 type: decision
 revision: 3
-rank: b5w
+rank: b6q
 state: decided
 in: [PLAN-027]
 title: "Start with GraphQL; join the live socket only to show the agent"
@@ -329,7 +329,7 @@ Correctness comes from replaceInAkt either way; a peer needs a socket per open d
 ---
 type: decision
 revision: 3
-rank: b5x
+rank: b6r
 state: decided
 in: [PLAN-027]
 title: The MCP server is a subcommand of the CLI
@@ -349,7 +349,7 @@ Nothing is duplicated, local mode comes free, and it ships with the CLI people a
 ---
 type: decision
 revision: 2
-rank: b5y
+rank: b6s
 state: decided
 in: [PLAN-027]
 title: "An agent's edits are the person's, through the agent, from Konklav's actor chain"
@@ -369,7 +369,7 @@ The person is accountable for what they let an agent write, so access and author
 ---
 type: task
 revision: 6
-rank: b5z
+rank: b6t
 state: done
 in: [PLAN-027]
 links: [Blocks PLAN-027-T05]
@@ -387,7 +387,7 @@ A spec rule says Kuria keeps a token's `act` subject beside `by` on every change
 ---
 type: task
 revision: 4
-rank: b60
+rank: b6u
 state: todo
 in: [PLAN-027]
 links: [Blocks PLAN-027-T05]
@@ -404,7 +404,7 @@ Konklav, in its own repository, lets a person start a child session for a servic
 ---
 type: decision
 revision: 3
-rank: b61
+rank: b6v
 state: decided
 in: [PLAN-027]
 title: Search with pg_search
@@ -424,7 +424,7 @@ BM25 ranking, tokenizers per language and ngram matching find documents by what 
 ---
 type: task
 revision: 6
-rank: b62
+rank: b6w
 state: done
 in: [PLAN-027]
 links: [Blocks PLAN-027-T03]
@@ -442,7 +442,7 @@ An image built from `postgres:18.x-trixie` with ParadeDB's pg_search package (pi
 ---
 type: decision
 revision: 2
-rank: b67
+rank: b71
 state: decided
 in: [PLAN-027]
 title: "Kuria's MCP runs only locally, in the CLI"
@@ -462,7 +462,7 @@ Run by the CLI, it signs in, keeps its session and proves its key with DPoP as t
 ---
 type: decision
 revision: 2
-rank: b68
+rank: b72
 state: decided
 in: [PLAN-027]
 title: "Text search is a query of its own, textSearch"
@@ -482,7 +482,7 @@ Relevance order and excerpts don't fit a recency-paged list of akter, and an age
 ---
 type: gap
 revision: 2
-rank: b69
+rank: b73
 state: closed
 in: [PLAN-027]
 title: "How kuria mcp shows its cursor, when live drafts refuse DPoP tokens"
@@ -506,7 +506,7 @@ Presence through GraphQL (option 1), as PLAN-027-D08 decides.
 ---
 type: decision
 revision: 2
-rank: b6A
+rank: b74
 state: decided
 in: [PLAN-027]
 title: "The server shows an agent's cursor, asked through GraphQL"

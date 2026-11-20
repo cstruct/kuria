@@ -2,7 +2,7 @@
 number: PLAN-028
 type: plan
 revision: 5
-rank: b63
+rank: b6x
 state: dropped
 title: "Remote MCP served by Kuria, for hosted agents such as claude.ai"
 owner: albin@mattsson.io
@@ -33,7 +33,7 @@ Builds on PLAN-027: its tools, `replaceInAkt`, search through pg_search and attr
 ---
 type: gap
 revision: 1
-rank: b64
+rank: b6y
 state: open
 in: [PLAN-028]
 title: How a hosted client gets a client id from Konklav
@@ -46,7 +46,7 @@ Konklav registers clients in its control plane only. Until it supports Client ID
 ---
 type: gap
 revision: 1
-rank: b65
+rank: b6z
 state: open
 in: [PLAN-028]
 title: "Whether Konklav accepts RFC 8707's resource parameter"
@@ -59,7 +59,7 @@ MCP clients send `resource` in every authorization and token request, whether th
 ---
 type: gap
 revision: 1
-rank: b66
+rank: b70
 state: open
 in: [PLAN-028]
 title: Whether tokens issued to a client name it in act
