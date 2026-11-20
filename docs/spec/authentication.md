@@ -31,6 +31,14 @@ r[auth.tenant]
 The tenant a request acts in MUST be the tenant of its verified token. Kuria
 MUST NOT take it from the query, its variables or any header.
 
+r[auth.actor]
+When a request's verified token names an actor in its actor chain (`act`),
+the subject really acting, such as an impersonator or an agent a person let
+act for them, Kuria MUST take it from the token as the relying SDK verified
+it, never from the request otherwise, and MUST record it with each change
+the request makes (`akt.revision.actor`). The subject the token names MUST
+stay the one whose access applies.
+
 r[auth.dpop]
 Kuria MUST check DPoP proofs against the URL the client addressed, built from
 the public URL Kuria is configured with, so that sender-constrained tokens

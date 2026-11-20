@@ -27,7 +27,8 @@ A bundle that holds akter MUST hold, for them:
 - every version of their akt types, as stored;
 - every akt, with its number, the version it was created with, its state,
   fields, title, rank, and when it was created and last changed;
-- every akt revision of each, as stored: its number, author, time,
+- every akt revision of each, as stored: its number, author, its actor if
+  any (`akt.revision.actor`), time,
   transition, reason, changes, resulting state, membership or link change,
   and hash;
 - every version of each, as stored: its number, the revision it names, its

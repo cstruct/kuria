@@ -27,10 +27,11 @@ use crate::changes::Hub;
 /// The schema the GraphQL endpoint serves.
 pub type KuriaSchema = Schema<Query, Mutation, changes::ChangesSubscription>;
 
-/// Builds the schema, storing akter through `akter`, and serving the
-/// `changes` subscription from `hub` if there is one.
+/// Builds the schema, storing akter through `akter`, serving the
+/// `changes` subscription from `hub` if there is one, and showing cursors
+/// in live drafts' `rooms` if given.
 #[must_use]
-pub fn schema(akter: Akter, hub: Option<Hub>) -> KuriaSchema {
+pub fn schema(akter: Akter, hub: Option<Hub>, rooms: Option<crate::live::Rooms>) -> KuriaSchema {
     Schema::build(
         Query::default(),
         Mutation::default(),
@@ -38,6 +39,7 @@ pub fn schema(akter: Akter, hub: Option<Hub>) -> KuriaSchema {
     )
     .data(akter)
     .data(hub)
+    .data(rooms)
     .limit_depth(12)
     .limit_complexity(2_000)
     .finish()
@@ -57,7 +59,7 @@ pub fn schema_sdl() -> String {
         max_connections: 1,
     })
     .expect("a pool that connects lazily");
-    schema(Akter::new(pool, None), None).sdl()
+    schema(Akter::new(pool, None), None, None).sdl()
 }
 
 /// Who is making a request, from its verified token. Every request's data
@@ -66,6 +68,9 @@ pub fn schema_sdl() -> String {
 pub(crate) struct Principal {
     pub subject: SubjectId,
     pub tenant: TenantId,
+    /// The subject really acting, from the token's actor chain (`act`),
+    /// if it names one (`auth.actor`).
+    pub acting: Option<SubjectId>,
     /// When the access token expires, in Unix seconds.
     pub expires_at: i64,
 }
@@ -75,6 +80,7 @@ impl Principal {
         Actor {
             subject: self.subject,
             tenant: self.tenant,
+            acting: self.acting,
         }
     }
 }

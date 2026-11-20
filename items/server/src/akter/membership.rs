@@ -370,7 +370,7 @@ async fn record_left(
             &container.ty,
             &container.akt,
             member,
-            caller.actor.subject.into(),
+            caller.actor.by(),
             now,
         )
         .await?;

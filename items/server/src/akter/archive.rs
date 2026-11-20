@@ -13,8 +13,9 @@ use crate::authorize::Permission;
 /// Who archives or unarchives an akt.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum By {
-    /// A subject, through the API.
-    Subject(Uuid),
+    /// A subject, through the API, and who really acted as them, if
+    /// another (`akt.revision.actor`).
+    Subject(Uuid, Option<Uuid>),
     /// One of its akt type's rules, by its kind (`archive.rules`), and for
     /// `with_container` the container it went with.
     Rule {
@@ -26,7 +27,7 @@ pub(crate) enum By {
 impl By {
     fn json(self) -> Json {
         match self {
-            Self::Subject(id) => json!({ "subject": id }),
+            Self::Subject(id, _) => json!({ "subject": id }),
             Self::Rule {
                 kind,
                 container: None,
@@ -42,7 +43,7 @@ impl By {
     /// subject is the nil id (`archive.history`).
     fn author(self) -> Uuid {
         match self {
-            Self::Subject(id) => id,
+            Self::Subject(id, _) => id,
             Self::Rule { .. } => Uuid::nil(),
         }
     }
@@ -108,7 +109,7 @@ pub(crate) async fn set(
     // archiving appends it first, then moves the akt with it.
     if !archive {
         // r[impl archive.rules.kept]
-        let kept = matches!(by, By::Subject(_)) && by_rule(&akt).is_some();
+        let kept = matches!(by, By::Subject(..)) && by_rule(&akt).is_some();
         store::set_archived(conn, tenant, akt.id, None, kept).await?;
         akt.archived = false;
         akt.archived_at = None;
@@ -123,7 +124,11 @@ pub(crate) async fn set(
     }
     let rule = match by {
         By::Rule { kind, .. } => Some(format!("by the rule `{kind}`")),
-        By::Subject(_) => None,
+        By::Subject(..) => None,
+    };
+    let actor = match by {
+        By::Subject(_, actor) => actor,
+        By::Rule { .. } => None,
     };
     let revision = RevisionRow {
         akt_id: akt.id,
@@ -140,6 +145,7 @@ pub(crate) async fn set(
         hash: kuria_engine::state_hash(&akt.state, &values).to_vec(),
         created_at: now,
         membership: None,
+        actor,
     };
     store::append_revision(conn, &revision).await?;
     if archive {
@@ -194,7 +200,8 @@ impl Akter {
                         if archive { "archived" } else { "live" }
                     )));
                 }
-                let by = By::Subject(caller.actor.subject.into());
+                let (subject, acting) = caller.actor.by();
+                let by = By::Subject(subject, acting);
                 let now = Utc::now();
                 let akt = set(conn, akt, &ty, archive, by, reason.clone(), now).await?;
                 super::rules::follow(conn, tenant, &akt, &ty, now).await?;

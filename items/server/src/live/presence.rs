@@ -13,20 +13,26 @@ use yrs::sync::AwarenessUpdate;
 
 use crate::akter::{AktError, Akter};
 
-/// How Kuria names `subject` in `tenant` (`person.name`).
+/// How Kuria names `subject` in `tenant` (`person.name`), and, when
+/// `acting` really acts as them, as `acting` for `subject`.
 // r[impl live.presence]
 pub(super) async fn name_of(
     akter: &Akter,
     tenant: Uuid,
     subject: Uuid,
+    acting: Option<Uuid>,
 ) -> Result<String, AktError> {
+    use crate::graphql::people::someone_name;
+    use kuria_engine::Someone::User;
     let mut conn = akter.pool().get().await?;
-    Ok(crate::graphql::people::someone_name(
-        &mut conn,
-        tenant,
-        kuria_engine::Someone::User(subject),
-    )
-    .await?)
+    let subject_name = someone_name(&mut conn, tenant, User(subject)).await?;
+    Ok(match acting {
+        Some(actor) => format!(
+            "{} for {subject_name}",
+            someone_name(&mut conn, tenant, User(actor)).await?
+        ),
+        None => subject_name,
+    })
 }
 
 /// `update` with every state in it saying it is `subject`'s, named

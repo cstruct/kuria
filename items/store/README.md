@@ -7,7 +7,10 @@ the queries the server runs.
 
 - Building a pool (`connect`) and applying migrations
   (`run_pending_migrations`), which are embedded from
-  [`migrations/`](migrations/).
+  [`migrations/`](migrations/). They need Postgres with pg_search
+  preloaded, for text search: the first that does creates the extension,
+  which takes a superuser, so where Kuria's role isn't one an operator
+  creates `pg_search` (with `CASCADE`, for pgvector) first.
 - The Diesel schema ([`src/schema.rs`](src/schema.rs)), kept in step with the
   migrations by hand.
 - Queries, by area:
@@ -18,6 +21,10 @@ the queries the server runs.
     beginning or a title's words, akt revisions, per-tenant counters, and the change-event outbox: taking
     unpublished events (`for update skip locked`), marking them published,
     and reading them in order with their akter's numbers and types.
+  - [`search`](src/search.rs): text search, pg_search's BM25 over
+    `akt_search`, a row per text field of each akt as it reads (its live
+    draft's if stored), which triggers on `akt` and `akt_draft` keep in
+    each change's transaction.
   - [`containers`](src/containers.rs): memberships, the cycle check (a
     recursive query), ranks with their neighbours, rank change events, the
     tenant's order lock, and locking several akter in a fixed order.

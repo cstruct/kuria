@@ -106,6 +106,9 @@ The client MUST offer:
   (`akt.filter.overdue`) and
   `--search`, a page at a time, or every page with `--all` (`akt.page`);
 - `find <text>`: a search (`akt.search`);
+- `search <text> [--type <key>] [--limit <n>]`: a text search
+  (`akt.search.text`), each match's akt, field and excerpt, then the
+  akter `find` finds that no text matched (`mcp.search`);
 - `cat <number>…`: each akt as an akt file (`cli.file`), several as one
   multi-akt file; with `--members <type>,…`, each followed by its direct
   members of those akt types, or with `--all-members` by all of them, in
@@ -200,6 +203,10 @@ The client MUST offer:
   <kind>:<number>]… [--carry]` (`link.create`, `link.create.carry`), answering the
   new akt's number;
 - `set <number> <field>=<value>…`: an edit without a file;
+- `replace <number> (--field <key> --span <text> --text <text>)…`:
+  replacements (`akt.replace`), each given as its field, span and text in
+  that order, answering the text around each as it now reads;
+- `mcp`: the MCP server ([MCP server](mcp.md));
 - `do <number> <transition> [--set <field>=<value>]…`: a transition, with
   the fields it requires;
 - `members add <container> <member>…` and `members remove <container>

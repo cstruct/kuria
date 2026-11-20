@@ -153,6 +153,12 @@ type AktRevision {
 	Who made the change, shown by name.
 	"""
 	by: User!
+	"""
+	Who really made the change, when it was made as `by`: an
+	impersonator, or an agent `by` let act for them, from the token's
+	actor chain (`akt.revision.actor`).
+	"""
+	actor: User
 	transition: String
 	reason: String
 	"""
@@ -602,6 +608,10 @@ type DraftChange {
 	Who made it.
 	"""
 	by: User!
+	"""
+	Who really made it, when it was made as `by` (`akt.revision.actor`).
+	"""
+	actor: User
 	at: DateTime!
 	"""
 	The keys of the fields it changed.
@@ -1054,6 +1064,25 @@ type Mutation {
 	"""
 	editAkt(input: EditAktInput!): Akt!
 	"""
+	Replaces spans of an akt's text and `markdown` fields, each found
+	in the field as it is now, not as it was read, and changing only
+	that span: for an akt with a live draft, its draft, merging with
+	whatever else was typed; for any other, one revision, whatever
+	revision was read (`akt.replace`). A span not found is refused as
+	`NO_MATCH`, one found more than once as `AMBIGUOUS`, each with its
+	`field` (`akt.replace.match`).
+	"""
+	replaceInAkt(input: ReplaceInAktInput!): Akt!
+	"""
+	Shows the caller's cursor at a span of a field of an akt's live
+	draft, to everyone editing it, for ten seconds, without a
+	connection of theirs: how an agent says where it is about to edit
+	(`live.presence.shown`). An akt without a live draft, or that the
+	caller may not read, is `NOT_FOUND`; a span as `replaceInAkt` refuses
+	it.
+	"""
+	showCursor(input: ShowCursorInput!): Boolean!
+	"""
 	Releases the akt's current revision as its next version
 	(`version.release`).
 	"""
@@ -1347,6 +1376,19 @@ type Query {
 		archived: ArchivedFilter
 	): AktConnection!
 	"""
+	Fields of akter that hold every word of `text`, as text search
+	splits and stems them, the most relevant first: at most `first` (20
+	by default, 50 at most), of one akt type if given, each with its
+	field and an excerpt marking the words found with « and »
+	(`akt.search.text`). A live draft is searched as it reads.
+	"""
+	textSearch(		text: String!,		type: String,		first: Int,
+		"""
+		Live akter (the default), archived ones, or both.
+		"""
+		archived: ArchivedFilter
+	): [TextMatch!]!
+	"""
 	The tenant's contacts, by name.
 	"""
 	contacts: [Contact!]!
@@ -1402,6 +1444,29 @@ What `renderDiagram` answers: the SVG, or why it didn't compile.
 type RenderedDiagram {
 	svg: String
 	error: String
+}
+
+"""
+What replacing spans of an akt's text fields takes (`akt.replace`).
+"""
+input ReplaceInAktInput {
+	number: String!
+	"""
+	Each a span of a text or `markdown` field and what it becomes,
+	found in the field as it is when applied.
+	"""
+	replacements: [ReplacementInput!]!
+	reason: String
+}
+
+"""
+One replacement: `span`, which must occur exactly once in `field` when
+applied, becomes `text`.
+"""
+input ReplacementInput {
+	field: String!
+	span: String!
+	text: String!
 }
 
 """
@@ -1473,6 +1538,22 @@ type SectionsValue {
 }
 
 """
+Where to show the caller's cursor in a live draft
+(`live.presence.shown`).
+"""
+input ShowCursorInput {
+	number: String!
+	"""
+	The text or `markdown` field.
+	"""
+	field: String!
+	"""
+	The span of it, found once in the draft as it reads now.
+	"""
+	span: String!
+}
+
+"""
 A user or a contact, as a value names them.
 """
 union Someone = User | Contact
@@ -1486,6 +1567,25 @@ type State {
 	How the state is shown, as the akt type's presentation says.
 	"""
 	tone: Tone!
+}
+
+"""
+A field of an akt that a text search matched (`akt.search.text.match`).
+"""
+type TextMatch {
+	akt: Akt!
+	"""
+	The field's key.
+	"""
+	field: String!
+	"""
+	How relevant the match is, by BM25: higher is more.
+	"""
+	relevance: Float!
+	"""
+	A part of the field around the words found, each marked with « and ».
+	"""
+	excerpt: String!
 }
 
 type TextValue {

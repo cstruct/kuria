@@ -43,6 +43,8 @@ pub struct UpdateRow {
     /// A push's message, if it came from a clone (`clone.server`); `None`
     /// for live typing and other writes.
     pub message: Option<String>,
+    /// Who really made it, when it was made as `by` (`akt.revision.actor`).
+    pub actor: Option<Uuid>,
 }
 
 /// Stores a new live draft.
@@ -117,7 +119,8 @@ pub async fn updates_after(
         .await
 }
 
-/// Appends `update`, made by `by` at `at` and changing the fields `keys`,
+/// Appends `update`, made by `by` (really by `actor`, if given) at `at` and
+/// changing the fields `keys`,
 /// with a push's `message` if it is one, to `akt`'s live draft, which then
 /// reads as `fields`, and answers its sequence number. The caller holds the
 /// akt's row lock.
@@ -130,7 +133,7 @@ pub async fn append(
     tenant: Uuid,
     akt: Uuid,
     update: &[u8],
-    by: Uuid,
+    (by, actor): (Uuid, Option<Uuid>),
     at: DateTime<Utc>,
     keys: &[String],
     fields: &Json,
@@ -152,6 +155,7 @@ pub async fn append(
             at,
             fields: Json::from(keys.to_vec()),
             message: message.map(ToOwned::to_owned),
+            actor,
         })
         .execute(conn)
         .await?;

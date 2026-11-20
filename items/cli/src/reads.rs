@@ -5,11 +5,13 @@
 mod akter;
 mod catalog;
 mod list;
+mod search;
 
 pub use akter::{WithMembers, cat, history, show};
 pub(crate) use akter::{akt_data, members_of};
 pub use catalog::{contacts, schema, types, users};
 pub use list::{Listing, find, ls};
+pub use search::{Searching, search};
 
 use serde_json::json;
 

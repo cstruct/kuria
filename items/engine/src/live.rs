@@ -212,6 +212,52 @@ impl LiveDraft {
         changed.then(|| txn.encode_update_v1())
     }
 
+    /// Where `span`, found once in the `Y.Text` of `field`, is, as awareness
+    /// says a cursor: `{field, anchor, head}`, its start and end as Yjs
+    /// relative positions, the JSON Yjs reads (`live.presence.shown`).
+    /// Refuses a span not found, found more than once, or empty, as a
+    /// replacement's (`akt.replace.match`).
+    // r[impl live.presence.shown]
+    pub fn cursor(&self, field: &str, span: &str) -> Result<Json, Refusal> {
+        use yrs::{Assoc, IndexedSequence};
+        let text = self.doc.get_or_insert_text(field);
+        let txn = self.doc.transact();
+        let whole = text.get_string(&txn);
+        let found = crate::replace::occurrences(&whole, span);
+        let start = match found.as_slice() {
+            _ if span.is_empty() => {
+                return Err(Refusal::BadReplacement {
+                    field: field.to_owned(),
+                    reason: "a span can't be empty".to_owned(),
+                });
+            }
+            [start] => *start,
+            [] => {
+                return Err(Refusal::NoMatch {
+                    field: field.to_owned(),
+                });
+            }
+            more => {
+                return Err(Refusal::Ambiguous {
+                    field: field.to_owned(),
+                    count: more.len(),
+                });
+            }
+        };
+        let at = |index: usize| {
+            let index = u32::try_from(index).ok()?;
+            text.sticky_index(&txn, index, Assoc::After)
+                .or_else(|| text.sticky_index(&txn, index, Assoc::Before))
+                .and_then(|sticky| serde_json::to_value(sticky).ok())
+        };
+        let gone = || Refusal::NoMatch {
+            field: field.to_owned(),
+        };
+        let anchor = at(start).ok_or_else(gone)?;
+        let head = at(start + span.len()).ok_or_else(gone)?;
+        Ok(serde_json::json!({ "field": field, "anchor": anchor, "head": head }))
+    }
+
     /// The draft's state vector, as a Yjs v1 sync step 1 carries it.
     #[must_use]
     pub fn state_vector(&self) -> Vec<u8> {
@@ -798,5 +844,36 @@ mod tests {
             .apply(&server.missing_from(&fresh.state_vector()).unwrap())
             .unwrap();
         assert_eq!(fresh.fields(&ty).unwrap(), fields());
+    }
+
+    // r[verify live.presence.shown]
+    #[test]
+    fn a_cursor_is_a_span_as_yjs_relative_positions() {
+        let draft = LiveDraft {
+            doc: Doc::with_client_id(7),
+        };
+        let text = draft.doc.get_or_insert_text("body");
+        text.insert(
+            &mut draft.doc.transact_mut(),
+            0,
+            "Install it.\n\nRestart.\n",
+        );
+        let cursor = draft.cursor("body", "Restart.").unwrap();
+        assert_eq!(
+            cursor,
+            serde_json::json!({
+                "field": "body",
+                "anchor": { "item": { "client": 7, "clock": 13 }, "assoc": 0 },
+                "head": { "item": { "client": 7, "clock": 21 }, "assoc": 0 },
+            })
+        );
+        assert!(matches!(
+            draft.cursor("body", "nowhere"),
+            Err(Refusal::NoMatch { .. })
+        ));
+        assert!(matches!(
+            draft.cursor("body", "t"),
+            Err(Refusal::Ambiguous { count: 4, .. })
+        ));
     }
 }

@@ -350,6 +350,28 @@ Editing an akt MUST change only the field values given, where a `null`
 clears a value. It MUST refuse an akt in a final state, and an edit that
 would change nothing.
 
+r[akt.replace]
+An akt's text and `markdown` fields MUST also be editable by replacements,
+each naming a field, a span of its text and what the span becomes, all
+applied in one change with an optional reason. Each span MUST be found in
+the field as it is when the change is applied, not as its author read it,
+and replaced there, leaving the rest of the field as it is; the field's
+value afterwards MUST then be checked as an edit's (`akt.field.kinds`,
+`akt.field.markdown`). For an akt with a live draft it MUST change the
+draft as `live.edit` says, each text only by the characters of the spans
+that differ; for any other it MUST append one revision, and MUST NOT name
+or check the revision its author read (`akt.revision.concurrency`), since
+a span still found is not stale. Replacements in one field MUST NOT
+overlap, and are applied to the field as it was before any of them.
+
+r[akt.replace.match]
+A replacement whose span isn't in its field MUST refuse the whole change as
+`NO_MATCH`, and one whose span occurs more than once as `AMBIGUOUS`, each
+with the field and how many times the span occurs, so that its author
+reads the field again or gives a longer span. A field that isn't text or
+`markdown`, or an empty span, MUST be refused as `BAD_REQUEST`, and an
+akt in a final state as `akt.edit` refuses it.
+
 r[akt.transition]
 Performing a transition MUST be refused unless the akt's current state is
 one the transition starts from. It MAY change field values in the same step,
@@ -425,6 +447,22 @@ with the text, ignoring case, or its title contains every word of the
 text, ignoring case. A search MUST only answer akter the subject may read
 (`authz.read`), the most recently changed first, a page at a time
 (`akt.page`).
+
+r[akt.search.text]
+Akter MUST also be searchable by what their text and `markdown` fields
+hold (`text search`): an akt's field matches when it holds the words of the
+text, as the search's tokenizer splits and stems them, and matches MUST be
+ranked by relevance (BM25), most relevant first, at most `first` (20 by
+default, 50 at most), of one akt type if asked. A field of an akt with a
+live draft MUST be searched as its live draft reads, every other as its
+latest revision. A search MUST only answer akter the subject may read
+(`authz.read`), and archived ones only as `archived` asks (`archive.read`).
+
+r[akt.search.text.match]
+Each match MUST name its akt, the field, its relevance and an excerpt: a
+short part of the field around the words found, with each word found
+marked. A change to an akt MUST be searchable as it is once the change is
+committed.
 
 r[akt.page]
 A list of akter, a search, and a container's members MUST be answered a
@@ -523,6 +561,13 @@ gaps, recording the subject who made it, the transition if there was one,
 the reason if one was given, the field values it changed, the resulting
 state, and the SHA-256 hash of the akt's resulting state and field values.
 Akt revisions MUST never change or be removed by any operation of Kuria's.
+
+r[akt.revision.actor]
+A change made by an actor, a subject acting as another (`auth.actor`),
+MUST record the actor beside the subject it was made as: in its revision,
+in an update to a live draft (`live.history`), and in a push. Reading the
+change MUST answer both, so that history shows it as made by the actor
+for the subject.
 
 r[akt.revision.concurrency]
 An edit or a transition MUST name the akt revision it was based on, and MUST

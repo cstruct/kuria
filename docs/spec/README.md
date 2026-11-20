@@ -56,3 +56,5 @@ Specs:
   or without akter, or a whole tenant, keeping numbers and history
 - [command-line client](cli.md): `kuria`, signing in by a link, reading
   and editing akter as files, and the relay its sign-in uses
+- [MCP server](mcp.md): `kuria mcp`, the command-line client's tools
+  for agents searching, reading and editing akter

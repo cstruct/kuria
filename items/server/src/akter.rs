@@ -61,6 +61,16 @@ use uuid::Uuid;
 pub struct Actor {
     pub subject: SubjectId,
     pub tenant: TenantId,
+    /// The subject really acting as `subject`, from the token's actor
+    /// chain, if any (`auth.actor`).
+    pub acting: Option<SubjectId>,
+}
+
+impl Actor {
+    /// Who made a change, and who really did if another (`akt.revision.actor`).
+    pub fn by(self) -> (Uuid, Option<Uuid>) {
+        (self.subject.into(), self.acting.map(Into::into))
+    }
 }
 
 /// Who is acting, with what decides their permissions.
@@ -378,6 +388,24 @@ impl Akter {
         self.committed(result)
     }
 
+    /// Replaces spans of the akt `number`'s text fields (`akt.replace`).
+    pub async fn replace(
+        &self,
+        caller: Caller<'_>,
+        number: &str,
+        replacements: &[kuria_engine::replace::Replacement],
+        reason: Option<String>,
+    ) -> Result<AktRow, AktError> {
+        let mut conn = self.pool.get().await?;
+        let conn: &mut kuria_store::Connection = &mut conn;
+        let result = conn
+            .transaction::<_, AktError, _>(async |conn| {
+                replace_in(conn, caller, number, replacements, reason.clone()).await
+            })
+            .await;
+        self.committed(result)
+    }
+
     /// The akt `number`, opened for a client of its live draft
     /// (`live.sync`).
     pub async fn open_live(
@@ -475,13 +503,43 @@ pub(crate) async fn edit_in(
         conn,
         caller,
         number,
-        expected_revision,
+        Some(expected_revision),
         None,
         reason,
         |ty| Permission::Edit {
             key: ty.key().to_owned(),
         },
         |ty, current, change, _| kuria_engine::edit(ty, current, fields, change),
+    )
+    .await
+}
+
+/// The body of [`Akter::replace`], in the transaction `conn` is in:
+/// `replacements` found in the akt's fields as they are now, its live
+/// draft's for an akt with one, and written as an edit of them, whatever
+/// revision their author read (`akt.replace`).
+// r[impl akt.replace]
+pub(crate) async fn replace_in(
+    conn: &mut kuria_store::Connection,
+    caller: Caller<'_>,
+    number: &str,
+    replacements: &[kuria_engine::replace::Replacement],
+    reason: Option<String>,
+) -> Result<AktRow, AktError> {
+    change_in(
+        conn,
+        caller,
+        number,
+        None,
+        None,
+        reason,
+        |ty| Permission::Edit {
+            key: ty.key().to_owned(),
+        },
+        |ty, current, change, _| {
+            let fields = kuria_engine::replace::replace(ty, current, replacements)?;
+            kuria_engine::edit(ty, current, &fields, change)
+        },
     )
     .await
 }
@@ -500,7 +558,7 @@ pub(crate) async fn transition_in(
         conn,
         caller,
         number,
-        expected_revision,
+        Some(expected_revision),
         Some(transition.to_owned()),
         reason,
         |ty| Permission::Transition {
@@ -526,7 +584,9 @@ async fn change_in(
     conn: &mut kuria_store::Connection,
     caller: Caller<'_>,
     number: &str,
-    expected_revision: i32,
+    // The revision the change was based on, or `None` for one that isn't
+    // checked against it (`akt.replace`).
+    expected_revision: Option<i32>,
     transition: Option<String>,
     reason: Option<String>,
     permission: impl FnOnce(&AktType) -> Permission + Send,
@@ -568,6 +628,7 @@ async fn change_in(
     // revision it was based on isn't checked: revisions don't move with it.
     let live = live::has_live_draft(&stored);
     let to_draft = live && transition.is_none();
+    let expected_revision = expected_revision.unwrap_or(akt.revision);
     if akt.revision != expected_revision && !to_draft {
         return Err(AktError::Stale {
             expected: expected_revision,
@@ -695,7 +756,7 @@ async fn write_draft(
         &akt,
         loaded,
         &outcome.fields,
-        caller.actor.subject.into(),
+        caller.actor.by(),
         now,
     )
     .await?;
@@ -793,6 +854,8 @@ fn revision(
         hash: outcome.hash.to_vec(),
         created_at: now,
         membership: None,
+        // r[impl akt.revision.actor]
+        actor: actor.acting.map(Into::into),
     }
 }
 
@@ -1133,6 +1196,7 @@ async fn record_membership_changing(
             hash: hash.to_vec(),
             created_at: now,
             membership: Some(membership),
+            actor: actor.acting.map(Into::into),
         },
     )
     .await?;

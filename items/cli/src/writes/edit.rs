@@ -509,6 +509,138 @@ pub async fn set(
     })
 }
 
+/// The replacements `fields`, `spans` and `texts` give, one of each in
+/// order (`cli.write`).
+pub fn replacements(
+    fields: &[String],
+    spans: &[String],
+    texts: &[String],
+) -> Result<Vec<kuria_engine::replace::Replacement>, CliError> {
+    if fields.len() != spans.len() || spans.len() != texts.len() {
+        return Err(CliError::refused(
+            "BAD_REQUEST",
+            "give each replacement as --field, --span and --text, one of each",
+        ));
+    }
+    Ok(fields
+        .iter()
+        .zip(spans)
+        .zip(texts)
+        .map(|((field, span), text)| kuria_engine::replace::Replacement {
+            field: field.clone(),
+            span: span.clone(),
+            text: text.clone(),
+        })
+        .collect())
+}
+
+/// What replacing answers: for each replacement, its field's text around
+/// what its span became, as the field now reads (`mcp.edit`).
+pub(crate) fn replaced(
+    number: &str,
+    revision: &Json,
+    now: &serde_json::Map<String, Json>,
+    replacements: &[kuria_engine::replace::Replacement],
+) -> Answer {
+    const AROUND: usize = 60;
+    let mut lines = vec![format!(
+        "{number}: replaced {} span{} (revision {revision}).",
+        replacements.len(),
+        if replacements.len() == 1 { "" } else { "s" }
+    )];
+    let mut around = Vec::new();
+    for r in replacements {
+        let text = now.get(&r.field).and_then(Json::as_str).unwrap_or_default();
+        // The lines around what the span became, whole.
+        let shown = match (r.text.is_empty(), text.find(&r.text)) {
+            (false, Some(at)) => {
+                let after = at + r.text.len();
+                let from = (0..=at.saturating_sub(AROUND))
+                    .rev()
+                    .find(|&i| text.is_char_boundary(i))
+                    .unwrap_or(0);
+                let to = ((after + AROUND).min(text.len())..=text.len())
+                    .find(|&i| text.is_char_boundary(i))
+                    .unwrap_or(text.len());
+                let start = text[..from].rfind('\n').map_or(0, |i| i + 1);
+                let end = text[to..].find('\n').map_or(text.len(), |i| to + i);
+                text[start..end].trim_matches('\n').to_owned()
+            }
+            _ => String::new(),
+        };
+        lines.push(format!("\n`{}` now reads:\n\n```\n{shown}\n```", r.field));
+        around.push(json!({ "field": r.field, "text": shown }));
+    }
+    Answer {
+        markdown: lines.join("\n"),
+        json: json!({ "number": number, "revision": revision, "replaced": around }),
+    }
+}
+
+/// Shows the caller's cursor at the first of `replacements` that the akt's
+/// live draft holds, to those editing it (`live.presence.shown`); quietly
+/// nothing if it has none, or no span is there.
+// r[impl mcp.presence]
+pub async fn show_cursor(
+    session: &Session,
+    number: &str,
+    replacements: &[kuria_engine::replace::Replacement],
+) {
+    for r in replacements {
+        let shown = session
+            .graphql(
+                "mutation($n: String!, $f: String!, $s: String!) {
+                   showCursor(input: { number: $n, field: $f, span: $s }) }",
+                json!({ "n": number, "f": r.field, "s": r.span }),
+            )
+            .await;
+        match shown {
+            Ok(_) => return,
+            // No live draft, or Kuria can't show it: the edit goes ahead.
+            Err(e) if e.code != "NO_MATCH" && e.code != "AMBIGUOUS" => return,
+            Err(_) => {}
+        }
+    }
+}
+
+/// `kuria replace <number>`: spans of text fields replaced, each found in
+/// the field as it is when Kuria applies it (`akt.replace`).
+// r[impl cli.write]
+pub async fn replace(
+    session: &Session,
+    number: &str,
+    replacements: &[kuria_engine::replace::Replacement],
+    reason: Option<&str>,
+) -> Result<Answer, CliError> {
+    let given: Vec<Json> = replacements
+        .iter()
+        .map(|r| json!({ "field": r.field, "span": r.span, "text": r.text }))
+        .collect();
+    let data = session
+        .graphql(
+            "mutation($n: String!, $r: [ReplacementInput!]!, $reason: String) {
+               replaceInAkt(input: { number: $n, replacements: $r, reason: $reason }) {
+                 revision fields { ... on TextValue { field text } ... on MarkdownValue { field markdown } } } }",
+            json!({ "n": number, "r": given, "reason": reason }),
+        )
+        .await?;
+    let now: serde_json::Map<String, Json> = data["replaceInAkt"]["fields"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|f| {
+            let text = f["text"].as_str().or(f["markdown"].as_str())?;
+            Some((f["field"].as_str()?.to_owned(), Json::from(text)))
+        })
+        .collect();
+    Ok(replaced(
+        number,
+        &data["replaceInAkt"]["revision"],
+        &now,
+        replacements,
+    ))
+}
+
 /// `kuria do <number> <transition>`: a transition, by key or name, with the
 /// fields it requires.
 // r[impl cli.write]

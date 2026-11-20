@@ -770,3 +770,57 @@ async fn checkboxes_record_the_caller_and_git_and_images_round_trip() {
             .any(|v| v["__typename"] == "CheckboxValue")
     );
 }
+
+// r[verify akt.replace]
+// r[verify akt.replace.match]
+#[tokio::test(flavor = "multi_thread")]
+async fn replacements_make_one_revision_whatever_was_read() {
+    let world = World::new().await;
+    world.define(capa()).await;
+    let number = world
+        .create(json!({ "title": "Missed review", "root_cause": "No owner. No date." }))
+        .await["number"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    // Someone else edits after the replacement's author read revision 1.
+    world
+        .data(
+            "mutation($n: String!) { editAkt(input: { number: $n, revision: 1, fields: { severity: \"minor\" } }) { revision } }",
+            json!({ "n": number }),
+        )
+        .await;
+    let replaced = world
+        .data(
+            "mutation($n: String!) { replaceInAkt(input: { number: $n, reason: \"Clearer\", replacements: [
+                { field: \"root_cause\", span: \"No owner.\", text: \"Nobody owned it.\" },
+                { field: \"title\", span: \"review\", text: \"design review\" }
+              ] }) { revision fields { ... on TextValue { field text } } } }",
+            json!({ "n": number }),
+        )
+        .await["replaceInAkt"]
+        .clone();
+    assert_eq!(replaced["revision"], 3);
+    let revisions = world
+        .data(
+            "query($n: String!) { akt(number: $n) { revisions { reason changes } } }",
+            json!({ "n": number }),
+        )
+        .await["akt"]["revisions"]
+        .clone();
+    assert_eq!(revisions[2]["reason"], "Clearer");
+    assert_eq!(
+        revisions[2]["changes"],
+        json!({ "root_cause": "Nobody owned it. No date.", "title": "Missed design review" })
+    );
+
+    let missing = world
+        .run(
+            "mutation($n: String!) { replaceInAkt(input: { number: $n, replacements: [
+                { field: \"root_cause\", span: \"No owner.\", text: \"x\" } ] }) { revision } }",
+            json!({ "n": number }),
+        )
+        .await;
+    assert_eq!(code(&missing), "NO_MATCH", "{missing}");
+    assert_eq!(world.revision_rows().await, 3);
+}

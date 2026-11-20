@@ -62,7 +62,10 @@ type.
     type with a due field), `--search`,
     `--limit` and `--after`, or
     `--all` pages. With a type, its list fields are the columns;
-  - `find <text>`; `cat <number>… [--members <type>,… | --all-members]
+  - `find <text>`; `search <text> [--type] [--limit]` (`akt.search.text`:
+    each match's akt, field and an excerpt marked « », then what `find`
+    finds that no text matched; in local mode, fields holding every word,
+    ranked by how often); `cat <number>… [--members <type>,… | --all-members]
     [-o <dir>]` (`cli.file`, `cli.members`): several akter, or an akt with
     its direct members in the container's order, print as one multi-akt
     file (`cli.file.multi`), each after the first following its
@@ -387,6 +390,8 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
 | `types` | `{types: [{key, name, version, numberPattern, akterCount}]}` |
 | `schema` | `{type: {key, name, version, numberPattern, fields: [{key, name, kind, required, multiline, description, options, format, draft}], states: [{key, name, initial, final, tone}], transitions: [{key, name, from, to, requires, action}], contains, createdIn, links, board, presentation}}` |
 | `ls`, `find` | `{akter: [{number, type, title, state, outcome, archived, updatedAt, fields}], endCursor, hasNextPage}` |
+| `search` | `{matches: [{number, title, type, field, excerpt}], akter: [as `find`'s, those no text matched]}` |
+| `replace` | `{number, revision, replaced: [{field, text}]}`, `text` the field around what each span became |
 | `cat` | `{akter: [{number, type, revision, state, outcome, archived, in, links: [{kind, name, outgoing, number, pinnedRevision}], fields}]}`, or `{written}` with `-o`; `archived` is `{at, by, rule, reason}` or `null` |
 | `show` | `{akt: {…cat's, title, typeName, stateName, createdAt, updatedAt, containers, links: [{kind, name, outgoing, akt, pinnedRevision}], members: {columns?, akter, more, sections?}, transitions, history?}}` |
 | `history` | `{number, revisions: [{revision, by, at, what, reason, changes: [{field, value}], memberships}]}`; in local mode also `tracked` and `uncommitted` |
@@ -433,13 +438,19 @@ instead of a server ([`src/local.rs`](src/local.rs), `cli.local.*`):
   [`src/values.rs`](src/values.rs), [`src/file.rs`](src/file.rs),
   [`src/history.rs`](src/history.rs), [`src/md.rs`](src/md.rs).
 - [`src/writes.rs`](src/writes.rs): the writes, in `writes/edit.rs` (`new`,
-  `apply`, `set`, `do`, `draft`, `verdict`), `writes/copy.rs`,
+  `apply`, `set`, `replace`, `do`, `draft`, `verdict`), `writes/copy.rs`,
   `writes/arrange.rs` (membership, order, links) and `writes/types.rs`
   (documents).
 - [`src/clone.rs`](src/clone.rs): clones (`docs …`), in `clone/sync.rs`
   (`clone`, `pull`, `push`), `clone/work.rs` (`status`, `diff`, `add`),
   `clone/base.rs` (`.kuria/`), `clone/fmt.rs`, `clone/layout.rs` and
   `clone/pictures.rs`.
+- [`src/mcp.rs`](src/mcp.rs): `kuria mcp`, an MCP server over standard
+  input and output with `rmcp` (its `local` feature, for the
+  single-threaded runtime), each tool answered by the command it stands
+  for (`search`, `cat`, `replace --show-cursor`, `types`, `types schema`) on the same
+  `--url`, `--tenant`, `--profile` or `--dir`, a refusal as a tool error
+  with its code, message and field ([spec](../../docs/spec/mcp.md)).
 - [`src/profile.rs`](src/profile.rs), [`src/secret.rs`](src/secret.rs),
   [`src/output.rs`](src/output.rs), [`src/error.rs`](src/error.rs).
 
@@ -495,6 +506,13 @@ cargo test -p kuria-cli
   pull merging it and the push again; a conflict marked, refused by `docs add`,
   resolved and pushed; and git's branch workflow end to end. Needs
   `mise run db:up`.
+- MCP ([`tests/mcp.rs`](tests/mcp.rs)): an MCP client over a pipe to
+  `Kuria::on` a session with the test server, finding a document by its
+  body, reading one section by heading id, and replacing a span while
+  the app edits another, both kept; a changed span a `NO_MATCH` tool
+  error; and the binary itself, `kuria mcp --dir`, over standard input
+  and output, searching, editing and reading a plan. Text search needs
+  the development Postgres with pg_search.
 - End to end ([`e2e/tests/clone.spec.ts`](../../e2e/tests/clone.spec.ts)):
   the binary clones an index while the app types in its document; a push
   behind it is refused, a pull merges, and the push shows in the browser.
@@ -531,8 +549,8 @@ cargo test -p kuria-cli
   `login`, `secret`, `secret-key`, `dpop`, `discovery`, `format`,
   `errors`, `guide`, `read`, `file`, `apply`, `write`, `values`,
   `archive`, and `local.*` for local mode); [`docs/spec/clones.md`](../../docs/spec/clones.md)
-  (`clone.*`); `app.history` for the history's wording.
+  (`clone.*`); [`docs/spec/mcp.md`](../../docs/spec/mcp.md) (`mcp.*`); `app.history` for the history's wording.
 - Annotations: `r[impl cli.*]` and `r[impl clone.*]` in `src/`,
   `r[verify cli.*]` and `r[verify clone.*]` in the unit tests,
-  `tests/local.rs`, `tests/clones.rs`, `tests/archive.rs`, `e2e/tests/cli.spec.ts`,
+  `tests/local.rs`, `tests/clones.rs`, `tests/archive.rs`, `tests/mcp.rs`, `e2e/tests/cli.spec.ts`,
   `e2e/tests/clone.spec.ts` and `e2e/tests/parity.spec.ts`.

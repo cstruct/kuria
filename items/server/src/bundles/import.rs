@@ -712,6 +712,7 @@ async fn write(
             hash: unhex(&r.hash).unwrap_or_default(),
             created_at: r.created_at,
             membership: r.membership.clone(),
+            actor: r.actor,
         }));
         held.extend(a.attachments.iter().map(|h| HeldAttachment {
             tenant_id: tenant,

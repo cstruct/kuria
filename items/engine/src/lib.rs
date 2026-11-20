@@ -13,6 +13,7 @@ pub mod markdown;
 pub mod merge;
 pub mod outcomes;
 mod rank;
+pub mod replace;
 pub mod rules;
 pub mod sbom;
 pub mod sections;
@@ -70,6 +71,15 @@ pub enum Refusal {
     Final,
     #[error("the change changes nothing")]
     NoChange,
+    /// A replacement's span isn't in its field (`akt.replace.match`).
+    #[error("`{field}` doesn't hold the span: read it again")]
+    NoMatch { field: String },
+    /// A replacement's span occurs `count` times in its field.
+    #[error("`{field}` holds the span {count} times: give a longer one")]
+    Ambiguous { field: String, count: usize },
+    /// A replacement that can't be made, whatever the field holds.
+    #[error("`{field}`: {reason}")]
+    BadReplacement { field: String, reason: String },
     #[error("the akt type has no transition `{0}`")]
     UnknownTransition(String),
     #[error("`{transition}` can't be performed from `{state}`")]

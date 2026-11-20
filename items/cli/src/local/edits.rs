@@ -277,6 +277,54 @@ pub fn set(
     ))
 }
 
+/// `kuria replace <number>` in local mode: spans of text fields replaced,
+/// each found in the field as the directory holds it (`akt.replace`).
+// r[impl cli.local.rules]
+// r[impl mcp.edit]
+pub fn replace(
+    w: &mut Writer,
+    number: &str,
+    replacements: &[kuria_engine::replace::Replacement],
+    reason: Option<&str>,
+) -> Result<Answer, CliError> {
+    let key = w.akt(number)?.type_key.clone();
+    let current = w.current(number)?;
+    let t = w.dir.types[&key].clone();
+    let fields = kuria_engine::replace::replace(&t.ty, &current, replacements)
+        .map_err(|r| replace_refusal(&r))?;
+    let change = w.change();
+    let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    let changed: Vec<String> = outcome.changes.keys().cloned().collect();
+    let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
+    let now: Map<String, Json> = fields
+        .keys()
+        .map(|k| (k.clone(), values.get(k).cloned().unwrap_or(Json::Null)))
+        .collect();
+    w.akt_mut(number).values = values;
+    let revision = w.bump(number);
+    let mut answered = crate::writes::edit::replaced(number, &json!(revision), &now, replacements);
+    if let Some(reason) = reason {
+        answered = answer(answered.markdown, answered.json, Some(reason));
+    }
+    Ok(answered)
+}
+
+/// A replacement's refusal, with the codes Kuria gives it
+/// (`akt.replace.match`).
+// r[impl akt.replace.match]
+pub(crate) fn replace_refusal(r: &Refusal) -> CliError {
+    let (code, field) = match r {
+        Refusal::NoMatch { field } => ("NO_MATCH", field),
+        Refusal::Ambiguous { field, .. } => ("AMBIGUOUS", field),
+        Refusal::BadReplacement { field, .. } => ("BAD_REQUEST", field),
+        other => return refusal(other),
+    };
+    CliError {
+        field: (!field.is_empty()).then(|| field.clone()),
+        ..CliError::from_server(code, r.to_string(), None)
+    }
+}
+
 /// `kuria do <number> <transition>` in local mode: a transition by key or
 /// name.
 // r[impl cli.local.rules]

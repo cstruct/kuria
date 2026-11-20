@@ -27,6 +27,8 @@ pub const OTHER_TENANT: &str = "01900000-0000-7000-8000-000000000002";
 pub const SUBJECT: &str = "01900000-0000-7000-8000-0000000000aa";
 /// The subject of `colleague` tokens: another subject of `TENANT`.
 pub const COLLEAGUE: &str = "01900000-0000-7000-8000-0000000000cc";
+/// The actor of `agent` tokens, which act as `SUBJECT` (`auth.actor`).
+pub const AGENT: &str = "01900000-0000-7000-8000-0000000000ee";
 pub const PUBLIC_URL: &str = "https://kuria.example";
 
 /// The claims of a token of `kind`, in `TENANT` if it is a tenant token.
@@ -59,7 +61,8 @@ pub fn claims_in(kind: &str, tenant: &str) -> AccessClaims {
 /// with `tenant` or `identity`, with claims of that kind, `tenant-expiring`,
 /// a tenant token that expires in two seconds, `tenant-dpop`, a
 /// tenant token bound to a DPoP key, `other-tenant`, a tenant token in
-/// `OTHER_TENANT`, and `as-<subject>…`, a tenant token of that subject;
+/// `OTHER_TENANT`, `as-<subject>…`, a tenant token of that subject,
+/// `agent`, a tenant token of `SUBJECT` whose actor chain names `AGENT`;
 /// refuses `invalid`,
 /// refuses the proof of `bad-proof`, fails for `unreachable`, and decides
 /// by token kind alone.
@@ -108,6 +111,14 @@ impl FakeHost {
                     .and_then(|s| s.parse().ok())
                     .ok_or(Error::Exhausted)?;
                 Ok(Verified::Valid(someone))
+            }
+            "agent" => {
+                let mut through = claims("tenant");
+                through.act = Some(konklav_token::Actor {
+                    sub: AGENT.parse().unwrap(),
+                    tid: None,
+                });
+                Ok(Verified::Valid(through))
             }
             token if token.starts_with("colleague") => {
                 let mut colleague = claims("tenant");

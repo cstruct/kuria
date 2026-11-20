@@ -132,7 +132,15 @@ The Kuria server: a GraphQL API over HTTP, authenticated through Konklav.
   it; transitions and membership changes record the latest revision's
   fields, refusing a transition that sets fields. `Akt.draftChanges` lists
   the draft's changes by author since the latest release, or all of them,
-  each with a push's message. `Akt.liveState` answers the draft's Yjs state,
+  each with a push's message. A revision and a draft change also answer
+  their `actor`, the subject a token's actor chain named as really making
+  it (`auth.actor`), and awareness names a client with one as "<actor> for
+  <subject>".
+  `showCursor` puts the caller's cursor at a span of a live draft's field
+  into its room, and other instances' through Valkey, without a connection
+  of theirs, saying they left ten seconds later unless shown again
+  (`live::Rooms::show_cursor`, `live.presence.shown`): how `kuria mcp`,
+  whose DPoP-bound sessions the WebSocket refuses, shows an agent. `Akt.liveState` answers the draft's Yjs state,
   state vector and base (its Yjs snapshot, which also moves with a change
   that only deletes), base64-encoded, for clones (`live.state`).
 - Editing live drafts together ([`src/live.rs`](src/live.rs),
@@ -228,6 +236,8 @@ Not yet: signatures.
   fields give `Akt.overdue` (`akt.field.due`). `createAkt`'s `links` are
   added in its transaction (`link.create`).
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
+  `replaceInAkt` (spans of text fields, found as the akt is when applied,
+  without a revision: `akter::replace_in`),
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
   `linkContact`, `eraseContact`, `addLink`, `removeLink`, and `batch`: up to
@@ -243,7 +253,9 @@ Not yet: signatures.
   revision's `named` lists the users and contacts its values name.
   An akt has its `title`, an akt type its `presentation` (title field,
   card and list fields, icon and colour) and each state its `tone`; `akter(search:)` finds
-  akter by a number's beginning or a title's words; `AktType.akterCount`
+  akter by a number's beginning or a title's words, and `textSearch` by
+  the words their text fields hold, ranked by pg_search's BM25, each match
+  its field and an excerpt marked with « and »; `AktType.akterCount`
   counts a type's akter for those who may read them; `viewer.user` names
   the viewer.
   A revision's `by` is `User { id name email }`; `user` fields are
@@ -260,7 +272,9 @@ Not yet: signatures.
   `currentRevision`), `FORBIDDEN`, `UNAVAILABLE`, `NOT_CONTAINABLE`,
   `ALREADY_MEMBER`, `NOT_MEMBER`, `EXCLUSIVE`, `CYCLE`, `FROZEN`,
   `NOT_ACCEPTING`, `CREATED_IN`, `BAD_REQUEST`, `INVALID_CONTACT`,
-  `DUPLICATE_EMAIL`, `LINKED` or `INTERNAL`. The attachment endpoints answer
+  `DUPLICATE_EMAIL`, `LINKED`, `NO_MATCH` or `AMBIGUOUS` (a replacement's
+  span found in its `field` no or several times, with the `count`), or
+  `INTERNAL`. The attachment endpoints answer
   JSON errors with a `code` of `invalid_name`, `not_found`, `unavailable`
   or `internal`, and 413 for an upload over the limit.
 - [`src/changes.rs`](src/changes.rs): the [relay](src/changes/relay.rs),
@@ -486,6 +500,9 @@ mise run test
 - [`tests/links.rs`](tests/links.rs): links both ways with revisions on
   both akter, the kinds and targets they allow, pinned targets as they
   were, and linking needing edit at the source and read at the target.
+- [`tests/text_search.rs`](tests/text_search.rs): text search by stemmed
+  words, ranked, with excerpts, a live draft as it reads once written,
+  of one type, only readable types, and archived akter only as asked.
 - [`tests/presentation.rs`](tests/presentation.rs): akt types' presentation,
   tones, icons and colours (unknown ones refused), titles by the
   presentation or by default and kept through edits and transitions,

@@ -98,7 +98,8 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
         // r[impl akt.field.locked]
         AktError::Refused(kuria_engine::Refusal::Locked { .. }) => coded(message, "LOCKED"),
-        AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
+        AktError::Refused(refusal) => refused(message, refusal),
+        AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
         AktError::NumberTaken(_) => coded(message, "NUMBER_TAKEN"),
@@ -160,6 +161,30 @@ fn error(error: AktError) -> async_graphql::Error {
             coded("internal error".to_owned(), "INTERNAL")
         }
     }
+}
+
+/// A refusal as a GraphQL error: `REFUSED`, save a replacement's, which
+/// say their `field` (`akt.replace.match`).
+// r[impl akt.replace.match]
+fn refused(message: String, refusal: kuria_engine::Refusal) -> async_graphql::Error {
+    use kuria_engine::Refusal;
+    let (code, field, count) = match refusal {
+        Refusal::NoMatch { field } => ("NO_MATCH", field, Some(0)),
+        Refusal::Ambiguous { field, count } => (
+            "AMBIGUOUS",
+            field,
+            Some(i32::try_from(count).unwrap_or(i32::MAX)),
+        ),
+        Refusal::BadReplacement { field, .. } => ("BAD_REQUEST", field, None),
+        _ => return coded(message, "REFUSED"),
+    };
+    async_graphql::Error::new(message).extend_with(move |_, e| {
+        e.set("code", code);
+        e.set("field", field.clone());
+        if let Some(count) = count {
+            e.set("count", count);
+        }
+    })
 }
 
 fn coded(message: String, code: &'static str) -> async_graphql::Error {
@@ -436,6 +461,82 @@ impl AkterQuery {
             page_info,
         })
     }
+
+    /// Fields of akter that hold every word of `text`, as text search
+    /// splits and stems them, the most relevant first: at most `first` (20
+    /// by default, 50 at most), of one akt type if given, each with its
+    /// field and an excerpt marking the words found with « and »
+    /// (`akt.search.text`). A live draft is searched as it reads.
+    // r[impl akt.search.text]
+    // r[impl akt.search.text.match]
+    // r[impl authz.read]
+    async fn text_search(
+        &self,
+        ctx: &Context<'_>,
+        text: String,
+        #[graphql(name = "type")] key: Option<String>,
+        first: Option<i32>,
+        #[graphql(desc = "Live akter (the default), archived ones, or both.")] archived: Option<
+            ArchivedFilter,
+        >,
+    ) -> async_graphql::Result<Vec<TextMatch>> {
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let limit = i64::from(first.unwrap_or(20).clamp(1, 50));
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut readable = Vec::new();
+        for ty in store::latest_type_versions(&mut conn, tenant)
+            .await
+            .map_err(internal)?
+        {
+            if key.as_ref().is_none_or(|k| *k == ty.key) && reads(ctx, &ty.key).await? {
+                readable.push(ty.key);
+            }
+        }
+        let matches = kuria_store::search::search_text(
+            &mut conn,
+            tenant,
+            &text,
+            &readable,
+            archived.unwrap_or_default().into(),
+            limit,
+        )
+        .await
+        .map_err(internal)?;
+        let mut ids: Vec<Uuid> = matches.iter().map(|m| m.akt_id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        let rows = store::akter_by_ids(&mut conn, tenant, &ids)
+            .await
+            .map_err(internal)?;
+        let akter: HashMap<Uuid, Akt> = with_types(&mut conn, tenant, rows)
+            .await?
+            .into_iter()
+            .map(|akt| (akt.row.id, akt))
+            .collect();
+        Ok(matches
+            .into_iter()
+            .filter_map(|m| {
+                Some(TextMatch {
+                    akt: akter.get(&m.akt_id)?.clone(),
+                    field: m.field,
+                    relevance: m.relevance,
+                    excerpt: m.excerpt,
+                })
+            })
+            .collect())
+    }
+}
+
+/// A field of an akt that a text search matched (`akt.search.text.match`).
+#[derive(SimpleObject)]
+pub struct TextMatch {
+    akt: Akt,
+    /// The field's key.
+    field: String,
+    /// How relevant the match is, by BM25: higher is more.
+    relevance: f64,
+    /// A part of the field around the words found, each marked with « and ».
+    excerpt: String,
 }
 
 /// The store's conditions for akter of the type `key` overdue on one of its
@@ -739,6 +840,36 @@ pub struct EditAktInput {
     /// Field keys to values; `null` clears a field.
     fields: Json<JsonValue>,
     reason: Option<String>,
+}
+
+/// What replacing spans of an akt's text fields takes (`akt.replace`).
+#[derive(InputObject)]
+pub struct ReplaceInAktInput {
+    number: String,
+    /// Each a span of a text or `markdown` field and what it becomes,
+    /// found in the field as it is when applied.
+    replacements: Vec<ReplacementInput>,
+    reason: Option<String>,
+}
+
+/// One replacement: `span`, which must occur exactly once in `field` when
+/// applied, becomes `text`.
+#[derive(InputObject)]
+pub struct ReplacementInput {
+    field: String,
+    span: String,
+    text: String,
+}
+
+/// Where to show the caller's cursor in a live draft
+/// (`live.presence.shown`).
+#[derive(InputObject)]
+pub struct ShowCursorInput {
+    number: String,
+    /// The text or `markdown` field.
+    field: String,
+    /// The span of it, found once in the draft as it reads now.
+    span: String,
 }
 
 /// What copying an akt takes (`akt.copy`).
@@ -1126,6 +1257,71 @@ impl AkterMutation {
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await
+    }
+
+    /// Replaces spans of an akt's text and `markdown` fields, each found
+    /// in the field as it is now, not as it was read, and changing only
+    /// that span: for an akt with a live draft, its draft, merging with
+    /// whatever else was typed; for any other, one revision, whatever
+    /// revision was read (`akt.replace`). A span not found is refused as
+    /// `NO_MATCH`, one found more than once as `AMBIGUOUS`, each with its
+    /// `field` (`akt.replace.match`).
+    async fn replace_in_akt(
+        &self,
+        ctx: &Context<'_>,
+        input: ReplaceInAktInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let replacements: Vec<_> = input
+            .replacements
+            .into_iter()
+            .map(|r| kuria_engine::replace::Replacement {
+                field: r.field,
+                span: r.span,
+                text: r.text,
+            })
+            .collect();
+        let akter = akter(ctx)?;
+        let row = akter
+            .replace(caller, &input.number, &replacements, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Shows the caller's cursor at a span of a field of an akt's live
+    /// draft, to everyone editing it, for ten seconds, without a
+    /// connection of theirs: how an agent says where it is about to edit
+    /// (`live.presence.shown`). An akt without a live draft, or that the
+    /// caller may not read, is `NOT_FOUND`; a span as `replaceInAkt` refuses
+    /// it.
+    // r[impl live.presence.shown]
+    async fn show_cursor(
+        &self,
+        ctx: &Context<'_>,
+        input: ShowCursorInput,
+    ) -> async_graphql::Result<bool> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: None,
+            renderer: None,
+        };
+        let Some(rooms) = ctx.data::<Option<crate::live::Rooms>>()?.as_ref() else {
+            return Err(error(AktError::Internal(
+                "live drafts aren't served here".to_owned(),
+            )));
+        };
+        rooms
+            .show_cursor(caller, &input.number, &input.field, &input.span)
+            .await
+            .map_err(error)?;
+        Ok(true)
     }
 
     /// Releases the akt's current revision as its next version
@@ -2109,6 +2305,7 @@ impl Akt {
 
 /// An akt, with the akt type version it was created with; read at one of
 /// its versions, if `version` says so.
+#[derive(Clone)]
 pub struct Akt {
     row: AktRow,
     ty: StoredType,
@@ -2598,6 +2795,7 @@ impl Akt {
                 .map(|row| DraftChange {
                     seq: row.seq,
                     by: User(row.by),
+                    actor: row.actor.map(User),
                     at: row.at,
                     fields: serde_json::from_value(row.fields).unwrap_or_default(),
                     message: row.message,
@@ -2653,6 +2851,8 @@ pub struct DraftChange {
     seq: i64,
     /// Who made it.
     by: User,
+    /// Who really made it, when it was made as `by` (`akt.revision.actor`).
+    actor: Option<User>,
     at: DateTime<Utc>,
     /// The keys of the fields it changed.
     fields: Vec<String>,
@@ -3435,6 +3635,14 @@ impl AktRevision {
     /// Who made the change, shown by name.
     async fn by(&self) -> User {
         User(self.row.author)
+    }
+
+    /// Who really made the change, when it was made as `by`: an
+    /// impersonator, or an agent `by` let act for them, from the token's
+    /// actor chain (`akt.revision.actor`).
+    // r[impl akt.revision.actor]
+    async fn actor(&self) -> Option<User> {
+        self.row.actor.map(User)
     }
 
     async fn transition(&self) -> Option<&str> {

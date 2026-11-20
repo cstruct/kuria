@@ -39,6 +39,7 @@ pub mod history;
 pub mod http;
 pub mod konklav;
 pub mod local;
+pub mod mcp;
 pub mod md;
 pub mod model;
 pub mod output;
@@ -63,6 +64,9 @@ use std::path::{Path, PathBuf};
 
 /// Runs `cli`, saying its answer or refusal, and answers the exit code.
 pub async fn run(cli: Cli) -> ExitCode {
+    if matches!(cli.command, Command::Mcp) {
+        return Box::pin(mcp::serve(mcp::Target::of(&cli))).await;
+    }
     let format = cli.format;
     match answer(cli).await {
         Ok(answer) => {
@@ -267,6 +271,7 @@ fn reads_only(command: &Command) -> bool {
             action: None | Some(TypesCommand::Export { .. } | TypesCommand::Schema { .. })
         } | Command::Ls { .. }
             | Command::Find { .. }
+            | Command::Search { .. }
             | Command::Cat { .. }
             | Command::Show { .. }
             | Command::History { .. }
@@ -325,6 +330,7 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             let archived = reads::Archived::asked(archived, with_archived);
             reads::find(source, &text.join(" "), limit, archived).await
         }
+        command @ Command::Search { .. } => search(source, command).await,
         Command::Cat {
             numbers,
             output,
@@ -369,6 +375,28 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
         Command::Contacts => reads::contacts(source).await,
         _ => unreachable!("only reads come here"),
     }
+}
+
+/// `kuria search`.
+async fn search(source: Source<'_>, command: Command) -> Result<Answer, CliError> {
+    let Command::Search {
+        text,
+        akt_type,
+        limit,
+        archived,
+        with_archived,
+    } = command
+    else {
+        unreachable!("only a search comes here");
+    };
+    let text = text.join(" ");
+    let asked = reads::Searching {
+        text: &text,
+        akt_type: akt_type.as_deref(),
+        limit,
+        archived: reads::Archived::asked(archived, with_archived),
+    };
+    reads::search(source, &asked).await
 }
 
 /// A command on the akt directory at `root` (`cli.local.*`).
@@ -535,6 +563,17 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             sets,
             reason,
         } => edits::set(&mut w, &number, &sets, reason.as_deref()),
+        Command::Replace {
+            number,
+            fields,
+            spans,
+            texts,
+            reason,
+            ..
+        } => {
+            let replacements = writes::replacements(&fields, &spans, &texts)?;
+            edits::replace(&mut w, &number, &replacements, reason.as_deref())
+        }
         Command::Do {
             number,
             transition,
@@ -601,6 +640,12 @@ fn whoami_local(root: &Path) -> Result<Answer, CliError> {
         ),
         json: serde_json::json!({ "dir": root, "me": me, "signedInWith": "local" }),
     })
+}
+
+/// What `command` answers through `session`, an open session, as `kuria`
+/// would signed in to it.
+pub async fn answer_on(session: &Session, command: Command) -> Result<Answer, CliError> {
+    Box::pin(dispatch(session, command)).await
 }
 
 async fn dispatch(session: &Session, command: Command) -> Result<Answer, CliError> {
@@ -710,6 +755,20 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             sets,
             reason,
         } => writes::set(session, &number, &sets, reason.as_deref()).await,
+        Command::Replace {
+            number,
+            fields,
+            spans,
+            texts,
+            show_cursor,
+            reason,
+        } => {
+            let replacements = writes::replacements(&fields, &spans, &texts)?;
+            if show_cursor {
+                writes::show_cursor(session, &number, &replacements).await;
+            }
+            writes::replace(session, &number, &replacements, reason.as_deref()).await
+        }
         Command::Do {
             number,
             transition,

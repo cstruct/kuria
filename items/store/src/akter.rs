@@ -284,6 +284,8 @@ pub struct RevisionRow {
     pub created_at: DateTime<Utc>,
     /// For a membership revision, the membership it added or removed.
     pub membership: Option<Json>,
+    /// Who really made it, when it was made as `author` (`akt.revision.actor`).
+    pub actor: Option<Uuid>,
 }
 
 /// Stores a new akt.
@@ -380,6 +382,20 @@ pub async fn akt_by_number(
         .first(conn)
         .await
         .optional()
+}
+
+/// The tenant's akter with the identifiers `ids`, in no order.
+pub async fn akter_by_ids(
+    conn: &mut Connection,
+    tenant: Uuid,
+    ids: &[Uuid],
+) -> QueryResult<Vec<AktRow>> {
+    akt::table
+        .filter(akt::tenant_id.eq(tenant))
+        .filter(akt::id.eq_any(ids))
+        .select(AktRow::as_select())
+        .load(conn)
+        .await
 }
 
 /// The akt numbered `number`, locked until the transaction ends.
