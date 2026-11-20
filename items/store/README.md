@@ -7,7 +7,10 @@ the queries the server runs.
 
 - Building a pool (`connect`) and applying migrations
   (`run_pending_migrations`), which are embedded from
-  [`migrations/`](migrations/).
+  [`migrations/`](migrations/). They need Postgres with pg_search
+  preloaded, for text search: the first that does creates the extension,
+  which takes a superuser, so where Kuria's role isn't one an operator
+  creates `pg_search` (with `CASCADE`, for pgvector) first.
 - The Diesel schema ([`src/schema.rs`](src/schema.rs)), kept in step with the
   migrations by hand.
 - Queries, by area:

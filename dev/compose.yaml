@@ -2,7 +2,9 @@ name: kuria-dev
 
 services:
   postgres:
-    image: postgres:18.1
+    # Postgres with pg_search, for text search (dev/postgres/Dockerfile).
+    image: kuria-dev-postgres:18.6-pgsearch0.27.0
+    build: ./postgres
     environment:
       POSTGRES_USER: kuria
       POSTGRES_PASSWORD: kuria

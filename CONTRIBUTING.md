@@ -18,7 +18,13 @@ mise run db:up
 
 `db:up` starts the development Postgres, Valkey and S3 gateway
 ([`dev/compose.yaml`](dev/compose.yaml)), on ports that don't clash with
-Konklav's; `db:down` stops them and `db:reset` forgets their data.
+Konklav's; `db:down` stops them and `db:reset` forgets their data. The
+Postgres is an image of Kuria's own, built the first time from
+[`dev/postgres`](dev/postgres/Dockerfile): Postgres 18 with
+[pg_search](https://github.com/paradedb/paradedb/tree/main/pg_search),
+which text search needs, preloaded. Every Kuria database runs on it, so a
+Postgres without pg_search refuses Kuria's migrations. pg_search is
+AGPL-3.0, and managed Postgres services don't offer it.
 `mise tasks` lists every task.
 
 ## How work is done

@@ -403,13 +403,17 @@ BM25 ranking, tokenizers per language and ngram matching find documents by what 
 <!-- akt: PLAN-027-T10 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b62
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocks PLAN-027-T03]
 title: "Kuria's own Postgres image, with pg_search"
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+`dev/postgres/Dockerfile`: `postgres:18.6-trixie` with pgvector (PGDG apt) and ParadeDB's pg_search 0.27.0 .deb, preloaded by its CMD; `dev/compose.yaml` builds it as `kuria-dev-postgres:18.6-pgsearch0.27.0`. Every Kuria database (tests, CI, examples, dogfood, e2e) is on that Postgres; the other stacks' Postgres is Konklav's and unchanged. Migration `000027_pg_search` creates the extension (`if not exists`, `cascade`). Verified: built on arm64, `kuria-store` tests on an instance of it (port 15443, a project of its own, leaving the shared one alone); `mise run lint`. The shared `kuria-dev` Postgres is recreated with the image at its next `mise run db:up` from this branch; data carries over (same major).
 
 <!-- field: acceptance -->
 An image built from `postgres:18.x-trixie` with ParadeDB's pg_search package (pinned, 0.27.0 or later) and pgvector, `shared_preload_libraries = 'pg_search'`, runs Kuria's development, test, CI, end-to-end and dogfooding Postgres; a migration creates or requires the extension; CONTRIBUTING.md and docs/architecture.md say Kuria needs Postgres with pg_search, and why.
