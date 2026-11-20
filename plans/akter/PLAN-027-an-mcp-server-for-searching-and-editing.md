@@ -229,7 +229,7 @@ pg_search, as PLAN-027-D05 decides: BM25 ranking over `akt_search`, a row per te
 <!-- akt: PLAN-027-G03 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b5u
 state: open
 in: [PLAN-027]
@@ -237,7 +237,24 @@ title: "Where MCP runs: a local process or the server"
 ---
 
 <!-- field: description -->
-kuria mcp over stdio serves Claude Code and desktop clients; claude.ai connectors and other hosted clients need remote MCP over HTTP, which the server would host with Konklav authenticating, OAuth for MCP included. Decide whether the second is in this plan.
+`kuria mcp` over standard input and output serves clients on the person's machine (Claude Code, desktop apps). claude.ai connectors and other hosted clients need remote MCP over HTTP, which the server would host.
+
+## What remote MCP asks (specification 2026-07-28)
+
+- **Transport:** Streamable HTTP, one endpoint taking `POST`, answering JSON or an event stream; no sessions, `GET` answered 405; `Origin` checked.
+- **Kuria as a resource server:** Protected Resource Metadata (RFC 9728) naming the authorization server, found by a 401's `WWW-Authenticate: Bearer resource_metadata=…` or at `/.well-known/oauth-protected-resource`. Tokens arrive as `Authorization: Bearer`; DPoP isn't mentioned. Kuria must accept only tokens issued for it, which the relying crates check by audience.
+- **The authorization server:** OpenID Connect discovery is allowed. Clients send RFC 8707's `resource` in every authorization and token request. They get a client id by, in order: pre-registration (or the person entering it), Client ID Metadata Documents, Dynamic Client Registration (deprecated).
+
+## What Konklav has
+
+- An OpenID provider (`oidc.provider.*`): discovery, authorization code flow with PKCE, refresh tokens, a tenant by scope or by choosing at login. Access tokens are Konklav's, with the client's audience, so registering a client with Kuria's audience gives tokens Kuria verifies unchanged.
+- Clients are registered in the control plane only, with exact redirect URIs: no Client ID Metadata Documents and no dynamic registration. An operator would register each host (claude.ai, …), and the person would enter its client id, if the host lets them (not verified for claude.ai).
+- Not verified: whether Konklav ignores the `resource` parameter or refuses it.
+- An OIDC client is a service principal (`client` credentials), yet tokens issued to it name only the person. Naming the client in `act` would be the delegation PLAN-027-D04 needs: a person authorizing a client is a person delegating to an agent, scoped and revocable. `kuria mcp` could sign in the same way, as a public client with a loopback redirect, so PLAN-027-T09 would be one Konklav change for both.
+
+## Shape in Kuria
+
+The tools defined once, in a crate both use, over a GraphQL executor: `kuria mcp` sends the documents over HTTP, the server runs them in-process as the caller, so authorization and checks are the same.
 
 <!-- akt: PLAN-027-D01 -->
 ---
