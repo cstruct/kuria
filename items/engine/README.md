@@ -20,6 +20,10 @@ produces, or why it is refused.
   transition requires for the values given; `check_locked` refuses a change
   to a locked field without a reason; `overdue` gives the due fields an akt
   is overdue on today.
+- `replace::replace`: the field values a list of `Replacement`s (a field,
+  a span and what it becomes) makes of an akt's fields as they are, each
+  span found exactly once, or `NoMatch`, `Ambiguous` or `BadReplacement`
+  (`akt.replace`); the server and local mode then edit with them.
 - `rank_between` and `nth_appended`: rank keys, fractional indexing with an
   integer part, so appending keeps keys short and there is always a key
   between two others. Keys are compared byte by byte. `placement`: where a

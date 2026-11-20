@@ -1054,6 +1054,16 @@ type Mutation {
 	"""
 	editAkt(input: EditAktInput!): Akt!
 	"""
+	Replaces spans of an akt's text and `markdown` fields, each found
+	in the field as it is now, not as it was read, and changing only
+	that span: for an akt with a live draft, its draft, merging with
+	whatever else was typed; for any other, one revision, whatever
+	revision was read (`akt.replace`). A span not found is refused as
+	`NO_MATCH`, one found more than once as `AMBIGUOUS`, each with its
+	`field` (`akt.replace.match`).
+	"""
+	replaceInAkt(input: ReplaceInAktInput!): Akt!
+	"""
 	Releases the akt's current revision as its next version
 	(`version.release`).
 	"""
@@ -1402,6 +1412,29 @@ What `renderDiagram` answers: the SVG, or why it didn't compile.
 type RenderedDiagram {
 	svg: String
 	error: String
+}
+
+"""
+What replacing spans of an akt's text fields takes (`akt.replace`).
+"""
+input ReplaceInAktInput {
+	number: String!
+	"""
+	Each a span of a text or `markdown` field and what it becomes,
+	found in the field as it is when applied.
+	"""
+	replacements: [ReplacementInput!]!
+	reason: String
+}
+
+"""
+One replacement: `span`, which must occur exactly once in `field` when
+applied, becomes `text`.
+"""
+input ReplacementInput {
+	field: String!
+	span: String!
+	text: String!
 }
 
 """

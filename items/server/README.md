@@ -228,6 +228,8 @@ Not yet: signatures.
   fields give `Akt.overdue` (`akt.field.due`). `createAkt`'s `links` are
   added in its transaction (`link.create`).
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
+  `replaceInAkt` (spans of text fields, found as the akt is when applied,
+  without a revision: `akter::replace_in`),
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,
   `linkContact`, `eraseContact`, `addLink`, `removeLink`, and `batch`: up to
@@ -260,7 +262,9 @@ Not yet: signatures.
   `currentRevision`), `FORBIDDEN`, `UNAVAILABLE`, `NOT_CONTAINABLE`,
   `ALREADY_MEMBER`, `NOT_MEMBER`, `EXCLUSIVE`, `CYCLE`, `FROZEN`,
   `NOT_ACCEPTING`, `CREATED_IN`, `BAD_REQUEST`, `INVALID_CONTACT`,
-  `DUPLICATE_EMAIL`, `LINKED` or `INTERNAL`. The attachment endpoints answer
+  `DUPLICATE_EMAIL`, `LINKED`, `NO_MATCH` or `AMBIGUOUS` (a replacement's
+  span found in its `field` no or several times, with the `count`), or
+  `INTERNAL`. The attachment endpoints answer
   JSON errors with a `code` of `invalid_name`, `not_found`, `unavailable`
   or `internal`, and 413 for an upload over the limit.
 - [`src/changes.rs`](src/changes.rs): the [relay](src/changes/relay.rs),

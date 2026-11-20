@@ -462,3 +462,76 @@ async fn the_drafts_changes_are_kept_by_author_between_releases() {
         3
     );
 }
+
+const REPLACE: &str = "mutation($n: String!, $r: [ReplacementInput!]!) {
+    replaceInAkt(input: { number: $n, replacements: $r }) {
+      revision fields { ... on TextValue { field text } ... on MarkdownValue { field markdown } } } }";
+
+// r[verify akt.replace]
+// r[verify akt.replace.match]
+// r[verify live.edit]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_replacement_keeps_what_others_typed_since_it_was_read() {
+    let world = World::new().await;
+    let guide = world
+        .create(json!({ "title": "Guide", "body": "Install it.\n\nThen restart.\n" }))
+        .await;
+    // An agent reads the body, and while it thinks a colleague edits
+    // another paragraph of it.
+    let read = world.akt(&guide).await;
+    assert_eq!(text(&read, "body"), Some("Install it.\n\nThen restart.\n"));
+    let colleague = world
+        .edit_as(
+            "colleague",
+            &guide,
+            json!({ "body": "Install it.\n\nThen restart, twice.\n" }),
+        )
+        .await;
+    assert!(colleague.get("errors").is_none(), "{colleague}");
+
+    // The agent's replacement, of what it read, keeps the colleague's.
+    let replaced = world
+        .run(
+            REPLACE,
+            json!({ "n": guide, "r": [{ "field": "body", "span": "Install it.", "text": "Run `setup`." }] }),
+        )
+        .await;
+    assert!(replaced.get("errors").is_none(), "{replaced}");
+    let after = world.akt(&guide).await;
+    assert_eq!(
+        text(&after, "body"),
+        Some("Run `setup`.\n\nThen restart, twice.\n")
+    );
+    assert_eq!(after["revisions"].as_array().unwrap().len(), 1);
+    let changes = world.changes(&guide, false).await;
+    assert_eq!(changes.as_array().unwrap().len(), 2, "{changes}");
+    assert_eq!(changes[1]["by"]["id"], SUBJECT);
+
+    // A span someone changed since is refused, and changes nothing.
+    let gone = world
+        .run(
+            REPLACE,
+            json!({ "n": guide, "r": [{ "field": "body", "span": "Then restart.", "text": "Done." }] }),
+        )
+        .await;
+    assert_eq!(code(&gone), "NO_MATCH", "{gone}");
+    assert_eq!(gone["errors"][0]["extensions"]["field"], "body");
+    let twice = world
+        .run(
+            REPLACE,
+            json!({ "n": guide, "r": [{ "field": "body", "span": "t", "text": "T" }] }),
+        )
+        .await;
+    assert_eq!(code(&twice), "AMBIGUOUS", "{twice}");
+    let tags = world
+        .run(
+            REPLACE,
+            json!({ "n": guide, "r": [{ "field": "tags", "span": "a", "text": "b" }] }),
+        )
+        .await;
+    assert_eq!(code(&tags), "BAD_REQUEST", "{tags}");
+    assert_eq!(
+        text(&world.akt(&guide).await, "body"),
+        Some("Run `setup`.\n\nThen restart, twice.\n")
+    );
+}

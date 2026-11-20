@@ -109,7 +109,7 @@ A schema generated per configuration would give each akt type its own GraphQL ty
 
 ### Mutations
 
-Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`; and for contacts `addContact`, `editContact`, `linkContact` and `eraseContact`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Links: `addLink` and `removeLink` ([spec](spec/links.md)). Later: `sign`.
+Mutations follow what people do, not table rows: `defineAktType`, `createAkt` (optionally inside containers), `editAkt`, `replaceInAkt`, `performTransition`, `addToContainer`, `removeFromContainer`, `moveAkt` and `draftField`; and for contacts `addContact`, `editContact`, `linkContact` and `eraseContact`. Edits, transitions and drafts take the revision the client last saw and fail if it is stale; arranging members and moving don't, so that a board drag isn't refused because someone edited an item. Links: `addLink` and `removeLink` ([spec](spec/links.md)). Later: `sign`.
 
 Errors carry a `code` extension the client can act on, such as `STALE`, `FORBIDDEN`, `NOT_FOUND`, `CYCLE`, `FROZEN` or `DUPLICATE_EMAIL`; the server README lists them all.
 

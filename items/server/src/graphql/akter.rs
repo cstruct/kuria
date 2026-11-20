@@ -98,7 +98,8 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
         // r[impl akt.field.locked]
         AktError::Refused(kuria_engine::Refusal::Locked { .. }) => coded(message, "LOCKED"),
-        AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
+        AktError::Refused(refusal) => refused(message, refusal),
+        AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
         AktError::NumberTaken(_) => coded(message, "NUMBER_TAKEN"),
@@ -160,6 +161,30 @@ fn error(error: AktError) -> async_graphql::Error {
             coded("internal error".to_owned(), "INTERNAL")
         }
     }
+}
+
+/// A refusal as a GraphQL error: `REFUSED`, save a replacement's, which
+/// say their `field` (`akt.replace.match`).
+// r[impl akt.replace.match]
+fn refused(message: String, refusal: kuria_engine::Refusal) -> async_graphql::Error {
+    use kuria_engine::Refusal;
+    let (code, field, count) = match refusal {
+        Refusal::NoMatch { field } => ("NO_MATCH", field, Some(0)),
+        Refusal::Ambiguous { field, count } => (
+            "AMBIGUOUS",
+            field,
+            Some(i32::try_from(count).unwrap_or(i32::MAX)),
+        ),
+        Refusal::BadReplacement { field, .. } => ("BAD_REQUEST", field, None),
+        _ => return coded(message, "REFUSED"),
+    };
+    async_graphql::Error::new(message).extend_with(move |_, e| {
+        e.set("code", code);
+        e.set("field", field.clone());
+        if let Some(count) = count {
+            e.set("count", count);
+        }
+    })
 }
 
 fn coded(message: String, code: &'static str) -> async_graphql::Error {
@@ -741,6 +766,25 @@ pub struct EditAktInput {
     reason: Option<String>,
 }
 
+/// What replacing spans of an akt's text fields takes (`akt.replace`).
+#[derive(InputObject)]
+pub struct ReplaceInAktInput {
+    number: String,
+    /// Each a span of a text or `markdown` field and what it becomes,
+    /// found in the field as it is when applied.
+    replacements: Vec<ReplacementInput>,
+    reason: Option<String>,
+}
+
+/// One replacement: `span`, which must occur exactly once in `field` when
+/// applied, becomes `text`.
+#[derive(InputObject)]
+pub struct ReplacementInput {
+    field: String,
+    span: String,
+    text: String,
+}
+
 /// What copying an akt takes (`akt.copy`).
 #[derive(InputObject)]
 pub struct CopyAktInput {
@@ -1123,6 +1167,41 @@ impl AkterMutation {
         let akter = akter(ctx)?;
         let row = akter
             .edit(caller, &input.number, input.revision, &fields, input.reason)
+            .await
+            .map_err(error)?;
+        reload(ctx, akter, row).await
+    }
+
+    /// Replaces spans of an akt's text and `markdown` fields, each found
+    /// in the field as it is now, not as it was read, and changing only
+    /// that span: for an akt with a live draft, its draft, merging with
+    /// whatever else was typed; for any other, one revision, whatever
+    /// revision was read (`akt.replace`). A span not found is refused as
+    /// `NO_MATCH`, one found more than once as `AMBIGUOUS`, each with its
+    /// `field` (`akt.replace.match`).
+    async fn replace_in_akt(
+        &self,
+        ctx: &Context<'_>,
+        input: ReplaceInAktInput,
+    ) -> async_graphql::Result<Akt> {
+        let caller = Caller {
+            actor: principal(ctx)?.actor(),
+            auth: authorizer(ctx)?,
+            storage: akter(ctx)?.storage(),
+            renderer: akter(ctx)?.renderer(),
+        };
+        let replacements: Vec<_> = input
+            .replacements
+            .into_iter()
+            .map(|r| kuria_engine::replace::Replacement {
+                field: r.field,
+                span: r.span,
+                text: r.text,
+            })
+            .collect();
+        let akter = akter(ctx)?;
+        let row = akter
+            .replace(caller, &input.number, &replacements, input.reason)
             .await
             .map_err(error)?;
         reload(ctx, akter, row).await

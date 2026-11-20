@@ -87,13 +87,17 @@ Rules in docs/spec (akter.md or live-drafts.md for replaceInAkt, akt.search exte
 <!-- akt: PLAN-027-T02 -->
 ---
 type: task
-revision: 3
+revision: 7
 rank: b5m
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T01, Blocks PLAN-027-T04]
 title: Replace spans of text fields on the server
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+`kuria_engine::replace` finds each span in the fields as they are and answers the values an edit writes, refusing `NoMatch`, `Ambiguous` and `BadReplacement`; `replaceInAkt` runs it through `change_in` without a revision (`expected_revision: None`), so a live draft takes it as the least Yjs change and any other akt one revision. Verified: engine unit tests (`replace`), `tests/live_drafts.rs` (a colleague's edit since the read is kept; NO_MATCH, AMBIGUOUS, BAD_REQUEST), `tests/akter.rs` (one revision after another's edit); `mise run lint`.
 
 <!-- field: acceptance -->
 replaceInAkt applies replacements under the row lock as the least Yjs change for a live draft, or as one revision otherwise; refuses a missing or ambiguous span with a code and field; tested against a concurrent update to the same field.
