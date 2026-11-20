@@ -9,7 +9,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { moved, open } from '../support/app.ts';
+import { moved, open, placedIn } from '../support/app.ts';
 import { defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -162,7 +162,7 @@ test('a test protocol is copied from its template, run by two testers, and finis
 	const [password, passkey, card, invoice] = [1, 2, 3, 4].map((n) => `${run}-C0${n}`);
 	await expect(rm.getByText('Copied from Checkout regression')).toBeVisible();
 	await expect(rm.getByRole('heading', { level: 1 })).toHaveText(`Checkout regression: ${release} rc`);
-	await expect(rm.getByRole('list', { name: 'Part of' })).toContainText(candidate);
+	await placedIn(rm, candidate);
 	await expect(rm.getByTestId('state')).toHaveText('Draft');
 	await expect(mine(rm, `${run}-C01`)).toContainText('Results are given once the run has started.');
 	await expect(sectionsOf(rm).getByText('Accessibility')).toHaveCount(0);

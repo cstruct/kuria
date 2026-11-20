@@ -305,7 +305,16 @@ r[app.links]
 An akt's page MUST show its links (`link.read`), from it by kind and to it
 by inverse name, each with the other akt's number, title and state, and
 let a person add a link of a kind its type declares, to an akt found by
-number or title (`app.pickers`), and remove one.
+number or title (`app.pickers`), and remove one. An akt with no links
+MUST show none, only, to one who may add one, a way to.
+
+r[app.side]
+An akt's page MUST show its links, versions and history beside its fields,
+and, on a container whose board shows its members, under the board, so
+that the board has the page's width. It MUST show the containers it is in
+there, except when it is in one only and the trail names it
+(`app.trail`); moving it to another container, and removing it from one,
+MUST be offered among its actions either way.
 
 r[app.filters]
 A type's list MUST let a person filter it by the values of its filterable
@@ -346,7 +355,8 @@ its option's name, the fields in the order the page shows them, and the
 containers or members it added or removed, by number. Consecutive
 revisions of one person only adding members, within a minute, MUST be
 said once, by how many were added. The latest five MUST be shown, and the
-others when asked for.
+others when asked for. Until a person opens it, an akt's page MUST show
+its history only as who changed it last and when.
 
 r[app.stale]
 When an edit, transition or draft is refused as `STALE`, the app MUST show

@@ -203,6 +203,19 @@
 	const containedWords = $derived(
 		orList(contained.map((key) => (typeNames[key] ?? key).toLowerCase()))
 	);
+	// r[impl app.side]: the containers it is in, unless the trail names its
+	// only one.
+	const showsPlaces = $derived.by(() => {
+		if (!akt || akt.containers.length === 0) return false;
+		if (akt.containers.length > 1) return true;
+		const earlier = before(trail, akt.number);
+		const only = akt.containers[0].number;
+		return !(earlier.length === 0 || earlier.some((s) => s.number === only));
+	});
+	/** The containers it may be moved from or removed from. */
+	const leavable = $derived(
+		akt && !akt.archived ? akt.containers.filter((c) => c.type.viewerMay.edit) : []
+	);
 	/** What moving it elsewhere is called: "Move to another release". */
 	const moveWords = $derived(
 		`Move to another ${akt?.containers[0]?.type.name.toLowerCase() ?? 'place'}`
@@ -991,7 +1004,7 @@
 						<Plus size={14} aria-hidden={true} /> New {actions.primary.name}
 					</Button>
 				{/if}
-				{#if !akt.archived && !atVersion && (akt.type.viewerMay.edit || akt.type.viewerMay.archive)}
+				{#if !akt.archived && !atVersion && (akt.type.viewerMay.edit || akt.type.viewerMay.archive || leavable.length > 0)}
 					<!-- r[impl app.archive]: Archive, in the akt's menu. -->
 					<Menu
 						label="More actions for {akt.number}"
@@ -1006,10 +1019,30 @@
 										}
 									]
 								: []),
+							// r[impl app.side]: moving and removing it among its actions.
+							...(leavable.length > 0
+								? [
+										{
+											label: `${moveWords}…`,
+											icon: ArrowRightLeft,
+											disabled: busy,
+											onSelect: () => {
+												transferFrom = leavable[0].number;
+												transferOpen = true;
+											}
+										},
+										...leavable.map((c) => ({
+											label: `Remove from ${c.title ?? c.number}`,
+											icon: X,
+											disabled: busy,
+											onSelect: () => leave(c.number)
+										}))
+									]
+								: []),
 							...(akt.type.viewerMay.archive
 								? [
 										{
-											separated: akt.type.viewerMay.edit,
+											separated: akt.type.viewerMay.edit || leavable.length > 0,
 											label: 'Archive…',
 											icon: Archive,
 											disabled: busy,
@@ -1049,7 +1082,8 @@
 			</section>
 		{/if}
 
-		<div class="columns">
+		<!-- r[impl app.side]: a board across the page, the side cards under it. -->
+		<div class="columns" class:boarded={contained.length > 0}>
 			<div class="main">
 				{#if !titleOnly}<Card title="Details">
 						<dl class="fields">
@@ -1186,7 +1220,7 @@
 
 			<aside class="side">
 				<!-- r[impl app.members]: where it is, only when it is somewhere. -->
-				{#if akt.containers.length > 0}<Card title="Part of">
+				{#if showsPlaces}<Card title="Part of">
 						<ul class="containers" aria-label="Part of">
 							{#each akt.containers as container (container.id)}
 								<li>
@@ -1633,6 +1667,16 @@
 		.columns {
 			grid-template-columns: minmax(0, 1fr);
 		}
+	}
+
+	.columns.boarded {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.columns.boarded .side {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		align-items: start;
 	}
 
 	/* r[impl app.narrow]: on a phone, what it holds before its details. */

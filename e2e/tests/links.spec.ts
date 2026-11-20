@@ -2,7 +2,7 @@
 // declares, shown both ways, recorded in the history, and removed.
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { open, pick } from '../support/app.ts';
+import { history, open, pick } from '../support/app.ts';
 import { defineExample, exampleDocument } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -32,10 +32,11 @@ test('a task is linked to the task it blocks, and unlinked', async ({ browser })
 
 	const page = await signIn(browser, seeded().people.developer);
 	await open(page, first);
+	await page.getByRole('button', { name: 'Add link' }).click();
 	await pick(page, 'Blocks…', second);
 	const blocks = page.getByRole('list', { name: 'Blocks', exact: true });
 	await expect(blocks).toContainText(second);
-	await expect(page.getByRole('list', { name: 'Revisions' }).locator(':scope > li').first()).toContainText(
+	await expect((await history(page)).locator(':scope > li').first()).toContainText(
 		`Linked: Blocks ${second}`
 	);
 
@@ -43,7 +44,9 @@ test('a task is linked to the task it blocks, and unlinked', async ({ browser })
 	await open(page, second);
 	await expect(page.getByRole('list', { name: 'Blocked by', exact: true })).toContainText(first);
 	await page.getByRole('button', { name: `Remove link Blocked by ${first}` }).click();
-	await expect(page.getByText('No links.')).toBeVisible();
+	// None shown when there are none, only a way to add one.
+	await expect(page.getByRole('heading', { name: 'Links' })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Add link' })).toBeVisible();
 
 	await open(page, first);
 	await expect(page.getByRole('list', { name: 'Blocks', exact: true })).toHaveCount(0);

@@ -7,7 +7,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { column, open } from '../support/app.ts';
+import { column, history, open } from '../support/app.ts';
 import { defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -58,7 +58,7 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(main.getByRole('button', { name: 'Accept', exact: true })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: `More actions for ${gone}` })).toHaveCount(0);
 	await expect(main.getByRole('button', { name: `Remove from ${release}` })).toHaveCount(0);
-	await expect(rm.getByRole('list', { name: 'Revisions' })).toContainText('archived it');
+	await expect(await history(rm)).toContainText('archived it');
 	expect(await violations(rm), 'an archived akt’s page').toEqual([]);
 
 	// Its release's board shows the live candidate only, and says one is archived.
@@ -110,7 +110,7 @@ test('an akt is archived with a reason, left out unless asked for, and unarchive
 	await expect(unarchive).toBeHidden();
 	await expect(rm.getByRole('region', { name: 'Archived' })).toHaveCount(0);
 	await expect(rm.getByRole('main').getByRole('button', { name: 'Reject', exact: true })).toBeVisible();
-	await expect(rm.getByRole('list', { name: 'Revisions' })).toContainText('unarchived it');
+	await expect(await history(rm)).toContainText('unarchived it');
 	await rm.goto('/types/release_candidate');
 	await expect(rm.getByRole('table', { name: 'Release candidate' }).getByRole('link', { name: gone })).toBeVisible();
 	await open(rm, release);

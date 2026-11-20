@@ -1,7 +1,7 @@
 ---
 number: PLAN-025
 type: plan
-revision: 29
+revision: 30
 rank: b5p
 state: active
 title: "A release flow people can use without knowing Kuria's model"
@@ -1136,3 +1136,32 @@ Verdicts are offered only while the run takes them (`app.verdicts`).
 It keeps what PLAN-024 was for: a fail or a skip can't be saved without saying why. It drops the dialog round trip for the common case, a pass, which is most of a run. Keyboard shortcuts on the dialog would have kept the round trip.
 
 Decided while working through the plan, then confirmed by Albin Skott on 2026-11-20.
+
+<!-- akt: PLAN-025-T18 -->
+---
+type: task
+revision: 6
+rank: b6H
+state: done
+in: [PLAN-025]
+title: "Keep an item's side column to what people look for"
+assignee: albin@mattsson.io
+---
+
+<!-- field: description -->
+The side column of an item's page holds Part of, Links, Versions and History, which people seldom look for, yet it takes a third of the page beside a board. Keep what people need there, and the rest out of the way:
+
+- History collapsed to who changed it last and when, with "Show history".
+- Links: none shown when there are none, only a way to add one; a blocker stays in sight.
+- Part of shown only when the trail doesn't already say where it is; moving and removing it from its container in the item's menu.
+- On a container with a board, the board across the page, and the side cards under it.
+
+Update `app.history`, `app.links`, `app.trail` and a new `app.side` first.
+
+## Done
+
+- History shows who changed the item last and when, with "Show history" for the rest (`app.history`).
+- Links shows only "Add link" when there are none, and nothing to a reader who may not add one (`app.links`).
+- Part of is hidden when the trail names the item's only container. Moving it, and removing it from a container, are in its "More actions" menu (`app.side`).
+- On a container, the board spans the page and the side cards sit under it in a grid (`app.side`).
+- The e2e helpers `history` and `placedIn` read the history and the container, wherever the page shows them.

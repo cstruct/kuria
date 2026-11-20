@@ -91,17 +91,37 @@ export async function addTo(page: Page, container: string) {
 	await expect(page.getByRole('combobox', { name: 'Add to', exact: true })).toBeFocused();
 	await pick(page, 'Add to', container);
 	await expect(page.getByRole('dialog', { name: 'Add to…' })).toBeHidden();
-	await expect(page.getByRole('list', { name: 'Part of' })).toContainText(container);
+	await placedIn(page, container);
+}
+
+/** Expects the open akt in `container`: named by the trail, or, when the
+ * trail doesn't, under Part of (`app.side`). */
+export async function placedIn(page: Page, container: string) {
+	await expect(
+		page
+			.locator('nav[aria-label="You are here"], ul[aria-label="Part of"]')
+			.filter({ hasText: container })
+			.first()
+	).toBeVisible();
+}
+
+/** The open akt's history, opened (`app.history`). */
+export async function history(page: Page) {
+	const show = page.getByRole('button', { name: 'Show history' });
+	if (await show.isVisible()) await show.click();
+	return page.getByRole('list', { name: 'Revisions' });
 }
 
 /** Moves the open akt from `from` to `to`. */
 export async function transfer(page: Page, from: string, to: string) {
-	await page.getByRole('button', { name: /^Move to another / }).click();
+	// r[verify app.side]: moving it is among its actions.
+	await page.getByRole('button', { name: /^More actions for / }).first().click();
+	await page.getByRole('menuitem', { name: /^Move to another / }).click();
 	const dialog = page.getByRole('dialog', { name: /^Move to another / });
 	await dialog.getByLabel('From').selectOption(from);
 	await pick(page, 'To', to);
 	await expect(dialog).toBeHidden();
-	await expect(page.getByRole('list', { name: 'Part of' })).toContainText(to);
+	await placedIn(page, to);
 }
 
 /** The text of the headings and list items a field's Markdown renders to. */

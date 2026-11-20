@@ -2,7 +2,7 @@
 // that says what changed.
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { open } from '../support/app.ts';
+import { history, open } from '../support/app.ts';
 import { defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -31,7 +31,10 @@ test('a field is edited in place, and the history says so', async ({ browser }) 
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText('Winter backlog');
 	await expect(editor).toBeHidden();
 
-	const latest = page.getByRole('list', { name: 'Revisions' }).getByRole('listitem').first();
+	// r[verify app.history]: who changed it last and when, until it's opened.
+	await expect(page.getByText(/^Last changed by /)).toBeVisible();
+	await expect(page.getByRole('list', { name: 'Revisions' })).toHaveCount(0);
+	const latest = (await history(page)).getByRole('listitem').first();
 	await expect(latest).toContainText('edited it');
 	await expect(latest).toContainText('Title');
 	await expect(latest).toContainText('Winter backlog');

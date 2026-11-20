@@ -2,7 +2,7 @@
 // (a password's), and an akt's history naming the people its values name.
 import { expect, test } from '@playwright/test';
 import { api } from '../support/api.ts';
-import { open } from '../support/app.ts';
+import { history, open } from '../support/app.ts';
 import { defineExample } from '../support/example.ts';
 import { signIn } from '../support/people.ts';
 import { seeded } from '../support/stack.ts';
@@ -58,7 +58,7 @@ test('the history names the users and contacts values name', async ({ browser })
 	const page = await signIn(browser, people.releaseManager);
 	await open(page, createAkt.number);
 	// The first revision is the timeline's last entry.
-	const created = page.getByRole('list', { name: 'Revisions' }).locator(':scope > li').last();
+	const created = (await history(page)).locator(':scope > li').last();
 	await expect(created).toContainText('Release manager');
 	await expect(created).toContainText('rm@shop.example');
 	await expect(created).not.toContainText('a user');
