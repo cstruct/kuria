@@ -59,6 +59,7 @@ kuria ls <type> --state <s>    # akter, a page at a time (--all for every page)
 kuria ls <type> --where assignee=@me   # by a field's value
 kuria ls --in <container>      # a container's members
 kuria find <text>              # by number or title words
+kuria search <text> [--type <type>]   # by what text fields say, ranked, with excerpts
 kuria ls <type> --archived     # archived akter only; --with-archived: both
 kuria show <number> --history  # everything about one akt
 kuria history <number>         # who changed what, and when
@@ -199,6 +200,9 @@ kuria docs fmt                         # the files as Kuria writes them
 kuria new <type> --in <container> --set title="…" --set description=@notes.md
 kuria new <type> --number FOOID-1234 …  # its number, if its pattern gives it and it is free
 kuria set <number> assignee=@me
+kuria replace <number> --field body --span "old text" --text "new text"
+                         # a span found once in the field as it is now; others'
+                         # typing elsewhere is kept (NO_MATCH, AMBIGUOUS: read again)
 kuria do <number> <transition> --set field=value --reason "…"
 kuria members add <container> <member>…
 kuria members remove <container> <member>…
@@ -267,3 +271,11 @@ Where a tenant uses the planning example (`kuria types schema plan`):
   the decision and why.
 - Order: tasks are worked in the plan's order (`move`), and `blocks`
   links say what must come first.
+
+## Agents through MCP
+
+`kuria mcp` serves MCP over standard input and output, signed in as the
+client is, or on `--dir`: register it with an MCP client on this machine
+(`claude mcp add kuria -- kuria mcp`). Its tools are `search_documents`,
+`read_document` (a field, or one section by heading id), `edit_document`
+(replacements, as `kuria replace`), `list_types` and `type_schema`.

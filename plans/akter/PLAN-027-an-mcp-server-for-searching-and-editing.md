@@ -123,13 +123,17 @@ Migration `000028_akt_search`: `akt_search` (a row per text and markdown field, 
 <!-- akt: PLAN-027-T04 -->
 ---
 type: task
-revision: 6
+revision: 10
 rank: b5o
-state: todo
+state: done
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T02, Blocked by PLAN-027-T03, Blocks PLAN-027-T05, Blocks PLAN-027-T06, Blocks PLAN-027-T07]
 title: kuria mcp over standard input and output
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+New commands `kuria search` (text search, then `find`'s; word counts in local mode) and `kuria replace` (`replaceInAkt`; the engine's replace in local mode), and `kuria mcp` (`src/mcp.rs`): rmcp 3.11 with its `local` feature over stdio, the tools `search_documents`, `read_document` (a field, or a section by heading id; says whether it has a live draft), `edit_document`, `list_types`, `type_schema`, each run as its command on the same target (or `Kuria::on` an open session), refusals as tool errors with code, message and field. Spec: `cli.read`/`cli.write` list them; guide and README updated. Verified: `tests/mcp.rs` (an MCP client over a pipe against a test server, a span replaced while the app edits another section and both kept, NO_MATCH as a tool error; the binary over stdio on an akt directory), CLI unit tests, every CLI test, `mise run lint`.
 
 <!-- field: acceptance -->
 search_documents, read_document (with heading), edit_document, list_types and schema, signed in or in local mode; refusals as tool errors; CLI tests through an MCP client; items/cli README updated.

@@ -107,6 +107,23 @@ pub enum Command {
         #[arg(long)]
         with_archived: bool,
     },
+    /// Akter whose text fields hold every word of TEXT, the most relevant
+    /// first, each with its field and an excerpt; then those `find` finds.
+    Search {
+        #[arg(required = true, num_args = 1..)]
+        text: Vec<String>,
+        /// Only this akt type's akter.
+        #[arg(long = "type", value_name = "KEY")]
+        akt_type: Option<String>,
+        #[arg(long, default_value_t = 20)]
+        limit: u32,
+        /// Only archived akter.
+        #[arg(long, conflicts_with = "with_archived")]
+        archived: bool,
+        /// Archived akter as well as live ones.
+        #[arg(long)]
+        with_archived: bool,
+    },
     /// Each akt as an akt file: Markdown with YAML front matter.
     Cat {
         #[arg(required = true, value_name = "NUMBER")]
@@ -235,6 +252,27 @@ pub enum Command {
         #[arg(long)]
         reason: Option<String>,
     },
+    /// Replace spans of text fields, each found in the field as it is now:
+    /// give each as `--field`, `--span` and `--text`, in that order.
+    Replace {
+        number: String,
+        /// The field of each replacement.
+        #[arg(long = "field", value_name = "KEY", required = true)]
+        fields: Vec<String>,
+        /// What each replaces, found exactly once in its field.
+        #[arg(long = "span", value_name = "TEXT", required = true)]
+        spans: Vec<String>,
+        /// What each span becomes.
+        #[arg(
+            long = "text",
+            value_name = "TEXT",
+            required = true,
+            allow_hyphen_values = true
+        )]
+        texts: Vec<String>,
+        #[arg(long)]
+        reason: Option<String>,
+    },
     /// Perform a transition, by key or name, with the fields it requires.
     Do {
         number: String,
@@ -351,6 +389,10 @@ pub enum Command {
     },
     /// A guide for agents: the commands, the akt file and the exit codes.
     Guide,
+    /// Serve MCP over standard input and output, so an agent on this
+    /// machine searches, reads and edits akter through tools, signed in as
+    /// the client is (or in the akt directory `--dir` names).
+    Mcp,
     /// Make an akt directory for local mode: `kuria init --dir <path>`.
     Init,
     /// Check a whole akt directory as a server would hold it, naming each
