@@ -159,7 +159,7 @@ In mise run example documents, a person typing and an agent editing through kuri
 <!-- akt: PLAN-027-G01 -->
 ---
 type: gap
-revision: 1
+revision: 2
 rank: b5s
 state: open
 in: [PLAN-027]
@@ -167,7 +167,20 @@ title: "Who an agent's edits are attributed to"
 ---
 
 <!-- field: description -->
-With a person's CLI session, draft history and awareness (live/presence.rs stamps the subject's name) show the person, not the agent. Options: as the person; a Konklav software principal of its own; or the person's session marked as acting through an agent. Settles PLAN-027-T05.
+With a person's CLI session, draft history and awareness (`live/presence.rs` stamps the subject's name) show the person, not the agent. Settles PLAN-027-T05.
+
+## What exists
+
+- Kuria records one subject per change (`by`, from the token's `sub`); `Someone` is a user or a contact. It never reads the token's `act` claim.
+- Konklav tokens carry an actor chain, `act` (`token.access.actor-chain`): the subject really acting behind a session. Konklav issues it only for impersonation and assumption (`authn.impersonation.actor-chain`): `POST /v1/impersonate` needs `konklav:subject:impersonate`, and the child session lasts at most an hour. So today Kuria also hides who impersonated someone, against the intent that "the real actor is never hidden".
+- Service principals (`subject kind` `service`, a secret key) work already: `KURIA_KEY`, `cli.secret-key`, and `person.name` shows one by its subject identifier.
+
+## Options
+
+1. **As the person.** Nothing to build; the history doesn't say an agent wrote it.
+2. **A service principal of its own.** Verified and works today, but it acts with its own memberships, not the person's, says nothing of whom it worked for, and one shared by everyone using a hosted MCP (PLAN-027-G03) is wrong.
+3. **The person, through the agent, verified.** The change is the person's (their access, their accountability) and records the agent from `act`. Kuria reads `act` and keeps it on each change, `draftChanges` and awareness; Konklav needs a delegation it doesn't have: a person starting a child session for an agent's service principal, scoped and time-bounded, revoked with the parent.
+4. **The person, with a label the client declares.** `kuria mcp` says it is an agent, and Kuria keeps that beside `by`. Cheap, and the access stays the person's, but it isn't verified: anything with the session may claim it or leave it out.
 
 <!-- akt: PLAN-027-G02 -->
 ---
