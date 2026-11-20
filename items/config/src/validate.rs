@@ -519,7 +519,52 @@ fn transitions(
             }
         }
         outcomes(problems, document, &path, transition);
+        waits(problems, document, &path, transition);
     }
+}
+
+/// Checks what a transition waits for, and the links it requires: akt
+/// types the document contains, and link kinds it declares, each once.
+// r[impl akt.transition.members]
+// r[impl akt.transition.links]
+// r[impl akt.type.validation]
+fn waits(problems: &mut Problems, document: &AktTypeDocument, path: &str, t: &TransitionDef) {
+    let named = |problems: &mut Problems,
+                 at: &str,
+                 keys: &[String],
+                 known: &dyn Fn(&str) -> bool,
+                 what: &str| {
+        for (i, key) in keys.iter().enumerate() {
+            if keys[..i].contains(key) {
+                problems.add(&format!("{at}[{i}]"), format!("`{key}` is named twice"));
+            } else if !known(key) {
+                problems.add(&format!("{at}[{i}]"), format!("`{key}` isn't {what}"));
+            }
+        }
+    };
+    let contained = |key: &str| document.contains.iter().any(|c| c.akt_type == key);
+    let declared = |key: &str| document.links.iter().any(|l| l.key == key);
+    named(
+        problems,
+        &format!("{path}.waits_for.members"),
+        &t.waits_for.members,
+        &contained,
+        "an akt type this type contains",
+    );
+    named(
+        problems,
+        &format!("{path}.waits_for.links"),
+        &t.waits_for.links,
+        &declared,
+        "a link kind this akt type declares",
+    );
+    named(
+        problems,
+        &format!("{path}.requires_links"),
+        &t.requires_links,
+        &declared,
+        "a link kind this akt type declares",
+    );
 }
 
 /// The outcomes an akt may have.
@@ -1207,6 +1252,34 @@ mod tests {
         assert_eq!(
             problems(on_text),
             ["fields[2].references: only markdown fields keep references"]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.members]
+    // r[verify akt.transition.links]
+    #[test]
+    fn checks_what_a_transition_waits_for() {
+        let mut document = capa();
+        document["contains"] = json!([{ "type": "action" }]);
+        document["links"] = json!([
+            { "key": "implemented_by", "name": "Implemented by", "inverse": "Implements", "to": ["task"] }
+        ]);
+        document["transitions"][0]["waits_for"] =
+            json!({ "members": ["action"], "links": ["implemented_by"] });
+        document["transitions"][0]["requires_links"] = json!(["implemented_by"]);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["transitions"][0]["waits_for"] =
+            json!({ "members": ["action", "task", "action"], "links": ["blocks"] });
+        document["transitions"][0]["requires_links"] = json!(["superseded_by"]);
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].waits_for.members[1]: `task` isn't an akt type this type contains",
+                "transitions[0].waits_for.members[2]: `action` is named twice",
+                "transitions[0].waits_for.links[0]: `blocks` isn't a link kind this akt type declares",
+                "transitions[0].requires_links[0]: `superseded_by` isn't a link kind this akt type declares",
+            ]
         );
     }
 

@@ -14,7 +14,7 @@ pub use document::{
     AktTypeDocument, ArchiveDef, ArchiveRule, ArchiveRuleDef, AttachmentFormat, BoardDef,
     ChoiceOption, Colour, ColumnDef, ContainsDef, FieldDef, FieldKind, IMAGE_MEDIA_TYPES, Icon,
     LinkDef, MAX_CARD_FIELDS, Navigation, PRIMARY_COPY, PresentationDef, StateDef, Tone,
-    TransitionDef, VersionsDef,
+    TransitionDef, VersionsDef, WaitsFor,
 };
 pub use draft::{DraftDef, GroupBy, LineTemplate, LineValues, MAX_DEPTH};
 pub use number::{NumberContext, NumberPattern, PatternError};

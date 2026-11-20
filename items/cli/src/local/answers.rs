@@ -303,6 +303,79 @@ pub fn outcome(dir: &AktDir, akt: &LocalAkt) -> Result<Option<Outcome>, CliError
     walk(dir, akt, &mut Vec::new())
 }
 
+/// What the transition `def` waits for, for `akt` as the directory has it
+/// (`akt.transition.members`, `akt.transition.links`): its members of the
+/// types it names, archived or not, and the targets of its links of the
+/// kinds it names. A target the directory lacks counts as final.
+// r[impl akt.transition.members]
+// r[impl akt.transition.links]
+#[must_use]
+pub fn waits(
+    dir: &AktDir,
+    akt: &LocalAkt,
+    def: &kuria_config::TransitionDef,
+) -> kuria_engine::waits::Waits {
+    use kuria_engine::waits::{self, Linked, Member};
+    if !waits::waits_at_all(def) {
+        return waits::Waits::default();
+    }
+    let is_final = |a: &LocalAkt| {
+        dir.type_of(a)
+            .ty
+            .state(&a.state)
+            .is_some_and(|s| s.is_final)
+    };
+    let members: Vec<Member> = dir
+        .members_with(&akt.number, crate::reads::Archived::All)
+        .map(|m| Member {
+            number: m.number.clone(),
+            akt_type: m.type_key.clone(),
+            is_final: is_final(m),
+        })
+        .collect();
+    let declared = &dir.type_of(akt).ty.document().links;
+    let linked: Vec<Linked> = akt
+        .links
+        .iter()
+        .filter_map(|text| {
+            let (name, number, _) = said(text)?;
+            let def = declared.iter().find(|l| l.name == name)?;
+            Some(Linked {
+                kind: def.key.clone(),
+                number: number.to_owned(),
+                is_final: dir.any(number).is_none_or(is_final),
+            })
+        })
+        .collect();
+    waits::of(def, &members, &linked)
+}
+
+/// What each transition `akt`'s state allows waits for, as `waits
+/// { transition open lacking }` answers it (`akt.transition.waits`).
+// r[impl akt.transition.waits]
+fn transition_waits(dir: &AktDir, akt: &LocalAkt) -> Json {
+    let ty = &dir.type_of(akt).ty;
+    if ty.state(&akt.state).is_none_or(|s| s.is_final) {
+        return json!([]);
+    }
+    ty.document()
+        .transitions
+        .iter()
+        .filter(|t| t.from.contains(&akt.state))
+        .filter_map(|t| {
+            let waits = waits(dir, akt, t);
+            (!waits.is_empty()).then(|| {
+                let lacking: Vec<String> = waits
+                    .lacking
+                    .iter()
+                    .map(|k| ty.link(k).map_or_else(|| k.clone(), |l| l.name.clone()))
+                    .collect();
+                json!({ "transition": t.key, "open": waits.open, "lacking": lacking })
+            })
+        })
+        .collect()
+}
+
 /// An outcome as GraphQL names it, if there is one.
 fn outcome_json(dir: &AktDir, akt: &LocalAkt) -> Result<Json, CliError> {
     Ok(outcome(dir, akt)?.map_or(Json::Null, |o| screaming(&o)))
@@ -638,6 +711,7 @@ pub fn akt(
         "fields": values(dir, akt)?,
         "containers": containers,
         "links": links(dir, akt)?,
+        "waits": transition_waits(dir, akt),
         "version": null,
         "versions": super::versions::listed(akt),
         "board": { "columns": columns },

@@ -96,7 +96,8 @@ The client MUST offer:
 - `types`: the akt types, with how many akter each has;
 - `types schema <type>`: a type's fields with their kinds, whether required, and
   options; its states and their tones; its transitions with what they
-  require and the outcomes they allow; the types it contains and links
+  require, the outcomes they allow, and the members and links they wait
+  for (`akt.transition.members`, `akt.transition.links`); the types it contains and links
   to; its board and presentation;
 - `ls [<type>]`: akter as a table of number, title, state, outcome where
   they have one, and the presentation's list fields, filtered by
@@ -111,8 +112,8 @@ The client MUST offer:
 - `show <number>`: an akt's fields, its outcome, containers, members by
   column and type, or in their sections with each section's outcome,
   links, its broken references (`akt.field.markdown.references`), its
-  versions, and the transitions its state allows, and with
-  `--history` its revisions;
+  versions, and the transitions its state allows, with what each waits
+  for (`akt.transition.waits`), and with `--history` its revisions;
 - `cat`, `show` and `pdf` with `--version <n>`: the akt at that version
   (`version.read`);
 - `versions <number>`: its versions, latest first (`version.list`), and

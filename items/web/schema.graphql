@@ -98,6 +98,12 @@ type Akt {
 	"""
 	outcome: Outcome
 	"""
+	For each transition its state allows that would be refused now for
+	what it waits for, what that is (`akt.transition.waits`). None for
+	an akt read at a version or revision, or in a final state.
+	"""
+	waits: [TransitionWait!]!
+	"""
 	The changes to its live draft since its latest release, or all of
 	them with `all`, oldest first: who made each, when, and which fields
 	it changed (`live.history`). None for an akt without a live draft,
@@ -1477,6 +1483,40 @@ type Transition {
 	none, if empty (`akt.transition.outcomes`).
 	"""
 	outcomes: [Outcome!]!
+	"""
+	The contained akt types whose members must all be final for it to
+	be performed (`akt.transition.members`).
+	"""
+	waitsForMembers: [String!]!
+	"""
+	The link kinds whose targets must all be final for it to be
+	performed (`akt.transition.links`).
+	"""
+	waitsForLinks: [String!]!
+	"""
+	The link kinds the akt must have a link of for it to be performed
+	(`akt.transition.links`).
+	"""
+	requiresLinks: [String!]!
+}
+
+"""
+What a transition the akt's state allows waits for
+(`akt.transition.waits`).
+"""
+type TransitionWait {
+	"""
+	The transition's key.
+	"""
+	transition: String!
+	"""
+	The members and link targets not yet final, by number.
+	"""
+	open: [String!]!
+	"""
+	The link kinds it requires and the akt has no link of, by name.
+	"""
+	lacking: [String!]!
 }
 
 """

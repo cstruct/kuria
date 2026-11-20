@@ -1489,6 +1489,9 @@ impl AktType {
                     .filter_map(|o| kuria_engine::outcomes::Outcome::parse(o))
                     .map(OutcomeKind::from)
                     .collect(),
+                waits_for_members: t.waits_for.members.clone(),
+                waits_for_links: t.waits_for.links.clone(),
+                requires_links: t.requires_links.clone(),
             })
             .collect()
     }
@@ -1791,6 +1794,27 @@ pub struct Transition {
     /// The outcomes the akt must have for it to be performed; any, or
     /// none, if empty (`akt.transition.outcomes`).
     outcomes: Vec<OutcomeKind>,
+    /// The contained akt types whose members must all be final for it to
+    /// be performed (`akt.transition.members`).
+    waits_for_members: Vec<String>,
+    /// The link kinds whose targets must all be final for it to be
+    /// performed (`akt.transition.links`).
+    waits_for_links: Vec<String>,
+    /// The link kinds the akt must have a link of for it to be performed
+    /// (`akt.transition.links`).
+    requires_links: Vec<String>,
+}
+
+/// What a transition the akt's state allows waits for
+/// (`akt.transition.waits`).
+#[derive(SimpleObject)]
+pub struct TransitionWait {
+    /// The transition's key.
+    transition: String,
+    /// The members and link targets not yet final, by number.
+    open: Vec<String>,
+    /// The link kinds it requires and the akt has no link of, by name.
+    lacking: Vec<String>,
 }
 
 /// A link between this akt and another, as this akt reads it.
@@ -2349,6 +2373,41 @@ impl Akt {
             .await
             .map_err(error)?
             .map(Into::into))
+    }
+
+    /// For each transition its state allows that would be refused now for
+    /// what it waits for, what that is (`akt.transition.waits`). None for
+    /// an akt read at a version or revision, or in a final state.
+    // r[impl akt.transition.waits]
+    async fn waits(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<TransitionWait>> {
+        let ty = &self.ty.ty;
+        if self.is_past() || ty.state(&self.row.state).is_none_or(|s| s.is_final) {
+            return Ok(Vec::new());
+        }
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut answered = Vec::new();
+        for def in &ty.document().transitions {
+            if !def.from.contains(&self.row.state) {
+                continue;
+            }
+            let waits = crate::akter::waits::of(&mut conn, tenant, def, &self.row)
+                .await
+                .map_err(error)?;
+            if waits.is_empty() {
+                continue;
+            }
+            answered.push(TransitionWait {
+                transition: def.key.clone(),
+                open: waits.open,
+                lacking: waits
+                    .lacking
+                    .iter()
+                    .map(|k| ty.link(k).map_or_else(|| k.clone(), |l| l.name.clone()))
+                    .collect(),
+            });
+        }
+        Ok(answered)
     }
 
     /// The changes to its live draft since its latest release, or all of

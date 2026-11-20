@@ -5,8 +5,10 @@ import {
 	draftedFields,
 	givenIn,
 	linkKinds,
+	lackingText,
 	outcomeRefusal,
-	requiredFields
+	requiredFields,
+	waitingFor
 } from './document';
 
 describe('akt type documents', () => {
@@ -76,5 +78,24 @@ describe('givenIn', () => {
 		expect(givenIn(document, 'title', 'planning')).toBe(true);
 		expect(givenIn(document, 'released_on', 'planning')).toBe(false);
 		expect(givenIn(document, 'released_on', 'released')).toBe(true);
+	});
+});
+
+// r[verify app.transitions]
+describe('waitingFor', () => {
+	const waits = [
+		{ transition: 'close', open: ['CASE-1-A01'], lacking: ['Verified by', 'Reviewed by'] },
+		{ transition: 'drop', open: [], lacking: [] }
+	];
+	it('finds what a transition waits for, if anything', () => {
+		expect(waitingFor({ key: 'close' }, waits)?.open).toEqual(['CASE-1-A01']);
+		expect(waitingFor({ key: 'drop' }, waits)).toBeNull();
+		expect(waitingFor({ key: 'reopen' }, waits)).toBeNull();
+		expect(waitingFor({ key: 'close' }, null)).toBeNull();
+	});
+	it('names the links it lacks', () => {
+		expect(lackingText(['Verified by', 'Reviewed by'])).toBe(
+			'a Verified by link and a Reviewed by link'
+		);
 	});
 });

@@ -3478,3 +3478,88 @@ fn archived_akter_go_to_a_bundle_and_back() {
     assert_eq!(revision_of(&back, "PLAN-001"), plan + 2);
     back.ok(&["check"]);
 }
+
+// r[verify akt.transition.members]
+// r[verify akt.transition.links]
+// r[verify akt.transition.waits]
+// r[verify cli.local.rules]
+#[test]
+fn a_case_closes_once_what_it_waits_for_is_final() {
+    let dir = Dir::new();
+    let simple = |key: &str, number: &str| {
+        json!({
+            "key": key, "name": key, "number": number,
+            "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+            "states": [
+                { "key": "open", "name": "Open", "initial": true },
+                { "key": "done", "name": "Done", "final": true }
+            ],
+            "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done" }]
+        })
+    };
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ],
+        "contains": [{ "type": "action" }],
+        "links": [
+            { "key": "implemented_by", "name": "Implemented by", "inverse": "Implements", "to": ["job"] },
+            { "key": "verified_by", "name": "Verified by", "inverse": "Verifies", "to": ["job"] }
+        ],
+        "transitions": [
+            { "key": "close", "name": "Close", "from": ["open"], "to": "closed",
+              "waits_for": { "members": ["action"], "links": ["implemented_by"] },
+              "requires_links": ["verified_by"] }
+        ]
+    });
+    for (key, document) in [
+        ("case", case),
+        ("action", simple("action", "ACT-{seq}")),
+        ("job", simple("job", "JOB-{seq}")),
+    ] {
+        std::fs::write(
+            dir.root.join(format!("types/{key}.json")),
+            document.to_string(),
+        )
+        .unwrap();
+    }
+    let schema = dir.ok(&["types", "schema", "case"]).markdown;
+    assert!(
+        schema.contains(
+            "- `close` Close: open → closed, waits for its `action` members to be final, waits for its `implemented_by` links' akter to be final, needs a `verified_by` link\n"
+        ),
+        "{schema}"
+    );
+    dir.ok(&["new", "case", "--set", "title=Late reviews"]);
+    dir.ok(&["new", "action", "--in", "CASE-1", "--set", "title=Assign"]);
+    dir.ok(&["new", "job", "--set", "title=Rota"]);
+    dir.ok(&["new", "job", "--set", "title=Check"]);
+    dir.ok(&["link", "CASE-1", "implemented_by", "JOB-1"]);
+    let shown = dir.ok(&["show", "CASE-1"]).markdown;
+    assert!(
+        shown.contains(
+            "- `close` Close → Closed, waits for ACT-1 and JOB-1, and a Verified by link"
+        ),
+        "{shown}"
+    );
+    let refused = dir.refused(&["do", "CASE-1", "close"]);
+    assert_eq!(refused.code, "REFUSED");
+    assert_eq!(
+        refused.message,
+        "`close` waits for ACT-1 and JOB-1, which are not final yet, and a `verified_by` link"
+    );
+    dir.ok(&["do", "ACT-1", "finish"]);
+    dir.ok(&["do", "JOB-1", "finish"]);
+    dir.ok(&["link", "CASE-1", "verified_by", "JOB-2"]);
+    assert_eq!(
+        dir.ok(&["show", "CASE-1", "--format", "json"]).json["akt"]["transitions"][0]["waits"],
+        Value::Null
+    );
+    assert_eq!(
+        dir.ok(&["do", "CASE-1", "close", "--format", "json"]).json["state"],
+        "closed"
+    );
+}

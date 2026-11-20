@@ -180,12 +180,13 @@ All of this is configuration of the release-management example (`docs/examples/r
 <!-- akt: PLAN-026-T01 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6J
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T08]
 title: Transitions that wait for members and linked akter
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -195,6 +196,28 @@ Spec `akt.transition.members` and `akt.transition.links` in `docs/spec/akter.md`
 - The server checks this within the transition's revision, as `akt.transition.outcomes` does.
 - The refusal names the akter still open.
 - `kuria types schema` and the app's transition hints say why the transition waits.
+
+## Done
+
+- **Spec:** `akt.transition.members`, `akt.transition.links` and `akt.transition.waits` in `docs/spec/akter.md`. `akt.type.validation`, `app.transitions` and `cli.read` say what they add.
+  - A transition says `waits_for: {members: [<contained type>], links: [<link kind>]}`, and `requires_links: [<link kind>]` for a link it needs. D02's superseded CAPA needs the latter.
+  - "Optionally in a success state" was left out: a CAPA waits for actions that are done or dropped, both final, and nothing yet needs more.
+- **Config** (`items/config`): `WaitsFor` and `requires_links` on `TransitionDef`, validated against `contains` and `links`.
+- **Engine** (`items/engine/src/waits.rs`): `waits::of` decides from members and links the caller finds. `transition` takes an `Around` (what members add up to, and what it waits for), into which an `Option<Outcome>` still turns, and refuses as `Refusal::Waits`.
+- **Server** (`items/server/src/akter/waits.rs`): the members and link targets are share-locked, then read again, inside the transition's revision. `Akt.waits` and `Transition.waitsForMembers`, `waitsForLinks` and `requiresLinks` are served over GraphQL.
+- **CLI:** local mode decides the same way. `types schema` says what each transition waits for, and `show` says what each allowed transition waits for now, also as JSON.
+- **App:** a waiting transition's button is disabled, with what it waits for beside it: each akt by number and title, linked, then the links it lacks.
+
+## Verified
+
+- `items/config` test `checks_what_a_transition_waits_for`.
+- `items/engine` test `a_transition_waits_for_members_and_links`.
+- `items/server/tests/waits.rs`.
+- `items/cli/tests/local.rs` test `a_case_closes_once_what_it_waits_for_is_final`.
+- `items/web` test `waitingFor`.
+- `mise run lint` and `mise run test`.
+
+The app's hint is checked in a browser by T12's walk.
 
 <!-- field: acceptance -->
 Closing a fixture container with an open member is refused, naming the open member. It succeeds once that member is final.

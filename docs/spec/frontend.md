@@ -196,7 +196,9 @@ r[app.transitions]
 The app MUST offer the transitions an akt's state allows, asking for the
 fields a transition requires before performing it. A transition the akt's
 outcome doesn't allow (`akt.transition.outcomes`) MUST be shown as
-unavailable, saying the outcomes it allows.
+unavailable, saying the outcomes it allows, and one that waits
+(`akt.transition.waits`) as unavailable, saying what for: the akter not
+yet final, each by number and title, linked, and the links it lacks.
 
 r[app.members]
 A container's page MUST show its members of the akt types its board names

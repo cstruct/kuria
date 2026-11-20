@@ -371,6 +371,11 @@ export const AktPage = graphql(`
 			title
 			revision
 			outcome
+			waits {
+				transition
+				open
+				lacking
+			}
 			archived {
 				...ArchivedShown
 			}

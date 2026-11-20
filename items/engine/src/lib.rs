@@ -20,6 +20,7 @@ pub mod typst;
 mod value;
 pub mod verdicts;
 pub mod versions;
+pub mod waits;
 
 use std::collections::BTreeMap;
 
@@ -89,6 +90,55 @@ pub enum Refusal {
         outcome: Option<outcomes::Outcome>,
         allowed: Vec<String>,
     },
+    #[error("`{transition}` waits for {}", waiting(.open, .lacking))]
+    Waits {
+        transition: String,
+        /// The members and link targets not yet final, by number.
+        open: Vec<String>,
+        /// The link kinds it requires and the akt lacks, by key.
+        lacking: Vec<String>,
+    },
+}
+
+/// What a waiting transition waits for, in words.
+fn waiting(open: &[String], lacking: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !open.is_empty() {
+        let these = if open.len() == 1 { "is" } else { "are" };
+        parts.push(format!("{}, which {these} not final yet", all_of(open)));
+    }
+    if !lacking.is_empty() {
+        let kinds: Vec<String> = lacking.iter().map(|k| format!("a `{k}` link")).collect();
+        parts.push(all_of(&kinds));
+    }
+    parts.join(", and ")
+}
+
+/// `["a", "b", "c"]` as "a, b and c".
+fn all_of(words: &[String]) -> String {
+    match words {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+/// What a transition needs to know of other akter: what the akt's members
+/// add up to (`held`), and what it waits for (`waits`). An
+/// `Option<outcomes::Outcome>` is one that waits for nothing.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Around {
+    pub held: Option<outcomes::Outcome>,
+    pub waits: waits::Waits,
+}
+
+impl From<Option<outcomes::Outcome>> for Around {
+    fn from(held: Option<outcomes::Outcome>) -> Self {
+        Self {
+            held,
+            waits: waits::Waits::default(),
+        }
+    }
 }
 
 /// `["a", "b", "c"]` as "a, b or c".
@@ -178,9 +228,11 @@ pub fn changes_anything(
 }
 
 /// Performs `transition` on `current`, setting the values `input` gives on
-/// the way. `held` is what the akt's members add up to (`outcomes::of_all`)
-/// if its type has outcomes and no `verdict` field of its own; a caller
-/// needs to work it out only for a transition that names `outcomes`.
+/// the way. `around.held` is what the akt's members add up to
+/// (`outcomes::of_all`) if its type has outcomes and no `verdict` field of
+/// its own; a caller needs to work it out only for a transition that names
+/// `outcomes`. `around.waits` is what it waits for (`waits::of`), which a
+/// caller needs to work out only for one that `waits::waits_at_all`.
 // r[impl akt.transition]
 pub fn transition(
     ty: &AktType,
@@ -188,8 +240,9 @@ pub fn transition(
     transition: &str,
     input: &Map<String, Json>,
     change: Change,
-    held: Option<outcomes::Outcome>,
+    around: impl Into<Around>,
 ) -> Result<Outcome, Refusal> {
+    let Around { held, waits } = around.into();
     let Some(def) = ty.transition(transition) else {
         return Err(Refusal::UnknownTransition(transition.to_owned()));
     };
@@ -239,6 +292,15 @@ pub fn transition(
                 allowed: def.outcomes.clone(),
             });
         }
+    }
+    // r[impl akt.transition.members]
+    // r[impl akt.transition.links]
+    if !waits.is_empty() {
+        return Err(Refusal::Waits {
+            transition: transition.to_owned(),
+            open: waits.open,
+            lacking: waits.lacking,
+        });
     }
     Ok(outcome(def.to.clone(), fields, changes))
 }

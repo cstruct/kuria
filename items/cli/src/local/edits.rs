@@ -293,7 +293,14 @@ pub fn perform(
     } else {
         None
     };
-    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, held)
+    // r[impl akt.transition.members]
+    // r[impl akt.transition.links]
+    let waits =
+        t.ty.transition(&chosen.key)
+            .map(|d| super::answers::waits(&w.dir, &akt, d))
+            .unwrap_or_default();
+    let around = kuria_engine::Around { held, waits };
+    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, around)
         .map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();

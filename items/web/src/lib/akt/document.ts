@@ -88,6 +88,37 @@ export function outcomeRefusal(
 	return `Needs the result to be ${list}; it is ${named(outcome ?? 'PENDING')}`;
 }
 
+/** What a transition the akt's state allows waits for
+ * (`akt.transition.waits`): the akter not yet final, by number, and the
+ * links it lacks, by name. */
+export interface Waiting {
+	transition: string;
+	open: readonly string[];
+	lacking: readonly string[];
+}
+
+/** What `transition` waits for, of the akt's `waits`, if anything. */
+// r[impl app.transitions]
+export function waitingFor(
+	transition: { key: string },
+	waits: readonly Waiting[] | null | undefined
+): Waiting | null {
+	const wait = waits?.find((w) => w.transition === transition.key);
+	return wait && (wait.open.length > 0 || wait.lacking.length > 0) ? wait : null;
+}
+
+/** `words` as "a, b and c". */
+export function allOf(words: readonly string[]): string {
+	return words.length > 1
+		? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
+		: (words[0] ?? '');
+}
+
+/** The links a waiting transition lacks, in words: "a Verified by link". */
+export function lackingText(lacking: readonly string[]): string {
+	return allOf(lacking.map((name) => `a ${name} link`));
+}
+
 /** Whether the field `key` of the type `document` is given in the state
  * `state`: in every state, unless it names its `states`
  * (`akt.field.states`). */

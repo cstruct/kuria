@@ -35,6 +35,9 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - the outcomes a transition allows are `pass`, `fail`, `skip` or
   `pending`, each once, and only on a type that has a `verdict` field or
   contains an akt type (`akt.transition.outcomes`);
+- `waits_for.members` names akt types the type contains, and
+  `waits_for.links` and `requires_links` link kinds it declares, each
+  once (`akt.transition.members`, `akt.transition.links`);
 - the keys in `contains` and `created_in` are valid akt type keys, each listed
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
@@ -334,6 +337,30 @@ refused unless the akt has outcomes (`akt.outcome`) and its outcome, as
 it is when the transition is performed, is one of them, saying the
 outcome and those allowed. No verdict or membership in the akt's member
 tree MUST change between that check and the transition's revision.
+
+r[akt.transition.members]
+A transition MAY name, in `waits_for.members`, akt types its type
+contains. Performing it MUST then be refused while any member of those
+types, archived or not, is in a state that isn't final for that member's
+akt type version, saying which members. Neither the members' states nor
+the akt's membership MUST change between that check and the transition's
+revision.
+
+r[akt.transition.links]
+A transition MAY name, in `waits_for.links`, link kinds its type declares
+(`link.kinds`). Performing it MUST then be refused while any akt the akt
+links to by one of those kinds is in a state that isn't final, saying
+which. A transition MAY name, in `requires_links`, link kinds its type
+declares: performing it MUST then be refused unless the akt links to at
+least one akt by each, saying which it lacks. A link the subject may not
+read MUST still count, but MUST be named only by its number. Neither
+those links nor their targets' states MUST change between the check and
+the transition's revision.
+
+r[akt.transition.waits]
+An akt MUST be served with, for each transition its state allows that
+`waits_for` or `requires_links` would refuse now, what it waits for: the
+akter not yet final, and the link kinds it lacks, by their names.
 
 r[akt.version-pinned]
 An akt MUST be validated against the akt type version it was created with,

@@ -519,10 +519,39 @@ pub struct TransitionDef {
     /// `fail`, `skip` or `pending`); any, or none, if empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub outcomes: Vec<String>,
+    /// The members and link targets that must be final for it to be
+    /// performed (`akt.transition.members`, `akt.transition.links`).
+    #[serde(default, skip_serializing_if = "WaitsFor::is_empty")]
+    pub waits_for: WaitsFor,
+    /// The link kinds the akt must have at least one link of for it to be
+    /// performed (`akt.transition.links`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires_links: Vec<String>,
     /// A Konklav action performing it requires, besides
     /// `kuria:akter:transition`, such as `capa:approve_closure`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+}
+
+/// What a transition waits for: every member of these contained akt types,
+/// and every target of these link kinds, in a final state.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WaitsFor {
+    /// Contained akt types, by key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<String>,
+    /// Link kinds the type declares, by key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<String>,
+}
+
+impl WaitsFor {
+    /// Whether it waits for nothing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.members.is_empty() && self.links.is_empty()
+    }
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref, reason = "serde's signature")]

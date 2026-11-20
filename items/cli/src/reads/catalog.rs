@@ -111,6 +111,8 @@ fn schema_json(shape: &Shape) -> Json {
             "requires": t.requires,
             "outcomes": t.outcomes.iter().map(|o| o.to_ascii_lowercase()).collect::<Vec<_>>(),
             "action": document["transitions"].as_array().and_then(|ts| ts.iter().find(|d| d["key"] == t.key.as_str())).and_then(|d| d["action"].as_str()),
+            "waitsFor": waits_of(document, &t.key),
+            "requiresLinks": requires_links_of(document, &t.key),
         })).collect::<Vec<_>>(),
         "contains": document.get("contains").cloned().unwrap_or_else(|| json!([])),
         "createdIn": document.get("created_in").cloned().unwrap_or_else(|| json!([])),
@@ -203,6 +205,7 @@ fn schema_markdown(shape: &Shape) -> String {
                     t.outcomes.iter().map(|o| o.to_ascii_lowercase()).collect();
                 line.push_str(&format!(", only if the outcome is {}", outcomes.join(", ")));
             }
+            line.push_str(&waits_text(document, &t.key));
             text.push_str(&line);
             text.push('\n');
         }
@@ -354,4 +357,67 @@ pub async fn contacts(source: Source<'_>) -> Result<Answer, CliError> {
         },
         json: json!({ "contacts": contacts }),
     })
+}
+
+/// What the transition `key` waits for and the links it needs, as the
+/// schema's line for it goes on: ", waits for its `action` members to be
+/// final", ….
+// r[impl akt.transition.members]
+// r[impl akt.transition.links]
+fn waits_text(document: &Json, key: &str) -> String {
+    let keys = |list: &Json| -> Vec<String> {
+        list.as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|k| k.as_str().map(|k| format!("`{k}`")))
+            .collect()
+    };
+    let waits = waits_of(document, key);
+    let mut text = String::new();
+    let members = keys(&waits["members"]);
+    if !members.is_empty() {
+        text.push_str(&format!(
+            ", waits for its {} members to be final",
+            members.join(", ")
+        ));
+    }
+    let links = keys(&waits["links"]);
+    if !links.is_empty() {
+        text.push_str(&format!(
+            ", waits for its {} links' akter to be final",
+            links.join(", ")
+        ));
+    }
+    let needs = keys(&requires_links_of(document, key));
+    if !needs.is_empty() {
+        text.push_str(&format!(", needs a {} link", needs.join(", ")));
+    }
+    text
+}
+
+/// The transition `key`'s definition in `document`, if it has one.
+fn transition_def<'a>(document: &'a Json, key: &str) -> Option<&'a Json> {
+    document["transitions"]
+        .as_array()
+        .and_then(|ts| ts.iter().find(|d| d["key"] == key))
+}
+
+/// What the transition `key` waits for, as `{members, links}`.
+fn waits_of(document: &Json, key: &str) -> Json {
+    let waits = transition_def(document, key).map(|d| &d["waits_for"]);
+    let list = |k: &str| {
+        waits
+            .and_then(|w| w.get(k))
+            .cloned()
+            .unwrap_or_else(|| json!([]))
+    };
+    json!({ "members": list("members"), "links": list("links") })
+}
+
+/// The link kinds the transition `key` requires.
+fn requires_links_of(document: &Json, key: &str) -> Json {
+    transition_def(document, key)
+        .and_then(|d| d.get("requires_links"))
+        .cloned()
+        .unwrap_or_else(|| json!([]))
 }

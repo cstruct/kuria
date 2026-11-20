@@ -204,6 +204,37 @@ struct Around {
     members: Members,
     #[serde(default)]
     revisions: Vec<Revision>,
+    /// What the transitions its state allows wait for
+    /// (`akt.transition.waits`).
+    #[serde(default)]
+    waits: Vec<Wait>,
+}
+
+#[derive(Deserialize)]
+struct Wait {
+    transition: String,
+    open: Vec<String>,
+    lacking: Vec<String>,
+}
+
+impl Wait {
+    /// What it waits for, in words: "TASK-1 and TASK-2, and a Verified by link".
+    fn text(&self) -> String {
+        let all = |words: &[String]| match words {
+            [] => String::new(),
+            [one] => one.clone(),
+            [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+        };
+        let mut parts = Vec::new();
+        if !self.open.is_empty() {
+            parts.push(all(&self.open));
+        }
+        if !self.lacking.is_empty() {
+            let links: Vec<String> = self.lacking.iter().map(|k| format!("a {k} link")).collect();
+            parts.push(all(&links));
+        }
+        parts.join(", and ")
+    }
 }
 
 #[derive(Deserialize)]
@@ -362,6 +393,7 @@ pub async fn show(
     let extra = format!(
         "board(first: {MEMBERS}{board}) {{ columns {{ key name akter {{ number title type {{ key name }} state {{ key name }} outcome {ARCHIVED} }} }} }}
          members(first: {MEMBERS}, archived: {}) {{ nodes {{ number title type {{ key name }} state {{ key name }} outcome {ARCHIVED} }} pageInfo {{ hasNextPage }} }}
+         waits {{ transition open lacking }}
          {}",
         // Kept below as the board keeps them: all of an archived one's.
         match archived {
@@ -540,6 +572,10 @@ impl Shown<'_> {
                     let names: Vec<&str> = t.requires.iter().map(|k| shape.field_name(k)).collect();
                     line.push_str(&format!(", requires {}", names.join(", ")));
                 }
+                // r[impl akt.transition.waits]
+                if let Some(wait) = self.around.waits.iter().find(|w| w.transition == t.key) {
+                    line.push_str(&format!(", waits for {}", wait.text()));
+                }
                 text.push_str(&line);
                 text.push('\n');
             }
@@ -706,7 +742,13 @@ impl Shown<'_> {
         json["members"] = members;
         json["transitions"] = allowed
             .iter()
-            .map(|t| json!({ "key": t.key, "name": t.name, "to": t.to, "requires": t.requires }))
+            .map(|t| {
+                let wait = self.around.waits.iter().find(|w| w.transition == t.key);
+                json!({
+                    "key": t.key, "name": t.name, "to": t.to, "requires": t.requires,
+                    "waits": wait.map(|w| json!({ "open": w.open, "lacking": w.lacking })),
+                })
+            })
             .collect();
         if with_history {
             json["history"] = described.iter().map(Described::json).collect();

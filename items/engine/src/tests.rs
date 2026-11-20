@@ -1122,3 +1122,86 @@ fn a_field_is_given_only_in_its_states() {
     )
     .unwrap();
 }
+
+/// A container whose `close` waits for its `action` members and the targets
+/// of its `implemented_by` links, and needs a `verified_by` link.
+fn waiting() -> AktType {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ],
+        "contains": [{ "type": "action" }, { "type": "note" }],
+        "links": [
+            { "key": "implemented_by", "name": "Implemented by", "inverse": "Implements", "to": ["task"] },
+            { "key": "verified_by", "name": "Verified by", "inverse": "Verifies", "to": ["test"] }
+        ],
+        "transitions": [
+            { "key": "close", "name": "Close", "from": ["open"], "to": "closed",
+              "waits_for": { "members": ["action"], "links": ["implemented_by"] },
+              "requires_links": ["verified_by"] }
+        ]
+    }))
+    .unwrap();
+    validate(document).unwrap()
+}
+
+// r[verify akt.transition.members]
+// r[verify akt.transition.links]
+#[test]
+fn a_transition_waits_for_members_and_links() {
+    let ty = waiting();
+    let def = ty.transition("close").unwrap();
+    let member = |number: &str, akt_type: &str, is_final| waits::Member {
+        number: number.to_owned(),
+        akt_type: akt_type.to_owned(),
+        is_final,
+    };
+    let link = |kind: &str, number: &str, is_final| waits::Linked {
+        kind: kind.to_owned(),
+        number: number.to_owned(),
+        is_final,
+    };
+    let members = [
+        member("A1", "action", true),
+        member("A2", "action", false),
+        // Only the types it names count.
+        member("N1", "note", false),
+    ];
+    let links = [
+        link("implemented_by", "T1", false),
+        link("implemented_by", "T2", true),
+    ];
+    let waits = waits::of(def, &members, &links);
+    assert_eq!(waits.open, ["A2", "T1"]);
+    assert_eq!(waits.lacking, ["verified_by"]);
+    let akt = current("open", json!({ "title": "T" }));
+    let around = |waits| Around { held: None, waits };
+    let refused = transition(&ty, &akt, "close", &Map::new(), change(), around(waits));
+    assert_eq!(
+        refused,
+        Err(Refusal::Waits {
+            transition: "close".to_owned(),
+            open: vec!["A2".to_owned(), "T1".to_owned()],
+            lacking: vec!["verified_by".to_owned()],
+        })
+    );
+    assert_eq!(
+        refused.unwrap_err().to_string(),
+        "`close` waits for A2 and T1, which are not final yet, and a `verified_by` link"
+    );
+    let done = [member("A1", "action", true), member("A2", "action", true)];
+    let linked = [
+        link("implemented_by", "T1", true),
+        link("verified_by", "V1", false),
+    ];
+    let settled = waits::of(def, &done, &linked);
+    assert!(
+        settled.is_empty(),
+        "a required link's target needn't be final"
+    );
+    let closed = transition(&ty, &akt, "close", &Map::new(), change(), around(settled)).unwrap();
+    assert_eq!(closed.state, "closed");
+}
