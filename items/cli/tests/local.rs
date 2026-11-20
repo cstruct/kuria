@@ -3563,3 +3563,57 @@ fn a_case_closes_once_what_it_waits_for_is_final() {
         "closed"
     );
 }
+
+// r[verify akt.transition.requires-when]
+// r[verify cli.local.rules]
+#[test]
+fn a_corrective_case_needs_its_root_cause() {
+    let dir = Dir::new();
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "kind", "name": "Kind", "kind": "choices", "options": [
+                { "key": "corrective", "name": "Corrective" },
+                { "key": "preventive", "name": "Preventive" } ] },
+            { "key": "root_cause", "name": "Root cause", "kind": "text" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "planned", "name": "Planned" }
+        ],
+        "transitions": [{ "key": "plan", "name": "Plan", "from": ["open"], "to": "planned",
+            "requires_when": [{ "field": "root_cause", "when": { "kind": ["corrective"] } }] }]
+    });
+    std::fs::write(dir.root.join("types/case.json"), case.to_string()).unwrap();
+    let schema = dir.ok(&["types", "schema", "case"]).markdown;
+    assert!(
+        schema.contains(
+            "- `plan` Plan: open → planned, requires root_cause when kind is corrective\n"
+        ),
+        "{schema}"
+    );
+    dir.ok(&[
+        "new",
+        "case",
+        "--set",
+        "title=Bug",
+        "--set",
+        "kind=corrective",
+    ]);
+    let refused = dir.refused(&["do", "CASE-1", "plan"]);
+    assert_eq!(refused.message, "`plan` requires root_cause");
+    assert_eq!(
+        dir.ok(&[
+            "do",
+            "CASE-1",
+            "plan",
+            "--set",
+            "root_cause=No rota",
+            "--format",
+            "json"
+        ])
+        .json["state"],
+        "planned"
+    );
+}

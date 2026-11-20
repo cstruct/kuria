@@ -1492,6 +1492,21 @@ impl AktType {
                 waits_for_members: t.waits_for.members.clone(),
                 waits_for_links: t.waits_for.links.clone(),
                 requires_links: t.requires_links.clone(),
+                requires_when: t
+                    .requires_when
+                    .iter()
+                    .map(|r| RequiredWhen {
+                        field: r.field.clone(),
+                        when: r
+                            .when
+                            .iter()
+                            .map(|(field, options)| Condition {
+                                field: field.clone(),
+                                options: options.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
             })
             .collect()
     }
@@ -1803,6 +1818,24 @@ pub struct Transition {
     /// The link kinds the akt must have a link of for it to be performed
     /// (`akt.transition.links`).
     requires_links: Vec<String>,
+    /// The fields it requires only while other fields hold certain values
+    /// (`akt.transition.requires-when`).
+    requires_when: Vec<RequiredWhen>,
+}
+
+/// A field a transition requires only while every condition holds
+/// (`akt.transition.requires-when`).
+#[derive(SimpleObject)]
+pub struct RequiredWhen {
+    field: String,
+    when: Vec<Condition>,
+}
+
+/// A `choice` or `choices` field holding one of these options.
+#[derive(SimpleObject)]
+pub struct Condition {
+    field: String,
+    options: Vec<String>,
 }
 
 /// What a transition the akt's state allows waits for

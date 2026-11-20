@@ -527,10 +527,41 @@ pub struct TransitionDef {
     /// performed (`akt.transition.links`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires_links: Vec<String>,
+    /// Fields it requires only while other fields hold certain values
+    /// (`akt.transition.requires-when`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires_when: Vec<RequiredWhen>,
     /// A Konklav action performing it requires, besides
     /// `kuria:akter:transition`, such as `capa:approve_closure`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+}
+
+/// A field a transition requires only while other fields hold certain
+/// values: `{"field": "root_cause", "when": {"kind": ["corrective"]}}`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequiredWhen {
+    /// The field required.
+    pub field: String,
+    /// The `choice` or `choices` fields, by key, and the options each must
+    /// hold one of for it to be required.
+    pub when: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl RequiredWhen {
+    /// Whether it is required, given `holds`, which answers the options a
+    /// field holds now: one for a `choice` field, any number for `choices`.
+    pub fn applies<'a, I>(&self, holds: impl Fn(&str) -> I) -> bool
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        self.when.iter().all(|(field, options)| {
+            holds(field)
+                .into_iter()
+                .any(|held| options.iter().any(|o| o == held))
+        })
+    }
 }
 
 /// What a transition waits for: every member of these contained akt types,

@@ -227,12 +227,13 @@ The same works for link targets, and the app says why the transition is unavaila
 <!-- akt: PLAN-026-T02 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6K
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T08]
 title: Fields required only when another field has certain values
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -241,6 +242,28 @@ Spec conditional requirements.
 - A transition's `requires` entry can be `{field, when: {<field>: [values]}}`. The field is required only when the other field, a `choice` or `choices` field, holds one of the values (for `choices`, includes one).
 - A type document whose condition names a field or option that doesn't exist is refused.
 - `kuria types schema` and the app say when a field is required.
+
+## Done
+
+- **Spec:** `akt.transition.requires-when` in `docs/spec/akter.md`, with its validation in `akt.type.validation`. `app.transitions` and `cli.read` say what they add.
+  - The rules sit in a list of their own, `requires_when: [{field, when: {<field>: [options]}}]`, rather than as entries of `requires`. `requires` stays a list of keys, which the API, the CLI's model and the app read as such.
+  - `when` can name several fields; the field is required while all of them hold one of their options.
+- **Config:** `RequiredWhen` on `TransitionDef`, validated: fields that exist, conditions only on `choice` and `choices` fields, options of their own, none named twice.
+- **Engine:** `required_when` gives the fields required now, and `transition` refuses without them as `Refusal::Requires`, as for `requires`. The server and local mode both get this through the engine.
+- **GraphQL:** `Transition.requiresWhen { field when { field options } }`.
+- **CLI:** `types schema` says, for example, ", requires root_cause when kind is corrective", and gives `requiresWhen` in JSON.
+- **App:** the transition dialog also asks for a conditionally required field while the akt's choices meet the condition.
+  - It goes by the akt's values as they are, not by values changed in the same dialog; `app.transitions` says so.
+  - A board move that needs a conditionally required field is refused and shows the refusal, rather than opening the akt.
+
+## Verified
+
+- `items/config` test `checks_what_a_transition_requires_when`.
+- `items/engine` test `a_field_is_required_only_while_others_hold_certain_values`.
+- `items/server/tests/requires_when.rs`.
+- `items/cli/tests/local.rs` test `a_corrective_case_needs_its_root_cause`.
+- `items/web` test `requiredFields, with conditions`.
+- `mise run lint` and `mise run test`.
 
 <!-- field: acceptance -->
 A fixture type requiring `root_cause` when `kind` includes `corrective` refuses the transition without it. It allows it when `kind` is only `preventive`.

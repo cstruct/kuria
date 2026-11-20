@@ -292,6 +292,13 @@ export const ShownType = graphql(`
 			to
 			requires
 			outcomes
+			requiresWhen {
+				field
+				when {
+					field
+					options
+				}
+			}
 		}
 	}
 `);
@@ -338,6 +345,13 @@ export const TypeShape = graphql(`
 			to
 			requires
 			outcomes
+			requiresWhen {
+				field
+				when {
+					field
+					options
+				}
+			}
 		}
 	}
 `);

@@ -65,12 +65,28 @@ export function availableTransitions<T extends TransitionShape>(
 	return state.final ? [] : transitions.filter((t) => t.from.includes(state.key));
 }
 
-/** The fields a transition asks for, in the akt type's order. */
+/** A field a transition requires only while every condition holds: a
+ * `choice` or `choices` field holding one of the options
+ * (`akt.transition.requires-when`). */
+export interface RequiredWhen {
+	field: string;
+	when: readonly { field: string; options: readonly string[] }[];
+}
+
+/** The fields a transition asks for, in the akt type's order: those it
+ * requires, and those it requires while the akt's choices, the option keys
+ * `held` answers for a field, meet the condition. */
+// r[impl app.transitions]
+// r[impl akt.transition.requires-when]
 export function requiredFields<F extends { key: string }>(
 	fields: readonly F[],
-	transition: TransitionShape
+	transition: TransitionShape & { requiresWhen?: readonly RequiredWhen[] | null },
+	held: (field: string) => readonly string[] = () => []
 ): F[] {
-	return fields.filter((f) => transition.requires.includes(f.key));
+	const when = (transition.requiresWhen ?? [])
+		.filter((r) => r.when.every((c) => held(c.field).some((o) => c.options.includes(o))))
+		.map((r) => r.field);
+	return fields.filter((f) => transition.requires.includes(f.key) || when.includes(f.key));
 }
 
 /** Why `transition` is unavailable to an akt with `outcome`, if it is: it

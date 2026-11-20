@@ -113,6 +113,7 @@ fn schema_json(shape: &Shape) -> Json {
             "action": document["transitions"].as_array().and_then(|ts| ts.iter().find(|d| d["key"] == t.key.as_str())).and_then(|d| d["action"].as_str()),
             "waitsFor": waits_of(document, &t.key),
             "requiresLinks": requires_links_of(document, &t.key),
+            "requiresWhen": transition_def(document, &t.key).and_then(|d| d.get("requires_when")).cloned().unwrap_or_else(|| json!([])),
         })).collect::<Vec<_>>(),
         "contains": document.get("contains").cloned().unwrap_or_else(|| json!([])),
         "createdIn": document.get("created_in").cloned().unwrap_or_else(|| json!([])),
@@ -205,6 +206,7 @@ fn schema_markdown(shape: &Shape) -> String {
                     t.outcomes.iter().map(|o| o.to_ascii_lowercase()).collect();
                 line.push_str(&format!(", only if the outcome is {}", outcomes.join(", ")));
             }
+            line.push_str(&requires_when_text(document, &t.key));
             line.push_str(&waits_text(document, &t.key));
             text.push_str(&line);
             text.push('\n');
@@ -357,6 +359,40 @@ pub async fn contacts(source: Source<'_>) -> Result<Answer, CliError> {
         },
         json: json!({ "contacts": contacts }),
     })
+}
+
+/// The fields the transition `key` requires only while others hold
+/// certain values, as the schema's line goes on: ", requires `root_cause`
+/// when kind is corrective or preventive".
+// r[impl akt.transition.requires-when]
+fn requires_when_text(document: &Json, key: &str) -> String {
+    let rules = transition_def(document, key)
+        .and_then(|d| d["requires_when"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut text = String::new();
+    for rule in rules {
+        let conditions: Vec<String> = rule["when"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(field, options)| {
+                let options: Vec<&str> = options
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Json::as_str)
+                    .collect();
+                format!("{field} is {}", options.join(" or "))
+            })
+            .collect();
+        text.push_str(&format!(
+            ", requires {} when {}",
+            rule["field"].as_str().unwrap_or_default(),
+            conditions.join(" and ")
+        ));
+    }
+    text
 }
 
 /// What the transition `key` waits for and the links it needs, as the

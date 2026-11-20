@@ -636,8 +636,16 @@
 		reason = '';
 	}
 
+	/** The option keys the akt's `choice` or `choices` field `key` holds. */
+	function held(key: string): string[] {
+		const value = akt?.fields.find((v) => v.field === key);
+		if (value?.__typename === 'ChoiceValue') return value.option ? [value.option.key] : [];
+		if (value?.__typename === 'ChoicesValue') return value.options.map((o) => o.key);
+		return [];
+	}
+
 	function required(transition: Transition): FieldDef[] {
-		return requiredFields(akt?.type.fields ?? [], transition);
+		return requiredFields(akt?.type.fields ?? [], transition, held);
 	}
 
 	function begin(transition: Transition) {
@@ -1465,7 +1473,7 @@
 							{busy}
 							onclick={() => moveInto(transition)}
 						>
-							{transition.name}{transition.requires.length > 0 ? '…' : ''}
+							{transition.name}{required(transition).length > 0 ? '…' : ''}
 						</Button>
 					{/each}
 				</div>

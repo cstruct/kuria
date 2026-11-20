@@ -520,6 +520,53 @@ fn transitions(
         }
         outcomes(problems, document, &path, transition);
         waits(problems, document, &path, transition);
+        requires_when(problems, document, &path, transition);
+    }
+}
+
+/// Checks the fields a transition requires only while others hold certain
+/// values: fields the type defines, conditions on `choice` or `choices`
+/// fields, each with options of its own, each once.
+// r[impl akt.transition.requires-when]
+// r[impl akt.type.validation]
+fn requires_when(
+    problems: &mut Problems,
+    document: &AktTypeDocument,
+    path: &str,
+    t: &TransitionDef,
+) {
+    for (i, rule) in t.requires_when.iter().enumerate() {
+        let at = format!("{path}.requires_when[{i}]");
+        if !document.fields.iter().any(|f| f.key == rule.field) {
+            problems.add(&format!("{at}.field"), format!("no field `{}`", rule.field));
+        }
+        if rule.when.is_empty() {
+            problems.add(&format!("{at}.when"), "`when` names at least one field");
+        }
+        for (key, options) in &rule.when {
+            let at = format!("{at}.when.{key}");
+            let Some(field) = document.fields.iter().find(|f| &f.key == key) else {
+                problems.add(&at, format!("no field `{key}`"));
+                continue;
+            };
+            if !field.kind.has_options() {
+                problems.add(&at, format!("`{key}` is no choice or choices field"));
+                continue;
+            }
+            if options.is_empty() {
+                problems.add(&at, "names at least one option");
+            }
+            for (j, option) in options.iter().enumerate() {
+                if options[..j].contains(option) {
+                    problems.add(&format!("{at}[{j}]"), format!("`{option}` is named twice"));
+                } else if !field.options.iter().any(|o| &o.key == option) {
+                    problems.add(
+                        &format!("{at}[{j}]"),
+                        format!("`{key}` has no option `{option}`"),
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -1252,6 +1299,33 @@ mod tests {
         assert_eq!(
             problems(on_text),
             ["fields[2].references: only markdown fields keep references"]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.requires-when]
+    #[test]
+    fn checks_what_a_transition_requires_when() {
+        let mut document = capa();
+        document["transitions"][0]["requires"] = json!([]);
+        document["transitions"][0]["requires_when"] =
+            json!([{ "field": "root_cause", "when": { "severity": ["major"] } }]);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["transitions"][0]["requires_when"] = json!([
+            { "field": "cause", "when": {} },
+            { "field": "root_cause", "when": {
+                "severity": ["major", "huge", "major"], "title": ["x"], "kind": ["y"] } }
+        ]);
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].requires_when[0].field: no field `cause`",
+                "transitions[0].requires_when[0].when: `when` names at least one field",
+                "transitions[0].requires_when[1].when.kind: no field `kind`",
+                "transitions[0].requires_when[1].when.severity[1]: `severity` has no option `huge`",
+                "transitions[0].requires_when[1].when.severity[2]: `major` is named twice",
+                "transitions[0].requires_when[1].when.title: `title` is no choice or choices field",
+            ]
         );
     }
 

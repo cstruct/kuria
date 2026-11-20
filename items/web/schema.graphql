@@ -470,6 +470,14 @@ type ChoicesValue {
 	options: [ChoiceOption!]!
 }
 
+"""
+A `choice` or `choices` field holding one of these options.
+"""
+type Condition {
+	field: String!
+	options: [String!]!
+}
+
 type Contact {
 	id: ID!
 	"""
@@ -1363,6 +1371,15 @@ type RenderedDiagram {
 }
 
 """
+A field a transition requires only while every condition holds
+(`akt.transition.requires-when`).
+"""
+type RequiredWhen {
+	field: String!
+	when: [Condition!]!
+}
+
+"""
 What Kuria recognised of an SBOM.
 """
 type Sbom {
@@ -1498,6 +1515,11 @@ type Transition {
 	(`akt.transition.links`).
 	"""
 	requiresLinks: [String!]!
+	"""
+	The fields it requires only while other fields hold certain values
+	(`akt.transition.requires-when`).
+	"""
+	requiresWhen: [RequiredWhen!]!
 }
 
 """

@@ -269,12 +269,18 @@ pub fn transition(
     let (fields, changes) = apply(ty, &current.fields, input, change)?;
     // r[impl akt.field.checkbox]
     // A checkbox counts as holding a value only while checked.
-    let missing: Vec<String> = def
+    // r[impl akt.transition.requires-when]
+    let mut missing: Vec<String> = def
         .requires
         .iter()
         .filter(|f| !fields.contains_key(*f))
         .cloned()
         .collect();
+    for key in required_when(def, &fields) {
+        if !fields.contains_key(&key) && !missing.contains(&key) {
+            missing.push(key);
+        }
+    }
     if !missing.is_empty() {
         return Err(Refusal::Requires {
             transition: transition.to_owned(),
@@ -303,6 +309,28 @@ pub fn transition(
         });
     }
     Ok(outcome(def.to.clone(), fields, changes))
+}
+
+/// The fields `def` requires only while others hold certain values
+/// (`akt.transition.requires-when`), that `fields` meet the condition of.
+// r[impl akt.transition.requires-when]
+#[must_use]
+pub fn required_when(
+    def: &kuria_config::TransitionDef,
+    fields: &BTreeMap<String, Value>,
+) -> Vec<String> {
+    let holds = |key: &str| -> Vec<&str> {
+        match fields.get(key) {
+            Some(Value::Choice(option)) => vec![option.as_str()],
+            Some(Value::Choices(options)) => options.iter().map(String::as_str).collect(),
+            _ => Vec::new(),
+        }
+    };
+    def.requires_when
+        .iter()
+        .filter(|rule| rule.applies(holds))
+        .map(|rule| rule.field.clone())
+        .collect()
 }
 
 pub(crate) fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {

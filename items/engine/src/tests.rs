@@ -1205,3 +1205,92 @@ fn a_transition_waits_for_members_and_links() {
     let closed = transition(&ty, &akt, "close", &Map::new(), change(), around(settled)).unwrap();
     assert_eq!(closed.state, "closed");
 }
+
+// r[verify akt.transition.requires-when]
+#[test]
+fn a_field_is_required_only_while_others_hold_certain_values() {
+    let mut document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "capa", "name": "CAPA", "number": "CAPA-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "kind", "name": "Kind", "kind": "choices", "options": [
+                { "key": "corrective", "name": "Corrective" },
+                { "key": "preventive", "name": "Preventive" } ] },
+            { "key": "severity", "name": "Severity", "kind": "choice", "options": [
+                { "key": "major", "name": "Major" }, { "key": "minor", "name": "Minor" } ] },
+            { "key": "root_cause", "name": "Root cause", "kind": "text" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "planned", "name": "Planned", "final": true }
+        ],
+        "transitions": [{ "key": "plan", "name": "Plan", "from": ["open"], "to": "planned",
+            "requires_when": [{ "field": "root_cause",
+                "when": { "kind": ["corrective"], "severity": ["major"] } }] }]
+    }))
+    .unwrap();
+    let ty = validate(document.clone()).unwrap();
+    let current = |state: &str, values: Json| Current {
+        state: state.to_owned(),
+        fields: fields_from_json(&ty, &input(values)).unwrap(),
+    };
+    let plan = |values: Json, given: Json| {
+        transition(
+            &ty,
+            &current("open", values),
+            "plan",
+            &input(given),
+            change(),
+            None,
+        )
+    };
+    let required = Err(Refusal::Requires {
+        transition: "plan".to_owned(),
+        fields: vec!["root_cause".to_owned()],
+    });
+    // Every field `when` names must hold one of its options.
+    let corrective_major =
+        json!({ "title": "T", "kind": ["preventive", "corrective"], "severity": "major" });
+    assert_eq!(plan(corrective_major.clone(), json!({})), required);
+    assert!(
+        plan(
+            json!({ "title": "T", "kind": ["corrective"], "severity": "minor" }),
+            json!({})
+        )
+        .is_ok()
+    );
+    assert!(
+        plan(
+            json!({ "title": "T", "kind": ["preventive"], "severity": "major" }),
+            json!({})
+        )
+        .is_ok()
+    );
+    assert!(plan(json!({ "title": "T", "severity": "major" }), json!({})).is_ok());
+    // As the transition leaves them.
+    assert_eq!(
+        plan(
+            json!({ "title": "T", "severity": "major" }),
+            json!({ "kind": ["corrective"] })
+        ),
+        required
+    );
+    assert!(plan(corrective_major, json!({ "root_cause": "No rota" })).is_ok());
+    document.transitions[0].requires = vec!["root_cause".to_owned()];
+    let both = validate(document).unwrap();
+    assert_eq!(
+        transition(
+            &both,
+            &current(
+                "open",
+                json!({ "title": "T", "kind": ["corrective"], "severity": "major" })
+            ),
+            "plan",
+            &Map::new(),
+            change(),
+            None
+        ),
+        required,
+        "named once, whichever way it is required"
+    );
+}

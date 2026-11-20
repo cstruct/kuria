@@ -96,7 +96,7 @@ The client MUST offer:
 - `types`: the akt types, with how many akter each has;
 - `types schema <type>`: a type's fields with their kinds, whether required, and
   options; its states and their tones; its transitions with what they
-  require, the outcomes they allow, and the members and links they wait
+  require, and when (`akt.transition.requires-when`), the outcomes they allow, and the members and links they wait
   for (`akt.transition.members`, `akt.transition.links`); the types it contains and links
   to; its board and presentation;
 - `ls [<type>]`: akter as a table of number, title, state, outcome where

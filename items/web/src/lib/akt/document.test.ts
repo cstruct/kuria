@@ -99,3 +99,25 @@ describe('waitingFor', () => {
 		);
 	});
 });
+
+// r[verify app.transitions]
+// r[verify akt.transition.requires-when]
+describe('requiredFields, with conditions', () => {
+	const fields = [{ key: 'kind' }, { key: 'root_cause' }, { key: 'hypothesis' }];
+	const plan = {
+		key: 'plan',
+		from: ['open'],
+		requires: [],
+		requiresWhen: [
+			{ field: 'root_cause', when: [{ field: 'kind', options: ['corrective'] }] },
+			{ field: 'hypothesis', when: [{ field: 'kind', options: ['preventive'] }] }
+		]
+	};
+	it('asks for a field while the akt meets its condition', () => {
+		const keys = (held: string[]) => requiredFields(fields, plan, () => held).map((f) => f.key);
+		expect(keys(['corrective'])).toEqual(['root_cause']);
+		expect(keys(['corrective', 'preventive'])).toEqual(['root_cause', 'hypothesis']);
+		expect(keys([])).toEqual([]);
+		expect(requiredFields(fields, plan)).toEqual([]);
+	});
+});

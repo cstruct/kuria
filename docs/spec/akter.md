@@ -35,6 +35,9 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - the outcomes a transition allows are `pass`, `fail`, `skip` or
   `pending`, each once, and only on a type that has a `verdict` field or
   contains an akt type (`akt.transition.outcomes`);
+- each `requires_when` entry names a field the type defines, and `when`
+  names at least one `choice` or `choices` field, each with at least one
+  of its options, each once (`akt.transition.requires-when`);
 - `waits_for.members` names akt types the type contains, and
   `waits_for.links` and `requires_links` link kinds it declares, each
   once (`akt.transition.members`, `akt.transition.links`);
@@ -330,6 +333,15 @@ one the transition starts from. It MAY change field values in the same step,
 as an edit does. It MUST be refused unless every field the transition
 requires holds a value afterwards. The akt then moves to the transition's
 target state.
+
+r[akt.transition.requires-when]
+A transition MAY name, in `requires_when`, fields it requires only while
+other fields hold certain values: each entry is `{"field": <key>, "when":
+{<key>: [<option>, …], …}}`, and its field is required when, as the
+transition leaves them, every field `when` names holds one of the options
+it lists for it: a `choice` field that option, a `choices` field any of
+them. Performing it MUST be refused, as for any field it requires, unless
+each field so required holds a value afterwards.
 
 r[akt.transition.outcomes]
 A transition MAY name the outcomes it allows. Performing it MUST then be
