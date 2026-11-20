@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 26
+revision: 27
 rank: b5k
 state: active
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -155,13 +155,17 @@ Edits through `kuria mcp` on a delegated session (PLAN-027-T09) are the person's
 <!-- akt: PLAN-027-T06 -->
 ---
 type: task
-revision: 2
+revision: 5
 rank: b5q
-state: todo
+state: doing
 in: [PLAN-027]
 links: [Blocked by PLAN-027-T04]
 title: "Show the agent's cursor as a Yjs peer"
+assignee: albin@mattsson.io
 ---
+
+<!-- field: description -->
+Blocked by PLAN-027-G04: the live route refuses the CLI's DPoP-bound sessions, so `kuria mcp` can't join a draft as planned.
 
 <!-- field: acceptance -->
 While editing, kuria mcp joins /akter/{number}/live, applies its replacements there and sets its awareness to the span it changes; the editor shows it.
@@ -469,3 +473,24 @@ The plan had `akter(search:)` also match text fields. That list is paged by curs
 
 <!-- field: why -->
 Relevance order and excerpts don't fit a recency-paged list of akter, and an agent wants the best matches, not every page; keeping `akter(search:)` leaves the app's lookup fast and unchanged.
+
+<!-- akt: PLAN-027-G04 -->
+---
+type: gap
+revision: 1
+rank: b69
+state: open
+in: [PLAN-027]
+title: "How kuria mcp shows its cursor, when live drafts refuse DPoP tokens"
+---
+
+<!-- field: description -->
+PLAN-027-T06 had `kuria mcp` join `GET /akter/{number}/live` and set its awareness to the span it replaces (`mcp.presence`). It can't: the live route refuses a sender-constrained (DPoP) token with 403 `sender_constrained_unsupported` (`authz.sender-constrained`), since a DPoP presentation lasts only its request and the socket decides each edit later; and every CLI session is DPoP-bound (`cli.dpop`), a secret-key one too.
+
+Found while building it: the cursor itself works. With the draft's Yjs state (`Akt.liveState`), yrs' `StickyIndex`, serialized with serde, is the Yjs relative-position JSON the app reads (`{item: {client, clock}, assoc}`), so a cursor is `{field, anchor, head}` at the span's start and end. The attempt is kept outside the repository; nothing of it is committed.
+
+Options:
+
+1. **Presence through GraphQL.** A mutation, such as `showCursor(number, field, span)`, by which the server itself puts an awareness state for the caller into the draft's room, stamped as `live.presence` says, for some seconds; `edit_document` calls it before `replaceInAkt`. Works with DPoP, needs the rooms reachable from GraphQL and a rule for how long it stays.
+2. **Let the live route take a DPoP token for reading and awareness only.** Decide read once, at the upgrade, with the accepted presentation, and refuse that client's updates: an agent shown, never editing over the socket. Changes `authz.sender-constrained` for this route.
+3. **Drop the cursor.** Agents' changes still reach people within a second, named "Claude for Albin" once PLAN-027-T05 is done; people just don't see where it works beforehand.
