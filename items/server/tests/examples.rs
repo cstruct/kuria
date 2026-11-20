@@ -37,6 +37,7 @@ const EXAMPLES: [(&str, &[&str]); 3] = [
             "release_notes",
             "test_case",
             "test_protocol",
+            "problem_report",
         ],
     ),
     (

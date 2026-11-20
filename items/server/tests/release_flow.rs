@@ -19,7 +19,7 @@ const RM: &str = "tenant-release-manager";
 /// The build pipeline: software, another subject than the people.
 const CI: &str = "colleague-ci";
 
-const DOCUMENTS: [&str; 10] = [
+const DOCUMENTS: [&str; 11] = [
     include_str!("../../../docs/examples/release-management/artifact.json"),
     include_str!("../../../docs/examples/release-management/backlog_item.json"),
     include_str!("../../../docs/examples/release-management/epic.json"),
@@ -30,6 +30,7 @@ const DOCUMENTS: [&str; 10] = [
     include_str!("../../../docs/examples/release-management/release_notes.json"),
     include_str!("../../../docs/examples/release-management/test_case.json"),
     include_str!("../../../docs/examples/release-management/test_protocol.json"),
+    include_str!("../../../docs/examples/release-management/problem_report.json"),
 ];
 
 struct World {

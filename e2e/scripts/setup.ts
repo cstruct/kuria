@@ -153,14 +153,14 @@ const people = {
 		'reader',
 		{
 			role: 'developer-work',
-			at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'document', 'image']
+			at: ['backlog', 'epic', 'backlog_item', 'problem_report', 'test_protocol', 'test_case', 'document_index', 'document', 'image']
 		}
 	]),
 	releaseManager: await person(tenant, 'rm@shop.example', [
 		'reader',
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes'] },
-		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index'] },
+		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'problem_report', 'test_protocol', 'test_case', 'document_index'] },
 		{ role: 'document-release', at: ['document', 'external_document'] }
 	]),
 	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])

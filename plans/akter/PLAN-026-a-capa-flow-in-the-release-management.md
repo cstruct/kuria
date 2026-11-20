@@ -456,12 +456,13 @@ From a fixture akt, *New …* opens a form filled with the shared fields, and th
 <!-- akt: PLAN-026-T07 -->
 ---
 type: task
-revision: 4
+revision: 8
 rank: b6P
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T10, Resolves PLAN-026-G01]
 title: Problem reports in the release-management example
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -472,6 +473,31 @@ Add a `problem_report` akt type to the example (G01). Problem reports live in th
 - the screening answer: yes, no or uncertain;
 - the risk record, a `reference`;
 - the resolution: fixed, or won't fix with a reason from a fixed list (cannot reproduce, by design, unsupported version, risk acceptable, workaround documented) and a rationale.
+
+## Done
+
+`docs/examples/release-management/problem_report.json`, numbered `PR-0001`, in the sidebar's new *Quality* group, with a bug icon.
+
+- **States:** *Open*, *Classified*, *Residual anomaly*, *Fixed* (final) and *Won't fix* (final).
+- **Classify** needs the screening answer ("Could it lead to a hazardous situation?"), severity and priority. It also needs the risk record when the answer is yes or uncertain (T02).
+- **Mark fixed:**
+  - it is fixed by tasks, linked as *Fixed by* (inverse *Fixes*), rather than by a pull request of its own, so a fix ships in candidates and hotfixes as tasks do and reaches the release notes;
+  - it needs at least one such link, and waits for every task it links to that way to be done (T01).
+- **Won't fix** needs a reason from the fixed list and a rationale, both given only in that state.
+- **Accept as residual anomaly** needs a rationale and the risk record. The report stays open across releases, and can be marked fixed later.
+- **Elsewhere in the example:**
+  - backlogs contain problem reports, exclusively: *To do* while open, *In progress* while classified or a residual anomaly, *Done* once fixed or won't fix;
+  - a fixed or won't-fix report archives itself after 90 days;
+  - the developer's grants in the e2e and example seeds take in `problem_report`;
+  - the server's example tests and the e2e loader define it, and the bundle was made again with the type and no akter of it (T10 adds those).
+
+The README comes with T11.
+
+## Verified
+
+- `items/server/tests/problem_reports.rs`: classifying needs the risk record when the screening is uncertain; marking fixed needs a *Fixed by* link and waits for its task; won't fix needs its reason.
+- `items/server/tests/examples.rs` and `release_flow.rs`.
+- `mise run lint` and `mise run test`.
 
 <!-- field: acceptance -->
 A problem report can be created on a backlog's board and classified. It closes as won't fix only with a reason and a rationale.
