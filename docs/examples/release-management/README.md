@@ -1,8 +1,9 @@
 # Release management
 
-An example configuration: ten akt types for running a product's backlog
-and releases in Kuria, and the test protocols its release candidates
-are accepted on. Nothing in Kuria knows these names; they are
+An example configuration: thirteen akt types for running a product's
+backlog and releases in Kuria, the test protocols its release candidates
+are accepted on, and the problem reports and CAPAs (corrective and
+preventive actions) that keep its quality. Nothing in Kuria knows these names; they are
 ordinary akt type documents, and a tenant can change them or start from
 others.
 
@@ -18,6 +19,9 @@ others.
 | [`release_notes`](release_notes.json) | `RELEASE-2026-0001-NOTES-1` | | a release |
 | [`test_protocol`](test_protocol.json) | `TP-001` | test cases | |
 | [`test_case`](test_case.json) | `TP-001-C01` | | a test protocol |
+| [`problem_report`](problem_report.json) | `PR-0001` | | |
+| [`capa`](capa.json), named CAPA | `CAPA-2026-0001` | its actions | |
+| [`capa_action`](capa_action.json) | `CAPA-2026-0001-A01` | | a CAPA |
 
 ## How it fits together
 
@@ -44,6 +48,11 @@ others.
   the build, as a reference. A candidate is accepted only once its result,
   what its test runs add up to, is Passed; its page says why Accept waits,
   and how many runs have passed.
+- A hotfix is a correction that can't wait: it is deployed first, with why
+  it is low risk (how isolated the change is, what it could break, how it
+  is rolled back) and without approval, and reviewed once it is stable,
+  with `release:approve`. Until then it reads as Deployed, a warning; a
+  release ends its maintenance only once every hotfix in it is reviewed.
 - A candidate's test protocols live in it: each is a run, a copy of a
   template made in the candidate, shown on its board from draft to done
   beside the work it tests. A candidate takes and loses protocols only
@@ -62,7 +71,7 @@ others.
   checked by Alice". Once that person signs in with the contact's email,
   verified, the release shows them as the user they became.
 - The release notes are drafted from what the release's accepted candidates
-  and deployed hotfixes contain, including the items inside their epics,
+  and deployed or reviewed hotfixes contain, including the items inside their epics,
   but not from its backlogs, whose items may not have shipped, nor from
   rejected candidates. The draft is then edited and approved.
 - The release notes' *Artifacts* are drafted from the artifacts in the
@@ -84,21 +93,114 @@ others.
 - A document's `presentation` says how its akter are shown: an icon and a
   colour for the type (a rocket for a release, a flask for a candidate,
   a wrench for a hotfix, a package for an artifact, a purple clipboard
-  for a test protocol, a blue flask for a test case), the
+  for a test protocol, a blue flask for a test case, a red bug for a
+  problem report, a teal shield for a CAPA), the
   fields on board cards (a task's kind and assignee, a candidate's
   build) and in lists (an artifact's change, version and image, a
   protocol's owner, a test case's testers), and the
   tone of each state (in progress is active, in review a warning, done,
-  accepted, deployed and approved a success, rejected a danger). Titles
+  accepted, reviewed and approved a success, a deployed hotfix still to
+  review a warning, rejected a danger). Titles
   come from each type's first required single-line text field, a
   candidate's from its label; a hotfix and release notes have none, and
   show their number. The sidebar lists the types by job, under Planning,
-  Releasing and Testing (`group`). Release candidates and release notes
-  are reached from inside releases, so it lists them under **Show more**
-  (`navigation`). Pages offer each state's next step first (`primary`), a
-  release's manager and a protocol's owner default to whoever creates them
+  Releasing, Testing and Quality (`group`). Release candidates and release
+  notes are reached from inside releases, and CAPA actions from inside
+  CAPAs, so it lists them under **Show more** (`navigation`). Pages offer each state's next step first (`primary`), a
+  release's manager, a protocol's, CAPA's or action's owner and a problem
+  report's reporter default to whoever creates them
   (`default`), and fields such as a release's date or a task's pull
   request are asked for only in the states they belong to (`states`).
+
+## Problem reports and CAPAs
+
+A problem report is a problem found in the product. A CAPA is the
+corrective and preventive action taken when a problem is serious,
+systemic or recurring: what happened or could happen, why, what is done
+about it, and whether that worked. Their types use rules any akt type can
+use ([spec](../../spec/akter.md)): transitions that wait for members and
+links, fields required only for some values, locked fields, due dates and
+reopening.
+
+- **A problem report** lives in a backlog, on its board beside the tasks.
+  - It is classified with the answer to "Could it lead to a hazardous
+    situation?", its severity and its priority, and the risk record it is
+    assessed against when the answer is yes or uncertain.
+  - It is fixed by tasks, linked as *Fixed by*: *Mark fixed* needs at least
+    one, and waits until every one is done.
+  - *Won't fix* needs one of five reasons (cannot be reproduced, by design,
+    unsupported version, risk acceptable, workaround documented) and a
+    rationale.
+  - *Accept as residual anomaly* needs a rationale and the risk record. The
+    report stays open across releases, to be fixed later.
+- **A CAPA** goes through *Open*, *Investigating*, *Planning*, *Implementing*
+  and *Verifying*, and ends *Closed*, *Superseded* or *Not required*.
+  - **Confirming it**, or deciding that none is needed (with why), is
+    QA/RA's: `capa:confirm`. Confirming needs its severity, impact and risk
+    record.
+  - **Planning** needs the kinds of action it takes (correction, corrective,
+    preventive), what is affected, and whether vigilance reporting and
+    customer communication are needed. It also needs:
+    - the root cause, for a corrective action;
+    - the causal hypothesis and its trigger, for a preventive one;
+    - the record of each report or notice, where one is needed.
+  - **Starting implementation** needs the effectiveness check and its
+    acceptance criteria. From then on they are locked: changing them needs a
+    reason, which the history keeps.
+  - **Verifying, and closing,** wait until every one of its actions is done
+    or dropped; the page names those still open. Closing is QA/RA's
+    (`capa:approve_closure`), and needs the effectiveness results, the
+    adverse impact check, and an outcome:
+    - completed;
+    - not completed by its due date, and reopened;
+    - ineffective, and reopened.
+  - **Superseding** needs a *Superseded by* link to the CAPA that takes over.
+  - **Reopening** a closed CAPA, back to *Implementing*, is QA/RA's. It needs
+    the reason, the remaining actions, a revised target, the owner's
+    confirmation and the impact of the delay. Closed and reopened, a CAPA
+    keeps both in its history. A second reopening finds the first's values
+    still there: change them to say what is true now.
+  - **Its links:** *Originated from* the problem report it came from (*Led
+    to* on the report), and *Verified by* the test cases or protocols that
+    show it worked.
+- **A CAPA's actions** are created in it, numbered after it, and shown on its
+  board: *Planned*, *In progress*, *Done* or *Dropped* (with why).
+  - Each is a correction, a corrective or preventive action, or a
+    verification, with an owner, a due date and the evidence it must leave.
+  - Its due date, once passed while the action is open, shows as overdue on
+    cards, in lists and on its page, and the list of CAPA actions filters to
+    those overdue. Once the action has started, the due date moves only with
+    a reason.
+  - An action is *Implemented by* the tasks, hotfixes or release candidates
+    that do it, and finishes, with its evidence, only once they are done.
+
+### A CAPA, in the app
+
+1. On the problem report, choose **New CAPA** under its links. The new
+   CAPA's page starts with what the report says, for each field both have,
+   and is linked to it once created.
+2. QA/RA chooses **Confirm CAPA**, and the owner plans it: **Plan actions**
+   asks for the root cause only when it is corrective.
+3. Under the CAPA's board, create its actions, and on each action, link what
+   implements it, or choose **New Task** under its links.
+4. **Start implementing**, then **Verify effectiveness** once every action
+   is done. **Close** says which actions are still open while it waits.
+
+### A CAPA, from the command line
+
+```sh
+kuria new capa --link originated_from:PR-0001 --carry \
+  --set title="Sessions lost at every deploy" --set problem=@problem.md
+kuria do CAPA-2026-0001 confirm --set severity=major \
+  --set impact="No safety impact" --set risk_record=https://qms.shop.example/risks/RA-12
+kuria new capa_action --in CAPA-2026-0001 --set title="Hotfix 4.2.1" \
+  --set kind=correction --set due=2026-04-15
+kuria link CAPA-2026-0001-A01 implemented_by RELEASE-2026-0001-HOTFIX-0001
+kuria ls capa_action --overdue                      # actions past their due date
+kuria set CAPA-2026-0001-A02 due=2026-07-15 --reason "Waiting on the pipeline team"
+kuria show CAPA-2026-0001                           # what Verify and Close wait for
+kuria do CAPA-2026-0001 reopen --set reopen_reason=@why.md …
+```
 
 ## Test protocols
 
@@ -224,7 +326,9 @@ developer and a release manager sign in, plan a release, work two
 candidates and a hotfix, give the go for a contact, and draft the notes
 and the artifacts that ship; then releases go on until the first archives
 itself with its candidates. Another walk copies a test protocol from its
-template, runs it as two testers and finishes it.
+template, runs it as two testers and finishes it. A third escalates a
+problem report to a CAPA, and works the CAPA from its confirmation, through
+its actions and the hotfix that is its correction, to its closure.
 
 ## Defining it
 
@@ -244,12 +348,19 @@ two releases of a web shop: spring's, worked through a rejected and an
 accepted candidate with the pipeline's artifacts and an SBOM, each with
 its run of the acceptance test, copied from the template, one failed and
 one passed, with verdicts from two testers, approved notes, the go given
-for the head of product and a deployed hotfix, then closed; and summer's,
-being planned, with a wish-list epic under way and a test protocol in
-draft. Devi
-Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`) and Hedda
-Lund (`hedda@shop.example`) wrote them, the people the end-to-end seed
-signs in as. To start a server with it, set
+for the head of product and a deployed and reviewed hotfix, then closed;
+and summer's, being planned, with a wish-list epic under way and a test
+protocol in draft. Two CAPAs came of spring:
+
+- one for the sessions lost at every deploy, from a problem report fixed by
+  the hotfix's task. The hotfix is its correction, a summer task its
+  corrective action, overdue, and a new acceptance test case verifies it;
+  it is still being implemented.
+- one for slow searches, preventive, closed as ineffective and reopened.
+
+Devi Larsen (`dev@shop.example`), Rami Moberg (`rm@shop.example`), Hedda
+Lund (`hedda@shop.example`) and Ines Berg (`qa@shop.example`), QA/RA, wrote
+them, the people the end-to-end seed signs in as. To start a server with it, set
 
 ```sh
 KURIA_BOOTSTRAP_BUNDLE=docs/examples/release-management/bundle
@@ -274,14 +385,17 @@ themselves, with the app hot-reloading ([`example/`](../../../example/README.md)
 Kuria's actions and its scope kind must be in Konklav's catalog (see the
 server's README), together with the action these documents name:
 
-- `release:approve`, which releasing, deploying a hotfix and approving
-  release notes require.
+- `release:approve`, which releasing, reviewing a hotfix and approving
+  release notes require;
+- `capa:confirm`, which confirming a CAPA, deciding none is needed, and
+  reopening one require;
+- `capa:approve_closure`, which closing and superseding a CAPA require.
 
 Two roles cover the usual split:
 
-- **Developer**, tenant-wide: `kuria:akter:read`; and at `backlog`, `epic`
-  and `backlog_item`: `kuria:akter:create`, `kuria:akter:edit` and
-  `kuria:akter:transition`.
+- **Developer**, tenant-wide: `kuria:akter:read`; and at `backlog`, `epic`,
+  `backlog_item` and `problem_report`: `kuria:akter:create`,
+  `kuria:akter:edit` and `kuria:akter:transition`.
 - **Release manager**, tenant-wide: `kuria:akter:read` and
   `kuria:contacts:manage`, to name approvers who aren't users yet; and at
   `release`,
@@ -295,6 +409,12 @@ Two roles cover the usual split:
   `kuria:akter:edit` at `release_candidate`, to put runs into candidates.
   A release manager with the test lead's at `test_protocol` and
   `test_case` needs nothing more.
+- **QA/RA**, tenant-wide: `kuria:akter:read`; and at `capa`, `capa_action`,
+  `problem_report` and `test_case`: `kuria:akter:create`,
+  `kuria:akter:edit`, `kuria:akter:transition`, `kuria:akter:archive`,
+  `capa:confirm` and `capa:approve_closure`. A CAPA's owner who isn't QA/RA
+  needs create, edit and transition at `capa` and `capa_action` to work it,
+  and links to tasks need `kuria:akter:read` at `backlog_item`.
 - **Tester**: `kuria:akter:read`, and `kuria:akter:edit` at `test_case`,
   to give verdicts. A verdict is an edit of the test case: only its
   testers give their own, and anyone who may edit it can give one for a

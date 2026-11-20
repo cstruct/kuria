@@ -15,6 +15,7 @@ use crate::values::{current_input, input_of, same_input};
 use super::{akt, inputs, known_field, people_for, split_sets};
 
 /// What `new` was given.
+#[derive(Default)]
 pub struct Created<'a> {
     pub akt_type: &'a str,
     pub inside: &'a [String],
@@ -22,7 +23,41 @@ pub struct Created<'a> {
     pub file: Option<&'a Path>,
     /// Its number, if it is given one (`akt.number.given`).
     pub number: Option<&'a str>,
+    /// The links it is created with (`link.create`).
+    pub links: &'a [NewLink],
+    /// Whether it starts with the values of the akter it is linked with
+    /// (`link.create.carry`).
+    pub carry: bool,
     pub reason: Option<&'a str>,
+}
+
+/// A link a new akt is created with: of `kind`, with the akt `other`, from
+/// the new akt if `outgoing`, else to it (`link.create`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NewLink {
+    pub kind: String,
+    pub other: String,
+    pub outgoing: bool,
+}
+
+/// The links `--link` and `--linked-from` ask for, each `<kind>:<number>`.
+// r[impl link.create]
+pub fn linked(links: &[String], linked_from: &[String]) -> Result<Vec<NewLink>, CliError> {
+    let read = |text: &String, outgoing| {
+        let (kind, other) = text.split_once(':').ok_or_else(|| {
+            CliError::refused("BAD_REQUEST", format!("`{text}` isn't `<kind>:<number>`"))
+        })?;
+        Ok(NewLink {
+            kind: kind.to_owned(),
+            other: other.to_owned(),
+            outgoing,
+        })
+    };
+    links
+        .iter()
+        .map(|t| read(t, true))
+        .chain(linked_from.iter().map(|t| read(t, false)))
+        .collect()
 }
 
 fn read_file(path: &Path) -> Result<Parsed, CliError> {
@@ -64,12 +99,45 @@ pub async fn create(session: &Session, asked: &Created<'_>) -> Result<Answer, Cl
     given.extend(split_sets(&shape, asked.sets)?);
     let people = people_for(session, &shape, given.keys()).await?;
     let mut fields = inputs(&shape, &given, &people)?;
+    // r[impl link.create.carry]
+    if asked.carry {
+        for link in asked.links {
+            let other = super::akt(session, &link.other).await?;
+            for field in &shape.fields {
+                let carried = other
+                    .shape
+                    .fields
+                    .iter()
+                    .any(|f| f.key == field.key && f.kind == field.kind)
+                    && field.kind != "VERDICT"
+                    && field.kind != "SECTIONS";
+                if !carried || fields.contains_key(&field.key) {
+                    continue;
+                }
+                if let Some(value) = other.fields.iter().find(|v| v.field() == field.key) {
+                    fields.insert(field.key.clone(), crate::values::current_input(value));
+                }
+            }
+        }
+    }
     fields.retain(|_, v| !v.is_null());
+    // r[impl link.create]
+    let links: Vec<Json> = asked
+        .links
+        .iter()
+        .map(|l| {
+            if l.outgoing {
+                json!({ "kind": l.kind, "to": l.other })
+            } else {
+                json!({ "kind": l.kind, "from": l.other })
+            }
+        })
+        .collect();
     let data = session
         .graphql(
-            "mutation($t: String!, $f: JSON, $in: [String!]!, $r: String, $n: String) {
-               createAkt(input: { type: $t, fields: $f, in: $in, reason: $r, number: $n }) { number revision } }",
-            json!({ "t": shape.key, "f": fields, "in": inside, "r": asked.reason, "n": asked.number }),
+            "mutation($t: String!, $f: JSON, $in: [String!]!, $r: String, $n: String, $l: [NewLinkInput!]) {
+               createAkt(input: { type: $t, fields: $f, in: $in, reason: $r, number: $n, links: $l }) { number revision } }",
+            json!({ "t": shape.key, "f": fields, "in": inside, "r": asked.reason, "n": asked.number, "l": links }),
         )
         .await?;
     let number = data["createAkt"]["number"]

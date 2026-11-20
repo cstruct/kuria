@@ -20,6 +20,7 @@ pub mod typst;
 mod value;
 pub mod verdicts;
 pub mod versions;
+pub mod waits;
 
 use std::collections::BTreeMap;
 
@@ -89,6 +90,65 @@ pub enum Refusal {
         outcome: Option<outcomes::Outcome>,
         allowed: Vec<String>,
     },
+    #[error(
+        "{} locked while `{state}`: changing it needs a reason",
+        .fields.iter().map(|f| format!("`{f}` is")).collect::<Vec<_>>().join(", ")
+    )]
+    Locked {
+        /// The locked fields the change changes.
+        fields: Vec<String>,
+        /// The state they are locked in.
+        state: String,
+    },
+    #[error("`{transition}` waits for {}", waiting(.open, .lacking))]
+    Waits {
+        transition: String,
+        /// The members and link targets not yet final, by number.
+        open: Vec<String>,
+        /// The link kinds it requires and the akt lacks, by key.
+        lacking: Vec<String>,
+    },
+}
+
+/// What a waiting transition waits for, in words.
+fn waiting(open: &[String], lacking: &[String]) -> String {
+    let mut parts = Vec::new();
+    if !open.is_empty() {
+        let these = if open.len() == 1 { "is" } else { "are" };
+        parts.push(format!("{}, which {these} not final yet", all_of(open)));
+    }
+    if !lacking.is_empty() {
+        let kinds: Vec<String> = lacking.iter().map(|k| format!("a `{k}` link")).collect();
+        parts.push(all_of(&kinds));
+    }
+    parts.join(", and ")
+}
+
+/// `["a", "b", "c"]` as "a, b and c".
+fn all_of(words: &[String]) -> String {
+    match words {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+/// What a transition needs to know of other akter: what the akt's members
+/// add up to (`held`), and what it waits for (`waits`). An
+/// `Option<outcomes::Outcome>` is one that waits for nothing.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Around {
+    pub held: Option<outcomes::Outcome>,
+    pub waits: waits::Waits,
+}
+
+impl From<Option<outcomes::Outcome>> for Around {
+    fn from(held: Option<outcomes::Outcome>) -> Self {
+        Self {
+            held,
+            waits: waits::Waits::default(),
+        }
+    }
 }
 
 /// `["a", "b", "c"]` as "a, b or c".
@@ -178,9 +238,11 @@ pub fn changes_anything(
 }
 
 /// Performs `transition` on `current`, setting the values `input` gives on
-/// the way. `held` is what the akt's members add up to (`outcomes::of_all`)
-/// if its type has outcomes and no `verdict` field of its own; a caller
-/// needs to work it out only for a transition that names `outcomes`.
+/// the way. `around.held` is what the akt's members add up to
+/// (`outcomes::of_all`) if its type has outcomes and no `verdict` field of
+/// its own; a caller needs to work it out only for a transition that names
+/// `outcomes`. `around.waits` is what it waits for (`waits::of`), which a
+/// caller needs to work out only for one that `waits::waits_at_all`.
 // r[impl akt.transition]
 pub fn transition(
     ty: &AktType,
@@ -188,12 +250,16 @@ pub fn transition(
     transition: &str,
     input: &Map<String, Json>,
     change: Change,
-    held: Option<outcomes::Outcome>,
+    around: impl Into<Around>,
 ) -> Result<Outcome, Refusal> {
+    let Around { held, waits } = around.into();
     let Some(def) = ty.transition(transition) else {
         return Err(Refusal::UnknownTransition(transition.to_owned()));
     };
-    refuse_final(ty, current)?;
+    // r[impl akt.transition.reopens]
+    if !def.reopens {
+        refuse_final(ty, current)?;
+    }
     if !def.from.contains(&current.state) {
         return Err(Refusal::NotFrom {
             transition: transition.to_owned(),
@@ -216,12 +282,18 @@ pub fn transition(
     let (fields, changes) = apply(ty, &current.fields, input, change)?;
     // r[impl akt.field.checkbox]
     // A checkbox counts as holding a value only while checked.
-    let missing: Vec<String> = def
+    // r[impl akt.transition.requires-when]
+    let mut missing: Vec<String> = def
         .requires
         .iter()
         .filter(|f| !fields.contains_key(*f))
         .cloned()
         .collect();
+    for key in required_when(def, &fields) {
+        if !fields.contains_key(&key) && !missing.contains(&key) {
+            missing.push(key);
+        }
+    }
     if !missing.is_empty() {
         return Err(Refusal::Requires {
             transition: transition.to_owned(),
@@ -240,7 +312,86 @@ pub fn transition(
             });
         }
     }
+    // r[impl akt.transition.members]
+    // r[impl akt.transition.links]
+    if !waits.is_empty() {
+        return Err(Refusal::Waits {
+            transition: transition.to_owned(),
+            open: waits.open,
+            lacking: waits.lacking,
+        });
+    }
     Ok(outcome(def.to.clone(), fields, changes))
+}
+
+/// The fields `def` requires only while others hold certain values
+/// (`akt.transition.requires-when`), that `fields` meet the condition of.
+// r[impl akt.transition.requires-when]
+#[must_use]
+pub fn required_when(
+    def: &kuria_config::TransitionDef,
+    fields: &BTreeMap<String, Value>,
+) -> Vec<String> {
+    let holds = |key: &str| -> Vec<&str> {
+        match fields.get(key) {
+            Some(Value::Choice(option)) => vec![option.as_str()],
+            Some(Value::Choices(options)) => options.iter().map(String::as_str).collect(),
+            _ => Vec::new(),
+        }
+    };
+    def.requires_when
+        .iter()
+        .filter(|rule| rule.applies(holds))
+        .map(|rule| rule.field.clone())
+        .collect()
+}
+
+/// The due fields (`akt.field.due`) an akt of `ty` in `current` is overdue
+/// on, `today`: those holding a date before it, while its state isn't
+/// final. Worked out when read, never stored.
+// r[impl akt.field.due]
+#[must_use]
+pub fn overdue(ty: &AktType, current: &Current, today: chrono::NaiveDate) -> Vec<String> {
+    if ty.state(&current.state).is_none_or(|s| s.is_final) {
+        return Vec::new();
+    }
+    ty.document()
+        .fields
+        .iter()
+        .filter(|f| f.due)
+        .filter(|f| matches!(current.fields.get(&f.key), Some(Value::Date(d)) if *d < today))
+        .map(|f| f.key.clone())
+        .collect()
+}
+
+/// Refuses `outcome`, a change of `current`, if it changes a value a field
+/// locked in `current`'s state holds, and gives no `reason`
+/// (`akt.field.locked`).
+// r[impl akt.field.locked]
+pub fn check_locked(
+    ty: &AktType,
+    current: &Current,
+    outcome: &Outcome,
+    reason: Option<&str>,
+) -> Result<(), Refusal> {
+    if reason.is_some_and(|r| !r.trim().is_empty()) {
+        return Ok(());
+    }
+    let fields: Vec<String> = ty
+        .document()
+        .fields
+        .iter()
+        .filter(|f| f.locked.contains(&current.state))
+        .filter(|f| current.fields.contains_key(&f.key) && outcome.changes.contains_key(&f.key))
+        .map(|f| f.key.clone())
+        .collect();
+    if fields.is_empty() {
+        return Ok(());
+    }
+    Err(Refusal::Locked {
+        fields,
+        state: current.state.clone(),
+    })
 }
 
 pub(crate) fn refuse_final(ty: &AktType, current: &Current) -> Result<(), Refusal> {

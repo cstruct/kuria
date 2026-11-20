@@ -46,6 +46,58 @@ export function linkKinds(document: unknown): LinkKind[] {
 	return (doc.links ?? []).filter((kind) => !kept.has(kind.key));
 }
 
+/** An akt that can be created linked to another (`link.create.carry`):
+ * of `type`, linked by `kind`, from the new akt if `outgoing`, read as
+ * `via` from the akt it is made from. */
+export interface LinkedCreation {
+	type: string;
+	typeName: string;
+	kind: string;
+	via: string;
+	outgoing: boolean;
+}
+
+/** What can be created linked to an akt of the type `key`, whose document is
+ * `document`: for each kind it declares, the types it links to, and for each
+ * kind another type declares to it, that type; of the `types` the viewer
+ * may create. */
+// r[impl link.create.carry]
+export function linkedCreations(
+	key: string,
+	document: unknown,
+	types: readonly {
+		key: string;
+		name: string;
+		document: unknown;
+		viewerMay: { create: boolean };
+	}[]
+): LinkedCreation[] {
+	const creatable = types.filter((t) => t.viewerMay.create);
+	const from = linkKinds(document).flatMap((kind) =>
+		creatable
+			.filter((t) => kind.to.includes(t.key))
+			.map((t) => ({
+				type: t.key,
+				typeName: t.name,
+				kind: kind.key,
+				via: kind.name,
+				outgoing: false
+			}))
+	);
+	const to = creatable.flatMap((t) =>
+		linkKinds(t.document)
+			.filter((kind) => kind.to.includes(key))
+			.map((kind) => ({
+				type: t.key,
+				typeName: t.name,
+				kind: kind.key,
+				via: kind.inverse,
+				outgoing: true
+			}))
+	);
+	return [...from, ...to];
+}
+
 /** The keys of the fields that have a draft recipe. */
 export function draftedFields(document: unknown): string[] {
 	return (documentOf(document).fields ?? []).filter((f) => f.draft).map((f) => f.key);
@@ -54,23 +106,45 @@ export function draftedFields(document: unknown): string[] {
 interface TransitionShape {
 	from: readonly string[];
 	requires: readonly string[];
+	reopens?: boolean | null;
 }
 
-/** The transitions an akt in `state` may take: none in a final state. */
+/** The transitions an akt in `state` may take: in a final state, only
+ * those that reopen it (`akt.transition.reopens`). */
 // r[impl app.transitions]
 export function availableTransitions<T extends TransitionShape>(
 	transitions: readonly T[],
-	state: { key: string; final: boolean }
+	state: { key: string; final?: boolean }
 ): T[] {
-	return state.final ? [] : transitions.filter((t) => t.from.includes(state.key));
+	// r[impl akt.transition.reopens]: from a final state, only a transition
+	// that reopens.
+	return transitions.filter(
+		(t) => t.from.includes(state.key) && (!state.final || Boolean(t.reopens))
+	);
 }
 
-/** The fields a transition asks for, in the akt type's order. */
+/** A field a transition requires only while every condition holds: a
+ * `choice` or `choices` field holding one of the options
+ * (`akt.transition.requires-when`). */
+export interface RequiredWhen {
+	field: string;
+	when: readonly { field: string; options: readonly string[] }[];
+}
+
+/** The fields a transition asks for, in the akt type's order: those it
+ * requires, and those it requires while the akt's choices, the option keys
+ * `held` answers for a field, meet the condition. */
+// r[impl app.transitions]
+// r[impl akt.transition.requires-when]
 export function requiredFields<F extends { key: string }>(
 	fields: readonly F[],
-	transition: TransitionShape
+	transition: TransitionShape & { requiresWhen?: readonly RequiredWhen[] | null },
+	held: (field: string) => readonly string[] = () => []
 ): F[] {
-	return fields.filter((f) => transition.requires.includes(f.key));
+	const when = (transition.requiresWhen ?? [])
+		.filter((r) => r.when.every((c) => held(c.field).some((o) => c.options.includes(o))))
+		.map((r) => r.field);
+	return fields.filter((f) => transition.requires.includes(f.key) || when.includes(f.key));
 }
 
 /** Why `transition` is unavailable to an akt with `outcome`, if it is: it
@@ -86,6 +160,37 @@ export function outcomeRefusal(
 	const words = allowed.map(named);
 	const list = words.length > 1 ? `${words.slice(0, -1).join(', ')} or ${words.at(-1)}` : words[0];
 	return `Needs the result to be ${list}; it is ${named(outcome ?? 'PENDING')}`;
+}
+
+/** What a transition the akt's state allows waits for
+ * (`akt.transition.waits`): the akter not yet final, by number, and the
+ * links it lacks, by name. */
+export interface Waiting {
+	transition: string;
+	open: readonly string[];
+	lacking: readonly string[];
+}
+
+/** What `transition` waits for, of the akt's `waits`, if anything. */
+// r[impl app.transitions]
+export function waitingFor(
+	transition: { key: string },
+	waits: readonly Waiting[] | null | undefined
+): Waiting | null {
+	const wait = waits?.find((w) => w.transition === transition.key);
+	return wait && (wait.open.length > 0 || wait.lacking.length > 0) ? wait : null;
+}
+
+/** `words` as "a, b and c". */
+export function allOf(words: readonly string[]): string {
+	return words.length > 1
+		? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`
+		: (words[0] ?? '');
+}
+
+/** The links a waiting transition lacks, in words: "a Verified by link". */
+export function lackingText(lacking: readonly string[]): string {
+	return allOf(lacking.map((name) => `a ${name} link`));
 }
 
 /** Whether the field `key` of the type `document` is given in the state

@@ -98,6 +98,17 @@ type Akt {
 	"""
 	outcome: Outcome
 	"""
+	The due fields it is overdue on today (`akt.field.due`); none if it
+	is read at a version or revision.
+	"""
+	overdue: [String!]!
+	"""
+	For each transition its state allows that would be refused now for
+	what it waits for, what that is (`akt.transition.waits`). None for
+	an akt read at a version or revision, or in a final state.
+	"""
+	waits: [TransitionWait!]!
+	"""
 	The changes to its live draft since its latest release, or all of
 	them with `all`, oldest first: who made each, when, and which fields
 	it changed (`live.history`). None for an akt without a live draft,
@@ -464,6 +475,14 @@ type ChoicesValue {
 	options: [ChoiceOption!]!
 }
 
+"""
+A `choice` or `choices` field holding one of these options.
+"""
+type Condition {
+	field: String!
+	options: [String!]!
+}
+
 type Contact {
 	id: ID!
 	"""
@@ -537,6 +556,10 @@ input CreateAktInput {
 	(`akt.number.given`); else its next.
 	"""
 	number: String
+	"""
+	Links to add as it is created (`link.create`).
+	"""
+	links: [NewLinkInput!]! = []
 }
 
 """
@@ -687,6 +710,16 @@ type Field {
 	For attachment fields: the media types it takes, any if none.
 	"""
 	mediaTypes: [String!]!
+	"""
+	The states in which a change to a value it holds needs a reason
+	(`akt.field.locked`).
+	"""
+	locked: [String!]!
+	"""
+	For a date field: whether an akt is overdue once it passes
+	(`akt.field.due`).
+	"""
+	due: Boolean!
 }
 
 """
@@ -1095,6 +1128,17 @@ type Mutation {
 }
 
 """
+A link a new akt is created with: of `kind`, `to` another akt, the new
+one being its source, or `from` another akt, as its target; one of the
+two (`link.create`).
+"""
+input NewLinkInput {
+	kind: String!
+	to: String
+	from: String
+}
+
+"""
 One operation of a batch: exactly one of the akt mutations, with its
 input. Wherever it takes an akt's number, `@<n>` names the akt the
 batch's operation `n`, an earlier `createAkt`, created.
@@ -1294,6 +1338,10 @@ type Query {
 		"""
 		outcome: Outcome,
 		"""
+		Only akter overdue on one of their due fields, as they are now; `type` must be given, and have one.
+		"""
+		overdue: Boolean,
+		"""
 		Live akter (the default), archived ones, or both.
 		"""
 		archived: ArchivedFilter
@@ -1354,6 +1402,15 @@ What `renderDiagram` answers: the SVG, or why it didn't compile.
 type RenderedDiagram {
 	svg: String
 	error: String
+}
+
+"""
+A field a transition requires only while every condition holds
+(`akt.transition.requires-when`).
+"""
+type RequiredWhen {
+	field: String!
+	when: [Condition!]!
 }
 
 """
@@ -1477,6 +1534,49 @@ type Transition {
 	none, if empty (`akt.transition.outcomes`).
 	"""
 	outcomes: [Outcome!]!
+	"""
+	The contained akt types whose members must all be final for it to
+	be performed (`akt.transition.members`).
+	"""
+	waitsForMembers: [String!]!
+	"""
+	The link kinds whose targets must all be final for it to be
+	performed (`akt.transition.links`).
+	"""
+	waitsForLinks: [String!]!
+	"""
+	The link kinds the akt must have a link of for it to be performed
+	(`akt.transition.links`).
+	"""
+	requiresLinks: [String!]!
+	"""
+	The fields it requires only while other fields hold certain values
+	(`akt.transition.requires-when`).
+	"""
+	requiresWhen: [RequiredWhen!]!
+	"""
+	Whether it leaves a final state (`akt.transition.reopens`).
+	"""
+	reopens: Boolean!
+}
+
+"""
+What a transition the akt's state allows waits for
+(`akt.transition.waits`).
+"""
+type TransitionWait {
+	"""
+	The transition's key.
+	"""
+	transition: String!
+	"""
+	The members and link targets not yet final, by number.
+	"""
+	open: [String!]!
+	"""
+	The link kinds it requires and the akt has no link of, by name.
+	"""
+	lacking: [String!]!
 }
 
 """

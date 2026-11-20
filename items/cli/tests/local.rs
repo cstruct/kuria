@@ -3478,3 +3478,379 @@ fn archived_akter_go_to_a_bundle_and_back() {
     assert_eq!(revision_of(&back, "PLAN-001"), plan + 2);
     back.ok(&["check"]);
 }
+
+// r[verify akt.transition.members]
+// r[verify akt.transition.links]
+// r[verify akt.transition.waits]
+// r[verify cli.local.rules]
+#[test]
+fn a_case_closes_once_what_it_waits_for_is_final() {
+    let dir = Dir::new();
+    let simple = |key: &str, number: &str| {
+        json!({
+            "key": key, "name": key, "number": number,
+            "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+            "states": [
+                { "key": "open", "name": "Open", "initial": true },
+                { "key": "done", "name": "Done", "final": true }
+            ],
+            "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done" }]
+        })
+    };
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [{ "key": "title", "name": "Title", "kind": "text", "required": true }],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ],
+        "contains": [{ "type": "action" }],
+        "links": [
+            { "key": "implemented_by", "name": "Implemented by", "inverse": "Implements", "to": ["job"] },
+            { "key": "verified_by", "name": "Verified by", "inverse": "Verifies", "to": ["job"] }
+        ],
+        "transitions": [
+            { "key": "close", "name": "Close", "from": ["open"], "to": "closed",
+              "waits_for": { "members": ["action"], "links": ["implemented_by"] },
+              "requires_links": ["verified_by"] }
+        ]
+    });
+    for (key, document) in [
+        ("case", case),
+        ("action", simple("action", "ACT-{seq}")),
+        ("job", simple("job", "JOB-{seq}")),
+    ] {
+        std::fs::write(
+            dir.root.join(format!("types/{key}.json")),
+            document.to_string(),
+        )
+        .unwrap();
+    }
+    let schema = dir.ok(&["types", "schema", "case"]).markdown;
+    assert!(
+        schema.contains(
+            "- `close` Close: open → closed, waits for its `action` members to be final, waits for its `implemented_by` links' akter to be final, needs a `verified_by` link\n"
+        ),
+        "{schema}"
+    );
+    dir.ok(&["new", "case", "--set", "title=Late reviews"]);
+    dir.ok(&["new", "action", "--in", "CASE-1", "--set", "title=Assign"]);
+    dir.ok(&["new", "job", "--set", "title=Rota"]);
+    dir.ok(&["new", "job", "--set", "title=Check"]);
+    dir.ok(&["link", "CASE-1", "implemented_by", "JOB-1"]);
+    let shown = dir.ok(&["show", "CASE-1"]).markdown;
+    assert!(
+        shown.contains(
+            "- `close` Close → Closed, waits for ACT-1 and JOB-1, and a Verified by link"
+        ),
+        "{shown}"
+    );
+    let refused = dir.refused(&["do", "CASE-1", "close"]);
+    assert_eq!(refused.code, "REFUSED");
+    assert_eq!(
+        refused.message,
+        "`close` waits for ACT-1 and JOB-1, which are not final yet, and a `verified_by` link"
+    );
+    dir.ok(&["do", "ACT-1", "finish"]);
+    dir.ok(&["do", "JOB-1", "finish"]);
+    dir.ok(&["link", "CASE-1", "verified_by", "JOB-2"]);
+    assert_eq!(
+        dir.ok(&["show", "CASE-1", "--format", "json"]).json["akt"]["transitions"][0]["waits"],
+        Value::Null
+    );
+    assert_eq!(
+        dir.ok(&["do", "CASE-1", "close", "--format", "json"]).json["state"],
+        "closed"
+    );
+}
+
+// r[verify akt.transition.requires-when]
+// r[verify cli.local.rules]
+#[test]
+fn a_corrective_case_needs_its_root_cause() {
+    let dir = Dir::new();
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "kind", "name": "Kind", "kind": "choices", "options": [
+                { "key": "corrective", "name": "Corrective" },
+                { "key": "preventive", "name": "Preventive" } ] },
+            { "key": "root_cause", "name": "Root cause", "kind": "text" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "planned", "name": "Planned" }
+        ],
+        "transitions": [{ "key": "plan", "name": "Plan", "from": ["open"], "to": "planned",
+            "requires_when": [{ "field": "root_cause", "when": { "kind": ["corrective"] } }] }]
+    });
+    std::fs::write(dir.root.join("types/case.json"), case.to_string()).unwrap();
+    let schema = dir.ok(&["types", "schema", "case"]).markdown;
+    assert!(
+        schema.contains(
+            "- `plan` Plan: open → planned, requires root_cause when kind is corrective\n"
+        ),
+        "{schema}"
+    );
+    dir.ok(&[
+        "new",
+        "case",
+        "--set",
+        "title=Bug",
+        "--set",
+        "kind=corrective",
+    ]);
+    let refused = dir.refused(&["do", "CASE-1", "plan"]);
+    assert_eq!(refused.message, "`plan` requires root_cause");
+    assert_eq!(
+        dir.ok(&[
+            "do",
+            "CASE-1",
+            "plan",
+            "--set",
+            "root_cause=No rota",
+            "--format",
+            "json"
+        ])
+        .json["state"],
+        "planned"
+    );
+}
+
+// r[verify akt.field.locked]
+// r[verify cli.local.rules]
+#[test]
+fn a_due_date_moves_only_with_a_reason_once_work_starts() {
+    let dir = Dir::new();
+    let action = json!({
+        "key": "action", "name": "Action", "number": "A-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "due", "name": "Due", "kind": "date", "locked": ["doing"] }
+        ],
+        "states": [
+            { "key": "planned", "name": "Planned", "initial": true },
+            { "key": "doing", "name": "Doing" }
+        ],
+        "transitions": [{ "key": "start", "name": "Start", "from": ["planned"], "to": "doing" }]
+    });
+    std::fs::write(dir.root.join("types/action.json"), action.to_string()).unwrap();
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Assign",
+        "--set",
+        "due=2026-12-01",
+    ]);
+    dir.ok(&["set", "A-1", "due=2026-12-15"]);
+    dir.ok(&["do", "A-1", "start"]);
+    let refused = dir.refused(&["set", "A-1", "due=2027-01-15"]);
+    assert_eq!(refused.code, "LOCKED", "{}", refused.message);
+    assert_eq!(
+        refused.message,
+        "`due` is locked while `doing`: changing it needs a reason"
+    );
+    dir.ok(&[
+        "set",
+        "A-1",
+        "due=2027-01-15",
+        "--reason",
+        "Waiting on the supplier",
+    ]);
+    assert!(file(&dir, "A-1").contains("due: 2027-01-15"));
+}
+
+// r[verify akt.transition.reopens]
+// r[verify cli.local.rules]
+#[test]
+fn a_closed_case_reopens() {
+    let dir = Dir::new();
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "why_reopened", "name": "Why reopened", "kind": "text" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ],
+        "transitions": [
+            { "key": "close", "name": "Close", "from": ["open"], "to": "closed" },
+            { "key": "reopen", "name": "Reopen", "from": ["closed"], "to": "open",
+              "reopens": true, "requires": ["why_reopened"] }
+        ]
+    });
+    std::fs::write(dir.root.join("types/case.json"), case.to_string()).unwrap();
+    let schema = dir.ok(&["types", "schema", "case"]).markdown;
+    assert!(
+        schema.contains("- `reopen` Reopen: closed → open, requires why_reopened, reopens\n"),
+        "{schema}"
+    );
+    dir.ok(&["new", "case", "--set", "title=Late reviews"]);
+    dir.ok(&["do", "CASE-1", "close"]);
+    assert_eq!(
+        dir.refused(&["set", "CASE-1", "title=Again"]).code,
+        "REFUSED"
+    );
+    let shown = dir.ok(&["show", "CASE-1"]).markdown;
+    assert!(shown.contains("`reopen` Reopen → Open"), "{shown}");
+    dir.ok(&[
+        "do",
+        "CASE-1",
+        "reopen",
+        "--set",
+        "why_reopened=It recurred",
+    ]);
+    dir.ok(&["set", "CASE-1", "title=Late reviews, again"]);
+    assert!(file(&dir, "CASE-1").contains("state: open"));
+}
+
+// r[verify akt.filter.overdue]
+// r[verify akt.field.due]
+#[test]
+fn lists_the_actions_overdue() {
+    let dir = Dir::new();
+    let action = json!({
+        "key": "action", "name": "Action", "number": "A-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "due", "name": "Due", "kind": "date", "due": true }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "done", "name": "Done", "final": true }
+        ],
+        "transitions": [{ "key": "finish", "name": "Finish", "from": ["open"], "to": "done" }]
+    });
+    std::fs::write(dir.root.join("types/action.json"), action.to_string()).unwrap();
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Late",
+        "--set",
+        "due=2020-01-01",
+    ]);
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Later",
+        "--set",
+        "due=2999-01-01",
+    ]);
+    dir.ok(&[
+        "new",
+        "action",
+        "--set",
+        "title=Late, done",
+        "--set",
+        "due=2020-01-01",
+    ]);
+    dir.ok(&["do", "A-3", "finish"]);
+    let overdue = |args: &[&str]| {
+        let mut all = vec!["ls"];
+        all.extend_from_slice(args);
+        all.extend(["--overdue", "--format", "json"]);
+        numbers(&dir.ok(&all))
+    };
+    assert_eq!(overdue(&["action"]), ["A-1"]);
+    assert_eq!(dir.refused(&["ls", "--overdue"]).code, "BAD_REQUEST");
+    assert_eq!(
+        dir.refused(&["ls", "plan", "--overdue"]).code,
+        "BAD_REQUEST"
+    );
+}
+
+// r[verify link.create]
+// r[verify link.create.carry]
+// r[verify cli.local.rules]
+#[test]
+fn a_case_is_created_from_its_report_with_its_values() {
+    let dir = Dir::new();
+    let severity = json!({ "key": "severity", "name": "Severity", "kind": "choice", "options": [
+        { "key": "major", "name": "Major" }, { "key": "minor", "name": "Minor" } ] });
+    let report = json!({
+        "key": "report", "name": "Report", "number": "PR-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            severity,
+            { "key": "steps", "name": "Steps", "kind": "text", "multiline": true }
+        ],
+        "states": [{ "key": "open", "name": "Open", "initial": true }]
+    });
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            severity,
+            { "key": "steps", "name": "Steps", "kind": "date" }
+        ],
+        "states": [{ "key": "open", "name": "Open", "initial": true }],
+        "links": [{ "key": "originated_from", "name": "Originated from", "inverse": "Led to", "to": ["report"] }]
+    });
+    for (key, document) in [("report", report), ("case", case)] {
+        std::fs::write(
+            dir.root.join(format!("types/{key}.json")),
+            document.to_string(),
+        )
+        .unwrap();
+    }
+    dir.ok(&[
+        "new",
+        "report",
+        "--set",
+        "title=Wrong total",
+        "--set",
+        "severity=major",
+        "--set",
+        "steps=Pay",
+    ]);
+    dir.ok(&[
+        "new",
+        "case",
+        "--link",
+        "originated_from:PR-1",
+        "--carry",
+        "--set",
+        "title=Totals",
+    ]);
+    let created = file(&dir, "CASE-1");
+    // Carried by key and kind: the severity, not `steps`, a date here.
+    assert!(created.contains("severity: major"), "{created}");
+    assert!(!created.contains("steps"), "{created}");
+    assert!(
+        created.contains("links: [Originated from PR-1]"),
+        "{created}"
+    );
+    assert!(file(&dir, "PR-1").contains("links: [Led to CASE-1]"));
+    // Given values win, and a link refused refuses the creation.
+    dir.ok(&[
+        "new",
+        "case",
+        "--link",
+        "originated_from:PR-1",
+        "--carry",
+        "--set",
+        "title=Again",
+        "--set",
+        "severity=minor",
+    ]);
+    assert!(file(&dir, "CASE-2").contains("severity: minor"));
+    let refused = dir.refused(&[
+        "new",
+        "case",
+        "--link",
+        "originated_from:CASE-1",
+        "--set",
+        "title=X",
+    ]);
+    assert_eq!(refused.code, "INVALID_LINK", "{}", refused.message);
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "case", "--format", "json"])).len(),
+        2
+    );
+}

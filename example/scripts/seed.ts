@@ -54,6 +54,10 @@ export const ROLES: Record<string, ReturnType<typeof allow>> = {
 	'document-release': allow(
 		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', ...exampleActions],
 		true
+	),
+	'quality-work': allow(
+		['kuria:akter:create', 'kuria:akter:edit', 'kuria:akter:transition', 'kuria:akter:archive', ...exampleActions],
+		true
 	)
 };
 
@@ -65,17 +69,21 @@ export const GRANTS: Record<string, Grant[]> = {
 		'reader',
 		{
 			role: 'developer-work',
-			at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'document', 'image', 'plan', 'task', 'gap', 'decision']
+			at: ['backlog', 'epic', 'backlog_item', 'problem_report', 'test_protocol', 'test_case', 'document_index', 'document', 'image', 'plan', 'task', 'gap', 'decision']
 		}
 	],
 	'rm@shop.example': [
 		'reader',
 		'contacts-manager',
 		{ role: 'release-work', at: ['release', 'release_candidate', 'hotfix', 'release_notes', 'plan', 'task', 'gap', 'decision'] },
-		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'test_protocol', 'test_case', 'document_index', 'image'] },
+		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'problem_report', 'test_protocol', 'test_case', 'document_index', 'image'] },
 		{ role: 'document-release', at: ['document', 'external_document'] }
 	],
-	'hedda@shop.example': ['reader']
+	'hedda@shop.example': ['reader'],
+	'qa@shop.example': [
+		'reader',
+		{ role: 'quality-work', at: ['capa', 'capa_action', 'problem_report', 'test_case'] }
+	]
 };
 
 /** The examples' people who sign in: every bundle's, once each, as the

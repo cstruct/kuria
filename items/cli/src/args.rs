@@ -71,6 +71,9 @@ pub enum Command {
         /// or `--in` for a type whose outcome comes from its members.
         #[arg(long, value_parser = ["pass", "fail", "skip", "pending"], ignore_case = true)]
         outcome: Option<String>,
+        /// Only those overdue on one of their due fields. Needs TYPE.
+        #[arg(long)]
+        overdue: bool,
         /// Only those whose number starts with this, or whose title holds
         /// each of its words.
         #[arg(long)]
@@ -199,6 +202,18 @@ pub enum Command {
         /// its type's pattern must give and no akt may have; else its next.
         #[arg(long)]
         number: Option<String>,
+        /// A link from it to another akt, as `<kind>:<number>`, made as it
+        /// is created. May be given more than once.
+        #[arg(long = "link", value_name = "KIND:NUMBER")]
+        links: Vec<String>,
+        /// A link to it from another akt, as `<kind>:<number>`, made as it
+        /// is created. May be given more than once.
+        #[arg(long = "linked-from", value_name = "KIND:NUMBER")]
+        linked_from: Vec<String>,
+        /// Start with the values of the akter it is linked to or from, for
+        /// each field both types have by key and kind; `--set` replaces them.
+        #[arg(long)]
+        carry: bool,
         #[arg(long)]
         reason: Option<String>,
     },

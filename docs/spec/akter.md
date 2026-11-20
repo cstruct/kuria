@@ -28,13 +28,23 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - exactly one state is initial;
 - every transition starts from at least one state and ends in a state the
   type defines, and every field it requires is a field the type defines;
-- no transition starts from a final state;
+- no transition starts from a final state unless it `reopens`, and one
+  that `reopens` starts only from final states (`akt.transition.reopens`);
 - every choice field has at least one option;
+- every state a field's `locked` names is one the type defines
+  (`akt.field.locked`), and only `date` fields say `due`
+  (`akt.field.due`);
 - the number pattern is valid (`akt.number.pattern`);
 - every action a transition names is valid (`authz.transition-action`);
 - the outcomes a transition allows are `pass`, `fail`, `skip` or
   `pending`, each once, and only on a type that has a `verdict` field or
   contains an akt type (`akt.transition.outcomes`);
+- each `requires_when` entry names a field the type defines, and `when`
+  names at least one `choice` or `choices` field, each with at least one
+  of its options, each once (`akt.transition.requires-when`);
+- `waits_for.members` names akt types the type contains, and
+  `waits_for.links` and `requires_links` link kinds it declares, each
+  once (`akt.transition.members`, `akt.transition.links`);
 - the keys in `contains` and `created_in` are valid akt type keys, each listed
   once (`container.contains`, `container.created-in`);
 - the board's columns are valid (`board.columns`);
@@ -158,6 +168,25 @@ one. The app MUST ask for such a field only in those states, or by the
 transitions that give it, and MUST show it outside them only once it holds
 a value (`app.create`, `app.fields`). Every state it names MUST be one the
 type defines; otherwise the document MUST be refused.
+
+r[akt.field.due]
+A `date` field MAY say `"due": true`; `due` on a field of another kind
+MUST be refused. An akt is overdue on such a field while it is in a state
+that isn't final and the field holds a date before today, in UTC. Whether
+it is MUST be worked out when it is read, never stored, so that it makes
+no revision, and an akt MUST be served with the due fields it is overdue
+on. The app MUST show an overdue date as overdue wherever it shows the
+field: on cards, in lists and on the akt's page.
+
+r[akt.field.locked]
+A field MAY name, in `locked`, states in which it is locked. While an akt
+is in one of them, an edit or a transition that changes the field's value
+MUST be refused as `LOCKED`, naming the field, unless the change gives a
+reason, which its revision records; giving a value to a locked field that
+holds none MUST NOT need one. Every state it names MUST be one the type
+defines; otherwise the document MUST be refused. The app MUST show a
+locked field as locked, and ask for the reason before changing it
+(`app.fields`).
 
 r[akt.field.sections]
 A `sections` field MUST hold a list of items, in order, each either an akt
@@ -328,12 +357,54 @@ as an edit does. It MUST be refused unless every field the transition
 requires holds a value afterwards. The akt then moves to the transition's
 target state.
 
+r[akt.transition.reopens]
+A transition MAY say `"reopens": true`. It then starts only from final
+states, and is the one kind of transition an akt in a final state MAY
+perform; its fields, requirements and conditions apply as any
+transition's do. The akt then is in the state it leads to, and follows that
+state's rules: it MAY be edited again, and a container MAY gain and lose
+members again (`container.frozen`). Its history MUST keep the revision that
+made it final, and the one that reopened it.
+
+r[akt.transition.requires-when]
+A transition MAY name, in `requires_when`, fields it requires only while
+other fields hold certain values: each entry is `{"field": <key>, "when":
+{<key>: [<option>, …], …}}`, and its field is required when, as the
+transition leaves them, every field `when` names holds one of the options
+it lists for it: a `choice` field that option, a `choices` field any of
+them. Performing it MUST be refused, as for any field it requires, unless
+each field so required holds a value afterwards.
+
 r[akt.transition.outcomes]
 A transition MAY name the outcomes it allows. Performing it MUST then be
 refused unless the akt has outcomes (`akt.outcome`) and its outcome, as
 it is when the transition is performed, is one of them, saying the
 outcome and those allowed. No verdict or membership in the akt's member
 tree MUST change between that check and the transition's revision.
+
+r[akt.transition.members]
+A transition MAY name, in `waits_for.members`, akt types its type
+contains. Performing it MUST then be refused while any member of those
+types, archived or not, is in a state that isn't final for that member's
+akt type version, saying which members. Neither the members' states nor
+the akt's membership MUST change between that check and the transition's
+revision.
+
+r[akt.transition.links]
+A transition MAY name, in `waits_for.links`, link kinds its type declares
+(`link.kinds`). Performing it MUST then be refused while any akt the akt
+links to by one of those kinds is in a state that isn't final, saying
+which. A transition MAY name, in `requires_links`, link kinds its type
+declares: performing it MUST then be refused unless the akt links to at
+least one akt by each, saying which it lacks. A link the subject may not
+read MUST still count, but MUST be named only by its number. Neither
+those links nor their targets' states MUST change between the check and
+the transition's revision.
+
+r[akt.transition.waits]
+An akt MUST be served with, for each transition its state allows that
+`waits_for` or `requires_links` would refuse now, what it waits for: the
+akter not yet final, and the link kinds it lacks, by their names.
 
 r[akt.version-pinned]
 An akt MUST be validated against the akt type version it was created with,
@@ -376,6 +447,12 @@ was checked for, or `me`; a date, by the date; a single-line `text` field,
 by the whole text. A condition on a field of any other kind, on a field
 the type lacks, or without one akt type to filter, MUST be refused as
 `BAD_REQUEST`.
+
+r[akt.filter.overdue]
+A list of akter of one akt type MAY be filtered to those overdue on any of
+its due fields (`akt.field.due`), as they are when the list is answered,
+a page at a time (`akt.page`). Filtering a type without due fields this way
+MUST be refused as `BAD_REQUEST`.
 
 r[akt.filter.outcome]
 A list of akter of one akt type MAY be filtered by outcome if the type has

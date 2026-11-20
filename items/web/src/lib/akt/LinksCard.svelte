@@ -2,13 +2,14 @@
 	// r[impl app.links]
 	import { resolve } from '$app/paths';
 	import Link2 from '@lucide/svelte/icons/link-2';
+	import Plus from '@lucide/svelte/icons/plus';
 	import X from '@lucide/svelte/icons/x';
 	import Button from '#lib/ui/Button.svelte';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import Combobox, { type Option } from '#lib/ui/Combobox.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
-	import type { LinkKind } from './document';
+	import type { LinkKind, LinkedCreation } from './document';
 	import type { Tone } from '#lib/graphql/generated/graphql.ts';
 
 	export interface ShownLink {
@@ -41,9 +42,31 @@
 		search: (text: string, kind: LinkKind) => Promise<Option[]>;
 		onAdd: (kind: string, target: string) => void;
 		onRemove: (link: ShownLink) => void;
+		/** The akt it is on, by number, and what can be created linked to
+		 * it (`link.create.carry`). */
+		number?: string;
+		creations?: readonly LinkedCreation[];
 	}
 
-	let { links, kinds, editable, busy, search, onAdd, onRemove }: Props = $props();
+	let {
+		links,
+		kinds,
+		editable,
+		busy,
+		search,
+		onAdd,
+		onRemove,
+		number = '',
+		creations = []
+	}: Props = $props();
+
+	/** Where creating `c` linked to this akt starts: its type's create page,
+	 * carrying this akt's values. */
+	function creating(c: LinkedCreation): string {
+		const param = c.outgoing ? 'link' : 'linkedFrom';
+		const query = new URLSearchParams({ [param]: `${c.kind}:${number}`, carry: '1' });
+		return `${resolve('/types/[key]/new', { key: c.type })}?${query}`;
+	}
 
 	let chosen = $state('');
 	/** Whether the way to add a link was asked for, when there are none. */
@@ -62,13 +85,30 @@
 	});
 </script>
 
+{#snippet creatable()}
+	<!-- r[impl link.create.carry]: New …, linked to this akt and carrying its values. -->
+	{#if creations.length > 0}
+		<div class="create">
+			{#each creations as c (`${c.type}:${c.kind}:${c.outgoing}`)}
+				<Button size="sm" variant="ghost" href={creating(c)}
+					><Plus size={14} aria-hidden={true} /> New {c.typeName}
+					<span class="hint">{c.via}</span></Button
+				>
+			{/each}
+		</div>
+	{/if}
+{/snippet}
+
 <!-- r[impl app.links]: none shown when there are none, only a way to add one. -->
 {#if groups.length === 0 && !adding}
-	{#if editable && kind}
+	{#if (editable && kind) || creations.length > 0}
 		<div class="empty">
-			<Button size="sm" variant="ghost" onclick={() => (adding = true)}
-				><Link2 size={14} aria-hidden={true} /> Add link</Button
-			>
+			{#if editable && kind}
+				<Button size="sm" variant="ghost" onclick={() => (adding = true)}
+					><Link2 size={14} aria-hidden={true} /> Add link</Button
+				>
+			{/if}
+			{@render creatable()}
 		</div>
 	{/if}
 {:else}
@@ -129,12 +169,22 @@
 				{/key}
 			</div>
 		{/if}
+		{@render creatable()}
 	</Card>
 {/if}
 
 <style>
 	.empty {
 		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
+
+	.create {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+		margin-top: var(--space-2);
 	}
 
 	h3 {

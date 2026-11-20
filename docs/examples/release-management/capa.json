@@ -1,0 +1,132 @@
+{
+  "key": "capa",
+  "name": "CAPA",
+  "number": "CAPA-{year}-{seq:4}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "problem", "name": "Problem statement", "kind": "text", "multiline": true, "required": true,
+      "description": "What happened, or could happen, with links to the evidence." },
+    { "key": "owner", "name": "Owner", "kind": "user", "default": "creator" },
+    { "key": "severity", "name": "Severity", "kind": "choice",
+      "options": [
+        { "key": "critical", "name": "Critical" },
+        { "key": "major", "name": "Major" }
+      ] },
+    { "key": "impact", "name": "Impact and risk", "kind": "text", "multiline": true,
+      "description": "On safety, performance, security and compliance, in short." },
+    { "key": "risk_record", "name": "Risk record", "kind": "reference" },
+    { "key": "containment", "name": "Containment so far", "kind": "text", "multiline": true },
+    { "key": "not_required_reason", "name": "Why no CAPA is needed", "kind": "text", "multiline": true,
+      "states": ["not_required"] },
+    { "key": "kind", "name": "Actions needed", "kind": "choices",
+      "options": [
+        { "key": "correction", "name": "Correction" },
+        { "key": "corrective", "name": "Corrective action" },
+        { "key": "preventive", "name": "Preventive action" }
+      ] },
+    { "key": "affected", "name": "Affected users, systems and versions", "kind": "text", "multiline": true },
+    { "key": "root_cause", "name": "Root cause", "kind": "text", "multiline": true,
+      "description": "Confirmed, with its evidence and the method used, such as 5 Whys." },
+    { "key": "causal_hypothesis", "name": "Causal hypothesis", "kind": "text", "multiline": true,
+      "description": "For a preventive action: what could cause it." },
+    { "key": "trigger", "name": "Trigger", "kind": "text", "multiline": true,
+      "description": "For a preventive action: why it is credible, such as a trend or a near miss." },
+    { "key": "vigilance", "name": "Vigilance reporting", "kind": "choice",
+      "options": [
+        { "key": "not_required", "name": "Not required" },
+        { "key": "required", "name": "Required" }
+      ] },
+    { "key": "vigilance_record", "name": "Vigilance record", "kind": "reference" },
+    { "key": "communication", "name": "Customer communication", "kind": "choice",
+      "options": [
+        { "key": "not_required", "name": "Not required" },
+        { "key": "required", "name": "Required" }
+      ] },
+    { "key": "communication_record", "name": "Communication record", "kind": "reference" },
+    { "key": "effectiveness_method", "name": "Effectiveness check", "kind": "text", "multiline": true,
+      "description": "How effectiveness will be shown, such as a new test, or no recurrence over two releases.",
+      "locked": ["implementing", "verifying"] },
+    { "key": "effectiveness_criteria", "name": "Acceptance criteria", "kind": "text", "multiline": true,
+      "locked": ["implementing", "verifying"] },
+    { "key": "effectiveness_results", "name": "Effectiveness results", "kind": "text", "multiline": true,
+      "states": ["verifying", "closed"] },
+    { "key": "adverse_impact", "name": "Adverse impact check", "kind": "text", "multiline": true,
+      "states": ["verifying", "closed"],
+      "description": "That the actions bring no unacceptable new risk, and don't degrade performance or compliance." },
+    { "key": "closure_outcome", "name": "Closure outcome", "kind": "choice",
+      "states": ["closed"],
+      "options": [
+        { "key": "completed", "name": "Completed" },
+        { "key": "not_completed", "name": "Not completed by its due date; reopened" },
+        { "key": "ineffective", "name": "Ineffective; reopened" }
+      ] },
+    { "key": "reopen_reason", "name": "Why it is reopened", "kind": "text", "multiline": true },
+    { "key": "remaining_actions", "name": "Remaining actions", "kind": "text", "multiline": true },
+    { "key": "revised_target", "name": "Revised target", "kind": "date", "due": true },
+    { "key": "owner_confirmed", "name": "Owner confirms", "kind": "checkbox" },
+    { "key": "delay_impact", "name": "Impact of the delay", "kind": "text", "multiline": true,
+      "description": "And whether resources, escalation or process changes are needed." }
+  ],
+  "states": [
+    { "key": "open", "name": "Open", "initial": true },
+    { "key": "investigating", "name": "Investigating" },
+    { "key": "planning", "name": "Planning" },
+    { "key": "implementing", "name": "Implementing" },
+    { "key": "verifying", "name": "Verifying" },
+    { "key": "closed", "name": "Closed", "final": true },
+    { "key": "superseded", "name": "Superseded", "final": true },
+    { "key": "not_required", "name": "Not required", "final": true }
+  ],
+  "transitions": [
+    { "key": "confirm", "name": "Confirm CAPA", "from": ["open"], "to": "investigating",
+      "requires": ["severity", "impact", "risk_record"], "action": "capa:confirm" },
+    { "key": "decline", "name": "No CAPA needed", "from": ["open"], "to": "not_required",
+      "requires": ["not_required_reason"], "action": "capa:confirm" },
+    { "key": "plan", "name": "Plan actions", "from": ["investigating"], "to": "planning",
+      "requires": ["kind", "affected", "vigilance", "communication"],
+      "requires_when": [
+        { "field": "root_cause", "when": { "kind": ["corrective"] } },
+        { "field": "causal_hypothesis", "when": { "kind": ["preventive"] } },
+        { "field": "trigger", "when": { "kind": ["preventive"] } },
+        { "field": "vigilance_record", "when": { "vigilance": ["required"] } },
+        { "field": "communication_record", "when": { "communication": ["required"] } }
+      ] },
+    { "key": "implement", "name": "Start implementing", "from": ["planning"], "to": "implementing",
+      "requires": ["effectiveness_method", "effectiveness_criteria"] },
+    { "key": "verify", "name": "Verify effectiveness", "from": ["implementing"], "to": "verifying",
+      "waits_for": { "members": ["capa_action"] } },
+    { "key": "rework", "name": "Back to implementing", "from": ["verifying"], "to": "implementing" },
+    { "key": "close", "name": "Close", "from": ["verifying"], "to": "closed",
+      "requires": ["effectiveness_results", "adverse_impact", "closure_outcome"],
+      "waits_for": { "members": ["capa_action"] }, "action": "capa:approve_closure" },
+    { "key": "supersede", "name": "Supersede", "from": ["investigating", "planning", "implementing", "verifying"],
+      "to": "superseded", "requires_links": ["superseded_by"], "action": "capa:approve_closure" },
+    { "key": "reopen", "name": "Reopen", "from": ["closed"], "to": "implementing", "reopens": true,
+      "requires": ["reopen_reason", "remaining_actions", "revised_target", "owner_confirmed", "delay_impact"],
+      "action": "capa:confirm" }
+  ],
+  "contains": [{ "type": "capa_action", "exclusive": true }],
+  "links": [
+    { "key": "originated_from", "name": "Originated from", "inverse": "Led to", "to": ["problem_report"] },
+    { "key": "superseded_by", "name": "Superseded by", "inverse": "Supersedes", "to": ["capa"] },
+    { "key": "verified_by", "name": "Verified by", "inverse": "Verifies", "to": ["test_case", "test_protocol"] }
+  ],
+  "board": { "columns": [
+    { "key": "planned", "name": "Planned", "states": { "capa_action": ["planned"] } },
+    { "key": "doing", "name": "In progress", "states": { "capa_action": ["in_progress"] } },
+    { "key": "done", "name": "Done", "states": { "capa_action": ["done", "dropped"] } }
+  ] },
+  "presentation": {
+    "group": "Quality", "plural": "CAPAs",
+    "icon": "shield-check", "colour": "teal",
+    "card": ["severity", "owner"], "list": ["severity", "owner", "kind", "revised_target"],
+    "tones": {
+      "investigating": "active", "planning": "active", "implementing": "active",
+      "verifying": "warning", "closed": "success"
+    },
+    "primary": {
+      "open": "confirm", "investigating": "plan", "planning": "implement",
+      "implementing": "verify", "verifying": "close"
+    }
+  }
+}

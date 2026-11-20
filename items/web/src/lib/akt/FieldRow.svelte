@@ -1,6 +1,8 @@
 <script lang="ts">
+	import Lock from '@lucide/svelte/icons/lock';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import FieldEditor from './FieldEditor.svelte';
@@ -23,6 +25,11 @@
 		editable: boolean;
 		/** Whether the field has a draft recipe. */
 		drafted: boolean;
+		/** Whether it is locked in the akt's state and holds a value, so
+		 * that changing it needs a reason (`akt.field.locked`). */
+		locked?: boolean;
+		/** Whether the akt is overdue on it (`akt.field.due`). */
+		overdue?: boolean;
 		busy: boolean;
 		error?: string;
 		onEdit: () => void;
@@ -54,6 +61,8 @@
 		editing,
 		editable,
 		drafted,
+		locked = false,
+		overdue = false,
 		busy,
 		error,
 		onEdit,
@@ -92,7 +101,13 @@
 				}}
 			>
 				<FieldEditor {field} bind:draft {people} {error} {members} {live} />
-				{#if !liveDraft}
+				<!-- r[impl app.fields]: a locked field changes only with a reason, asked for first. -->
+				{#if locked}
+					<label class="reason">
+						Reason <span class="optional">(needed: {field.name} is locked)</span>
+						<input bind:value={reason} required />
+					</label>
+				{:else if !liveDraft}
 					<label class="reason">
 						Reason <span class="optional">(optional)</span>
 						<input bind:value={reason} />
@@ -102,14 +117,24 @@
 					{#if live}
 						<Button variant="primary" size="sm" onclick={onCancel}>Done</Button>
 					{:else}
-						<Button variant="primary" size="sm" type="submit" {busy}>Save</Button>
+						<Button
+							variant="primary"
+							size="sm"
+							type="submit"
+							{busy}
+							disabled={locked && reason.trim() === ''}>Save</Button
+						>
 						<Button variant="ghost" size="sm" onclick={onCancel}>Cancel</Button>
 					{/if}
 				</div>
 			</form>
 		</dd>
 	{:else}
-		<dt class:visually-hidden={wide}>{field.name}</dt>
+		<dt class:visually-hidden={wide}>
+			{field.name}{#if locked}<span class="locked" title="Locked: changing it needs a reason"
+					><Lock size={12} aria-label="locked" /></span
+				>{/if}
+		</dt>
 		<dd data-field={field.key}>
 			<div class="value">
 				{#if field.kind === 'VERDICT' && judged}
@@ -120,6 +145,9 @@
 						open={judging}
 						onGive={onVerdict}
 					/>
+				{:else if value && overdue}
+					<!-- r[impl akt.field.due]: an overdue date, as overdue. -->
+					<Badge tone="DANGER"><FieldShown {value} multiline={field.multiline} />, overdue</Badge>
 				{:else if value}
 					<FieldShown {value} multiline={field.multiline} />
 				{:else}
@@ -208,6 +236,12 @@
 		flex-direction: column;
 		gap: var(--space-3);
 		padding: var(--space-2) 0;
+	}
+
+	.locked {
+		margin-inline-start: var(--space-1);
+		color: var(--text-muted);
+		vertical-align: middle;
 	}
 
 	.reason {

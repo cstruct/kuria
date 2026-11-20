@@ -41,8 +41,13 @@ see [the documents example](examples/documents/README.md). Their live
 drafts are written by several people at once, each release a revision,
 and their indices are cloned as files, staged, pulled and pushed with
 `kuria`, alongside one's own git.
+Problem reports and CAPAs run on it as well, with transitions that wait
+for members and linked akter, fields required only for some values,
+locked fields, due dates, reopening, and akter created linked to another:
+see [the release-management example](examples/release-management/README.md#problem-reports-and-capas).
 Not yet: other link kinds and traceability, signatures, structured tables,
-computed fields, deadlines, obligations, reporting and the frontend.
+computed fields, deadlines that escalate, obligations, separation of
+duties, reporting and the frontend.
 
 ## Processes to cover
 

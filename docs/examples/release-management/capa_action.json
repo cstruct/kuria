@@ -1,0 +1,49 @@
+{
+  "key": "capa_action",
+  "name": "CAPA action",
+  "number": "{parent}-A{seq:2}",
+  "created_in": ["capa"],
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true },
+    { "key": "kind", "name": "Kind", "kind": "choice", "required": true,
+      "options": [
+        { "key": "correction", "name": "Correction" },
+        { "key": "corrective", "name": "Corrective action" },
+        { "key": "preventive", "name": "Preventive action" },
+        { "key": "verification", "name": "Verification" }
+      ] },
+    { "key": "owner", "name": "Owner", "kind": "user", "default": "creator" },
+    { "key": "due", "name": "Due", "kind": "date", "due": true, "locked": ["in_progress"],
+      "description": "Moved only with a reason once work starts." },
+    { "key": "evidence_required", "name": "Evidence it must leave", "kind": "text", "multiline": true },
+    { "key": "evidence", "name": "Evidence", "kind": "reference", "states": ["in_progress", "done"] },
+    { "key": "drop_reason", "name": "Why it is dropped", "kind": "text", "multiline": true,
+      "states": ["dropped"] }
+  ],
+  "states": [
+    { "key": "planned", "name": "Planned", "initial": true },
+    { "key": "in_progress", "name": "In progress" },
+    { "key": "done", "name": "Done", "final": true },
+    { "key": "dropped", "name": "Dropped", "final": true }
+  ],
+  "transitions": [
+    { "key": "start", "name": "Start", "from": ["planned"], "to": "in_progress",
+      "requires": ["owner", "due"] },
+    { "key": "finish", "name": "Finish", "from": ["in_progress"], "to": "done",
+      "requires": ["evidence"], "waits_for": { "links": ["implemented_by"] } },
+    { "key": "drop", "name": "Drop", "from": ["planned", "in_progress"], "to": "dropped",
+      "requires": ["drop_reason"] }
+  ],
+  "links": [
+    { "key": "implemented_by", "name": "Implemented by", "inverse": "Implements",
+      "to": ["backlog_item", "hotfix", "release_candidate"] }
+  ],
+  "archive": { "rules": [{ "with_container": "capa" }] },
+  "presentation": {
+    "group": "Quality", "navigation": "more",
+    "icon": "circle-check", "colour": "teal",
+    "card": ["kind", "due", "owner"], "list": ["kind", "owner", "due"],
+    "tones": { "in_progress": "active", "done": "success" },
+    "primary": { "planned": "start", "in_progress": "finish" }
+  }
+}

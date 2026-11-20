@@ -96,6 +96,8 @@ fn error(error: AktError) -> async_graphql::Error {
         AktError::UnreadableType(_) => coded(message, "INVALID_AKT_TYPE"),
         AktError::UnknownType(_) => coded(message, "UNKNOWN_AKT_TYPE"),
         AktError::NotFound(_) | AktError::NotLinked { .. } => coded(message, "NOT_FOUND"),
+        // r[impl akt.field.locked]
+        AktError::Refused(kuria_engine::Refusal::Locked { .. }) => coded(message, "LOCKED"),
         AktError::Refused(_) | AktError::NotDraftable(_) => coded(message, "REFUSED"),
         AktError::Forbidden => coded(message, "FORBIDDEN"),
         AktError::NumbersExhausted(_) => coded(message, "NUMBERS_EXHAUSTED"),
@@ -339,6 +341,10 @@ impl AkterQuery {
             desc = "Only akter with this outcome, as it is now; `type` must be given, and have a `verdict` field."
         )]
         outcome: Option<OutcomeKind>,
+        #[graphql(
+            desc = "Only akter overdue on one of their due fields, as they are now; `type` must be given, and have one."
+        )]
+        overdue: Option<bool>,
         #[graphql(desc = "Live akter (the default), archived ones, or both.")] archived: Option<
             ArchivedFilter,
         >,
@@ -356,6 +362,7 @@ impl AkterQuery {
                 search.as_deref(),
                 Some(&where_key),
                 outcome.map(OutcomeKind::key),
+                overdue.filter(|o| *o).map(|_| "overdue"),
                 Some(archived_key(archived)),
             ],
         );
@@ -398,6 +405,9 @@ impl AkterQuery {
                 }
             }
         }
+        if overdue == Some(true) {
+            conditions.extend(overdue_conditions(&mut conn, tenant, key.as_deref()).await?);
+        }
         let listing = store::Listing {
             keys: &readable,
             archived: archived.into(),
@@ -426,6 +436,49 @@ impl AkterQuery {
             page_info,
         })
     }
+}
+
+/// The store's conditions for akter of the type `key` overdue on one of its
+/// due fields today, by its latest version (`akt.filter.overdue`).
+// r[impl akt.filter.overdue]
+async fn overdue_conditions(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    key: Option<&str>,
+) -> async_graphql::Result<Vec<store::Condition>> {
+    let refused = |message: &str| coded(message.to_owned(), "BAD_REQUEST");
+    let key = key.ok_or_else(|| refused("filtering by overdue needs `type`"))?;
+    let row = store::latest_type_versions(conn, tenant)
+        .await
+        .map_err(internal)?
+        .into_iter()
+        .find(|row| row.key == key)
+        .ok_or_else(|| refused(&format!("there is no akt type `{key}`")))?;
+    let ty = StoredType::read(row).map_err(error)?;
+    let document = ty.ty.document();
+    let today = Utc::now().date_naive().format("%Y-%m-%d").to_string();
+    let due: Vec<store::Match> = document
+        .fields
+        .iter()
+        .filter(|f| f.due)
+        .map(|f| store::Match::DateBefore {
+            field: f.key.clone(),
+            date: today.clone(),
+        })
+        .collect();
+    if due.is_empty() {
+        return Err(refused(&format!("`{key}` has no due fields")));
+    }
+    let open = document
+        .states
+        .iter()
+        .filter(|s| !s.is_final)
+        .map(|s| s.key.clone())
+        .collect();
+    Ok(vec![
+        store::Condition(due),
+        store::Condition(vec![store::Match::StateIn(open)]),
+    ])
 }
 
 /// The store's conditions for `conditions` on fields of the akt type `key`,
@@ -662,6 +715,19 @@ pub struct CreateAktInput {
     /// its type's pattern must give and no akt may have
     /// (`akt.number.given`); else its next.
     number: Option<String>,
+    /// Links to add as it is created (`link.create`).
+    #[graphql(default)]
+    links: Vec<NewLinkInput>,
+}
+
+/// A link a new akt is created with: of `kind`, `to` another akt, the new
+/// one being its source, or `from` another akt, as its target; one of the
+/// two (`link.create`).
+#[derive(InputObject)]
+pub struct NewLinkInput {
+    kind: String,
+    to: Option<String>,
+    from: Option<String>,
 }
 
 /// What editing an akt takes.
@@ -984,6 +1050,27 @@ impl AkterMutation {
             renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(input.fields)?;
+        // r[impl link.create]
+        let links = input
+            .links
+            .into_iter()
+            .map(|l| match (l.to, l.from) {
+                (Some(other), None) => Ok(crate::akter::NewLink {
+                    kind: l.kind,
+                    other,
+                    outgoing: true,
+                }),
+                (None, Some(other)) => Ok(crate::akter::NewLink {
+                    kind: l.kind,
+                    other,
+                    outgoing: false,
+                }),
+                _ => Err(coded(
+                    "a link names one akt, `to` or `from`".to_owned(),
+                    "BAD_REQUEST",
+                )),
+            })
+            .collect::<async_graphql::Result<Vec<_>>>()?;
         let akter = akter(ctx)?;
         let row = akter
             .create(
@@ -993,6 +1080,7 @@ impl AkterMutation {
                 input.reason,
                 &input.inside,
                 input.number.as_deref(),
+                &links,
             )
             .await
             .map_err(error)?;
@@ -1489,6 +1577,25 @@ impl AktType {
                     .filter_map(|o| kuria_engine::outcomes::Outcome::parse(o))
                     .map(OutcomeKind::from)
                     .collect(),
+                waits_for_members: t.waits_for.members.clone(),
+                waits_for_links: t.waits_for.links.clone(),
+                requires_links: t.requires_links.clone(),
+                reopens: t.reopens,
+                requires_when: t
+                    .requires_when
+                    .iter()
+                    .map(|r| RequiredWhen {
+                        field: r.field.clone(),
+                        when: r
+                            .when
+                            .iter()
+                            .map(|(field, options)| Condition {
+                                field: field.clone(),
+                                options: options.clone(),
+                            })
+                            .collect(),
+                    })
+                    .collect(),
             })
             .collect()
     }
@@ -1634,6 +1741,12 @@ pub struct Field {
     diagrams: bool,
     /// For attachment fields: the media types it takes, any if none.
     media_types: Vec<String>,
+    /// The states in which a change to a value it holds needs a reason
+    /// (`akt.field.locked`).
+    locked: Vec<String>,
+    /// For a date field: whether an akt is overdue once it passes
+    /// (`akt.field.due`).
+    due: bool,
 }
 
 /// What files an attachment field holds.
@@ -1663,6 +1776,8 @@ impl From<&FieldDef> for Field {
             references: def.references.clone(),
             diagrams: def.diagrams,
             media_types: def.media_types.clone(),
+            locked: def.locked.clone(),
+            due: def.due,
         }
     }
 }
@@ -1791,6 +1906,47 @@ pub struct Transition {
     /// The outcomes the akt must have for it to be performed; any, or
     /// none, if empty (`akt.transition.outcomes`).
     outcomes: Vec<OutcomeKind>,
+    /// The contained akt types whose members must all be final for it to
+    /// be performed (`akt.transition.members`).
+    waits_for_members: Vec<String>,
+    /// The link kinds whose targets must all be final for it to be
+    /// performed (`akt.transition.links`).
+    waits_for_links: Vec<String>,
+    /// The link kinds the akt must have a link of for it to be performed
+    /// (`akt.transition.links`).
+    requires_links: Vec<String>,
+    /// The fields it requires only while other fields hold certain values
+    /// (`akt.transition.requires-when`).
+    requires_when: Vec<RequiredWhen>,
+    /// Whether it leaves a final state (`akt.transition.reopens`).
+    reopens: bool,
+}
+
+/// A field a transition requires only while every condition holds
+/// (`akt.transition.requires-when`).
+#[derive(SimpleObject)]
+pub struct RequiredWhen {
+    field: String,
+    when: Vec<Condition>,
+}
+
+/// A `choice` or `choices` field holding one of these options.
+#[derive(SimpleObject)]
+pub struct Condition {
+    field: String,
+    options: Vec<String>,
+}
+
+/// What a transition the akt's state allows waits for
+/// (`akt.transition.waits`).
+#[derive(SimpleObject)]
+pub struct TransitionWait {
+    /// The transition's key.
+    transition: String,
+    /// The members and link targets not yet final, by number.
+    open: Vec<String>,
+    /// The link kinds it requires and the akt has no link of, by name.
+    lacking: Vec<String>,
 }
 
 /// A link between this akt and another, as this akt reads it.
@@ -2349,6 +2505,66 @@ impl Akt {
             .await
             .map_err(error)?
             .map(Into::into))
+    }
+
+    /// The due fields it is overdue on today (`akt.field.due`); none if it
+    /// is read at a version or revision.
+    // r[impl akt.field.due]
+    async fn overdue(&self) -> async_graphql::Result<Vec<String>> {
+        if self.is_past() {
+            return Ok(Vec::new());
+        }
+        let ty = &self.ty.ty;
+        if !ty.document().fields.iter().any(|f| f.due) {
+            return Ok(Vec::new());
+        }
+        let current = kuria_engine::Current {
+            state: self.row.state.clone(),
+            fields: kuria_engine::fields_from_json(
+                ty,
+                self.row
+                    .fields
+                    .as_object()
+                    .unwrap_or(&serde_json::Map::new()),
+            )
+            .map_err(internal)?,
+        };
+        Ok(kuria_engine::overdue(ty, &current, Utc::now().date_naive()))
+    }
+
+    /// For each transition its state allows that would be refused now for
+    /// what it waits for, what that is (`akt.transition.waits`). None for
+    /// an akt read at a version or revision, or in a final state.
+    // r[impl akt.transition.waits]
+    async fn waits(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<TransitionWait>> {
+        let ty = &self.ty.ty;
+        if self.is_past() || ty.state(&self.row.state).is_none_or(|s| s.is_final) {
+            return Ok(Vec::new());
+        }
+        let tenant: Uuid = principal(ctx)?.tenant.into();
+        let mut conn = akter(ctx)?.pool().get().await.map_err(internal)?;
+        let mut answered = Vec::new();
+        for def in &ty.document().transitions {
+            if !def.from.contains(&self.row.state) {
+                continue;
+            }
+            let waits = crate::akter::waits::of(&mut conn, tenant, def, &self.row)
+                .await
+                .map_err(error)?;
+            if waits.is_empty() {
+                continue;
+            }
+            answered.push(TransitionWait {
+                transition: def.key.clone(),
+                open: waits.open,
+                lacking: waits
+                    .lacking
+                    .iter()
+                    .map(|k| ty.link(k).map_or_else(|| k.clone(), |l| l.name.clone()))
+                    .collect(),
+            });
+        }
+        Ok(answered)
     }
 
     /// The changes to its live draft since its latest release, or all of

@@ -7,7 +7,8 @@ akter made with them:
 - [Release management](release-management/README.md): releases, their
   backlogs, candidates, hotfixes, notes and the artifacts they ship, and
   the test protocols run in each candidate: kept as templates, copied for
-  each run, with testers' verdicts.
+  each run, with testers' verdicts; and problem reports and CAPAs, with
+  their actions, due dates, and the hotfixes and tasks that implement them.
 - [Documents](documents/README.md): document indexes of documents and
   images, edited together and released as versions.
 - [Planning](planning/README.md): plans of tasks, gaps and decisions, as

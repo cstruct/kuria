@@ -8,14 +8,16 @@
     { "key": "closed", "name": "Closed", "final": true }
   ],
   "transitions": [{ "key": "close", "name": "Close", "from": ["open"], "to": "closed" }],
-  "contains": [{ "type": "backlog_item", "exclusive": true }, { "type": "epic" }],
+  "contains": [{ "type": "backlog_item", "exclusive": true }, { "type": "epic" },
+    { "type": "problem_report", "exclusive": true }],
   "board": { "columns": [
     { "key": "todo", "name": "To do",
-      "states": { "backlog_item": ["open"], "epic": ["open"] } },
+      "states": { "backlog_item": ["open"], "epic": ["open"], "problem_report": ["open"] } },
     { "key": "doing", "name": "In progress",
-      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"] } },
+      "states": { "backlog_item": ["in_progress", "in_review"], "epic": ["in_progress"],
+        "problem_report": ["classified", "residual_anomaly"] } },
     { "key": "done", "name": "Done",
-      "states": { "backlog_item": ["done"], "epic": ["done"] } }
+      "states": { "backlog_item": ["done"], "epic": ["done"], "problem_report": ["fixed", "wont_fix"] } }
   ] },
   "presentation": {
     "group": "Planning", "icon": "layers", "colour": "blue" }

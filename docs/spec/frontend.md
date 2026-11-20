@@ -52,7 +52,8 @@ one its type's presentation names for its state (`primary`), else, on a
 container the viewer may add to, creating an akt of the first akt type its
 board's first column offers (`app.board-create`), else none. No other
 transition MUST be shown as primary. A transition to a final state MUST be
-confirmed, saying the state it leads to.
+confirmed, saying the state it leads to, and that it stays there unless a
+transition that `reopens` leaves it (`akt.transition.reopens`).
 
 r[app.trail]
 The top bar MUST show where the page is as a trail: on an akt's page, the
@@ -73,7 +74,9 @@ or contact chosen by name, a checkbox that can be checked for someone else,
 a reference's URL and label, a git repository with a SHA or tag, a Docker
 repository with a digest and tag, an attachment uploaded or downloaded,
 several users or contacts for a `multiple` field, each assignee's
-verdict, and a `markdown` field in a rich-text editor (`app.editor`).
+verdict, and a `markdown` field in a rich-text editor (`app.editor`). A
+field locked in the akt's state (`akt.field.locked`) MUST be shown as
+locked, and changing a value it holds MUST ask for a reason first.
 
 r[app.create]
 The page creating an akt MUST ask for the fields its type is created
@@ -193,10 +196,17 @@ is editing, and where, shown (`live.presence`). Releasing it MUST release
 the live draft as it is (`live.release`).
 
 r[app.transitions]
-The app MUST offer the transitions an akt's state allows, asking for the
-fields a transition requires before performing it. A transition the akt's
+The app MUST offer the transitions an akt's state allows, those that
+reopen it from a final state included (`akt.transition.reopens`), asking for the
+fields a transition requires before performing it, those it requires only
+while other fields hold certain values (`akt.transition.requires-when`)
+included while the akt's values, as the transition would leave them,
+meet the condition: one that a field asked for with it meets is asked for
+as soon as it does. A transition the akt's
 outcome doesn't allow (`akt.transition.outcomes`) MUST be shown as
-unavailable, saying the outcomes it allows.
+unavailable, saying the outcomes it allows, and one that waits
+(`akt.transition.waits`) as unavailable, saying what for: the akter not
+yet final, each by number and title, linked, and the links it lacks.
 
 r[app.members]
 A container's page MUST show its members of the akt types its board names

@@ -58,7 +58,8 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   state, and `akt/following.ts`), the viewer and Sign out, and search
   (`/` or Cmd-K) over akter by number or title.
 - [`src/lib/akt`](src/lib/akt): working with akter by their akt types:
-  the akt page's parts (`FieldRow`, editing one field in place;
+  the akt page's parts (`FieldRow`, editing one field in place, a locked
+  one only with a reason, and showing an overdue date as overdue;
   `TransitionDialog`; `HistoryList`, a timeline from `history.ts`;
   `Members`, the board for the akt types its columns name and a list per
   other akt type, from `members.ts`, reordered by dragging within a
@@ -67,7 +68,8 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   column offering "+" for the types whose initial state it names, created
   in the container and its parent boards (`creating.ts`);
   `TypeMark`, a type's icon and colour from `identity.ts`; `LinksCard`, an
-  akt's links both ways, added by a kind its type declares and removed;
+  akt's links both ways, added by a kind its type declares and removed,
+  and _New …_ for each type that can be created linked to it;
   `Sections`, members in a `sections` field's nested sections, a
   collapsible one closed until opened and kept open while the akt
   reloads, each with its outcome worked out from its members'
@@ -87,7 +89,9 @@ e2e:screenshots` ([e2e](../../e2e/README.md)).
   linking a contact to a user (`contacts.ts`), each field kind's editor,
   input and text (`values.ts`), refusals
   (`errors.ts`), what a change leaves the page with (`editing.ts`), what a
-  type contains, drafts and allows (`document.ts`), accessible names
+  type contains, drafts and allows, what a transition waits for or requires
+  for the akt's values, and what can be created linked to it
+  (`document.ts`), accessible names
   (`labels.ts`), uploads, and the field editor and display components,
   a shown reference previewing its akt while pointed at or focused
   (`ReferencePreview`, its excerpt from `previews.ts`), and an akt released as

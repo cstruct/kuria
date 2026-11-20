@@ -5,8 +5,11 @@ import {
 	draftedFields,
 	givenIn,
 	linkKinds,
+	lackingText,
+	linkedCreations,
 	outcomeRefusal,
-	requiredFields
+	requiredFields,
+	waitingFor
 } from './document';
 
 describe('akt type documents', () => {
@@ -31,6 +34,11 @@ describe('akt type documents', () => {
 		expect(
 			availableTransitions(transitions, { key: 'testing', final: false }).map((t) => t.key)
 		).toEqual(['release']);
+		// r[verify akt.transition.reopens]: only one that reopens leaves a final state.
+		const reopen = { key: 'reopen', from: ['closed'], to: 'open', requires: [], reopens: true };
+		expect(
+			availableTransitions([reopen], { key: 'closed', final: true }).map((t) => t.key)
+		).toEqual(['reopen']);
 		expect(availableTransitions(transitions, { key: 'testing', final: true })).toEqual([]);
 		const fields = [{ key: 'title' }, { key: 'go' }, { key: 'version' }];
 		expect(requiredFields(fields, transitions[1]).map((f) => f.key)).toEqual(['go', 'version']);
@@ -76,5 +84,86 @@ describe('givenIn', () => {
 		expect(givenIn(document, 'title', 'planning')).toBe(true);
 		expect(givenIn(document, 'released_on', 'planning')).toBe(false);
 		expect(givenIn(document, 'released_on', 'released')).toBe(true);
+	});
+});
+
+// r[verify app.transitions]
+describe('waitingFor', () => {
+	const waits = [
+		{ transition: 'close', open: ['CASE-1-A01'], lacking: ['Verified by', 'Reviewed by'] },
+		{ transition: 'drop', open: [], lacking: [] }
+	];
+	it('finds what a transition waits for, if anything', () => {
+		expect(waitingFor({ key: 'close' }, waits)?.open).toEqual(['CASE-1-A01']);
+		expect(waitingFor({ key: 'drop' }, waits)).toBeNull();
+		expect(waitingFor({ key: 'reopen' }, waits)).toBeNull();
+		expect(waitingFor({ key: 'close' }, null)).toBeNull();
+	});
+	it('names the links it lacks', () => {
+		expect(lackingText(['Verified by', 'Reviewed by'])).toBe(
+			'a Verified by link and a Reviewed by link'
+		);
+	});
+});
+
+// r[verify app.transitions]
+// r[verify akt.transition.requires-when]
+describe('requiredFields, with conditions', () => {
+	const fields = [{ key: 'kind' }, { key: 'root_cause' }, { key: 'hypothesis' }];
+	const plan = {
+		key: 'plan',
+		from: ['open'],
+		requires: [],
+		requiresWhen: [
+			{ field: 'root_cause', when: [{ field: 'kind', options: ['corrective'] }] },
+			{ field: 'hypothesis', when: [{ field: 'kind', options: ['preventive'] }] }
+		]
+	};
+	it('asks for a field while the akt meets its condition', () => {
+		const keys = (held: string[]) => requiredFields(fields, plan, () => held).map((f) => f.key);
+		expect(keys(['corrective'])).toEqual(['root_cause']);
+		expect(keys(['corrective', 'preventive'])).toEqual(['root_cause', 'hypothesis']);
+		expect(keys([])).toEqual([]);
+		expect(requiredFields(fields, plan)).toEqual([]);
+	});
+});
+
+// r[verify link.create.carry]
+describe('linkedCreations', () => {
+	const report = { key: 'problem_report', name: 'Problem report', viewerMay: { create: true } };
+	const capa = {
+		key: 'capa',
+		name: 'CAPA',
+		viewerMay: { create: true },
+		document: {
+			links: [
+				{
+					key: 'originated_from',
+					name: 'Originated from',
+					inverse: 'Led to',
+					to: ['problem_report']
+				}
+			]
+		}
+	};
+	it('offers each type that links to it, or that it links to', () => {
+		const types = [{ ...report, document: {} }, capa];
+		expect(linkedCreations('problem_report', {}, types)).toEqual([
+			{ type: 'capa', typeName: 'CAPA', kind: 'originated_from', via: 'Led to', outgoing: true }
+		]);
+		expect(linkedCreations('capa', capa.document, types)).toEqual([
+			{
+				type: 'problem_report',
+				typeName: 'Problem report',
+				kind: 'originated_from',
+				via: 'Originated from',
+				outgoing: false
+			}
+		]);
+		const unmade = [
+			{ ...report, document: {} },
+			{ ...capa, viewerMay: { create: false } }
+		];
+		expect(linkedCreations('problem_report', {}, unmade)).toEqual([]);
 	});
 });

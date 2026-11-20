@@ -1,0 +1,76 @@
+{
+  "key": "problem_report",
+  "name": "Problem report",
+  "number": "PR-{seq:4}",
+  "fields": [
+    { "key": "title", "name": "Title", "kind": "text", "required": true,
+      "description": "What the problem concerns, and what it is." },
+    { "key": "description", "name": "Description", "kind": "text", "multiline": true,
+      "description": "How to reproduce it, what should happen, and what happens." },
+    { "key": "reporter", "name": "Reporter", "kind": "user", "default": "creator" },
+    { "key": "screening", "name": "Could it lead to a hazardous situation?", "kind": "choice",
+      "options": [
+        { "key": "no", "name": "No" },
+        { "key": "uncertain", "name": "Uncertain" },
+        { "key": "yes", "name": "Yes" }
+      ] },
+    { "key": "severity", "name": "Severity", "kind": "choice",
+      "options": [
+        { "key": "critical", "name": "Critical" },
+        { "key": "major", "name": "Major" },
+        { "key": "minor", "name": "Minor" },
+        { "key": "negligible", "name": "Negligible" }
+      ] },
+    { "key": "priority", "name": "Priority", "kind": "choice",
+      "options": [
+        { "key": "p0", "name": "P0" },
+        { "key": "p1", "name": "P1" },
+        { "key": "p2", "name": "P2" }
+      ] },
+    { "key": "risk_record", "name": "Risk record", "kind": "reference",
+      "description": "The risk analysis entry it is assessed against." },
+    { "key": "wont_fix_reason", "name": "Why it won't be fixed", "kind": "choice",
+      "states": ["wont_fix"],
+      "options": [
+        { "key": "cannot_reproduce", "name": "Cannot be reproduced" },
+        { "key": "by_design", "name": "By design" },
+        { "key": "unsupported_version", "name": "Unsupported version" },
+        { "key": "risk_acceptable", "name": "Risk acceptable" },
+        { "key": "workaround_documented", "name": "Workaround documented" }
+      ] },
+    { "key": "rationale", "name": "Rationale", "kind": "text", "multiline": true,
+      "states": ["wont_fix", "residual_anomaly"] },
+    { "key": "assignee", "name": "Assignee", "kind": "user" }
+  ],
+  "states": [
+    { "key": "open", "name": "Open", "initial": true },
+    { "key": "classified", "name": "Classified" },
+    { "key": "residual_anomaly", "name": "Residual anomaly" },
+    { "key": "fixed", "name": "Fixed", "final": true },
+    { "key": "wont_fix", "name": "Won't fix", "final": true }
+  ],
+  "transitions": [
+    { "key": "classify", "name": "Classify", "from": ["open"], "to": "classified",
+      "requires": ["screening", "severity", "priority"],
+      "requires_when": [
+        { "field": "risk_record", "when": { "screening": ["yes", "uncertain"] } }
+      ] },
+    { "key": "fixed", "name": "Mark fixed", "from": ["classified", "residual_anomaly"], "to": "fixed",
+      "requires_links": ["fixed_by"], "waits_for": { "links": ["fixed_by"] } },
+    { "key": "wont_fix", "name": "Won't fix", "from": ["open", "classified"], "to": "wont_fix",
+      "requires": ["wont_fix_reason", "rationale"] },
+    { "key": "accept", "name": "Accept as residual anomaly", "from": ["classified"],
+      "to": "residual_anomaly", "requires": ["rationale", "risk_record"] }
+  ],
+  "links": [
+    { "key": "fixed_by", "name": "Fixed by", "inverse": "Fixes", "to": ["backlog_item"] }
+  ],
+  "archive": { "rules": [{ "days_in": 90, "in": ["fixed", "wont_fix"] }] },
+  "presentation": {
+    "group": "Quality", "plural": "Problem reports",
+    "icon": "bug", "colour": "red",
+    "card": ["severity", "priority"], "list": ["severity", "priority", "assignee"],
+    "tones": { "classified": "active", "residual_anomaly": "warning", "fixed": "success" },
+    "primary": { "open": "classify", "classified": "fixed", "residual_anomaly": "fixed" }
+  }
+}

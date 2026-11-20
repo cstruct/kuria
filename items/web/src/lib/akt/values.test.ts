@@ -9,6 +9,7 @@ function field(kind: FieldDef['kind'], extra: Partial<FieldDef> = {}): FieldDef 
 		description: null,
 		required: false,
 		diagrams: false,
+		locked: [],
 		multiline: false,
 		multiple: false,
 		of: [],

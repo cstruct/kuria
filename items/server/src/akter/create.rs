@@ -17,14 +17,25 @@ use super::{
 };
 use crate::authorize::Permission;
 
+/// A link a new akt is created with (`link.create`): of `kind`, to the akt
+/// `other` if `outgoing`, the new akt being its source, else from it.
+#[derive(Clone, Debug)]
+pub struct NewLink {
+    pub kind: String,
+    pub other: String,
+    pub outgoing: bool,
+}
+
 impl Akter {
     /// Creates an akt of the akt type `key`, as a member of the containers
-    /// named in `inside`, the first of which is its parent.
+    /// named in `inside`, the first of which is its parent, with `links`.
     // r[impl akt.create]
     // r[impl akt.revision.atomic]
     // r[impl authz.create]
     // r[impl container.create-inside]
     // r[impl authz.create-inside]
+    // r[impl link.create]
+    #[allow(clippy::too_many_arguments, reason = "what a create takes")]
     pub async fn create(
         &self,
         caller: Caller<'_>,
@@ -33,12 +44,38 @@ impl Akter {
         reason: Option<String>,
         inside: &[String],
         number: Option<&str>,
+        links: &[NewLink],
     ) -> Result<AktRow, AktError> {
         let mut conn = self.pool.get().await?;
         let conn: &mut kuria_store::Connection = &mut conn;
         let result = conn
             .transaction::<_, AktError, _>(async |conn| {
-                create_in(conn, caller, key, fields, reason.clone(), inside, number).await
+                let akt =
+                    create_in(conn, caller, key, fields, reason.clone(), inside, number).await?;
+                if links.is_empty() {
+                    return Ok(akt);
+                }
+                for link in links {
+                    let (source, target) = if link.outgoing {
+                        (akt.number.as_str(), link.other.as_str())
+                    } else {
+                        (link.other.as_str(), akt.number.as_str())
+                    };
+                    super::links::add_link_in(
+                        conn,
+                        caller,
+                        source,
+                        &link.kind,
+                        target,
+                        None,
+                        reason.clone(),
+                    )
+                    .await?;
+                }
+                let tenant: Uuid = caller.actor.tenant.into();
+                store::akt_by_number(conn, tenant, &akt.number)
+                    .await?
+                    .ok_or_else(|| AktError::Internal(format!("{} vanished", akt.number)))
             })
             .await;
         self.committed(result)

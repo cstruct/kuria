@@ -652,9 +652,9 @@ pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, C
             akt_type: asked.akt_type,
             inside: asked.inside,
             sets: &folder.sets,
-            file: None,
             number: folder.number.as_deref(),
             reason: asked.reason,
+            ..Default::default()
         },
     )
     .await?;
@@ -686,9 +686,8 @@ pub async fn on_server(session: &Session, asked: &Asked<'_>) -> Result<Answer, C
                         akt_type: &ty.key,
                         inside: &[],
                         sets: &picture_sets(ty, picture, &id),
-                        file: None,
-                        number: None,
                         reason: asked.reason,
+                        ..Default::default()
                     },
                 )
                 .await
@@ -762,9 +761,9 @@ pub fn in_dir(root: &Path, me: Option<String>, asked: &Asked<'_>) -> Result<Answ
             akt_type: asked.akt_type,
             inside: asked.inside,
             sets: &folder.sets,
-            file: None,
             number: folder.number.as_deref(),
             reason: asked.reason,
+            ..Default::default()
         },
     )?;
     w.save()?;
@@ -855,9 +854,8 @@ fn draft_in(
                     akt_type: &ty.key,
                     inside: &[],
                     sets: &sets,
-                    file: None,
-                    number: None,
                     reason: asked.reason,
+                    ..Default::default()
                 },
             )?;
             let image = created.json["number"]

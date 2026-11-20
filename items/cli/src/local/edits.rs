@@ -30,7 +30,12 @@ fn read_file(path: &Path) -> Result<Parsed, CliError> {
 }
 
 fn refusal(r: &Refusal) -> CliError {
-    CliError::from_server("REFUSED", r.to_string(), None)
+    // r[impl akt.field.locked]
+    let code = match r {
+        Refusal::Locked { .. } => "LOCKED",
+        _ => "REFUSED",
+    };
+    CliError::from_server(code, r.to_string(), None)
 }
 
 /// The inputs the engine takes for `given` values of `shape`'s fields, for
@@ -77,6 +82,8 @@ pub fn create(w: &mut Writer, asked: &crate::writes::Created<'_>) -> Result<Answ
         sets,
         file: path,
         number: asked_number,
+        links,
+        carry,
         reason,
     } = *asked;
     let shape = w.shape(akt_type)?;
@@ -97,6 +104,32 @@ pub fn create(w: &mut Writer, asked: &crate::writes::Created<'_>) -> Result<Answ
     }
     containers.extend(inside.iter().cloned());
     given.extend(split_sets(&shape, sets)?);
+    // r[impl link.create.carry]
+    if carry {
+        for link in links {
+            let other = w.akt(&link.other)?.clone();
+            let theirs = &w.dir.types[&other.type_key].ty;
+            let ours = &w.dir.types[akt_type].ty;
+            for field in &ours.document().fields {
+                let shared = theirs
+                    .document()
+                    .fields
+                    .iter()
+                    .any(|f| f.key == field.key && f.kind == field.kind);
+                let carried = shared
+                    && !matches!(
+                        field.kind,
+                        kuria_config::FieldKind::Verdict | kuria_config::FieldKind::Sections
+                    );
+                if carried
+                    && !given.contains_key(&field.key)
+                    && let Some(value) = other.values.get(&field.key)
+                {
+                    given.insert(field.key.clone(), value.clone());
+                }
+            }
+        }
+    }
     // The number it will have, for the attachments it is given.
     let ty = w.dir.types[akt_type].ty.clone();
     let parent = containers.first().map(String::as_str);
@@ -108,6 +141,16 @@ pub fn create(w: &mut Writer, asked: &crate::writes::Created<'_>) -> Result<Answ
     fields.retain(|_, v| !v.is_null());
 
     let number = create_with(w, akt_type, &fields, &containers, Some(number))?;
+    // r[impl link.create]
+    // Nothing is written unless every link is made too.
+    for link in links {
+        let (source, target) = if link.outgoing {
+            (number.as_str(), link.other.as_str())
+        } else {
+            (link.other.as_str(), number.as_str())
+        };
+        super::arrange::add_link(w, source, &link.kind, target, None)?;
+    }
     Ok(answer(
         format!("Created {number}."),
         revision(&number, 1),
@@ -219,6 +262,8 @@ pub fn set(
     let t = w.dir.types[&key].clone();
     let change = w.change();
     let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
@@ -293,8 +338,17 @@ pub fn perform(
     } else {
         None
     };
-    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, held)
+    // r[impl akt.transition.members]
+    // r[impl akt.transition.links]
+    let waits =
+        t.ty.transition(&chosen.key)
+            .map(|d| super::answers::waits(&w.dir, &akt, d))
+            .unwrap_or_default();
+    let around = kuria_engine::Around { held, waits };
+    let outcome = kuria_engine::transition(&t.ty, &current, &chosen.key, &fields, change, around)
         .map_err(|r| refusal(&r))?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
     w.check_sections(&t.ty, Some(number), &outcome.changes)?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(Some(&akt), &outcome.fields, &changed, &w.ids);
@@ -344,6 +398,8 @@ pub fn verdict(
     let t = w.dir.types[&key].clone();
     let change = w.change();
     let outcome = kuria_engine::edit(&t.ty, &current, &fields, change).map_err(|r| refusal(&r))?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
     let changed: Vec<String> = outcome.changes.keys().cloned().collect();
     let values = after(w.dir.akt(number), &outcome.fields, &changed, &w.ids);
     w.akt_mut(number).values = values;
@@ -478,6 +534,8 @@ pub fn apply(
             }
             Err(r) => return Err(refusal(&r)),
         };
+        // r[impl akt.field.locked]
+        kuria_engine::check_locked(&t.ty, &current, &outcome, reason).map_err(|r| refusal(&r))?;
         w.check_sections(&t.ty, Some(&number), &outcome.changes)?;
         let changed: Vec<String> = outcome.changes.keys().cloned().collect();
         let names: Vec<&str> = changed.iter().map(|k| shape.field_name(k)).collect();

@@ -44,6 +44,9 @@
 	// r[impl app.filters]: by outcome, where the type has a verdict field.
 	const byOutcome = $derived(filtersByOutcome(filterFields));
 	const outcome = $derived(outcomeOf(page.url.searchParams, filterFields));
+	// r[impl akt.filter.overdue]: only those overdue, where the type has a due field.
+	const byOverdue = $derived(filterFields.some((f) => f.due));
+	const overdue = $derived(byOverdue && page.url.searchParams.get('overdue') === '1' ? true : null);
 	// r[impl app.archive]: live akter, and with Show archived, archived ones.
 	const showArchived = $derived(showsArchived(page.url.searchParams));
 	const archived = $derived(archivedFilterOf(page.url.searchParams));
@@ -52,6 +55,7 @@
 		state: stateKey || null,
 		where: conditions.length > 0 ? conditions : null,
 		outcome,
+		overdue,
 		archived
 	}));
 	const type = $derived(list.data?.aktType ?? undefined);
@@ -68,7 +72,7 @@
 	let loading = $state(false);
 	$effect(() => {
 		// A new list starts again from its first page.
-		void [key, stateKey, conditionsKey, outcome, archived];
+		void [key, stateKey, conditionsKey, outcome, overdue, archived];
 		more = [];
 		next = null;
 	});
@@ -88,6 +92,7 @@
 				state: stateKey || null,
 				where: conditions.length > 0 ? conditions : null,
 				outcome,
+				overdue,
 				archived,
 				after: pageInfo.cursor
 			})
@@ -106,7 +111,7 @@
 	);
 	setCrumbs(() => [{ label: type?.name ?? key }]);
 
-	function show(change: { state?: string; sort?: SortBy; outcome?: string }) {
+	function show(change: { state?: string; sort?: SortBy; outcome?: string; overdue?: string }) {
 		const params = new SvelteURLSearchParams(page.url.search);
 		for (const [name, value] of Object.entries(change)) {
 			if (value && !(name === 'sort' && value === 'updated')) params.set(name, value);
@@ -178,6 +183,16 @@
 					</select>
 				</label>
 			{/if}
+			{#if byOverdue}
+				<label class="overdue">
+					<input
+						type="checkbox"
+						checked={overdue === true}
+						onchange={(e) => show({ overdue: e.currentTarget.checked ? '1' : '' })}
+					/>
+					Overdue only
+				</label>
+			{/if}
 			<FilterBar
 				fields={filterFields}
 				values={Object.fromEntries(conditions.map((c) => [c.field, c.equals]))}
@@ -235,7 +250,8 @@
 												class="thumb"
 												src={field.picture}
 												alt={akt.title ?? field.name}
-											/>{:else}{field.text}{/if}</td
+											/>{:else if field.overdue}<Badge tone="DANGER">{field.text}, overdue</Badge
+											>{:else}{field.text}{/if}</td
 									>
 								{/each}
 								<td><Badge tone={akt.state.tone}>{akt.state.name}</Badge></td>

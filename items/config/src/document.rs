@@ -425,6 +425,14 @@ pub struct FieldDef {
     /// The states in which it is given, if not all (`akt.field.states`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub states: Vec<String>,
+    /// For a `date` field: whether an akt is overdue once it passes, while
+    /// not final (`akt.field.due`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub due: bool,
+    /// The states in which it is locked: a change to a value it holds
+    /// needs a reason (`akt.field.locked`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub locked: Vec<String>,
     /// What a single `user` field is offered as when an akt is created
     /// (`akt.field.default`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -519,10 +527,74 @@ pub struct TransitionDef {
     /// `fail`, `skip` or `pending`); any, or none, if empty.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub outcomes: Vec<String>,
+    /// The members and link targets that must be final for it to be
+    /// performed (`akt.transition.members`, `akt.transition.links`).
+    #[serde(default, skip_serializing_if = "WaitsFor::is_empty")]
+    pub waits_for: WaitsFor,
+    /// The link kinds the akt must have at least one link of for it to be
+    /// performed (`akt.transition.links`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires_links: Vec<String>,
+    /// Whether it leaves a final state, as the one kind of transition that
+    /// may (`akt.transition.reopens`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reopens: bool,
+    /// Fields it requires only while other fields hold certain values
+    /// (`akt.transition.requires-when`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires_when: Vec<RequiredWhen>,
     /// A Konklav action performing it requires, besides
     /// `kuria:akter:transition`, such as `capa:approve_closure`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+}
+
+/// A field a transition requires only while other fields hold certain
+/// values: `{"field": "root_cause", "when": {"kind": ["corrective"]}}`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequiredWhen {
+    /// The field required.
+    pub field: String,
+    /// The `choice` or `choices` fields, by key, and the options each must
+    /// hold one of for it to be required.
+    pub when: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl RequiredWhen {
+    /// Whether it is required, given `holds`, which answers the options a
+    /// field holds now: one for a `choice` field, any number for `choices`.
+    pub fn applies<'a, I>(&self, holds: impl Fn(&str) -> I) -> bool
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        self.when.iter().all(|(field, options)| {
+            holds(field)
+                .into_iter()
+                .any(|held| options.iter().any(|o| o == held))
+        })
+    }
+}
+
+/// What a transition waits for: every member of these contained akt types,
+/// and every target of these link kinds, in a final state.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WaitsFor {
+    /// Contained akt types, by key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub members: Vec<String>,
+    /// Link kinds the type declares, by key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<String>,
+}
+
+impl WaitsFor {
+    /// Whether it waits for nothing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.members.is_empty() && self.links.is_empty()
+    }
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref, reason = "serde's signature")]

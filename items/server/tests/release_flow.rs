@@ -19,7 +19,7 @@ const RM: &str = "tenant-release-manager";
 /// The build pipeline: software, another subject than the people.
 const CI: &str = "colleague-ci";
 
-const DOCUMENTS: [&str; 10] = [
+const DOCUMENTS: [&str; 11] = [
     include_str!("../../../docs/examples/release-management/artifact.json"),
     include_str!("../../../docs/examples/release-management/backlog_item.json"),
     include_str!("../../../docs/examples/release-management/epic.json"),
@@ -30,6 +30,7 @@ const DOCUMENTS: [&str; 10] = [
     include_str!("../../../docs/examples/release-management/release_notes.json"),
     include_str!("../../../docs/examples/release-management/test_case.json"),
     include_str!("../../../docs/examples/release-management/test_protocol.json"),
+    include_str!("../../../docs/examples/release-management/problem_report.json"),
 ];
 
 struct World {
@@ -530,7 +531,10 @@ async fn a_release_from_planning_to_closed() {
             RM,
             &hotfix,
             "deploy",
-            json!({ "build": { "url": "https://ci.example/builds/815" } }),
+            json!({
+                "build": { "url": "https://ci.example/builds/815" },
+                "low_risk": "One line in the session store; rolled back by redeploying 4.2.0.",
+            }),
         )
         .await;
 
@@ -671,6 +675,19 @@ async fn a_release_from_planning_to_closed() {
         "for": { "id": head, "displayName": "Hedda Produktsson", "user": { "id": hedda.to_string() } }
     })));
 
+    // It closes only once its hotfix is reviewed, which needs release:approve.
+    let early = world.transition(RM, &release, "close", json!({})).await;
+    assert_eq!(code(&early), "REFUSED", "{early}");
+    let review = json!({ "review": "Verified in production; the sessions test added; approved by the CTO." });
+    assert_eq!(
+        code(
+            &world
+                .transition(DEV, &hotfix, "review", review.clone())
+                .await
+        ),
+        "FORBIDDEN"
+    );
+    world.transitioned(RM, &hotfix, "review", review).await;
     // Closing the release freezes it.
     world.transitioned(RM, &release, "close", json!({})).await;
     let late = world

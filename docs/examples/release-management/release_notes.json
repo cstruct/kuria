@@ -11,7 +11,7 @@
         "types": ["epic", "backlog_item"],
         "line": "- {number} {field:title} ({field:kind})",
         "group_by": "type",
-        "states": { "release_candidate": ["accepted"], "hotfix": ["deployed"] }
+        "states": { "release_candidate": ["accepted"], "hotfix": ["deployed", "reviewed"] }
       } },
     { "key": "artifacts", "name": "Artifacts", "kind": "text", "multiline": true,
       "draft": {

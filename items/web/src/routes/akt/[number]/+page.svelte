@@ -30,8 +30,11 @@
 	import {
 		availableTransitions,
 		outcomeRefusal,
+		waitingFor,
+		lackingText,
 		containedTypes,
 		linkKinds,
+		linkedCreations,
 		draftedFields,
 		releasedFile,
 		requiredFields,
@@ -461,6 +464,19 @@
 	});
 	const allMembers = $derived(akt ? akt.board.columns.flatMap((c) => c.akter) : []);
 	const memberNames = $derived(allMembers.map((m) => ({ number: m.number, title: m.title })));
+	/** The titles of the akter it contains or links to, by number, for
+	 * what a transition waits for (`app.transitions`). */
+	const titles = $derived(
+		new Map<string, string | null | undefined>([
+			...(akt?.links ?? []).map((l) => [l.akt.number, l.akt.title] as const),
+			...allMembers.map((m) => [m.number, m.title] as const)
+		])
+	);
+	/** Whether `transition` is unavailable now: its outcome, or what it
+	 * waits for (`app.transitions`). */
+	const unavailable = (transition: { key: string; outcomes?: readonly string[] | null }) =>
+		outcomeRefusal(transition, akt?.outcome) !== null ||
+		waitingFor(transition, akt?.waits) !== null;
 	const placed = $derived(new Set(numbersIn(sectionItems)));
 	const unplacedColumns = $derived(
 		(akt?.board.columns ?? []).map((c) => ({
@@ -621,8 +637,20 @@
 		reason = '';
 	}
 
+	/** The option keys the akt's `choice` or `choices` field `key` holds: as
+	 * it is being edited, such as in a transition's dialog, else as saved. */
+	function held(key: string): string[] {
+		const draft = drafts[key];
+		if (draft?.kind === 'CHOICE') return draft.key ? [draft.key] : [];
+		if (draft?.kind === 'CHOICES') return draft.keys;
+		const value = akt?.fields.find((v) => v.field === key);
+		if (value?.__typename === 'ChoiceValue') return value.option ? [value.option.key] : [];
+		if (value?.__typename === 'ChoicesValue') return value.options.map((o) => o.key);
+		return [];
+	}
+
 	function required(transition: Transition): FieldDef[] {
-		return requiredFields(akt?.type.fields ?? [], transition);
+		return requiredFields(akt?.type.fields ?? [], transition, held);
 	}
 
 	function begin(transition: Transition) {
@@ -984,18 +1012,18 @@
 					>
 				{/if}
 				{#each actions.others as transition (transition.key)}
-					{@const blocked = outcomeRefusal(transition, akt.outcome)}
+					{@const blocked = unavailable(transition)}
 					<Button
-						disabled={busy || blocked !== null}
+						disabled={busy || blocked}
 						aria-describedby={blocked ? `blocked-${transition.key}` : undefined}
 						onclick={() => begin(transition)}>{transition.name}</Button
 					>
 				{/each}
 				{#if primaryTransition}
-					{@const blocked = outcomeRefusal(primaryTransition, akt.outcome)}
+					{@const blocked = unavailable(primaryTransition)}
 					<Button
 						variant="primary"
-						disabled={busy || blocked !== null}
+						disabled={busy || blocked}
 						aria-describedby={blocked ? `blocked-${primaryTransition.key}` : undefined}
 						onclick={() => begin(primaryTransition)}>{primaryTransition.name}</Button
 					>
@@ -1053,12 +1081,25 @@
 						]}
 					/>
 				{/if}
-				<!-- r[impl app.transitions]: a transition the outcome doesn't allow, unavailable, saying what it allows. -->
+				<!-- r[impl app.transitions]: a transition the outcome doesn't allow, unavailable, saying what it allows; one that waits, saying what for, each akt linked. -->
 				{#each [...actions.others, ...(primaryTransition ? [primaryTransition] : [])] as transition (transition.key)}
 					{@const blocked = outcomeRefusal(transition, akt.outcome)}
+					{@const wait = waitingFor(transition, akt.waits)}
 					{#if blocked}
 						<p class="blocked" id="blocked-{transition.key}">
 							{transition.name}: {blocked.toLowerCase()}
+						</p>
+					{:else if wait}
+						<p class="blocked" id="blocked-{transition.key}" data-testid="waits-{transition.key}">
+							{transition.name}:
+							{#if wait.open.length > 0}waits for
+								{#each wait.open as number, i (number)}{#if i > 0}{i === wait.open.length - 1
+											? ' and '
+											: ', '}{/if}<a href={resolve('/akt/[number]', { number })}
+										>{number}{#if titles.get(number)}&nbsp;{titles.get(number)}{/if}</a
+									>{/each}
+								to finish{#if wait.lacking.length > 0}, and{/if}
+							{/if}{#if wait.lacking.length > 0}needs {lackingText(wait.lacking)}{/if}
 						</p>
 					{/if}
 				{/each}
@@ -1111,6 +1152,9 @@
 										editing={editingField === field.key}
 										editable={editable && givenIn(akt.type.document, field.key, akt.state.key)}
 										drafted={drafted.includes(field.key)}
+										overdue={akt.overdue.includes(field.key)}
+										locked={(field.locked ?? []).includes(akt.state.key) &&
+											akt.fields.some((v) => 'field' in v && v.field === field.key)}
 										{busy}
 										error={editingField === field.key && refusal ? refusal.message : undefined}
 										onEdit={() => {
@@ -1284,6 +1328,10 @@
 				<LinksCard
 					links={akt.links}
 					kinds={linkKinds(akt.type.document)}
+					number={akt.number}
+					creations={atVersion || akt.archived
+						? []
+						: linkedCreations(akt.type.key, akt.type.document, view.data?.aktTypes ?? [])}
 					{editable}
 					{busy}
 					search={(text, kind) =>
@@ -1334,7 +1382,8 @@
 				name={pending.name}
 				confirm={confirmationOf(
 					headingOf(akt),
-					akt.type.states.find((s) => s.key === pending?.to)
+					akt.type.states.find((s) => s.key === pending?.to),
+					akt.type.transitions
 				)}
 				fields={required(pending)}
 				bind:drafts
@@ -1437,7 +1486,7 @@
 							{busy}
 							onclick={() => moveInto(transition)}
 						>
-							{transition.name}{transition.requires.length > 0 ? '…' : ''}
+							{transition.name}{required(transition).length > 0 ? '…' : ''}
 						</Button>
 					{/each}
 				</div>

@@ -100,11 +100,23 @@ describe('shownFields', () => {
 
 	it('names the fields the presentation picks, with their values', () => {
 		expect(shownFields(akt, 'card')).toEqual([
-			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text', overdue: false }
 		]);
 		expect(shownFields(akt, 'list')).toEqual([
-			{ name: 'Owner', text: '', picture: null, as: 'text' },
-			{ name: 'Kind', text: 'Feature', picture: null, as: 'text' }
+			{ name: 'Owner', text: '', picture: null, as: 'text', overdue: false },
+			{ name: 'Kind', text: 'Feature', picture: null, as: 'text', overdue: false }
+		]);
+	});
+
+	// r[verify akt.field.due]
+	it('shows an overdue date as overdue', () => {
+		const late = {
+			fields: [{ __typename: 'DateValue', field: 'due', date: '2026-01-01' }] as unknown as Value[],
+			overdue: ['due'],
+			type: { fields: [{ key: 'due', name: 'Due' }], presentation: { card: ['due'], list: [] } }
+		};
+		expect(shownFields(late, 'card')).toEqual([
+			{ name: 'Due', text: '2026-01-01', picture: null, as: 'chip', overdue: true }
 		]);
 	});
 
@@ -187,6 +199,15 @@ describe('transitionsInto', () => {
 
 	it('offers none from a final state, to an unknown column or type', () => {
 		expect(transitionsInto(board, 'todo', story('done', true))).toEqual([]);
+		// r[verify akt.transition.reopens]
+		const reopenable = {
+			...story('done', true),
+			type: {
+				key: 'story',
+				transitions: [{ key: 'reopen', from: ['done'], to: 'open', reopens: true }]
+			}
+		};
+		expect(transitionsInto(board, 'todo', reopenable).map((t) => t.key)).toEqual(['reopen']);
 		expect(transitionsInto(board, 'gone', story('open'))).toEqual([]);
 		expect(transitionsInto({}, 'done', story('open'))).toEqual([]);
 		expect(transitionsInto(board, 'todo', story('doing'))).toEqual([]);

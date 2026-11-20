@@ -49,8 +49,8 @@ type.
 
 - **Reads** (`cli.read`):
   - `types`; `types schema <type>` (fields with kinds, required and options,
-    states and tones, transitions with what they require and the outcomes
-    they allow, and from the
+    states and tones, transitions with what they require (and when), the
+    outcomes they allow, whether they reopen, and what they wait for, and from the
     type's document what it contains and links to, its board and
     presentation);
   - `ls [<type>]` with `--state` (key or name), `--in <container>` (its
@@ -58,7 +58,8 @@ type.
     to ask for), `--where <field>=<value>` (`cli.values`: options by key
     or name, people by email, name or `@me`, dates as `YYYY-MM-DD`,
     single-line text whole), `--outcome` (a type with a verdict field, or
-    with `--in` one whose outcome comes from its members), `--search`,
+    with `--in` one whose outcome comes from its members), `--overdue` (a
+    type with a due field), `--search`,
     `--limit` and `--after`, or
     `--all` pages. With a type, its list fields are the columns;
   - `find <text>`; `cat <number>… [--members <type>,… | --all-members]
@@ -84,7 +85,10 @@ type.
   - `new <type> [--in <container>]… [--set <field>=<value>]… [--file
     <file>]`: from flags, a file, or a file and flags (flags win). A file's
     `number`, `revision`, `state` and `links` are another akt's, so they're
-    ignored; its `in` is added to `--in`;
+    ignored; its `in` is added to `--in`. `--link <kind>:<number>` and
+    `--linked-from <kind>:<number>` link it as it is created, and `--carry`
+    starts it with those akter's values for the fields both types have
+    (`link.create`);
   - `apply <file>… [--dry-run]`: reads every akt of every file (a
     multi-akt file holds several), refuses one given twice, and checks
     every one, stale or read-only, before changing any, and against a

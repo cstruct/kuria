@@ -17,7 +17,10 @@ export const TYPES = [
 	'hotfix',
 	'release_notes',
 	'test_case',
-	'test_protocol'
+	'test_protocol',
+	'problem_report',
+	'capa',
+	'capa_action'
 ];
 
 /** Defines every akt type of the example, as the seeded admin. Defining

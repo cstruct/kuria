@@ -353,6 +353,19 @@ fn kinds(problems: &mut Problems, document: &AktTypeDocument, path: &str, field:
             );
         }
     }
+    // r[impl akt.field.due]
+    if field.due && field.kind != FieldKind::Date {
+        problems.add(&format!("{path}.due"), "only date fields are due");
+    }
+    // r[impl akt.field.locked]
+    for (j, state) in field.locked.iter().enumerate() {
+        if !document.states.iter().any(|s| &s.key == state) {
+            problems.add(
+                &format!("{path}.locked[{j}]"),
+                format!("no state `{state}`"),
+            );
+        }
+    }
     // r[impl akt.field.default]
     if field.default.is_some() && (field.kind != FieldKind::User || field.multiple) {
         problems.add(
@@ -491,9 +504,16 @@ fn transitions(
         for (j, from) in transition.from.iter().enumerate() {
             match document.states.iter().find(|s| &s.key == from) {
                 None => problems.add(&format!("{path}.from[{j}]"), format!("no state `{from}`")),
-                Some(state) if state.is_final => problems.add(
+                // r[impl akt.transition.reopens]
+                Some(state) if state.is_final && !transition.reopens => problems.add(
                     &format!("{path}.from[{j}]"),
-                    format!("`{from}` is final, and nothing moves on from a final state"),
+                    format!(
+                        "`{from}` is final, and only a transition that `reopens` moves on from a final state"
+                    ),
+                ),
+                Some(state) if !state.is_final && transition.reopens => problems.add(
+                    &format!("{path}.from[{j}]"),
+                    format!("`{from}` isn't final, and a transition that `reopens` starts only from final states"),
                 ),
                 Some(_) => {}
             }
@@ -519,7 +539,99 @@ fn transitions(
             }
         }
         outcomes(problems, document, &path, transition);
+        waits(problems, document, &path, transition);
+        requires_when(problems, document, &path, transition);
     }
+}
+
+/// Checks the fields a transition requires only while others hold certain
+/// values: fields the type defines, conditions on `choice` or `choices`
+/// fields, each with options of its own, each once.
+// r[impl akt.transition.requires-when]
+// r[impl akt.type.validation]
+fn requires_when(
+    problems: &mut Problems,
+    document: &AktTypeDocument,
+    path: &str,
+    t: &TransitionDef,
+) {
+    for (i, rule) in t.requires_when.iter().enumerate() {
+        let at = format!("{path}.requires_when[{i}]");
+        if !document.fields.iter().any(|f| f.key == rule.field) {
+            problems.add(&format!("{at}.field"), format!("no field `{}`", rule.field));
+        }
+        if rule.when.is_empty() {
+            problems.add(&format!("{at}.when"), "`when` names at least one field");
+        }
+        for (key, options) in &rule.when {
+            let at = format!("{at}.when.{key}");
+            let Some(field) = document.fields.iter().find(|f| &f.key == key) else {
+                problems.add(&at, format!("no field `{key}`"));
+                continue;
+            };
+            if !field.kind.has_options() {
+                problems.add(&at, format!("`{key}` is no choice or choices field"));
+                continue;
+            }
+            if options.is_empty() {
+                problems.add(&at, "names at least one option");
+            }
+            for (j, option) in options.iter().enumerate() {
+                if options[..j].contains(option) {
+                    problems.add(&format!("{at}[{j}]"), format!("`{option}` is named twice"));
+                } else if !field.options.iter().any(|o| &o.key == option) {
+                    problems.add(
+                        &format!("{at}[{j}]"),
+                        format!("`{key}` has no option `{option}`"),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Checks what a transition waits for, and the links it requires: akt
+/// types the document contains, and link kinds it declares, each once.
+// r[impl akt.transition.members]
+// r[impl akt.transition.links]
+// r[impl akt.type.validation]
+fn waits(problems: &mut Problems, document: &AktTypeDocument, path: &str, t: &TransitionDef) {
+    let named = |problems: &mut Problems,
+                 at: &str,
+                 keys: &[String],
+                 known: &dyn Fn(&str) -> bool,
+                 what: &str| {
+        for (i, key) in keys.iter().enumerate() {
+            if keys[..i].contains(key) {
+                problems.add(&format!("{at}[{i}]"), format!("`{key}` is named twice"));
+            } else if !known(key) {
+                problems.add(&format!("{at}[{i}]"), format!("`{key}` isn't {what}"));
+            }
+        }
+    };
+    let contained = |key: &str| document.contains.iter().any(|c| c.akt_type == key);
+    let declared = |key: &str| document.links.iter().any(|l| l.key == key);
+    named(
+        problems,
+        &format!("{path}.waits_for.members"),
+        &t.waits_for.members,
+        &contained,
+        "an akt type this type contains",
+    );
+    named(
+        problems,
+        &format!("{path}.waits_for.links"),
+        &t.waits_for.links,
+        &declared,
+        "a link kind this akt type declares",
+    );
+    named(
+        problems,
+        &format!("{path}.requires_links"),
+        &t.requires_links,
+        &declared,
+        "a link kind this akt type declares",
+    );
 }
 
 /// The outcomes an akt may have.
@@ -965,6 +1077,16 @@ mod tests {
             with("/fields/0/states", json!(["gone"])),
             ["fields[0].states[0]: no state `gone`"]
         );
+        // r[verify akt.field.due]
+        assert_eq!(
+            with("/fields/0/due", json!(true)),
+            ["fields[0].due: only date fields are due"]
+        );
+        // r[verify akt.field.locked]
+        assert_eq!(
+            with("/fields/0/locked", json!(["open", "gone"])),
+            ["fields[0].locked[1]: no state `gone`"]
+        );
         // r[verify akt.field.default]
         assert_eq!(
             with("/fields/0/default", json!("creator")),
@@ -1059,10 +1181,28 @@ mod tests {
         assert_eq!(
             problems(document),
             vec![
-                "transitions[0].from[0]: `closed` is final, and nothing moves on from a final state",
+                "transitions[0].from[0]: `closed` is final, and only a transition that `reopens` moves on from a final state",
                 "transitions[0].to: no state `opened`",
                 "transitions[0].requires[0]: no field `owner`",
                 "transitions[1].from: a transition starts from at least one state",
+            ]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.reopens]
+    #[test]
+    fn a_transition_that_reopens_starts_from_final_states_only() {
+        let mut document = capa();
+        document["transitions"] = json!([
+            { "key": "reopen", "name": "Reopen", "from": ["closed"], "to": "open", "reopens": true }
+        ]);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["transitions"][0]["from"] = json!(["open", "closed"]);
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].from[0]: `open` isn't final, and a transition that `reopens` starts only from final states"
             ]
         );
     }
@@ -1207,6 +1347,61 @@ mod tests {
         assert_eq!(
             problems(on_text),
             ["fields[2].references: only markdown fields keep references"]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.requires-when]
+    #[test]
+    fn checks_what_a_transition_requires_when() {
+        let mut document = capa();
+        document["transitions"][0]["requires"] = json!([]);
+        document["transitions"][0]["requires_when"] =
+            json!([{ "field": "root_cause", "when": { "severity": ["major"] } }]);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["transitions"][0]["requires_when"] = json!([
+            { "field": "cause", "when": {} },
+            { "field": "root_cause", "when": {
+                "severity": ["major", "huge", "major"], "title": ["x"], "kind": ["y"] } }
+        ]);
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].requires_when[0].field: no field `cause`",
+                "transitions[0].requires_when[0].when: `when` names at least one field",
+                "transitions[0].requires_when[1].when.kind: no field `kind`",
+                "transitions[0].requires_when[1].when.severity[1]: `severity` has no option `huge`",
+                "transitions[0].requires_when[1].when.severity[2]: `major` is named twice",
+                "transitions[0].requires_when[1].when.title: `title` is no choice or choices field",
+            ]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.members]
+    // r[verify akt.transition.links]
+    #[test]
+    fn checks_what_a_transition_waits_for() {
+        let mut document = capa();
+        document["contains"] = json!([{ "type": "action" }]);
+        document["links"] = json!([
+            { "key": "implemented_by", "name": "Implemented by", "inverse": "Implements", "to": ["task"] }
+        ]);
+        document["transitions"][0]["waits_for"] =
+            json!({ "members": ["action"], "links": ["implemented_by"] });
+        document["transitions"][0]["requires_links"] = json!(["implemented_by"]);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["transitions"][0]["waits_for"] =
+            json!({ "members": ["action", "task", "action"], "links": ["blocks"] });
+        document["transitions"][0]["requires_links"] = json!(["superseded_by"]);
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].waits_for.members[1]: `task` isn't an akt type this type contains",
+                "transitions[0].waits_for.members[2]: `action` is named twice",
+                "transitions[0].waits_for.links[0]: `blocks` isn't a link kind this akt type declares",
+                "transitions[0].requires_links[0]: `superseded_by` isn't a link kind this akt type declares",
+            ]
         );
     }
 

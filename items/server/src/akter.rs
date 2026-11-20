@@ -29,8 +29,10 @@ mod push;
 mod references;
 pub(crate) mod rules;
 pub mod versions;
+pub mod waits;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
+pub use create::NewLink;
 pub use ordering::Place;
 pub use push::{DraftPush, MESSAGE_MOST, Part as PushPart, PushError, Pushed};
 
@@ -532,7 +534,7 @@ async fn change_in(
         &AktType,
         &Current,
         kuria_engine::Change,
-        Option<kuria_engine::outcomes::Outcome>,
+        kuria_engine::Around,
     ) -> Result<Outcome, Refusal>
     + Send,
 ) -> Result<AktRow, AktError> {
@@ -585,13 +587,7 @@ async fn change_in(
                 .map_err(|e| AktError::Internal(format!("akt {number}: {e}")))?,
         },
     };
-    // r[impl akt.transition.outcomes]
-    let held = match transition.as_deref().and_then(|t| stored.ty.transition(t)) {
-        Some(def) if !def.outcomes.is_empty() => {
-            outcomes::held_locked(conn, tenant, &stored.ty, &akt).await?
-        }
-        _ => None,
-    };
+    let around = around_locked(conn, tenant, &stored.ty, transition.as_deref(), &akt).await?;
     let now = Utc::now();
     let outcome = decide(
         &stored.ty,
@@ -600,8 +596,10 @@ async fn change_in(
             by: actor.subject.into(),
             at: now,
         },
-        held,
+        around,
     )?;
+    // r[impl akt.field.locked]
+    kuria_engine::check_locked(&stored.ty, &current, &outcome, reason.as_deref())?;
     if let Some(loaded) = draft {
         if to_draft {
             return write_draft(conn, caller, &stored, akt, loaded, &outcome, now).await;
@@ -644,6 +642,32 @@ async fn change_in(
         return live::read_as_draft(conn, &stored, akt).await;
     }
     Ok(akt)
+}
+
+/// What the transition `transition` of `ty`, if one is performed, needs to
+/// know of other akter for `akt`, which the caller holds locked: what its
+/// members add up to, and what it waits for, each locked as it is read.
+async fn around_locked(
+    conn: &mut kuria_store::Connection,
+    tenant: Uuid,
+    ty: &AktType,
+    transition: Option<&str>,
+    akt: &AktRow,
+) -> Result<kuria_engine::Around, AktError> {
+    let Some(transition) = transition else {
+        return Ok(kuria_engine::Around::default());
+    };
+    // r[impl akt.transition.outcomes]
+    let held = match ty.transition(transition) {
+        Some(def) if !def.outcomes.is_empty() => {
+            outcomes::held_locked(conn, tenant, ty, akt).await?
+        }
+        _ => None,
+    };
+    // r[impl akt.transition.members]
+    // r[impl akt.transition.links]
+    let waits = waits::locked(conn, tenant, ty, transition, akt).await?;
+    Ok(kuria_engine::Around { held, waits })
 }
 
 /// Writes an edit's `outcome` to `akt`'s live draft `loaded`, checked as a

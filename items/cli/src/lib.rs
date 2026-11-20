@@ -293,6 +293,7 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
             inside,
             conditions,
             outcome,
+            overdue,
             search,
             limit,
             after,
@@ -306,6 +307,7 @@ async fn read(source: Source<'_>, command: Command) -> Result<Answer, CliError> 
                 inside,
                 conditions,
                 outcome: outcome.map(|o| o.to_ascii_lowercase()),
+                overdue,
                 search,
                 limit,
                 after,
@@ -503,6 +505,9 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
             sets,
             file,
             number,
+            links,
+            linked_from,
+            carry,
             reason,
         } => edits::create(
             &mut w,
@@ -512,6 +517,8 @@ fn local_write(root: &Path, me: Option<String>, command: Command) -> Result<Answ
                 sets: &sets,
                 file: file.as_deref(),
                 number: number.as_deref(),
+                links: &writes::linked(&links, &linked_from)?,
+                carry,
                 reason: reason.as_deref(),
             },
         ),
@@ -676,6 +683,9 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
             sets,
             file,
             number,
+            links,
+            linked_from,
+            carry,
             reason,
         } => {
             let created = writes::Created {
@@ -684,6 +694,8 @@ async fn write(session: &Session, command: Command) -> Result<Answer, CliError> 
                 sets: &sets,
                 file: file.as_deref(),
                 number: number.as_deref(),
+                links: &writes::linked(&links, &linked_from)?,
+                carry,
                 reason: reason.as_deref(),
             };
             writes::create(session, &created).await

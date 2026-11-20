@@ -55,6 +55,7 @@ export const AkterOfType = graphql(`
 		$after: String
 		$where: [FieldCondition!]
 		$outcome: Outcome
+		$overdue: Boolean
 		$archived: ArchivedFilter
 	) {
 		aktType(key: $type) {
@@ -74,6 +75,7 @@ export const AkterOfType = graphql(`
 			after: $after
 			where: $where
 			outcome: $outcome
+			overdue: $overdue
 			archived: $archived
 		) {
 			nodes {
@@ -83,6 +85,7 @@ export const AkterOfType = graphql(`
 				rank
 				updatedAt
 				outcome
+				overdue
 				archived {
 					at
 				}
@@ -292,6 +295,14 @@ export const ShownType = graphql(`
 			to
 			requires
 			outcomes
+			reopens
+			requiresWhen {
+				field
+				when {
+					field
+					options
+				}
+			}
 		}
 	}
 `);
@@ -319,6 +330,7 @@ export const TypeShape = graphql(`
 			assignees
 			references
 			diagrams
+			locked
 			options {
 				key
 				name
@@ -338,6 +350,14 @@ export const TypeShape = graphql(`
 			to
 			requires
 			outcomes
+			reopens
+			requiresWhen {
+				field
+				when {
+					field
+					options
+				}
+			}
 		}
 	}
 `);
@@ -371,6 +391,12 @@ export const AktPage = graphql(`
 			title
 			revision
 			outcome
+			overdue
+			waits {
+				transition
+				open
+				lacking
+			}
 			archived {
 				...ArchivedShown
 			}
@@ -429,6 +455,7 @@ export const AktPage = graphql(`
 						title
 						revision
 						outcome
+						overdue
 						archived {
 							at
 						}
@@ -512,6 +539,28 @@ export const NewAkt = graphql(`
 	}
 `);
 
+/** The akt a new one is created linked to, with the values it carries
+ * over (`link.create.carry`). */
+export const CarriedFrom = graphql(`
+	query CarriedFrom($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			type {
+				key
+				fields {
+					key
+					kind
+				}
+			}
+			fields {
+				...FieldValues
+			}
+		}
+	}
+`);
+
 export const Contacts = graphql(`
 	query Contacts {
 		contacts {
@@ -544,6 +593,7 @@ export const ListFilters = graphql(`
 				key
 				name
 				kind
+				due
 				multiline
 				multiple
 				options {

@@ -210,7 +210,14 @@ test('a release from planning to closed', async ({ browser }) => {
 	await addMembers(rm, sessions, backendHotfix);
 	await finish(sessions);
 	await open(rm, hotfix);
-	await moved(rm, 'Deploy', 'Deployed', { Build: { url: 'https://ci.example/builds/815' } });
+	// Deployed first, without approval, and reviewed once it is stable.
+	await moved(rm, 'Deploy', 'Deployed', {
+		Build: { url: 'https://ci.example/builds/815' },
+		'Why it is low risk': 'One line in the session store; rolled back by redeploying 4.2.0.'
+	});
+	await moved(rm, 'Review', 'Reviewed', {
+		'Retrospective review': 'Verified in production, with a test added. Approved by the CTO.'
+	});
 
 	// The experiment is replanned into the next backlog in one step.
 	const nextBacklog = await create(dev, 'backlog', { Title: 'Summer backlog' });
