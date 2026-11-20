@@ -1356,3 +1356,56 @@ fn a_locked_field_changes_only_with_a_reason() {
     let planned = akt("planned", json!({ "title": "T", "due": "2026-12-01" }));
     assert!(check(&planned, json!({ "due": "2027-01-15" }), None).is_ok());
 }
+
+// r[verify akt.transition.reopens]
+#[test]
+fn a_closed_akt_reopens_only_by_a_transition_that_reopens() {
+    let document: AktTypeDocument = serde_json::from_value(json!({
+        "key": "capa", "name": "CAPA", "number": "CAPA-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "why_reopened", "name": "Why reopened", "kind": "text" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ],
+        "transitions": [
+            { "key": "close", "name": "Close", "from": ["open"], "to": "closed" },
+            { "key": "reopen", "name": "Reopen", "from": ["closed"], "to": "open",
+              "reopens": true, "requires": ["why_reopened"] }
+        ]
+    }))
+    .unwrap();
+    let ty = validate(document).unwrap();
+    let closed = Current {
+        state: "closed".to_owned(),
+        fields: fields_from_json(&ty, &input(json!({ "title": "T" }))).unwrap(),
+    };
+    assert_eq!(
+        edit(&ty, &closed, &input(json!({ "title": "U" })), change()),
+        Err(Refusal::Final),
+        "still not edited while closed"
+    );
+    assert_eq!(
+        transition(&ty, &closed, "close", &Map::new(), change(), None),
+        Err(Refusal::Final)
+    );
+    assert_eq!(
+        transition(&ty, &closed, "reopen", &Map::new(), change(), None),
+        Err(Refusal::Requires {
+            transition: "reopen".to_owned(),
+            fields: vec!["why_reopened".to_owned()]
+        })
+    );
+    let reopened = transition(
+        &ty,
+        &closed,
+        "reopen",
+        &input(json!({ "why_reopened": "It recurred" })),
+        change(),
+        None,
+    )
+    .unwrap();
+    assert_eq!(reopened.state, "open");
+}

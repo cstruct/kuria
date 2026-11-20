@@ -33,6 +33,11 @@ describe('akt type documents', () => {
 		expect(
 			availableTransitions(transitions, { key: 'testing', final: false }).map((t) => t.key)
 		).toEqual(['release']);
+		// r[verify akt.transition.reopens]: only one that reopens leaves a final state.
+		const reopen = { key: 'reopen', from: ['closed'], to: 'open', requires: [], reopens: true };
+		expect(
+			availableTransitions([reopen], { key: 'closed', final: true }).map((t) => t.key)
+		).toEqual(['reopen']);
 		expect(availableTransitions(transitions, { key: 'testing', final: true })).toEqual([]);
 		const fields = [{ key: 'title' }, { key: 'go' }, { key: 'version' }];
 		expect(requiredFields(fields, transitions[1]).map((f) => f.key)).toEqual(['go', 'version']);

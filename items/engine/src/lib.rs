@@ -256,7 +256,10 @@ pub fn transition(
     let Some(def) = ty.transition(transition) else {
         return Err(Refusal::UnknownTransition(transition.to_owned()));
     };
-    refuse_final(ty, current)?;
+    // r[impl akt.transition.reopens]
+    if !def.reopens {
+        refuse_final(ty, current)?;
+    }
     if !def.from.contains(&current.state) {
         return Err(Refusal::NotFrom {
             transition: transition.to_owned(),

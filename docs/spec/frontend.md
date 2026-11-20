@@ -52,7 +52,8 @@ one its type's presentation names for its state (`primary`), else, on a
 container the viewer may add to, creating an akt of the first akt type its
 board's first column offers (`app.board-create`), else none. No other
 transition MUST be shown as primary. A transition to a final state MUST be
-confirmed, saying the state it leads to.
+confirmed, saying the state it leads to, and that it stays there unless a
+transition that `reopens` leaves it (`akt.transition.reopens`).
 
 r[app.trail]
 The top bar MUST show where the page is as a trail: on an akt's page, the
@@ -195,7 +196,8 @@ is editing, and where, shown (`live.presence`). Releasing it MUST release
 the live draft as it is (`live.release`).
 
 r[app.transitions]
-The app MUST offer the transitions an akt's state allows, asking for the
+The app MUST offer the transitions an akt's state allows, those that
+reopen it from a final state included (`akt.transition.reopens`), asking for the
 fields a transition requires before performing it, those it requires only
 while other fields hold certain values (`akt.transition.requires-when`)
 included while the akt's values meet the condition. A transition the akt's

@@ -315,12 +315,13 @@ Changing a locked fixture field without a reason is refused as `LOCKED`, naming 
 <!-- akt: PLAN-026-T04 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6M
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T08]
 title: Reopening an akt from a final state
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -330,6 +331,28 @@ Spec reopening (D01). Replace "no transition starts from a final state" with "no
 - A container that is no longer final can take members again (`container.frozen`).
 - Archive rules count a reopened akt as open.
 - Its history reads "Reopened", with the transition's fields.
+
+## Done
+
+- **Spec:** `akt.transition.reopens` in `docs/spec/akter.md`; `akt.type.validation` changes to match.
+  - A transition that `reopens` starts only from final states, and is the only kind that may.
+  - Once reopened, the akt follows its new state's rules: it can be edited again, and as a container it can gain and lose members.
+  - `app.header`'s confirmation of a move to a final state says the akt stays there unless it is reopened, where a transition can reopen it.
+- **History:** it shows the reopening as the transition it is, by its name ("Reopen"), with its fields, rather than as a fixed "Reopened". Archive rules need nothing: `state_since` moves with every transition.
+- **Config:** `reopens` on `TransitionDef`, validated both ways.
+- **Engine:** `transition` skips the final-state refusal for a transition that reopens; edits stay refused while final.
+- **GraphQL:** `Transition.reopens`.
+- **CLI:** `types schema` marks such a transition ", reopens".
+- **App:** in a final state, the page and board drops offer only transitions that reopen.
+
+## Verified
+
+- `items/config` tests `checks_what_transitions_name` and `a_transition_that_reopens_starts_from_final_states_only`.
+- `items/engine` test `a_closed_akt_reopens_only_by_a_transition_that_reopens`.
+- `items/server/tests/reopen.rs`: frozen while closed, takes a member and an edit once reopened, and the history holds both the close and the reopen.
+- `items/cli/tests/local.rs` test `a_closed_case_reopens`.
+- `items/web` tests `availableTransitions`, `transitionsInto` and `confirmationOf`.
+- `mise run lint` and `mise run test`.
 
 <!-- field: acceptance -->
 A fixture akt is closed, reopened with the transition's required fields, and closed again. Its history holds both closures, and it can be edited only while it is open.

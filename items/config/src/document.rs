@@ -531,6 +531,10 @@ pub struct TransitionDef {
     /// performed (`akt.transition.links`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires_links: Vec<String>,
+    /// Whether it leaves a final state, as the one kind of transition that
+    /// may (`akt.transition.reopens`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reopens: bool,
     /// Fields it requires only while other fields hold certain values
     /// (`akt.transition.requires-when`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

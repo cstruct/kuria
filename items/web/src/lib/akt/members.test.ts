@@ -187,6 +187,15 @@ describe('transitionsInto', () => {
 
 	it('offers none from a final state, to an unknown column or type', () => {
 		expect(transitionsInto(board, 'todo', story('done', true))).toEqual([]);
+		// r[verify akt.transition.reopens]
+		const reopenable = {
+			...story('done', true),
+			type: {
+				key: 'story',
+				transitions: [{ key: 'reopen', from: ['done'], to: 'open', reopens: true }]
+			}
+		};
+		expect(transitionsInto(board, 'todo', reopenable).map((t) => t.key)).toEqual(['reopen']);
 		expect(transitionsInto(board, 'gone', story('open'))).toEqual([]);
 		expect(transitionsInto({}, 'done', story('open'))).toEqual([]);
 		expect(transitionsInto(board, 'todo', story('doing'))).toEqual([]);

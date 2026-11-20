@@ -28,7 +28,8 @@ Kuria MUST refuse an akt type document, saying why, unless:
 - exactly one state is initial;
 - every transition starts from at least one state and ends in a state the
   type defines, and every field it requires is a field the type defines;
-- no transition starts from a final state;
+- no transition starts from a final state unless it `reopens`, and one
+  that `reopens` starts only from final states (`akt.transition.reopens`);
 - every choice field has at least one option;
 - every state a field's `locked` names is one the type defines
   (`akt.field.locked`);
@@ -345,6 +346,15 @@ one the transition starts from. It MAY change field values in the same step,
 as an edit does. It MUST be refused unless every field the transition
 requires holds a value afterwards. The akt then moves to the transition's
 target state.
+
+r[akt.transition.reopens]
+A transition MAY say `"reopens": true`. It then starts only from final
+states, and is the one kind of transition an akt in a final state MAY
+perform; its fields, requirements and conditions apply as any
+transition's do. The akt then is in the state it leads to, and follows that
+state's rules: it MAY be edited again, and a container MAY gain and lose
+members again (`container.frozen`). Its history MUST keep the revision that
+made it final, and the one that reopened it.
 
 r[akt.transition.requires-when]
 A transition MAY name, in `requires_when`, fields it requires only while

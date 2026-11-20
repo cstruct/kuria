@@ -48,4 +48,13 @@ describe('the header', () => {
 		);
 		expect(confirmationOf('Autumn', { name: 'Testing', final: false })).toBeUndefined();
 	});
+
+	// r[verify app.header]
+	// r[verify akt.transition.reopens]
+	it('says a final state can be left by reopening, where it can', () => {
+		const reopen = { from: ['closed'], reopens: true };
+		expect(
+			confirmationOf('CAPA-2026-0001', { key: 'closed', name: 'Closed', final: true }, [reopen])
+		).toBe('CAPA-2026-0001 moves to Closed, where it stays unless it is reopened.');
+	});
 });

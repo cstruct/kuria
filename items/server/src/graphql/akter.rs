@@ -1494,6 +1494,7 @@ impl AktType {
                 waits_for_members: t.waits_for.members.clone(),
                 waits_for_links: t.waits_for.links.clone(),
                 requires_links: t.requires_links.clone(),
+                reopens: t.reopens,
                 requires_when: t
                     .requires_when
                     .iter()
@@ -1827,6 +1828,8 @@ pub struct Transition {
     /// The fields it requires only while other fields hold certain values
     /// (`akt.transition.requires-when`).
     requires_when: Vec<RequiredWhen>,
+    /// Whether it leaves a final state (`akt.transition.reopens`).
+    reopens: bool,
 }
 
 /// A field a transition requires only while every condition holds

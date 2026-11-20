@@ -55,10 +55,16 @@ export function actionsOf<T extends { key: string }>(
 }
 
 /** What confirming a transition says: for one to a final state, that it
- * ends there. */
+ * ends there, unless a transition `reopens` it from there
+ * (`akt.transition.reopens`). */
 export function confirmationOf(
 	heading: string,
-	to: { name: string; final?: boolean | null } | undefined
+	to: { key?: string; name: string; final?: boolean | null } | undefined,
+	transitions: readonly { from: readonly string[]; reopens?: boolean | null }[] = []
 ): string | undefined {
-	return to?.final ? `${heading} moves to ${to.name}, where it stays.` : undefined;
+	if (!to?.final) return undefined;
+	const reopens = transitions.some((t) => t.reopens && to.key && t.from.includes(to.key));
+	return reopens
+		? `${heading} moves to ${to.name}, where it stays unless it is reopened.`
+		: `${heading} moves to ${to.name}, where it stays.`;
 }

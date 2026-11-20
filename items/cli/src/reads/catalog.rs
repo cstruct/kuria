@@ -113,6 +113,7 @@ fn schema_json(shape: &Shape) -> Json {
             "action": document["transitions"].as_array().and_then(|ts| ts.iter().find(|d| d["key"] == t.key.as_str())).and_then(|d| d["action"].as_str()),
             "waitsFor": waits_of(document, &t.key),
             "requiresLinks": requires_links_of(document, &t.key),
+            "reopens": transition_def(document, &t.key).is_some_and(|d| d["reopens"] == true),
             "requiresWhen": transition_def(document, &t.key).and_then(|d| d.get("requires_when")).cloned().unwrap_or_else(|| json!([])),
         })).collect::<Vec<_>>(),
         "contains": document.get("contains").cloned().unwrap_or_else(|| json!([])),
@@ -205,6 +206,10 @@ fn schema_markdown(shape: &Shape) -> String {
                 let outcomes: Vec<String> =
                     t.outcomes.iter().map(|o| o.to_ascii_lowercase()).collect();
                 line.push_str(&format!(", only if the outcome is {}", outcomes.join(", ")));
+            }
+            // r[impl akt.transition.reopens]
+            if transition_def(document, &t.key).is_some_and(|d| d["reopens"] == true) {
+                line.push_str(", reopens");
             }
             line.push_str(&requires_when_text(document, &t.key));
             line.push_str(&waits_text(document, &t.key));

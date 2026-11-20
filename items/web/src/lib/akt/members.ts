@@ -40,12 +40,16 @@ export function transitionsInto<M extends Movable>(
 	column: string,
 	member: M
 ): M['type']['transitions'][number][] {
-	if (member.state.final) return [];
 	const def = (documentOf(document).board?.columns ?? []).find((c) => c.key === column);
 	const states = def?.states?.[member.type.key];
 	if (!Array.isArray(states)) return [];
+	// r[impl akt.transition.reopens]: from a final state, only a transition
+	// that reopens.
 	return member.type.transitions.filter(
-		(t) => t.from.includes(member.state.key) && states.includes(t.to)
+		(t) =>
+			t.from.includes(member.state.key) &&
+			states.includes(t.to) &&
+			(!member.state.final || Boolean((t as { reopens?: boolean | null }).reopens))
 	);
 }
 

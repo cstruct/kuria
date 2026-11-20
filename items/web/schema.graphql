@@ -1525,6 +1525,10 @@ type Transition {
 	(`akt.transition.requires-when`).
 	"""
 	requiresWhen: [RequiredWhen!]!
+	"""
+	Whether it leaves a final state (`akt.transition.reopens`).
+	"""
+	reopens: Boolean!
 }
 
 """

@@ -3661,3 +3661,49 @@ fn a_due_date_moves_only_with_a_reason_once_work_starts() {
     ]);
     assert!(file(&dir, "A-1").contains("due: 2027-01-15"));
 }
+
+// r[verify akt.transition.reopens]
+// r[verify cli.local.rules]
+#[test]
+fn a_closed_case_reopens() {
+    let dir = Dir::new();
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            { "key": "why_reopened", "name": "Why reopened", "kind": "text" }
+        ],
+        "states": [
+            { "key": "open", "name": "Open", "initial": true },
+            { "key": "closed", "name": "Closed", "final": true }
+        ],
+        "transitions": [
+            { "key": "close", "name": "Close", "from": ["open"], "to": "closed" },
+            { "key": "reopen", "name": "Reopen", "from": ["closed"], "to": "open",
+              "reopens": true, "requires": ["why_reopened"] }
+        ]
+    });
+    std::fs::write(dir.root.join("types/case.json"), case.to_string()).unwrap();
+    let schema = dir.ok(&["types", "schema", "case"]).markdown;
+    assert!(
+        schema.contains("- `reopen` Reopen: closed → open, requires why_reopened, reopens\n"),
+        "{schema}"
+    );
+    dir.ok(&["new", "case", "--set", "title=Late reviews"]);
+    dir.ok(&["do", "CASE-1", "close"]);
+    assert_eq!(
+        dir.refused(&["set", "CASE-1", "title=Again"]).code,
+        "REFUSED"
+    );
+    let shown = dir.ok(&["show", "CASE-1"]).markdown;
+    assert!(shown.contains("`reopen` Reopen → Open"), "{shown}");
+    dir.ok(&[
+        "do",
+        "CASE-1",
+        "reopen",
+        "--set",
+        "why_reopened=It recurred",
+    ]);
+    dir.ok(&["set", "CASE-1", "title=Late reviews, again"]);
+    assert!(file(&dir, "CASE-1").contains("state: open"));
+}

@@ -500,9 +500,16 @@ fn transitions(
         for (j, from) in transition.from.iter().enumerate() {
             match document.states.iter().find(|s| &s.key == from) {
                 None => problems.add(&format!("{path}.from[{j}]"), format!("no state `{from}`")),
-                Some(state) if state.is_final => problems.add(
+                // r[impl akt.transition.reopens]
+                Some(state) if state.is_final && !transition.reopens => problems.add(
                     &format!("{path}.from[{j}]"),
-                    format!("`{from}` is final, and nothing moves on from a final state"),
+                    format!(
+                        "`{from}` is final, and only a transition that `reopens` moves on from a final state"
+                    ),
+                ),
+                Some(state) if !state.is_final && transition.reopens => problems.add(
+                    &format!("{path}.from[{j}]"),
+                    format!("`{from}` isn't final, and a transition that `reopens` starts only from final states"),
                 ),
                 Some(_) => {}
             }
@@ -1165,10 +1172,28 @@ mod tests {
         assert_eq!(
             problems(document),
             vec![
-                "transitions[0].from[0]: `closed` is final, and nothing moves on from a final state",
+                "transitions[0].from[0]: `closed` is final, and only a transition that `reopens` moves on from a final state",
                 "transitions[0].to: no state `opened`",
                 "transitions[0].requires[0]: no field `owner`",
                 "transitions[1].from: a transition starts from at least one state",
+            ]
+        );
+    }
+
+    // r[verify akt.type.validation]
+    // r[verify akt.transition.reopens]
+    #[test]
+    fn a_transition_that_reopens_starts_from_final_states_only() {
+        let mut document = capa();
+        document["transitions"] = json!([
+            { "key": "reopen", "name": "Reopen", "from": ["closed"], "to": "open", "reopens": true }
+        ]);
+        assert_eq!(problems(document.clone()), Vec::<String>::new());
+        document["transitions"][0]["from"] = json!(["open", "closed"]);
+        assert_eq!(
+            problems(document),
+            [
+                "transitions[0].from[0]: `open` isn't final, and a transition that `reopens` starts only from final states"
             ]
         );
     }

@@ -54,15 +54,21 @@ export function draftedFields(document: unknown): string[] {
 interface TransitionShape {
 	from: readonly string[];
 	requires: readonly string[];
+	reopens?: boolean | null;
 }
 
-/** The transitions an akt in `state` may take: none in a final state. */
+/** The transitions an akt in `state` may take: in a final state, only
+ * those that reopen it (`akt.transition.reopens`). */
 // r[impl app.transitions]
 export function availableTransitions<T extends TransitionShape>(
 	transitions: readonly T[],
-	state: { key: string; final: boolean }
+	state: { key: string; final?: boolean }
 ): T[] {
-	return state.final ? [] : transitions.filter((t) => t.from.includes(state.key));
+	// r[impl akt.transition.reopens]: from a final state, only a transition
+	// that reopens.
+	return transitions.filter(
+		(t) => t.from.includes(state.key) && (!state.final || Boolean(t.reopens))
+	);
 }
 
 /** A field a transition requires only while every condition holds: a

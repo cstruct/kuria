@@ -1372,7 +1372,8 @@
 				name={pending.name}
 				confirm={confirmationOf(
 					headingOf(akt),
-					akt.type.states.find((s) => s.key === pending?.to)
+					akt.type.states.find((s) => s.key === pending?.to),
+					akt.type.transitions
 				)}
 				fields={required(pending)}
 				bind:drafts

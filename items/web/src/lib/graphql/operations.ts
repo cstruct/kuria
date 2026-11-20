@@ -292,6 +292,7 @@ export const ShownType = graphql(`
 			to
 			requires
 			outcomes
+			reopens
 			requiresWhen {
 				field
 				when {
@@ -346,6 +347,7 @@ export const TypeShape = graphql(`
 			to
 			requires
 			outcomes
+			reopens
 			requiresWhen {
 				field
 				when {
