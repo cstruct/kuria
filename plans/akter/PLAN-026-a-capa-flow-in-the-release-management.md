@@ -1,9 +1,9 @@
 ---
 number: PLAN-026
 type: plan
-revision: 22
+revision: 23
 rank: b6I
-state: draft
+state: active
 title: A CAPA flow in the release-management example
 owner: albin@mattsson.io
 ---
@@ -520,11 +520,12 @@ Checking them would need a transition condition on a linked akt's field values (
 <!-- akt: PLAN-026-D01 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b6Z
-state: proposed
+state: decided
 in: [PLAN-026]
 title: Reopening is a transition that leaves a final state
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
@@ -539,11 +540,12 @@ A transition can say `reopens` and start from a final state. A CAPA closes to a 
 <!-- akt: PLAN-026-D02 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b6a
-state: proposed
+state: decided
 in: [PLAN-026]
 title: The closure outcome is a choice the close transition requires
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
@@ -558,11 +560,12 @@ It keeps the procedure's words on the record and needs no engine change beyond T
 <!-- akt: PLAN-026-D03 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b6b
-state: proposed
+state: decided
 in: [PLAN-026]
 title: CAPA actions are akter contained in their CAPA
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
@@ -577,11 +580,12 @@ Actions need their own states, due dates and links, which rows of a table wouldn
 <!-- akt: PLAN-026-D04 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b6c
-state: proposed
+state: decided
 in: [PLAN-026]
 title: "Hotfixes record the deferred review as a state, not as an obligation"
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
