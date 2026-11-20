@@ -585,12 +585,13 @@ Numbered `CAPA-2026-0001-A01`, created in its CAPA, under *Show more*.
 <!-- akt: PLAN-026-T09 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6R
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T10]
 title: Hotfixes deployed first and reviewed after
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -601,6 +602,28 @@ Rework hotfixes into the correction route (D04).
 - *Deployed* gets a warning tone.
 
 Rules that count deployed hotfixes (release notes, archiving) count *Deployed* and *Reviewed* alike. Update `release_flow.rs` and the end-to-end release walk.
+
+## Done
+
+- **`hotfix.json`:**
+  - *Deploy* needs the build and "Why it is low risk" (how isolated the change is, what it could break, how it is rolled back), and no approval.
+  - *Review* (`release:approve`) leads to a new final state, *Reviewed*, and needs the retrospective review, given only there.
+  - *Deployed* isn't final any more and reads as a warning, so a hotfix waiting for its review shows it; *Open* reads as active. Each state's next step is primary.
+- **`release.json`:**
+  - its board's *Accepted* column holds deployed and reviewed hotfixes;
+  - *End maintenance* waits for every hotfix to be reviewed (T01), so no release closes with a review still owed.
+- **`release_notes.json`:** the draft counts deployed and reviewed hotfixes alike.
+- Archiving needed nothing: hotfixes archive with their release.
+- **Tests:**
+  - `release_flow.rs` deploys with the assessment; refuses to close the release before the review; refuses the review to the developer; then reviews and closes;
+  - the example story in `examples.rs` reviews spring's hotfix, and the bundle was made again;
+  - `e2e/tests/release-flow.spec.ts` deploys and reviews in the app.
+
+## Verified
+
+- `items/server/tests/release_flow.rs` and `examples.rs`.
+- `mise run lint` and `mise run test`.
+- The e2e walk was changed but not run: the e2e Konklav running here is the main checkout's (another session's). It runs with T12.
 
 <!-- field: acceptance -->
 A hotfix deploys without approval and shows that it waits for review. Reviewing it needs `release:approve`, and its tasks still reach the release notes.

@@ -20,7 +20,8 @@
     { "key": "release", "name": "Release", "from": ["testing"], "to": "released",
       "requires": ["version", "released_on", "release_manager", "go"],
       "action": "release:approve" },
-    { "key": "close", "name": "End maintenance", "from": ["released"], "to": "closed" }
+    { "key": "close", "name": "End maintenance", "from": ["released"], "to": "closed",
+      "waits_for": { "members": ["hotfix"] } }
   ],
   "contains": [
     { "type": "backlog" },
@@ -32,7 +33,7 @@
     { "key": "testing", "name": "Testing",
       "states": { "release_candidate": ["testing"], "hotfix": ["open"] } },
     { "key": "accepted", "name": "Accepted",
-      "states": { "release_candidate": ["accepted"], "hotfix": ["deployed"] } },
+      "states": { "release_candidate": ["accepted"], "hotfix": ["deployed", "reviewed"] } },
     { "key": "rejected", "name": "Rejected", "states": { "release_candidate": ["rejected"] } }
   ] },
   "archive": { "rules": [{ "newer": 2, "in": ["closed"] }] },

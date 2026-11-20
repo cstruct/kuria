@@ -5,18 +5,27 @@
   "created_in": ["release"],
   "fields": [
     { "key": "reason", "name": "Why it can't wait", "kind": "text", "multiline": true, "required": true },
-    { "key": "build", "name": "Build", "kind": "reference" }
+    { "key": "build", "name": "Build", "kind": "reference" },
+    { "key": "low_risk", "name": "Why it is low risk", "kind": "text", "multiline": true,
+      "description": "How isolated the change is, what it could break, and how it is rolled back." },
+    { "key": "review", "name": "Retrospective review", "kind": "text", "multiline": true,
+      "states": ["reviewed"],
+      "description": "Once it is stable: its verification, its documents, and who approved it." }
   ],
   "states": [
     { "key": "open", "name": "Open", "initial": true },
-    { "key": "deployed", "name": "Deployed", "final": true }
+    { "key": "deployed", "name": "Deployed" },
+    { "key": "reviewed", "name": "Reviewed", "final": true }
   ],
   "transitions": [
     { "key": "deploy", "name": "Deploy", "from": ["open"], "to": "deployed",
-      "requires": ["build"], "action": "release:approve" }
+      "requires": ["build", "low_risk"] },
+    { "key": "review", "name": "Review", "from": ["deployed"], "to": "reviewed",
+      "requires": ["review"], "action": "release:approve" }
   ],
   "contains": [{ "type": "backlog_item" }, { "type": "artifact" }],
   "archive": { "rules": [{ "with_container": "release" }] },
   "presentation": {
-    "group": "Releasing", "icon": "wrench", "colour": "red", "card": ["build"], "list": ["build"], "tones": { "open": "warning", "deployed": "success" } }
+    "group": "Releasing", "icon": "wrench", "colour": "red", "card": ["build"], "list": ["build"], "tones": { "open": "active", "deployed": "warning", "reviewed": "success" },
+    "primary": { "open": "deploy", "deployed": "review" } }
 }

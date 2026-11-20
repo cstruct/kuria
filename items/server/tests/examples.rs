@@ -580,8 +580,19 @@ async fn release_management(w: &World) {
         &rm,
         &hotfix,
         "deploy",
-        Some(json!({ "build": { "url": "https://ci.example/shop/builds/815", "label": "Build 815" } })),
+        Some(json!({
+            "build": { "url": "https://ci.example/shop/builds/815", "label": "Build 815" },
+            "low_risk": "One line in the session store; rolled back by redeploying 4.2.0.",
+        })),
         "Deployed 4.2.1",
+    )
+    .await;
+    w.transition(
+        &rm,
+        &hotfix,
+        "review",
+        Some(json!({ "review": "Verified in production, with a test for lost sessions added. Approved by the CTO." })),
+        "Stable for a week",
     )
     .await;
     w.transition(&rm, &spring, "close", None, "Nothing more to ship")
