@@ -1,7 +1,7 @@
 ---
 number: PLAN-027
 type: plan
-revision: 19
+revision: 21
 rank: b5k
 state: draft
 title: "An MCP server for searching and editing documents, alongside live typing"
@@ -34,7 +34,9 @@ The CLI could do the same with `editAkt` (read, replace, write the whole field),
 
 ## Searching what documents say
 
-`akter(search:)` also matches text fields: a full-text search (Postgres `tsvector`, the `simple` configuration unless G02 says otherwise) over each akt's text and Markdown fields as it reads, which for an akt with a live draft is the draft (`akt_draft` keeps what it reads as). Answers say which field matched with a short excerpt around the match, so the agent can choose what to read. Readability is checked as for any read.
+`akter(search:)` also matches text fields, through [pg_search](https://github.com/paradedb/paradedb/tree/main/pg_search) (PLAN-027-D05): a BM25 index on `akt_search`, a table with a row per text and Markdown field of each akt (tenant, akt, field key, text) as it reads, which for an akt with a live draft is the draft. The write path keeps it, in the transaction of the change. Answers are ranked by relevance and say which field matched, with a highlighted excerpt, so the agent can choose what to read. Readability is checked as for any read.
+
+Kuria then needs Postgres with pg_search everywhere it runs: an image of its own, `postgres:18.x-trixie` with ParadeDB's package and pgvector, preloaded (PLAN-027-T10). Operators run Postgres themselves or on ParadeDB's offerings, since managed ones don't offer it; its indexes live on the primary only in the community edition, and it is AGPL-3.0 (PLAN-027-G02).
 
 ## `kuria mcp`
 
@@ -93,16 +95,16 @@ replaceInAkt applies replacements under the row lock as the least Yjs change for
 <!-- akt: PLAN-027-T03 -->
 ---
 type: task
-revision: 3
+revision: 5
 rank: b5n
 state: todo
 in: [PLAN-027]
-links: [Blocked by PLAN-027-T01, Blocks PLAN-027-T04]
+links: [Blocked by PLAN-027-T01, Blocks PLAN-027-T04, Blocked by PLAN-027-T10]
 title: Search akter by what their text says
 ---
 
 <!-- field: acceptance -->
-akter(search:) matches text and Markdown fields, a live draft as it reads, with the field and an excerpt; only readable akter; store and server tests.
+`akter(search:)` also matches text and Markdown fields through a pg_search BM25 index on `akt_search`, which the write path keeps (a live draft as it reads), ranked by relevance, with the field and a highlighted excerpt; only readable akter; store and server tests.
 
 <!-- akt: PLAN-027-T04 -->
 ---
@@ -192,9 +194,9 @@ The person, through the agent (option 3), as PLAN-027-D04 decides: Kuria reads K
 <!-- akt: PLAN-027-G02 -->
 ---
 type: gap
-revision: 2
+revision: 3
 rank: b5t
-state: open
+state: closed
 in: [PLAN-027]
 title: How search ranks and which language it stems
 ---
@@ -220,6 +222,9 @@ Postgres's own full-text search: `tsvector` with a GIN index, `ts_rank` (not BM2
 ## Either way
 
 Index a table of its own, `akt_search` (tenant, akt, field key, text), that the write path keeps: each text and Markdown field of each akt as it reads, its live draft's for an akt with one. A row per field says which field matched and gives its excerpt, and akt types' differing fields need no JSON index.
+
+<!-- field: resolution -->
+pg_search, as PLAN-027-D05 decides: BM25 ranking over `akt_search`, a row per text field, tokenized per column; Kuria's own Postgres image with it (PLAN-027-T10). Which tokenizer and language per tenant is settled in PLAN-027-T01's spec.
 
 <!-- akt: PLAN-027-G03 -->
 ---
@@ -342,11 +347,12 @@ Konklav, in its own repository, lets a person start a child session for a servic
 <!-- akt: PLAN-027-D05 -->
 ---
 type: decision
-revision: 1
+revision: 3
 rank: b61
-state: proposed
+state: decided
 in: [PLAN-027]
 title: Search with pg_search
+decided_by: albin@mattsson.io
 ---
 
 <!-- field: context -->
@@ -357,3 +363,17 @@ Kuria requires Postgres with pg_search (ParadeDB). Its BM25 index is on `akt_sea
 
 <!-- field: why -->
 BM25 ranking, tokenizers per language and ngram matching find documents by what they say far better than `ts_rank` over a `tsvector`, and are what an agent searching documents needs.
+
+<!-- akt: PLAN-027-T10 -->
+---
+type: task
+revision: 2
+rank: b62
+state: todo
+in: [PLAN-027]
+links: [Blocks PLAN-027-T03]
+title: "Kuria's own Postgres image, with pg_search"
+---
+
+<!-- field: acceptance -->
+An image built from `postgres:18.x-trixie` with ParadeDB's pg_search package (pinned, 0.27.0 or later) and pgvector, `shared_preload_libraries = 'pg_search'`, runs Kuria's development, test, CI, end-to-end and dogfooding Postgres; a migration creates or requires the extension; CONTRIBUTING.md and docs/architecture.md say Kuria needs Postgres with pg_search, and why.
