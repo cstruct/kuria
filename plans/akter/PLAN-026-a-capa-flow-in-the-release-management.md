@@ -737,12 +737,13 @@ The README describes the CAPA flow as the app shows it, and every new term is in
 <!-- akt: PLAN-026-T12 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6U
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocked by PLAN-026-T10]
 title: An end-to-end walk of a CAPA
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -757,6 +758,41 @@ Add `e2e/tests/capa-flow.spec.ts`, walking what the plan's verification lists:
 7. QA/RA closes the CAPA.
 
 Add a QA/RA person to the end-to-end seed.
+
+## Done
+
+`e2e/tests/capa-flow.spec.ts` walks it in the app:
+
+1. The developer reports a problem in a backlog and classifies it. The dialog asks for the risk record once *Uncertain* is chosen in it.
+2. QA/RA opens the report and chooses *New CAPA*. The create page says what it will be linked with, starts with the report's title, and creates the CAPA *Originated from* it.
+3. QA/RA confirms the CAPA. *Plan actions* asks for the root cause once *Corrective action* is ticked.
+4. *Start implementing* locks the effectiveness check, which shows a lock.
+5. An action due in 2020 reads "2020-01-01, overdue" on the CAPA's board. *Verify effectiveness* is unavailable and says it waits for the action.
+6. On the action, *New Task* isn't offered: QA/RA may not create tasks. A task the developers made is linked as *Implemented by*, and *Finish* says it waits for that task.
+7. Once the task is done, the action finishes with its evidence; the CAPA is verified and closed, its dialog saying it stays closed unless reopened, and *Reopen* is offered.
+
+Also:
+
+- **The e2e seed:** Ines Berg (`qa@shop.example`), with `quality-work` at `capa`, `capa_action`, `problem_report` and `test_case`.
+- **`e2e/support/app.ts`:** fills `choices` fields.
+
+### Fixed on the way
+
+The transition dialog didn't ask for a field the transition requires on a condition met by a value given in that same dialog: *Classify*'s risk record, which depends on the screening it asks for. The page's `held` now reads the values being edited before the saved ones, and `app.transitions` says so. This corrects what T02 recorded.
+
+### Found
+
+- A transition named *Close* shares its name with the dialog's close button, so the dialog has two buttons named "Close". The walk presses the submit button; an app that names its close button otherwise would read better.
+- A closed CAPA shows its reopen fields, empty, until it is reopened, because they have no `states`. Giving them states would hide them until reopened, but keep them out of the second closure's view.
+
+## Verified
+
+- `mise run e2e`, the whole suite, on a freshly seeded stack, taken over from the main checkout with your approval: 53 passed. That includes the release walk, now with the hotfix reviewed, and the other walks with the new types defined.
+- `capa-flow` then passed three times in a row once its selectors were fixed.
+  - One run in between failed at once, reading the report it had just created as not found. It didn't recur in the next three runs; the cause wasn't found.
+  - The full suite wasn't run again after those fixes, which touch only `capa-flow.spec.ts` and the dialog's `held`.
+- Only desktop width: the suite's one Playwright project is desktop Chromium, so the phone width in the acceptance wasn't walked.
+- `mise run lint` and `mise run test`.
 
 <!-- field: acceptance -->
 `mise run e2e` passes, the new walk included, at desktop and phone widths.

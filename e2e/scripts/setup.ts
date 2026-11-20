@@ -176,7 +176,11 @@ const people = {
 		{ role: 'developer-work', at: ['backlog', 'epic', 'backlog_item', 'problem_report', 'test_protocol', 'test_case', 'document_index'] },
 		{ role: 'document-release', at: ['document', 'external_document'] }
 	]),
-	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader'])
+	headOfProduct: await person(tenant, 'hedda@shop.example', ['reader']),
+	quality: await person(tenant, 'qa@shop.example', [
+		'reader',
+		{ role: 'quality-work', at: ['capa', 'capa_action', 'problem_report', 'test_case'] }
+	])
 };
 
 // Kuria itself: its browser sign-in client and its relying client's

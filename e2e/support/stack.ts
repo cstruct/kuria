@@ -22,7 +22,7 @@ export interface Seeded {
 	tenant: string;
 	/** A second tenant, where the admin is a member too. */
 	lab: string;
-	people: { developer: Person; releaseManager: Person; headOfProduct: Person };
+	people: { developer: Person; releaseManager: Person; headOfProduct: Person; quality: Person };
 	/** Software with secret keys: the admin, who defines akt types, and the
 	 * build pipeline. */
 	clients: { admin: ServiceClient; pipeline: ServiceClient };

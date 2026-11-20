@@ -15,7 +15,12 @@ export async function pick(page: Page, label: string, number: string) {
 }
 
 /** Fills a text, date or URL field by its name, in `scope`. */
-type Fill = string | { choose: string } | { check: true; for?: string } | { url: string; label?: string };
+type Fill =
+	| string
+	| { choose: string }
+	| { choices: string[] }
+	| { check: true; for?: string }
+	| { url: string; label?: string };
 
 async function fill(page: Page, fields: Record<string, Fill>) {
 	for (const [name, value] of Object.entries(fields)) {
@@ -24,6 +29,8 @@ async function fill(page: Page, fields: Record<string, Fill>) {
 			await group.getByLabel(name, { exact: true }).fill(value);
 		} else if ('choose' in value) {
 			await group.getByLabel(name, { exact: true }).selectOption({ label: value.choose });
+		} else if ('choices' in value) {
+			for (const option of value.choices) await group.getByRole('checkbox', { name: option }).check();
 		} else if ('check' in value) {
 			await group.getByRole('checkbox', { name }).check();
 			if (value.for) await group.getByLabel('Checked for').selectOption({ label: value.for });

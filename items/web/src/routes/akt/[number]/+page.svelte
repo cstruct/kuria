@@ -637,8 +637,12 @@
 		reason = '';
 	}
 
-	/** The option keys the akt's `choice` or `choices` field `key` holds. */
+	/** The option keys the akt's `choice` or `choices` field `key` holds: as
+	 * it is being edited, such as in a transition's dialog, else as saved. */
 	function held(key: string): string[] {
+		const draft = drafts[key];
+		if (draft?.kind === 'CHOICE') return draft.key ? [draft.key] : [];
+		if (draft?.kind === 'CHOICES') return draft.keys;
 		const value = akt?.fields.find((v) => v.field === key);
 		if (value?.__typename === 'ChoiceValue') return value.option ? [value.option.key] : [];
 		if (value?.__typename === 'ChoicesValue') return value.options.map((o) => o.key);

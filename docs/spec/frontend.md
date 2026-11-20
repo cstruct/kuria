@@ -200,7 +200,9 @@ The app MUST offer the transitions an akt's state allows, those that
 reopen it from a final state included (`akt.transition.reopens`), asking for the
 fields a transition requires before performing it, those it requires only
 while other fields hold certain values (`akt.transition.requires-when`)
-included while the akt's values meet the condition. A transition the akt's
+included while the akt's values, as the transition would leave them,
+meet the condition: one that a field asked for with it meets is asked for
+as soon as it does. A transition the akt's
 outcome doesn't allow (`akt.transition.outcomes`) MUST be shown as
 unavailable, saying the outcomes it allows, and one that waits
 (`akt.transition.waits`) as unavailable, saying what for: the akter not
