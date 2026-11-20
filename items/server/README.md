@@ -216,7 +216,17 @@ Not yet: signatures.
   comes from its members by working each one's out, a chunk at a time,
   until the page is full. Any other is `BAD_REQUEST`. A transition naming
   `outcomes` share-locks the akt's member tree before working out its
-  outcome (`akter::outcomes::held_locked`).
+  outcome (`akter::outcomes::held_locked`). `overdue` keeps those overdue
+  on a due field (`akt.filter.overdue`), by the type's latest version, as
+  `Match::DateBefore` and `Match::StateIn`.
+- Transitions that wait (`akt.transition.members`, `akt.transition.links`):
+  `akter::waits::locked` share-locks the members and link targets a
+  transition waits for, reads them again, and the engine decides;
+  `Akt.waits` answers what each transition the state allows waits for now.
+  Locked fields (`akt.field.locked`) are checked on the one path for edits
+  and transitions with the change's reason, refused as `LOCKED`; due
+  fields give `Akt.overdue` (`akt.field.due`). `createAkt`'s `links` are
+  added in its transaction (`link.create`).
   Mutations: `defineAktType`, `createAkt` (with `in`), `editAkt`,
   `performTransition`, `addToContainer`, `removeFromContainer`,
   `transferMember`, `moveAkt`, `draftField`, `addContact`, `editContact`,

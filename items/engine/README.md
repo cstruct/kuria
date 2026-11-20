@@ -14,7 +14,12 @@ produces, or why it is refused.
 - `create`, `edit` and `transition`: take an `AktType` (from `kuria-config`),
   the akt's current state and field values, and the values a request gives,
   and return an `Outcome` (the new state and values, what changed, and the
-  hash) or a `Refusal`.
+  hash) or a `Refusal`. A transition takes an `Around`: what the akt's
+  members add up to, and what it waits for (`waits::of`, from the members
+  and links the caller finds). `required_when` gives the fields a
+  transition requires for the values given; `check_locked` refuses a change
+  to a locked field without a reason; `overdue` gives the due fields an akt
+  is overdue on today.
 - `rank_between` and `nth_appended`: rank keys, fractional indexing with an
   integer part, so appending keeps keys short and there is always a key
   between two others. Keys are compared byte by byte. `placement`: where a

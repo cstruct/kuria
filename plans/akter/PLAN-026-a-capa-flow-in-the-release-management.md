@@ -694,12 +694,13 @@ Not seen in the app: the example stack running here is the main checkout's, so `
 <!-- akt: PLAN-026-T11 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6T
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocked by PLAN-026-T10]
 title: Document the CAPA flow
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -709,6 +710,26 @@ title: Document the CAPA flow
   - the akt-type table.
 - `docs/nomenclature.md`: the new terms (correction, corrective action, preventive action, reopening, due date, locked field).
 - `docs/requirements.md`: its "Not yet" line.
+
+## Done
+
+- **`docs/examples/release-management/README.md`:**
+  - thirteen types in the table;
+  - hotfixes deployed first and reviewed after;
+  - the *Quality* group, the new icons, tones, navigation and defaults;
+  - a new section, *Problem reports and CAPAs*, with how they fit, a CAPA in the app and from the CLI;
+  - the bundle's two CAPAs and Ines Berg;
+  - the two new Konklav actions, the developer's grant at `problem_report`, and a QA/RA role;
+  - the third e2e walk.
+- **`docs/nomenclature.md`:**
+  - under *Akter*: `reopening`, `waiting transition`, `due date` (with `overdue`) and `locked field`; `state` now says a final state can be left by reopening;
+  - a new *Quality* section with `problem report`, `CAPA`, `correction`, `corrective action`, `preventive action` and `effectiveness check`, marked as the example's words, not Kuria's.
+- **`docs/requirements.md`:** what now runs, linked to the new section. "Not yet" names deadlines that escalate, obligations and separation of duties.
+- **`docs/examples/README.md`**, and the server, CLI, engine and web READMEs, describe what each item now does.
+
+## Verified
+
+`mise run lint` (Tracey and Prettier included). The change is Markdown only, so `mise run test` wasn't rerun for it.
 
 <!-- field: acceptance -->
 The README describes the CAPA flow as the app shows it, and every new term is in `docs/nomenclature.md`.

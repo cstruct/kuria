@@ -84,7 +84,7 @@ Terms are introduced in dependency order: each definition only uses terms define
   - A software bill of materials: an attachment Kuria recognised as SPDX or CycloneDX, with a summary of its format, version, name and component count.
 
 - `state`
-  - Where an akt is in its akt type's workflow, such as `open` or `closed`. One state of each akt type is `initial`; states may be `final`, and an akt in a final state can no longer be edited.
+  - Where an akt is in its akt type's workflow, such as `open` or `closed`. One state of each akt type is `initial`; states may be `final`, and an akt in a final state can no longer be edited, nor moved on except by `reopening`.
 
 - `akt revision`
   - One recorded change to an akt: who made it, in what capacity, through which transition, why, and what changed.
@@ -93,8 +93,37 @@ Terms are introduced in dependency order: each definition only uses terms define
 - `transition`
   - A change of an akt from one state to another, as its akt type allows. A transition can have conditions, required fields, permitted roles and required signatures.
 
+- `reopening`
+  - A transition that leaves a final state, as one that says `reopens` may; the only kind that can. The akt's history keeps the revision that made it final.
+
+- `waiting transition`
+  - A transition that would be refused now for what it `waits_for`: members of some types, or the targets of some link kinds, not yet final; or a link kind it requires that the akt lacks. The akt is served with what each transition its state allows waits for.
+
+- `due date`
+  - A `date` field that says `due`. An akt is `overdue` on it once the date has passed while the akt isn't in a final state: worked out when read, never stored.
+
+- `locked field`
+  - A field locked in some states: a change to a value it holds there needs a reason, which its revision records.
+
 - `change event`
   - The record that an akt changed, numbered per tenant: a new akt revision, a new rank, a released version, or a change to its live draft (at most one a second per server for edits made live). Change events are what subscriptions and catching up deliver.
+
+## Quality
+
+These name what the release-management example's problem reports and CAPAs do. Kuria knows none of them; they are its akt types' words.
+
+- `problem report`
+  - A problem found in a product, classified by severity, priority and whether it could lead to a hazardous situation, and fixed by tasks or closed as won't fix with a reason.
+- `CAPA`
+  - A corrective and preventive action: the record of a serious, systemic or recurring problem, why it happens or could, the actions taken, and whether they worked.
+- `correction`
+  - An action that removes a problem found, such as a workaround or a hotfix, without removing its cause.
+- `corrective action`
+  - An action that removes the cause of a problem found, so that it doesn't recur.
+- `preventive action`
+  - An action that removes the cause of a problem that hasn't happened yet, so that it doesn't.
+- `effectiveness check`
+  - How a CAPA shows its actions worked, with criteria set before they are implemented.
 
 ## Documents and versions
 
