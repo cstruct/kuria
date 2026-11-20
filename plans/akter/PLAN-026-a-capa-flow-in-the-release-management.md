@@ -312,16 +312,16 @@ From a fixture akt, *New …* opens a form filled with the shared fields, and th
 <!-- akt: PLAN-026-T07 -->
 ---
 type: task
-revision: 2
+revision: 4
 rank: b6P
 state: todo
 in: [PLAN-026]
-links: [Blocks PLAN-026-T10]
+links: [Blocks PLAN-026-T10, Resolves PLAN-026-G01]
 title: Problem reports in the release-management example
 ---
 
 <!-- field: description -->
-Resolve G01, then add problem reports to the example. They live in the backlog, as tasks do. Their fields:
+Add a `problem_report` akt type to the example (G01). Problem reports live in the backlog, ranked beside tasks, with states open, classified, fixed, won't fix and residual anomaly. Their fields:
 
 - severity: critical, major, minor or negligible;
 - priority: P0, P1 or P2;
@@ -453,10 +453,11 @@ Add a QA/RA person to the end-to-end seed.
 <!-- akt: PLAN-026-G01 -->
 ---
 type: gap
-revision: 1
+revision: 3
 rank: b6V
-state: open
+state: closed
 in: [PLAN-026]
+links: [Resolved by PLAN-026-T07]
 title: "Problem reports: their own type, or a kind of task?"
 ---
 
@@ -467,6 +468,9 @@ The procedures keep a problem report as a backlog ticket with Type "Bug", plus s
 - **A `problem_report` type in the backlog:** it can have its own states (open, classified, fixed, won't fix, residual anomaly) and a *New CAPA* link, and it ranks beside tasks on the backlog's board.
 
 Leaning towards its own type. Decide before T07.
+
+<!-- field: resolution -->
+Decided: a `problem_report` akt type of its own, living in the backlog and ranked beside tasks on its board. It has its own states (open, classified, fixed, won't fix, residual anomaly), its classification fields, and *New CAPA* through an *Originated from* link (T06). `backlog_item` keeps `kind` as feature, fix or chore, without classification fields. T07 builds it.
 
 <!-- akt: PLAN-026-G02 -->
 ---
