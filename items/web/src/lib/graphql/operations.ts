@@ -539,6 +539,28 @@ export const NewAkt = graphql(`
 	}
 `);
 
+/** The akt a new one is created linked to, with the values it carries
+ * over (`link.create.carry`). */
+export const CarriedFrom = graphql(`
+	query CarriedFrom($number: String!) {
+		akt(number: $number) {
+			id
+			number
+			title
+			type {
+				key
+				fields {
+					key
+					kind
+				}
+			}
+			fields {
+				...FieldValues
+			}
+		}
+	}
+`);
+
 export const Contacts = graphql(`
 	query Contacts {
 		contacts {

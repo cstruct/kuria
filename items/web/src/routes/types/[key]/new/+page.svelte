@@ -16,6 +16,7 @@
 	import { getClient, mutate, query } from '#lib/graphql/context.svelte.ts';
 	import {
 		AddLink,
+		CarriedFrom,
 		Contacts,
 		CreateAkt,
 		NewAkt,
@@ -30,6 +31,16 @@
 	/** Whether to go back to the container once it is made, as from its
 	 * board (`app.create`). */
 	const returning = $derived(page.url.searchParams.has('return') && inside.length > 0);
+	// r[impl link.create]: the link it is created with, from `?link=` (from
+	// it) or `?linkedFrom=` (to it), each `<kind>:<number>`.
+	const linking = $derived.by(() => {
+		const params = page.url.searchParams;
+		const said = params.get('link') ?? params.get('linkedFrom');
+		const [kind, other] = said?.split(':') ?? [];
+		return kind && other ? { kind, other, outgoing: params.has('link') } : null;
+	});
+	const carrying = $derived(Boolean(linking) && page.url.searchParams.get('carry') === '1');
+	const carried = query(CarriedFrom, () => ({ number: carrying ? (linking?.other ?? '') : '' }));
 	const view = query(NewAkt, () => ({ type: key }));
 	const contacts = query(Contacts, () => ({}));
 	const users = query(Users, () => ({}));
@@ -99,8 +110,23 @@
 	);
 
 	$effect(() => {
-		if (type && preparedFor !== type.key) {
-			drafts = Object.fromEntries(type.fields.map((f) => [f.key, draftOf(f, undefined)]));
+		// Prepared once what it carries over has come, if it carries any.
+		const other = carrying ? carried.data?.akt : null;
+		if (type && preparedFor !== type.key && (!carrying || carried.data)) {
+			// r[impl link.create.carry]: each field both types have by key and
+			// kind starts with the other akt's value, to keep or change.
+			const carries = (f: { key: string; kind: string }) =>
+				!['VERDICT', 'SECTIONS'].includes(f.kind) &&
+				Boolean(other?.type.fields.some((o) => o.key === f.key && o.kind === f.kind));
+			drafts = Object.fromEntries(
+				type.fields.map((f) => [
+					f.key,
+					draftOf(
+						f,
+						carries(f) ? other?.fields.find((v) => 'field' in v && v.field === f.key) : undefined
+					)
+				])
+			);
 			// A title typed on a board before asking for the whole form.
 			const titled = titleFieldOf(type.document);
 			const given = page.url.searchParams.get('title');
@@ -138,7 +164,19 @@
 		);
 		busy = true;
 		const { data, error } = await mutate(client, CreateAkt, {
-			input: { type: type.key, fields, in: inside, reason: reason || null }
+			input: {
+				type: type.key,
+				fields,
+				in: inside,
+				reason: reason || null,
+				links: linking
+					? [
+							linking.outgoing
+								? { kind: linking.kind, to: linking.other }
+								: { kind: linking.kind, from: linking.other }
+						]
+					: []
+			}
 		});
 		busy = false;
 		if (error || !data) {
@@ -174,6 +212,10 @@
 		<header>
 			<h1>New {type.name}</h1>
 			{#if inside.length > 0}<p class="inside">In {inside.join(', ')}</p>{/if}
+			{#if linking}<p class="inside" data-testid="linking">
+					Linked with {linking.other}{#if carried.data?.akt?.title}&nbsp;{carried.data.akt
+							.title}{/if}{carrying ? ', starting with its values' : ''}
+				</p>{/if}
 		</header>
 		<form onsubmit={create} aria-label="New {type.name}" novalidate>
 			<Card>

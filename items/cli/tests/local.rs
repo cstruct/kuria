@@ -3764,3 +3764,93 @@ fn lists_the_actions_overdue() {
         "BAD_REQUEST"
     );
 }
+
+// r[verify link.create]
+// r[verify link.create.carry]
+// r[verify cli.local.rules]
+#[test]
+fn a_case_is_created_from_its_report_with_its_values() {
+    let dir = Dir::new();
+    let severity = json!({ "key": "severity", "name": "Severity", "kind": "choice", "options": [
+        { "key": "major", "name": "Major" }, { "key": "minor", "name": "Minor" } ] });
+    let report = json!({
+        "key": "report", "name": "Report", "number": "PR-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            severity,
+            { "key": "steps", "name": "Steps", "kind": "text", "multiline": true }
+        ],
+        "states": [{ "key": "open", "name": "Open", "initial": true }]
+    });
+    let case = json!({
+        "key": "case", "name": "Case", "number": "CASE-{seq}",
+        "fields": [
+            { "key": "title", "name": "Title", "kind": "text", "required": true },
+            severity,
+            { "key": "steps", "name": "Steps", "kind": "date" }
+        ],
+        "states": [{ "key": "open", "name": "Open", "initial": true }],
+        "links": [{ "key": "originated_from", "name": "Originated from", "inverse": "Led to", "to": ["report"] }]
+    });
+    for (key, document) in [("report", report), ("case", case)] {
+        std::fs::write(
+            dir.root.join(format!("types/{key}.json")),
+            document.to_string(),
+        )
+        .unwrap();
+    }
+    dir.ok(&[
+        "new",
+        "report",
+        "--set",
+        "title=Wrong total",
+        "--set",
+        "severity=major",
+        "--set",
+        "steps=Pay",
+    ]);
+    dir.ok(&[
+        "new",
+        "case",
+        "--link",
+        "originated_from:PR-1",
+        "--carry",
+        "--set",
+        "title=Totals",
+    ]);
+    let created = file(&dir, "CASE-1");
+    // Carried by key and kind: the severity, not `steps`, a date here.
+    assert!(created.contains("severity: major"), "{created}");
+    assert!(!created.contains("steps"), "{created}");
+    assert!(
+        created.contains("links: [Originated from PR-1]"),
+        "{created}"
+    );
+    assert!(file(&dir, "PR-1").contains("links: [Led to CASE-1]"));
+    // Given values win, and a link refused refuses the creation.
+    dir.ok(&[
+        "new",
+        "case",
+        "--link",
+        "originated_from:PR-1",
+        "--carry",
+        "--set",
+        "title=Again",
+        "--set",
+        "severity=minor",
+    ]);
+    assert!(file(&dir, "CASE-2").contains("severity: minor"));
+    let refused = dir.refused(&[
+        "new",
+        "case",
+        "--link",
+        "originated_from:CASE-1",
+        "--set",
+        "title=X",
+    ]);
+    assert_eq!(refused.code, "INVALID_LINK", "{}", refused.message);
+    assert_eq!(
+        numbers(&dir.ok(&["ls", "case", "--format", "json"])).len(),
+        2
+    );
+}

@@ -715,6 +715,19 @@ pub struct CreateAktInput {
     /// its type's pattern must give and no akt may have
     /// (`akt.number.given`); else its next.
     number: Option<String>,
+    /// Links to add as it is created (`link.create`).
+    #[graphql(default)]
+    links: Vec<NewLinkInput>,
+}
+
+/// A link a new akt is created with: of `kind`, `to` another akt, the new
+/// one being its source, or `from` another akt, as its target; one of the
+/// two (`link.create`).
+#[derive(InputObject)]
+pub struct NewLinkInput {
+    kind: String,
+    to: Option<String>,
+    from: Option<String>,
 }
 
 /// What editing an akt takes.
@@ -1037,6 +1050,27 @@ impl AkterMutation {
             renderer: akter(ctx)?.renderer(),
         };
         let fields = field_values(input.fields)?;
+        // r[impl link.create]
+        let links = input
+            .links
+            .into_iter()
+            .map(|l| match (l.to, l.from) {
+                (Some(other), None) => Ok(crate::akter::NewLink {
+                    kind: l.kind,
+                    other,
+                    outgoing: true,
+                }),
+                (None, Some(other)) => Ok(crate::akter::NewLink {
+                    kind: l.kind,
+                    other,
+                    outgoing: false,
+                }),
+                _ => Err(coded(
+                    "a link names one akt, `to` or `from`".to_owned(),
+                    "BAD_REQUEST",
+                )),
+            })
+            .collect::<async_graphql::Result<Vec<_>>>()?;
         let akter = akter(ctx)?;
         let row = akter
             .create(
@@ -1046,6 +1080,7 @@ impl AkterMutation {
                 input.reason,
                 &input.inside,
                 input.number.as_deref(),
+                &links,
             )
             .await
             .map_err(error)?;

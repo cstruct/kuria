@@ -6,6 +6,7 @@ import {
 	givenIn,
 	linkKinds,
 	lackingText,
+	linkedCreations,
 	outcomeRefusal,
 	requiredFields,
 	waitingFor
@@ -124,5 +125,45 @@ describe('requiredFields, with conditions', () => {
 		expect(keys(['corrective', 'preventive'])).toEqual(['root_cause', 'hypothesis']);
 		expect(keys([])).toEqual([]);
 		expect(requiredFields(fields, plan)).toEqual([]);
+	});
+});
+
+// r[verify link.create.carry]
+describe('linkedCreations', () => {
+	const report = { key: 'problem_report', name: 'Problem report', viewerMay: { create: true } };
+	const capa = {
+		key: 'capa',
+		name: 'CAPA',
+		viewerMay: { create: true },
+		document: {
+			links: [
+				{
+					key: 'originated_from',
+					name: 'Originated from',
+					inverse: 'Led to',
+					to: ['problem_report']
+				}
+			]
+		}
+	};
+	it('offers each type that links to it, or that it links to', () => {
+		const types = [{ ...report, document: {} }, capa];
+		expect(linkedCreations('problem_report', {}, types)).toEqual([
+			{ type: 'capa', typeName: 'CAPA', kind: 'originated_from', via: 'Led to', outgoing: true }
+		]);
+		expect(linkedCreations('capa', capa.document, types)).toEqual([
+			{
+				type: 'problem_report',
+				typeName: 'Problem report',
+				kind: 'originated_from',
+				via: 'Originated from',
+				outgoing: false
+			}
+		]);
+		const unmade = [
+			{ ...report, document: {} },
+			{ ...capa, viewerMay: { create: false } }
+		];
+		expect(linkedCreations('problem_report', {}, unmade)).toEqual([]);
 	});
 });

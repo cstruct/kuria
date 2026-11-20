@@ -34,6 +34,7 @@
 		lackingText,
 		containedTypes,
 		linkKinds,
+		linkedCreations,
 		draftedFields,
 		releasedFile,
 		requiredFields,
@@ -1323,6 +1324,10 @@
 				<LinksCard
 					links={akt.links}
 					kinds={linkKinds(akt.type.document)}
+					number={akt.number}
+					creations={atVersion || akt.archived
+						? []
+						: linkedCreations(akt.type.key, akt.type.document, view.data?.aktTypes ?? [])}
 					{editable}
 					{busy}
 					search={(text, kind) =>

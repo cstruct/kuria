@@ -27,6 +27,24 @@ declares, when the target's akt type is one the kind's `to` names. It MUST
 refuse a link to the akt itself, and a link of the same kind between the
 same two akter that already exists, as `INVALID_LINK`.
 
+r[link.create]
+`createAkt` MAY name links for the new akt, each by a kind and another
+akt: `to` it, with the new akt as the link's source, or `from` it, as its
+target. Each MUST be added as `addLink` adds it (`link.add`,
+`authz.link`), in the transaction that creates the akt, so that it never
+exists without them; a refused link refuses the creation.
+
+r[link.create.carry]
+Creating an akt linked to another MAY carry over that akt's values: each
+field both akt types have by key and kind starts with the other akt's
+value, which a value given for it replaces. The app MUST offer, on an
+akt's page, for each link kind by which it can link to, or be linked from,
+an akt type the viewer may create, a *New …* action: the type's create
+page, asking for the carried values to keep or change, then creating it
+linked (`app.create`). The CLI does so with `kuria new <type> --link
+<kind>:<number>` for a link from the new akt, `--linked-from
+<kind>:<number>` for one to it, and `--carry` (`cli.write`).
+
 r[link.referenced]
 A link kind a `markdown` field names as its `references`
 (`akt.field.markdown.references`) MUST be kept by the akt's writes alone:

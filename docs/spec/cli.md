@@ -196,7 +196,8 @@ r[cli.write]
 The client MUST offer:
 
 - `new <type> [--in <container>]… [--set <field>=<value>]… [--number <number>]`
-  (`akt.number.given`), answering the
+  (`akt.number.given`) `[--link <kind>:<number>]… [--linked-from
+  <kind>:<number>]… [--carry]` (`link.create`, `link.create.carry`), answering the
   new akt's number;
 - `set <number> <field>=<value>…`: an edit without a file;
 - `do <number> <transition> [--set <field>=<value>]…`: a transition, with

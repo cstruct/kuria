@@ -410,12 +410,13 @@ A fixture akt with a past due date reads as overdue on its card, in the list and
 <!-- akt: PLAN-026-T06 -->
 ---
 type: task
-revision: 2
+revision: 6
 rank: b6O
-state: todo
+state: done
 in: [PLAN-026]
 links: [Blocks PLAN-026-T10]
 title: Creating an akt linked to the one you are on
+assignee: albin@mattsson.io
 ---
 
 <!-- field: description -->
@@ -425,6 +426,29 @@ Spec creating a linked akt.
 - For a link kind whose target types the viewer may create, the source's page offers *New …*.
 - The new akt starts with the fields both types share by key and kind, which the form shows, to keep or change.
 - In the CLI: `kuria new <type> --link <kind>:<number>`, with `--carry` to copy the shared fields.
+
+## Done
+
+- **Spec:** `link.create` and `link.create.carry` in `docs/spec/links.md`; `cli.write`'s `new` names the options.
+  - The links are made in the transaction that creates the akt, as `addLink` makes them, permissions included. The new akt's first revision is its creation and its second the link, rather than one revision for both: the link code stays the one path, and the akt still never exists unlinked.
+  - Carrying is the client's: the server takes the values it is given.
+- **Server:** `CreateAktInput.links: [NewLinkInput { kind, to | from }]`.
+- **CLI:**
+  - `kuria new <type> --link <kind>:<number>` makes a link from the new akt, and `--linked-from <kind>:<number>` one to it, each more than once.
+  - `--carry` starts with the linked akter's values for each field both types have by key and kind; `--set` replaces them, and verdicts and sections aren't carried.
+  - It works against a server and in local mode, which writes nothing if a link is refused.
+- **App:**
+  - an akt's links card offers *New <type>* for each type the viewer may create that links to this akt's type, or that it links to, named by the link it would be;
+  - the create page takes `?link=` or `?linkedFrom=` with `carry=1`, starts with the carried values, says what it will be linked with, and sends the link with `createAkt`.
+
+## Verified
+
+- `items/server/tests/linked_create.rs`: both directions, and a refused link leaves no akt.
+- `items/cli/tests/local.rs` test `a_case_is_created_from_its_report_with_its_values`: carried by key and kind, given values win, refused links.
+- `items/web` test `linkedCreations`.
+- `mise run lint` and `mise run test`.
+
+The app's flow is walked in a browser by T12, escalating a problem report to a CAPA. The CLI's server path has no test of its own; T12's seed or a CLI test against a server can add one.
 
 <!-- field: acceptance -->
 From a fixture akt, *New …* opens a form filled with the shared fields, and the akt it creates is linked back in its first revision. The CLI does the same.

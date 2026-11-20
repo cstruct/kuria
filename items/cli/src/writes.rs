@@ -13,7 +13,7 @@ pub use arrange::{Membership, link, membership, move_akt, transfer, unlink};
 pub use bundles::{Exported, export as export_bundle, import as import_bundle};
 pub use copy::copy;
 pub(crate) use edit::read_akter;
-pub use edit::{Created, apply, create, draft, perform, set, verdict};
+pub use edit::{Created, NewLink, apply, create, draft, linked, perform, set, verdict};
 pub(crate) use types::documents;
 pub use types::{define, export};
 

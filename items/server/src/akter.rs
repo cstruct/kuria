@@ -32,6 +32,7 @@ pub mod versions;
 pub mod waits;
 
 pub use batch::{BatchError, MOST as BATCH_MOST, Operation};
+pub use create::NewLink;
 pub use ordering::Place;
 pub use push::{DraftPush, MESSAGE_MOST, Part as PushPart, PushError, Pushed};
 

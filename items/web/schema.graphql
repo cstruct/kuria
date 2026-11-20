@@ -556,6 +556,10 @@ input CreateAktInput {
 	(`akt.number.given`); else its next.
 	"""
 	number: String
+	"""
+	Links to add as it is created (`link.create`).
+	"""
+	links: [NewLinkInput!]! = []
 }
 
 """
@@ -1121,6 +1125,17 @@ type Mutation {
 	values naming it still read.
 	"""
 	eraseContact(id: ID!): Contact!
+}
+
+"""
+A link a new akt is created with: of `kind`, `to` another akt, the new
+one being its source, or `from` another akt, as its target; one of the
+two (`link.create`).
+"""
+input NewLinkInput {
+	kind: String!
+	to: String
+	from: String
 }
 
 """

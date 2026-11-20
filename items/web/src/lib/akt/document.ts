@@ -46,6 +46,58 @@ export function linkKinds(document: unknown): LinkKind[] {
 	return (doc.links ?? []).filter((kind) => !kept.has(kind.key));
 }
 
+/** An akt that can be created linked to another (`link.create.carry`):
+ * of `type`, linked by `kind`, from the new akt if `outgoing`, read as
+ * `via` from the akt it is made from. */
+export interface LinkedCreation {
+	type: string;
+	typeName: string;
+	kind: string;
+	via: string;
+	outgoing: boolean;
+}
+
+/** What can be created linked to an akt of the type `key`, whose document is
+ * `document`: for each kind it declares, the types it links to, and for each
+ * kind another type declares to it, that type; of the `types` the viewer
+ * may create. */
+// r[impl link.create.carry]
+export function linkedCreations(
+	key: string,
+	document: unknown,
+	types: readonly {
+		key: string;
+		name: string;
+		document: unknown;
+		viewerMay: { create: boolean };
+	}[]
+): LinkedCreation[] {
+	const creatable = types.filter((t) => t.viewerMay.create);
+	const from = linkKinds(document).flatMap((kind) =>
+		creatable
+			.filter((t) => kind.to.includes(t.key))
+			.map((t) => ({
+				type: t.key,
+				typeName: t.name,
+				kind: kind.key,
+				via: kind.name,
+				outgoing: false
+			}))
+	);
+	const to = creatable.flatMap((t) =>
+		linkKinds(t.document)
+			.filter((kind) => kind.to.includes(key))
+			.map((kind) => ({
+				type: t.key,
+				typeName: t.name,
+				kind: kind.key,
+				via: kind.inverse,
+				outgoing: true
+			}))
+	);
+	return [...from, ...to];
+}
+
 /** The keys of the fields that have a draft recipe. */
 export function draftedFields(document: unknown): string[] {
 	return (documentOf(document).fields ?? []).filter((f) => f.draft).map((f) => f.key);
